@@ -1,5 +1,10 @@
 //! 프로세스 테스트 공용 — 임시 폴더, 헬퍼 자식, 가짜 브리지 서버(크레이트 사이에 도우미를 나누지 않는다 — 계획 §5).
-#![allow(dead_code, clippy::unwrap_used, clippy::expect_used, clippy::result_large_err)]
+#![allow(
+    dead_code,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::result_large_err
+)]
 
 pub mod child;
 pub mod flow;
