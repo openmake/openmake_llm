@@ -132,6 +132,41 @@ fn waiting_for_a_slot_is_first_come_first_served() {
     });
 }
 
+/// 자리 차례표의 맨 앞 대기자를 버리면 다음 대기자가 맨 앞이 되어 든다 — 버린 차례표가 맨 앞에 남으면 뒤의 요청이 모두 영영 기다린다.
+#[test]
+fn dropped_front_slot_waiter_lets_the_next_in() {
+    paused().block_on(async {
+        let (s, log) = (Arc::new(BrowserScheduler::default()), Log::default());
+        let mut jobs: Vec<_> = ["T0", "T1", "T2"]
+            .iter()
+            .map(|k| job(&s, &log, k, k))
+            .collect();
+        settle().await;
+        let (w1, _o1) = job(&s, &log, "W1", "W1");
+        settle().await;
+        jobs.push(job(&s, &log, "W2", "W2"));
+        settle().await;
+        w1.abort(); // 자리 차례표의 맨 앞
+        settle().await;
+        let (h, o) = jobs.remove(0);
+        o.send(()).unwrap();
+        h.await.unwrap();
+        settle().await;
+        assert_eq!(started(&log)[BROWSER_MAX_CONCURRENT..], ["W2"]);
+        // 그 뒤 새 요청도 자리가 나면 든다
+        jobs.push(job(&s, &log, "X", "X"));
+        let (h, o) = jobs.remove(0);
+        o.send(()).unwrap();
+        h.await.unwrap();
+        settle().await;
+        assert_eq!(started(&log)[BROWSER_MAX_CONCURRENT..], ["W2", "X"]);
+        for (h, o) in jobs {
+            o.send(()).unwrap();
+            h.await.unwrap();
+        }
+    });
+}
+
 #[test]
 fn stop_generations() {
     let s = Arc::new(BrowserScheduler::default());
