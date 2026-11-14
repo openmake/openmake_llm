@@ -12,6 +12,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { PATH_PROBE_ENV_EXTRA_POSIX, PATH_PROBE_TIMEOUT_MS } from './constants';
 import { buildExecEnv } from './exec-env';
+import { wrapInSandbox } from './sandbox';
 
 /** execPath(`:` 구분) 안에 실행 가능한 bin 이 있는가. */
 export function onPath(bin: string, execPath: string): boolean {
@@ -22,7 +23,11 @@ export function onPath(bin: string, execPath: string): boolean {
 
 const isAbsEntry = (p: string): boolean => p.startsWith('/');
 
-export function resolveExecPath(folderRoot: string | null): string {
+/**
+ * toolSandbox: mise 를 감쌀 도구 프로파일 — undefined = 샌드박스 꺼짐(감싸지 않음), null = 켜졌는데 프로파일 없음(mise 를 건너뛴다).
+ * 신뢰된 경로의 mise 설정은 에이전트가 파일 쓰기로 고칠 수 있어, 그 `exec()` 가 샌드박스 밖에서 돌지 않게 한다(설계 D-6).
+ */
+export function resolveExecPath(folderRoot: string | null, toolSandbox?: string | null): string {
     // Windows — 로그인 셸·Homebrew·mise 관행이 없다. 프로세스의 PATH 를 그대로 쓴다.
     if (process.platform === 'win32') return process.env.PATH || process.env.Path || '';
     const parts: string[] = [];
@@ -38,12 +43,14 @@ export function resolveExecPath(folderRoot: string | null): string {
     // 절대경로 항목만 — 상대 항목(`.`·`bin`)은 자식 cwd(연결 폴더) 기준으로 풀려 폴더의 파일을 고를 수 있다(설계 D-5).
     const base = [...new Set(parts.filter(isAbsEntry))].join(':');
     let merged = base;
+    if (toolSandbox === null) return merged; // PATH 계산은 exec 를 막지 않는다 — 그 exec·도구는 뒤에서 126 으로 거절된다
     try {
-        const misePaths = execFileSync('mise', ['bin-paths'],
+        const mise = wrapInSandbox('mise', ['bin-paths'], toolSandbox);
+        const misePaths = execFileSync(mise.file, mise.args,
             { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS, cwd: folderRoot || os.homedir(), env: probeEnv(base) })
             .trim().split('\n').filter(isAbsEntry);
         // 프로젝트 버전이 이기도록 mise 경로를 앞에 둔다.
         merged = [...new Set([...misePaths, ...base.split(':')])].join(':');
-    } catch { /* mise 부재/미신뢰 설정 — base 만 사용 */ }
+    } catch { /* mise 부재/미신뢰 설정/감싼 실행 실패(65·71 포함) — base 만 사용 */ }
     return merged;
 }

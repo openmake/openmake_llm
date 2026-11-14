@@ -195,7 +195,7 @@ export class BridgeCore {
                     done({ ok: false, error: SANDBOX_PROFILE_MISSING_ERROR, exitCode: 126 });
                     return;
                 }
-                if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
+                if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot, this.toolSandbox());
                 const opts = {
                     cwd: base, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER, encoding: 'utf8' as const,
                     // allowlist(exec-env) — 비밀 상속 차단
@@ -267,7 +267,7 @@ export class BridgeCore {
                 const rel = Array.isArray(m.paths) ? m.paths.slice(0, DIAG_MAX_TOTAL) : [];
                 const abs: string[] = [];
                 for (const p of rel) abs.push(await safeFromAsync(base, p));
-                if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
+                if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot, this.toolSandbox());
                 const r = await this.toolSandboxed(done, () => collectDiagnostics(base, abs, this.execPathCache!, this.toolSandbox()));
                 if (r) done({ ok: true, ...r });
                 return;
@@ -277,7 +277,7 @@ export class BridgeCore {
                 // 탐지된 테스트의 실행은 exec 로 따로 오고 사용자 확인을 거친다.
                 // pytest 탐지의 python3 도 lsp_diagnostics 와 같은 도구 프로파일 안에서 돈다.
                 const dirAbs = await safeFromAsync(base, m.path || '.');
-                if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
+                if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot, this.toolSandbox());
                 const testRunner = await this.toolSandboxed(done, () => detectTestRunner(dirAbs, this.execPathCache!, this.toolSandbox()));
                 if (testRunner) done({ ok: true, testRunner });
                 return;

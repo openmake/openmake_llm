@@ -240,7 +240,8 @@ impl ExecState {
             return p.clone();
         }
         let h = &self.host;
-        let p = resolve_exec_path(&h.env, &h.home, h.platform, Some(root)).await;
+        let sandbox = self.tool_sandbox();
+        let p = resolve_exec_path(&h.env, &h.home, h.platform, Some(root), &sandbox).await;
         *cache = Some(p.clone());
         p
     }
