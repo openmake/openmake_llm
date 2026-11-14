@@ -15,6 +15,7 @@
  */
 import { spawn } from 'child_process';
 import { createLogger } from '../../utils/logger';
+import { cappedUtf8Text } from '../../utils/capped-utf8-text';
 import { resolveDocker } from '../../utils/docker-path';
 import { ARTIFACT_EXPORT } from '../../config/artifact-export';
 import { REPORT_DOCX_SCRIPT } from './docx-script';
@@ -94,12 +95,13 @@ const html = Buffer.from('${b64}', 'base64').toString('utf8');
 `;
 }
 
-/** 컨테이너 실행 — stdout(base64 텍스트)·stderr 캡처. */
-function runDocker(dockerPath: string, args: string[], stdinData: string): Promise<{ stdout: string; stderr: string; exitCode: number | null; timedOut: boolean; durationMs: number }> {
+/** 컨테이너 실행 — stdout(base64 텍스트)·stderr 캡처. 테스트가 docker 없이 자식 프로세스로 부른다. */
+export function runDocker(dockerPath: string, args: string[], stdinData: string): Promise<{ stdout: string; stderr: string; exitCode: number | null; timedOut: boolean; durationMs: number }> {
     return new Promise((resolve) => {
         const started = Date.now();
         let stdout = '';
-        let stderr = '';
+        // stderr(실패 사유, 한글 가능)는 이어 디코드하고 64K자까지만 — 조각마다 디코드하면 경계 글자가 깨진다
+        const err = cappedUtf8Text(64 * 1024);
         let timedOut = false;
         const max = ARTIFACT_EXPORT.outputMaxBytes;
         const child = spawn(dockerPath, args, { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -107,16 +109,15 @@ function runDocker(dockerPath: string, args: string[], stdinData: string): Promi
         child.stdout.on('data', (d: Buffer) => {
             if (stdout.length < max) stdout += d.toString('utf8');
         });
-        child.stderr.on('data', (d: Buffer) => {
-            if (stderr.length < 64 * 1024) stderr += d.toString('utf8');
-        });
+        child.stderr.on('data', (d: Buffer) => err.write(d));
         child.on('error', (e) => {
             clearTimeout(timer);
             resolve({ stdout: '', stderr: `docker spawn 실패: ${e.message}`, exitCode: null, timedOut, durationMs: Date.now() - started });
         });
         child.on('close', (exitCode) => {
             clearTimeout(timer);
-            resolve({ stdout, stderr, exitCode, timedOut, durationMs: Date.now() - started });
+            err.end();
+            resolve({ stdout, stderr: err.text, exitCode, timedOut, durationMs: Date.now() - started });
         });
         child.stdin.on('error', () => { /* EPIPE 무시 */ });
         child.stdin.write(stdinData);
