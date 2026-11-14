@@ -331,4 +331,32 @@ describe('Google AI(gemini) 사고 요약 스트림', () => {
         expect(tokens).toBe('답');
         expect(r.toolCalls).toBeUndefined();
     });
+
+    // 리뷰 R1 N-3 — 도구 호출만 하고 끝나는 턴: 사고가 닫히지 않은 채 네이티브 tool_calls 로 끝나도 사고·도구 호출이 섞이지 않는다
+    it('직접 + thinking 켬 + tools → 닫힘 없는 사고 뒤 네이티브 tool_calls 로 끝 → 전부 사고, 본문 빈 값, 도구 호출 1건', async () => {
+        reply = () => ({ kind: 'stream', chunks: [
+            sseChunk({ role: 'assistant', content: '<thought>사고: 날씨는 ', ...thought }),
+            sseChunk({ content: '검색해야 한다.', ...thought }),
+            sseChunk({ tool_calls: [{ index: 0, id: 'call_g', function: { name: 'web_search', arguments: '{"query":' } }] }),
+            sseChunk({ tool_calls: [{ index: 0, function: { arguments: '"서울 날씨"}' } }] }, { finish_reason: 'tool_calls' }),
+        ] });
+        const tokens: string[] = [];
+        const thinkingParts: string[] = [];
+        const r = await direct().streamChat(
+            {
+                messages, modelId: 'gemini-2.5-flash', thinking: true,
+                tools: [{ type: 'function', function: { name: 'web_search', description: 'search', parameters: { type: 'object', properties: {} } } }],
+            },
+            { onToken: (t) => tokens.push(t), onThinking: (t) => thinkingParts.push(t) },
+        );
+        const thinking = thinkingParts.join('');
+        expect(thinking).toBe('사고: 날씨는 검색해야 한다.');
+        expect(tokens).toEqual([]);
+        expect(r.content).toBe('');
+        expect(r.toolCalls).toHaveLength(1);
+        expect(r.toolCalls?.[0]).toMatchObject({ name: 'web_search', args: { query: '서울 날씨' } });
+        expect(r.finishReason).toBe('tool_calls');
+        expect(thinking).not.toContain('<thought');
+        expect(r.content).not.toContain('<thought');
+    });
 });
