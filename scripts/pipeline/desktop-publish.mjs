@@ -21,6 +21,8 @@ const DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
 const MAX_MANIFEST_BYTES = 64 * 1024;             // 자산 매니페스트는 수백 바이트 — 넘으면 읽다 말고 중단
 const MAX_DMG_BYTES = 512 * 1024 * 1024;         // 기본 상한(publish 의 maxDmgBytes) — 지금 dmg 는 이보다 한참 작다, 넘으면 받다 말고 중단
 export const EXIT = { OK: 0, FAILED: 1, PENDING: 75 };
+// 이 파일을 옮기면 판정 기준을 함께 바꿔야 한다 — 안 그러면 릴리스가 기대되는 버전의 404 가 모두 건너뜀(unreleased)이 된다.
+export const AUTOMATION_SCRIPT = 'scripts/pipeline/desktop-publish.mjs';
 
 /** 점으로 나눈 수 비교(모자란 자리는 0) — 앱 Updater.swift 의 isNewer 와 같은 규칙. */
 export function compareVersions(a, b) {
@@ -131,13 +133,16 @@ async function download(fetchImpl, url, target, expectedSha256, maxBytes) {
 /**
  * 릴리스 자산이 없을 때(404)만: 설치 SHA 의 첫 부모 줄에서 VERSION 을 마지막으로 바꾼 커밋의 트리에 이 스크립트가 없으면
  * 그 버전은 릴리스 자동화 이전에 정해져 릴리스가 만들어지지 않는다 — 그 커밋을 돌려준다. 있거나 판단할 수 없으면 undefined(대기).
+ * 그 커밋의 VERSION 이 작업 트리에서 읽은 version 과 다르면(다른 커밋의 판정) 역시 undefined.
  */
-function preAutomationVersionCommit(gitOutput, cwd, sha) {
+function preAutomationVersionCommit(gitOutput, cwd, sha, version) {
     const log = gitOutput(['log', '--first-parent', '-1', '--format=%H', sha, '--', 'apps/desktop-native/VERSION'], cwd);
     const commit = log.status === 0 ? log.stdout.trim() : '';
     if (!GIT_SHA_RE.test(commit)) return undefined;
-    const tree = gitOutput(['ls-tree', '--name-only', commit, '--', 'scripts/pipeline/desktop-publish.mjs'], cwd);
-    return tree.status === 0 && tree.stdout.trim() === '' ? commit : undefined;
+    const tree = gitOutput(['ls-tree', '--name-only', commit, '--', AUTOMATION_SCRIPT], cwd);
+    if (tree.status !== 0 || tree.stdout.trim() !== '') return undefined;
+    const shown = gitOutput(['show', `${commit}:apps/desktop-native/VERSION`], cwd);
+    return shown.status === 0 && shown.stdout.trim() === version ? commit : undefined;
 }
 
 const defaultDeps = {
@@ -190,7 +195,7 @@ export async function publish(options, deps = {}) {
         const base = `${web}/${repo}/releases/download/${TAG_PREFIX}${version}`;
         const response = await fetch(`${base}/${MANIFEST_ASSET}`, { redirect: 'follow', signal: AbortSignal.timeout(MANIFEST_TIMEOUT_MS) });
         if (response.status === 404) {
-            const versionCommit = preAutomationVersionCommit(gitOutput, cwd, sha);
+            const versionCommit = preAutomationVersionCommit(gitOutput, cwd, sha, version);
             if (versionCommit) return finish('unreleased', EXIT.OK, `version ${version} was set before release automation (${versionCommit.slice(0, 7)}); no release asset is made for it`);
             return finish('pending', EXIT.PENDING, `release asset ${TAG_PREFIX}${version} not available yet`);
         }
