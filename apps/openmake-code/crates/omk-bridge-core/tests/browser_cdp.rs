@@ -3,7 +3,10 @@
 
 mod support;
 
+use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::task::{Context, Poll};
 use std::time::Duration;
 
 use omk_bridge_core::browser::cdp::{
@@ -12,8 +15,9 @@ use omk_bridge_core::browser::cdp::{
 };
 use serde_json::{Value, json};
 use support::browser::{
-    FakeHost, Out, Responder, Sent, Server, empty_replies, pair, paused, serve,
+    DUPLEX_BUF, FakeHost, Out, Responder, Sent, Server, empty_replies, pair, paused, serve,
 };
+use tokio::io::{AsyncRead, AsyncWrite, DuplexStream, ReadBuf};
 use tokio::time::Instant;
 
 const URL: &str = "ws://127.0.0.1:1/devtools/browser/x";
@@ -122,6 +126,70 @@ fn peer_close_fails_pending_then_send_is_refused() {
         };
         let (r, ()) = futures_util::future::join(pending, closer).await;
         assert_eq!(r.unwrap_err(), CDP_DISCONNECTED_ERROR);
+        assert!(!c.is_open());
+        assert_eq!(
+            c.send("A.c", json!({}), None).await.unwrap_err(),
+            CDP_NOT_OPEN_ERROR
+        );
+    });
+}
+
+/// 쓰기만 깨지는 스트림 — `broken` 이 서면 쓰기가 `BrokenPipe`, 읽기는 그대로 산다(반쪽 닫힘).
+struct HalfBroken {
+    inner: DuplexStream,
+    broken: Arc<AtomicBool>,
+}
+
+impl AsyncRead for HalfBroken {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.inner).poll_read(cx, buf)
+    }
+}
+
+impl AsyncWrite for HalfBroken {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        if self.broken.load(Ordering::SeqCst) {
+            return Poll::Ready(Err(std::io::ErrorKind::BrokenPipe.into()));
+        }
+        Pin::new(&mut self.inner).poll_write(cx, buf)
+    }
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.inner).poll_flush(cx)
+    }
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.inner).poll_shutdown(cx)
+    }
+}
+
+/// 쓰기 끝만 깨져도(읽기는 살아 있음) 연결은 닫힌 것으로 본다 — 기다리던 명령은 끊김으로 끝나고 `is_open` 은 거짓
+/// (TS `ws.readyState` 와 같은 뜻 — `connect()` 가 죽은 클라이언트를 돌려주지 않고 다시 붙는다).
+#[test]
+fn broken_write_end_closes_the_client() {
+    paused().block_on(async {
+        let (a, b) = tokio::io::duplex(DUPLEX_BUF);
+        let broken = Arc::new(AtomicBool::new(false));
+        let _server = serve(b, silent(), false);
+        let io = HalfBroken {
+            inner: a,
+            broken: broken.clone(),
+        };
+        let (c, _ev) = CdpClient::handshake(Box::new(io), URL).await.unwrap();
+        assert!(c.is_open());
+        broken.store(true, Ordering::SeqCst);
+        let t0 = Instant::now();
+        assert_eq!(
+            c.send("A.b", json!({}), None).await.unwrap_err(),
+            CDP_DISCONNECTED_ERROR
+        );
+        assert_eq!(t0.elapsed(), Duration::ZERO);
         assert!(!c.is_open());
         assert_eq!(
             c.send("A.c", json!({}), None).await.unwrap_err(),
