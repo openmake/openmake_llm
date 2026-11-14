@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde_json::Value;
 
+pub mod browser;
 pub mod browser_fs;
 pub mod flow_hooks;
 
