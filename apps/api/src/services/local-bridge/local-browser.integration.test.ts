@@ -76,6 +76,7 @@ describeIfChrome('로컬 브라우저 전 구간 — RemoteExecutor ↔ 코어 �
         await new Promise<void>((r) => site.close(() => r()));
         fs.rmSync(folder, { recursive: true, force: true });
         fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+        fs.rmSync(`${profile}-downloads`, { recursive: true, force: true }); // 기동 때 만드는 다운로드 대기 폴더(B-8)
     }, 30000);
 
     it('기기가 browser 능력을 알렸고 게이트가 켜져 있어 서버가 브라우저를 쓴다', () => {
