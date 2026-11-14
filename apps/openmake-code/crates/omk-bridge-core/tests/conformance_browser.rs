@@ -12,6 +12,8 @@ mod download_place;
 mod flow;
 #[path = "conformance_browser/site_policy.rs"]
 mod site_policy;
+#[path = "conformance_browser/site_policy_block.rs"]
+mod site_policy_block;
 mod support;
 #[path = "conformance_browser/upload_files.rs"]
 mod upload_files;
