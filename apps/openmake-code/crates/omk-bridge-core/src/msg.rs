@@ -269,8 +269,8 @@ pub struct BridgeResult {
     pub tool: Option<Box<ToolOutput>>,
     /// browser — 넘겨받은 상태라 실행하지 않았다(서버는 오류로 돌려주지 않고 작업을 주차한다).
     pub user_control: Option<bool>,
-    /// browser — 기기가 사이트 정책·사용자 제어로 막은 호출의 표식(`kind, host, action`).
-    pub policy_block: Option<Value>,
+    /// browser — 기기가 사이트 정책·사용자 제어로 막은 호출의 표식(`kind, host, action`). 상자에 둔다(`tool` 과 같은 이유).
+    pub policy_block: Option<Box<Value>>,
 }
 
 impl BridgeResult {
@@ -349,7 +349,7 @@ impl BridgeResult {
             o.insert("userControl".to_owned(), Value::Bool(u));
         }
         if let Some(b) = &self.policy_block {
-            o.insert("policyBlock".to_owned(), b.clone());
+            o.insert("policyBlock".to_owned(), Value::clone(b));
         }
         Value::Object(o)
     }
