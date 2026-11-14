@@ -1,6 +1,9 @@
-//! suite `browser-constants` — 상수·표·문구. `chrome` 묶음은 PR-1.6b(`chrome.rs`)가 함수 결과와 대조한다 — 여기서는 모양만 본다.
+//! suite `browser-constants` — 상수·표·문구, 환경 이름(`BrowserEnv::from_env`), Chrome 후보 경로·실행 인자(`chrome.rs`).
+
+use std::cell::RefCell;
 
 use omk_bridge_core::browser::constants as c;
+use omk_bridge_core::browser::{chrome, host::BrowserEnv};
 use serde_json::{Value, json};
 
 use super::load;
@@ -87,33 +90,137 @@ fn constants_suite() {
     });
     assert_eq!(doc["messages"], messages, "browser-constants/messages");
 
-    // 환경 이름의 해석(BrowserEnv::from_env)은 PR-1.6b — 1.6a 는 기본값이 상수와 같은지만 본다.
-    let env = json!({
-        "OMK_BRIDGE_CHROME": null,
-        "OMK_BRIDGE_BROWSER_HEADLESS": c::BROWSER_HEADLESS,
-        "OMK_BRIDGE_BROWSER_TIMEOUT_MS": c::BROWSER_ACTION_TIMEOUT_MS,
-        "OMK_BRIDGE_BROWSER_EXTRACT_READY_MS": c::BROWSER_EXTRACT_READY_MS,
-        "OMK_BRIDGE_BROWSER_DOWNLOAD_WAIT_MS": c::BROWSER_DOWNLOAD_WAIT_MS,
-        "OMK_BRIDGE_UPLOAD_MAX_FILE_BYTES": c::BROWSER_UPLOAD_MAX_FILE_BYTES,
-    });
-    assert_eq!(doc["env"], env, "browser-constants/env");
+    env_group(&doc["env"]);
+    chrome_group(&doc["chrome"]);
+}
 
-    let chrome = doc["chrome"].as_object().expect("chrome 객체");
-    let keys: Vec<&str> = chrome.keys().map(String::as_str).collect();
-    let mut want = [
+/// `env` — 환경 이름마다 기본값(아무 값도 없을 때)과, 값을 주면 그 칸이 바뀌는지.
+fn env_group(want: &Value) {
+    let asked = RefCell::new(Vec::<String>::new());
+    let e = BrowserEnv::from_env(
+        &|k| {
+            asked.borrow_mut().push(k.to_owned());
+            None
+        },
         "darwin",
-        "win32Roots",
-        "win32Files",
-        "other",
-        "args",
-        "headlessOnly",
-    ];
-    want.sort_unstable();
-    assert_eq!(keys, want, "browser-constants/chrome 키");
-    assert!(
-        chrome
-            .values()
-            .all(|v| v.as_array().is_some_and(|a| !a.is_empty())),
-        "browser-constants/chrome: 빈 목록"
+        "/work/home",
+    );
+    let defaults = json!({
+        "OMK_BRIDGE_CHROME": e.chrome_override,
+        "OMK_BRIDGE_BROWSER_HEADLESS": e.headless,
+        "OMK_BRIDGE_BROWSER_TIMEOUT_MS": e.action_timeout_ms,
+        "OMK_BRIDGE_BROWSER_EXTRACT_READY_MS": e.extract_ready_ms,
+        "OMK_BRIDGE_BROWSER_DOWNLOAD_WAIT_MS": e.download_wait_ms,
+        "OMK_BRIDGE_UPLOAD_MAX_FILE_BYTES": e.upload_max_file_bytes,
+    });
+    assert_eq!(*want, defaults, "browser-constants/env 기본값");
+    for k in want.as_object().unwrap().keys() {
+        assert!(
+            asked.borrow().contains(k),
+            "browser-constants/env: {k} 를 읽지 않는다"
+        );
+    }
+    // 이름이 칸에 바로 이어지는지 — 서로 다른 값을 준다.
+    let given = BrowserEnv::from_env(
+        &|k| {
+            Some(
+                match k {
+                    "OMK_BRIDGE_CHROME" => "/work/chrome",
+                    "OMK_BRIDGE_BROWSER_HEADLESS" => "1",
+                    "OMK_BRIDGE_BROWSER_TIMEOUT_MS" => "1001",
+                    "OMK_BRIDGE_BROWSER_EXTRACT_READY_MS" => "1002",
+                    "OMK_BRIDGE_BROWSER_DOWNLOAD_WAIT_MS" => "1003",
+                    "OMK_BRIDGE_UPLOAD_MAX_FILE_BYTES" => "1004",
+                    _ => return None,
+                }
+                .to_owned(),
+            )
+        },
+        "darwin",
+        "/work/home",
+    );
+    assert_eq!(
+        (
+            given.chrome_override.as_deref(),
+            given.headless,
+            given.action_timeout_ms,
+            given.extract_ready_ms,
+            given.download_wait_ms,
+            given.upload_max_file_bytes
+        ),
+        (Some("/work/chrome"), true, 1001, 1002, 1003, 1004),
+        "browser-constants/env 값"
+    );
+}
+
+fn strings(v: &Value) -> Vec<String> {
+    v.as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s.as_str().unwrap().to_owned())
+        .collect()
+}
+
+/// `chrome` — 플랫폼별 후보 경로와 실행 인자를 함수 결과와 대조한다.
+fn chrome_group(c: &Value) {
+    let env = |platform: &str, lookup: &dyn Fn(&str) -> Option<String>| {
+        BrowserEnv::from_env(lookup, platform, "/work/home")
+    };
+    let darwin: Vec<String> = strings(&c["darwin"])
+        .iter()
+        .map(|p| p.replace("{{HOME}}", "/work/home"))
+        .collect();
+    assert_eq!(
+        chrome::candidates(&env("darwin", &|_| None)),
+        darwin,
+        "chrome/darwin"
+    );
+    assert_eq!(
+        chrome::candidates(&env("linux", &|_| None)),
+        strings(&c["other"]),
+        "chrome/other"
+    );
+
+    // win32 — 뿌리 이름마다 다른 값을 주고 `뿌리 × 파일` 순서(뿌리가 바깥)로 잇는다.
+    let roots = strings(&c["win32Roots"]);
+    let root_value = |k: &str| format!("C:\\Root{}", roots.iter().position(|r| r == k).unwrap());
+    let files: Vec<Vec<String>> = c["win32Files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(strings)
+        .collect();
+    let want: Vec<String> = roots
+        .iter()
+        .flat_map(|r| files.iter().map(move |f| (r, f)))
+        .map(|(r, f)| format!("{}\\{}", root_value(r), f.join("\\")))
+        .collect();
+    let got = chrome::candidates(&env("win32", &|k| {
+        roots.iter().any(|r| r == k).then(|| root_value(k))
+    }));
+    assert_eq!(got, want, "chrome/win32");
+    // 없는 뿌리는 건너뛴다
+    let only_last = chrome::candidates(&env("win32", &|k| (k == roots[2]).then(|| root_value(k))));
+    assert_eq!(only_last.len(), files.len(), "chrome/win32 빈 뿌리");
+
+    let args: Vec<String> = strings(&c["args"])
+        .iter()
+        .map(|a| a.replace("{{PROFILE}}", "/work/profile"))
+        .collect();
+    assert_eq!(
+        chrome::launch_args("/work/profile", true),
+        args,
+        "chrome/args 화면 없음"
+    );
+    let headless_only = strings(&c["headlessOnly"]);
+    let headed: Vec<String> = args
+        .iter()
+        .filter(|a| !headless_only.contains(a))
+        .cloned()
+        .collect();
+    assert_eq!(
+        chrome::launch_args("/work/profile", false),
+        headed,
+        "chrome/args 화면 있음"
     );
 }

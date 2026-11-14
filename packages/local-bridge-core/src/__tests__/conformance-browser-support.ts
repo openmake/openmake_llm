@@ -8,8 +8,8 @@ import * as os from 'os';
 import * as path from 'path';
 
 export const DIR = path.join(__dirname, '..', '..', 'conformance');
-/** 이 러너 몫 — `browser-` 로 시작하는 파일은 정확히 이것뿐이어야 한다(PR-1.6b 가 browser-run 을 더한다). */
-export const KNOWN_BROWSER_SUITES = ['browser-constants', 'browser-defs', 'browser-download-place', 'browser-flow', 'browser-site-policy', 'browser-upload-files'];
+/** 이 러너 몫 — `browser-` 로 시작하는 파일은 정확히 이것뿐이어야 한다(`browser-run` 은 conformance-browser-run.test.ts 가 돌린다). */
+export const KNOWN_BROWSER_SUITES = ['browser-constants', 'browser-defs', 'browser-download-place', 'browser-flow', 'browser-run', 'browser-site-policy', 'browser-upload-files'];
 
 /** 묶음 이름 → 입력 키 [필수, 선택]. 사례 키는 `id`·`input`·`expect`(파일 suite 는 `setup`·`after` 를 더한다). */
 type Inputs = Record<string, [string[], string[]]>;
@@ -49,6 +49,7 @@ export const GROUPS: Record<string, { top: string[]; groups: Inputs; caseKeys?: 
     'browser-upload-files': { top: ['baseSetup'], groups: { cases: [['base', 'files'], []] }, caseKeys: ['setup'] },
     'browser-download-place': { top: [], groups: { cases: [['name'], ['staged']] }, caseKeys: ['setup', 'after'] },
     'browser-constants': { top: ['values', 'tables', 'messages', 'env', 'chrome'], groups: {} },
+    'browser-run': { top: ['defaults'], groups: { cases: [['spec', 'opts', 'cdp'], ['sentDefaults', 'userControl']] }, caseKeys: ['setup'] },
 };
 
 export function load<T>(suite: string): T {
