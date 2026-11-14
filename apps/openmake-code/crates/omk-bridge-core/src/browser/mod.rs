@@ -15,6 +15,7 @@ pub mod flow;
 pub mod host;
 pub mod js_value;
 pub mod local_browser;
+mod page;
 pub mod policy_block;
 pub mod result;
 pub mod run;

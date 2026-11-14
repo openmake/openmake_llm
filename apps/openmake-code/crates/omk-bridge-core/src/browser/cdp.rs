@@ -187,6 +187,17 @@ fn dispatch(shared: &Mutex<Shared>, events: &mpsc::UnboundedSender<CdpEvent>, te
     });
 }
 
+fn frame_text(id: u64, method: &str, params: Value, session: Option<&str>) -> String {
+    let mut frame = Map::new();
+    frame.insert("id".into(), Value::from(id));
+    frame.insert("method".into(), Value::from(method));
+    frame.insert("params".into(), params);
+    if let Some(sid) = session.filter(|s| !s.is_empty()) {
+        frame.insert("sessionId".into(), Value::from(sid));
+    }
+    Value::Object(frame).to_string()
+}
+
 /// 기다리던 명령이 버려지면 대기 표에서 뺀다.
 struct PendingGuard<'a> {
     shared: &'a Mutex<Shared>,
@@ -319,17 +330,10 @@ impl CdpClient {
             shared: &self.shared,
             id,
         };
-        let mut frame = Map::new();
-        frame.insert("id".into(), Value::from(id));
-        frame.insert("method".into(), Value::from(method));
-        frame.insert("params".into(), params);
-        if let Some(sid) = session.filter(|s| !s.is_empty()) {
-            frame.insert("sessionId".into(), Value::from(sid));
-        }
         // 큐에 넣기만 한다 — 소켓 쓰기는 쓰기 태스크가 한다
         if self
             .out
-            .send(Message::text(Value::Object(frame).to_string()))
+            .send(Message::text(frame_text(id, method, params, session)))
             .is_err()
         {
             return Err(CDP_NOT_OPEN_ERROR.to_owned());
@@ -339,6 +343,17 @@ impl CdpClient {
             Ok(Err(_)) => Err(CDP_DISCONNECTED_ERROR.to_owned()),
             Err(_) => Err(format!("브라우저 응답 시간 초과 ({method})")),
         }
+    }
+
+    /// 명령을 바로 큐에 넣고 답은 버린다(TS `send(...).catch(() => undefined)` 를 기다리지 않는 자리) — 부르는 순간 나간다.
+    pub fn send_detached(&self, method: &str, params: Value, session: Option<&str>) {
+        if lock(&self.shared).closed {
+            return;
+        }
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let _ = self
+            .out
+            .send(Message::text(frame_text(id, method, params, session)));
     }
 
     /// 이벤트 한 번을 기다린다 — 조건에 맞는 것만, 시간 초과면 `None`. **부르는 순간 등록한다** — 명령을 보내기 전에 불러야

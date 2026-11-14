@@ -264,7 +264,7 @@ impl LocalBrowser {
         Ok(cdp)
     }
 
-    async fn attach(&self, cdp: &CdpClient, target_id: &str) -> Result<String, String> {
+    pub(super) async fn attach(&self, cdp: &CdpClient, target_id: &str) -> Result<String, String> {
         let r = cdp
             .send(
                 "Target.attachToTarget",
@@ -424,14 +424,14 @@ impl LocalBrowser {
         if let Some(p) = prompt_text {
             params["promptText"] = Value::from(p);
         }
-        let (Some(cdp), session) = (cdp.upgrade(), e.session_id.clone()) else {
-            return;
-        };
-        tokio::spawn(async move {
-            let _ = cdp
-                .send("Page.handleJavaScriptDialog", params, session.as_deref())
-                .await;
-        });
+        // 이 자리에서 바로 보낸다(답은 기다리지 않는다) — 확인창을 연 명령의 답보다 앞서 나가야 TS 와 순서가 같다.
+        if let Some(cdp) = cdp.upgrade() {
+            cdp.send_detached(
+                "Page.handleJavaScriptDialog",
+                params,
+                e.session_id.as_deref(),
+            );
+        }
     }
 }
 
