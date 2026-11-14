@@ -73,7 +73,17 @@ pub(crate) struct MatchAttempter<'a, Input: InputIndexer> {
     re: &'a CompiledRegex,
     bts: Vec<BacktrackInsn<Input>>,
     s: State<Input::Position>,
+    // [omk] 실행 한도 — 없으면(None) 원본과 같다.
+    limits: Option<crate::api::ExecLimits<'a>>,
+    // 뒤로 가는 흐름(루프 재진입·역추적)을 센다. POLL_EVERY 마다 stop 을 묻는다.
+    ticks: u32,
+    // 둘러보기(lookaround)가 잠시 치워 둔 바깥 스택들의 길이 합.
+    outer_bts: usize,
+    pub(crate) exceeded: Option<crate::api::LimitExceeded>,
 }
+
+// [omk] stop 콜백을 묻는 간격(검사점 수).
+const POLL_EVERY: u32 = 256;
 
 impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
     pub(crate) fn new(re: &'a CompiledRegex, entry: Input::Position) -> Self {
@@ -84,7 +94,39 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
                 loops: vec![LoopData::new(entry); re.loops as usize],
                 groups: vec![GroupData::new(); re.groups as usize],
             },
+            // [omk] 실행 한도 상태 — set_limits 전에는 원본과 같다.
+            limits: None,
+            ticks: 0,
+            outer_bts: 0,
+            exceeded: None,
         }
+    }
+
+    // [omk] 한도를 받는 API 는 utf16 판정(is_match_ucs2_limited)뿐이다.
+    #[cfg(feature = "utf16")]
+    pub(crate) fn set_limits(&mut self, limits: crate::api::ExecLimits<'a>) {
+        self.limits = Some(limits);
+    }
+
+    /// [omk] 검사점 — 계속해도 되면 true. 한도를 넘으면 `exceeded` 를 세우고 false.
+    #[inline(always)]
+    fn checkpoint(&mut self) -> bool {
+        if self.exceeded.is_some() {
+            return false;
+        }
+        let Some(limits) = &self.limits else {
+            return true;
+        };
+        if self.outer_bts + self.bts.len() > limits.max_backtrack {
+            self.exceeded = Some(crate::api::LimitExceeded::Backtrack);
+            return false;
+        }
+        self.ticks = self.ticks.wrapping_add(1);
+        if self.ticks % POLL_EVERY == 0 && (limits.stop)() {
+            self.exceeded = Some(crate::api::LimitExceeded::Stopped);
+            return false;
+        }
+        true
     }
 
     #[inline(always)]
@@ -123,6 +165,10 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
         pos: Input::Position,
         ip: IP,
     ) -> Option<IP> {
+        // [omk] 검사점 1 — 루프 진입·재진입.
+        if !self.checkpoint() {
+            return None;
+        }
         let loop_data = &mut self.s.loops[loop_fields.loop_id as usize];
         let iteration = loop_data.iters;
 
@@ -466,12 +512,20 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
         // TODO: consider using a stack-allocated array.
         let mut saved_bts = vec![BacktrackInsn::Exhausted];
         core::mem::swap(&mut self.bts, &mut saved_bts);
+        // [omk] 치워 둔 바깥 스택도 한도에 센다.
+        self.outer_bts += saved_bts.len();
 
         // Enter into the lookaround's instruction stream.
         let matched = self.try_at_pos(*input, ip, pos, Dir::new()).is_some();
 
         // Put back our bts.
+        self.outer_bts -= saved_bts.len();
         core::mem::swap(&mut self.bts, &mut saved_bts);
+        // [omk] 안에서 한도를 넘었으면 부정 둘러보기도 성공으로 치지 않는다.
+        if self.exceeded.is_some() {
+            self.s.groups.splice(range, saved_groups);
+            return false;
+        }
 
         // If we are a positive lookahead that successfully matched, retain the
         // capture groups (but we need to set up backtracking). Otherwise restore
@@ -499,6 +553,12 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
         pos: &mut Input::Position,
         _dir: Dir,
     ) -> bool {
+        // [omk] 검사점 2 — 역추적.
+        if !self.checkpoint() {
+            // 한도 초과 — 이 스택을 버리고 "더 없음"으로 끝낸다. 부르는 쪽이 exceeded 를 본다.
+            self.bts.truncate(1);
+            return false;
+        }
         loop {
             // We always have a single Exhausted instruction backstopping our stack,
             // so we do not need to check for empty bts.
@@ -1026,6 +1086,12 @@ impl<'r, Input: InputIndexer> BacktrackExecutor<'r, Input> {
     pub(crate) fn new(input: Input, matcher: MatchAttempter<'r, Input>) -> Self {
         Self { input, matcher }
     }
+
+    // [omk] 한도 초과 여부 — is_match_ucs2_limited 가 본다.
+    #[cfg(feature = "utf16")]
+    pub(crate) fn exceeded(&self) -> Option<crate::api::LimitExceeded> {
+        self.matcher.exceeded
+    }
 }
 
 impl<Input: InputIndexer> BacktrackExecutor<'_, Input> {
@@ -1101,6 +1167,10 @@ impl<Input: InputIndexer> BacktrackExecutor<'_, Input> {
                     *next_start = inp.next_right_pos(end);
                 }
                 return Some(self.successful_match(pos, end));
+            }
+            // [omk] 한도 초과면 다음 시작 위치를 시도하지 않는다.
+            if self.matcher.exceeded.is_some() {
+                return None;
             }
             // Didn't find it at this position, try the next one.
             pos = inp.next_right_pos(pos)?;
