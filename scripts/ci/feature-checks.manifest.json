@@ -18,7 +18,8 @@
     "apps/desktop-windows/": "desktopWindows",
     "apps/desktop-native/helper/": "desktopHelper",
     "apps/cli/": "cli",
-    "scripts/release/": "infra"
+    "scripts/release/": "infra",
+    "scripts/bench/": "infra"
   },
   "deletedTests": {
     "apps/api/src/addons/knowledge-runtime/__tests__/reindex-lease.test.ts": "전역 reindex(index-manager) 제거로 공간 재색인으로 흡수 — lease 검사(배치 삽입·전환 트랜잭션 앞, 0행이면 LeaseLostError)는 apps/api/src/addons/knowledge-runtime/__tests__/space-reindex.test.ts 가 검증한다",
