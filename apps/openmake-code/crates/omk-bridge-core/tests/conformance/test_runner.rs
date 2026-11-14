@@ -29,14 +29,12 @@ fn test_runner_direct() {
         let dir = input["dir"].as_str().unwrap();
         let got = rt.block_on(test_runner::detect(dir, &tool, &gate));
         assert_eq!(got.as_deref(), Ok(c["expect"].as_str().unwrap()), "{ctx}");
-        if let Some(tc) = c.get("toolCalls") {
-            let want = fill(tc, &tmp.path);
-            assert_eq!(
-                tool_calls_view(&read_tool_calls(&tmp), &want),
-                want,
-                "{ctx}: toolCalls"
-            );
-        }
+        let want = fill(&c["toolCalls"], &tmp.path);
+        assert_eq!(
+            tool_calls_view(&read_tool_calls(&tmp), &want),
+            want,
+            "{ctx}: toolCalls"
+        );
     }
     rt.shutdown_timeout(Duration::from_secs(5));
 }

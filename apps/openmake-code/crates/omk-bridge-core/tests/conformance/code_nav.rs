@@ -120,10 +120,20 @@ fn shape_core_cases(doc: &Value, suite: &str) {
     }
 }
 
-fn shape_direct(doc: &Value, suite: &str, input_keys: &[&str]) {
+/// `calls_required` — 모든 사례에 toolCalls(띄운 자식이 없으면 빈 배열)를 둔다(test-runner, PR-1.4 리뷰 N2).
+fn shape_direct(doc: &Value, suite: &str, input_keys: &[&str], calls_required: bool) {
     for c in non_empty(&doc["direct"], &format!("{suite}/direct")) {
         let at = format!("{suite}/direct/{}", c["id"].as_str().unwrap_or("?"));
-        shape(c, &["id", "setup", "input", "expect"], &["toolCalls"], &at);
+        if calls_required {
+            shape(
+                c,
+                &["id", "setup", "input", "expect", "toolCalls"],
+                &[],
+                &at,
+            );
+        } else {
+            shape(c, &["id", "setup", "input", "expect"], &["toolCalls"], &at);
+        }
         shape_setup(&c["setup"], &at);
         shape(&c["input"], input_keys, &[], &format!("{at}/input"));
         if let Some(tc) = c.get("toolCalls") {
@@ -185,7 +195,12 @@ fn tools_fixture_shapes() {
         "diagnostics-parse",
     );
     shape_core_cases(&doc, "diagnostics-parse");
-    shape_direct(&doc, "diagnostics-parse", &["base", "paths", "execPath"]);
+    shape_direct(
+        &doc,
+        "diagnostics-parse",
+        &["base", "paths", "execPath"],
+        false,
+    );
     for c in doc["direct"].as_array().unwrap() {
         let at = format!(
             "diagnostics-parse/direct/{}/expect",
@@ -207,7 +222,7 @@ fn tools_fixture_shapes() {
         "test-runner",
     );
     shape_core_cases(&doc, "test-runner");
-    shape_direct(&doc, "test-runner", &["dir", "execPath"]);
+    shape_direct(&doc, "test-runner", &["dir", "execPath"], true);
     for c in doc["direct"].as_array().unwrap() {
         let e = c["expect"].as_str().unwrap_or("");
         assert!(
