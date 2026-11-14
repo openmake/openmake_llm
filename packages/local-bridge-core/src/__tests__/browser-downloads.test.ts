@@ -92,7 +92,7 @@ function setup(navigate?: Record<string, unknown>, mockActions = true) {
 
 const act = (extra: Record<string, unknown> = {}) => ({ actions: [{ type: 'wait', ms: 0, ...extra }], sitePolicy: { allow: [], deny: [] } });
 const opts = (taskId: string, placeDownload?: BrowserRunOptions['placeDownload']): BrowserRunOptions => ({
-    taskId, downloadDir: '/tmp/out', saveFile: async () => undefined, ...(placeDownload ? { placeDownload } : {}),
+    taskId, saveFile: async () => undefined, ...(placeDownload ? { placeDownload } : {}),
 });
 /** 대기 폴더에 Chrome 이 받은 것처럼 `<guid>` 파일을 둔다. */
 const stage = (guid: string) => fs.writeFileSync(path.join(staging, guid), 'data');
