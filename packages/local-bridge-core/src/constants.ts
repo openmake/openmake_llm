@@ -255,6 +255,8 @@ export const BROWSER_DOWNLOAD_WAIT_MS = Number(process.env.OMK_BRIDGE_BROWSER_DO
 export const BROWSER_DOWNLOAD_NAME_TRIES = 100;
 /** 다운로드 대기 폴더 = 전용 프로필 폴더 + 이 접미사(연결 폴더 밖, Chrome 은 여기에 `<guid>` 이름으로만 받는다) */
 export const BROWSER_DOWNLOAD_STAGING_SUFFIX = '-downloads';
+/** 전용 Chrome 을 띄우는 프로필 — 기동 전에 이 프로필의 `Preferences` 기본 다운로드 폴더를 대기 폴더로 맞춘다(설계 B-9, 둘은 같아야 한다) */
+export const BROWSER_PROFILE_DIRECTORY = 'Default';
 /** 다운로드 제안 이름이 경로 글자(/ \ NUL)를 품거나 빈·점 이름일 때 쓰는 이름 */
 export const BROWSER_DOWNLOAD_FALLBACK_NAME = 'download';
 /** 화면 없이 띄울지 — 테스트·서버 환경용. 기본은 사용자에게 보이는 창 */
