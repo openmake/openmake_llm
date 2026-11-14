@@ -4,6 +4,8 @@
 //! `packages/local-bridge-core/conformance` 의 fixture 를 두 구현이 함께 통과해야 한다.
 
 pub mod base64_lenient;
+// 로컬 브라우저 — 판정·파일 경계(PR-1.6a). CDP·실행은 PR-1.6b.
+pub mod browser;
 pub mod constants;
 pub mod core;
 pub mod denylist;
