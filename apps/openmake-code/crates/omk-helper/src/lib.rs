@@ -73,3 +73,53 @@ pub fn run(argv: &[String]) -> i32 {
     rt.shutdown_background();
     code
 }
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    const CHILD: &str = "OMK_HELPER_PANIC_CHILD";
+
+    /// 자식(이 테스트 바이너리 자신)에서 훅을 달고 값이 섞인 패닉을 낸다.
+    #[test]
+    #[ignore = "panic_hook_prints_location_only 가 자식으로만 돌린다"]
+    fn panic_child() {
+        if std::env::var_os(CHILD).is_some() {
+            super::install_panic_hook();
+            panic!("secret-value omk_live_x");
+        }
+    }
+
+    /// D-98 — 패닉은 위치 한 줄 + exit 101. 패닉 메시지(값)는 찍지 않는다.
+    #[test]
+    fn panic_hook_prints_location_only() {
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "tests::panic_child",
+                "--ignored",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(super::PANIC_EXIT));
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            err.contains("omk-helper: 내부 오류 (crates/omk-helper/src/lib.rs:"),
+            "{err}"
+        );
+        assert!(
+            !err.contains("secret-value")
+                && !String::from_utf8_lossy(&out.stdout).contains("secret-value"),
+            "{err}"
+        );
+    }
+
+    /// D-98 — 로거를 설치하지 않는다(의존 크레이트의 `log` 기록이 꺼진 채다).
+    #[test]
+    fn no_logger_installed() {
+        assert_eq!(log::max_level(), log::LevelFilter::Off);
+    }
+}
