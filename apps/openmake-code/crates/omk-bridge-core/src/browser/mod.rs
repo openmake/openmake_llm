@@ -11,3 +11,4 @@ pub mod js_value;
 pub mod policy_block;
 pub mod result;
 pub mod site_policy;
+pub mod upload_files;
