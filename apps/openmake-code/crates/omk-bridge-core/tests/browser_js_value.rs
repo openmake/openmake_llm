@@ -251,3 +251,26 @@ fn clip_drops_split_surrogate_pair() {
     let c = clip(Some(&json!(s)));
     assert_eq!(c, format!("x{}…", "😀".repeat(99)));
 }
+
+/// 정책 JSON 을 `serde_json` 이 못 읽으면 빈 정책(전부 승인 대상 — 더 엄격). TS `JSON.parse` 는 셋 다 읽어 `allow: ["a", …]`
+/// 다(Node 24 실측) — BROWSER.md "fixture 에 넣지 않는 차이" 8.
+#[test]
+fn unreadable_policy_json_is_empty() {
+    use omk_bridge_core::browser::site_policy::{SitePolicy, parse_policy};
+    let deep = format!("{}{}", "[".repeat(129), "]".repeat(129));
+    for raw in [
+        r#"{"allow":["a","\ud800"]}"#.to_owned(),
+        format!(r#"{{"allow":["a"],"deny":{deep}}}"#),
+        r#"{"allow":["a"],"x":1e999}"#.to_owned(),
+    ] {
+        assert_eq!(
+            parse_policy(Some(&json!(raw))),
+            SitePolicy::default(),
+            "{raw}"
+        );
+    }
+    assert_eq!(
+        parse_policy(Some(&json!(r#"{"allow":["a"]}"#))).allow,
+        ["a"]
+    );
+}
