@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.133.1](https://github.com/openmake/openmake_llm/compare/v1.133.0...v1.133.1) (2026-11-13)
+
+
+### 🐛 버그 수정
+
+* **pipeline:** promote 가 병합 상태 계산 지연 때 다시 확인한다 ([2c71d6c](https://github.com/openmake/openmake_llm/commit/2c71d6c0bb165c48f0d3f55fb96476f55c9eb094))
+* **pipeline:** 건너뛸 실행을 승격·자동 머지 동시성 그룹에서 뺀다 ([2498f08](https://github.com/openmake/openmake_llm/commit/2498f08762d273fd5ba5ff8ae0b8f6fa12f21af9))
+
 ## [1.133.0](https://github.com/openmake/openmake_llm/compare/v1.132.0...v1.133.0) (2026-11-13)
 
 
