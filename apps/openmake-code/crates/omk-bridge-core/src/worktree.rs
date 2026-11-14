@@ -29,9 +29,8 @@ use crate::msg::{BridgeMsg, BridgeResult};
 use crate::node_path;
 use crate::scope;
 use crate::timed_fs::FsGate;
-use crate::tool_env::{ToolEnv, tool_failure};
+use crate::tool_env::{NO_HOST, ToolEnv, exists, tool_failure};
 
-const NO_HOST: &str = "exec 호스트가 설정되지 않았습니다";
 const NOT_A_REPO: &str = "git 레포가 아닙니다";
 const LABEL: &str = "worktree";
 
@@ -41,11 +40,6 @@ static TASK_ID: LazyLock<Option<regress::Regex>> =
 /// TS `TASK_ID_RE.test` — 정규식은 TS 의 source 그대로(플래그 없음 — `$` 는 끝에서만).
 fn task_id_ok(t: &str) -> bool {
     TASK_ID.as_ref().is_some_and(|re| re.find(t).is_some())
-}
-
-/// `existsSync` — 심링크를 따라가고, 어떤 오류든 "없음".
-fn exists(p: &str) -> bool {
-    std::fs::metadata(p).is_ok()
 }
 
 struct Git {

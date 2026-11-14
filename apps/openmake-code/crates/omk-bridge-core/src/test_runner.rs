@@ -15,16 +15,12 @@ use crate::constants::{MAX_BUFFER, TEST_RUNNER_PROBE_TIMEOUT_MS};
 use crate::git_trust::read_regular_file;
 use crate::node_path;
 use crate::timed_fs::FsGate;
-use crate::tool_env::ToolEnv;
+use crate::tool_env::{ToolEnv, exists};
 
 const LABEL: &str = "test_runner";
 
 /// pytest 탐지 코드 — 별건 TS 수정과 같은 글자(설계 변경 이력 2026-11-13).
 pub const PYTEST_PROBE: &str = "import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)";
-
-fn exists(p: &str) -> bool {
-    fs::metadata(p).is_ok()
-}
 
 /// 표식 파일 읽기 — 일반 파일만·MAX_BUFFER 이하만(FIFO 면 읽기가 멈췄다, 리뷰 R5). 그 밖(심링크·FIFO·큰 파일·없음)은
 /// "표식 없음". 깨진 바이트는 U+FFFD(TS `readMarker`).
