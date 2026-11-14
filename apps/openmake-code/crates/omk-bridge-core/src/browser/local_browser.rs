@@ -153,6 +153,15 @@ impl LocalBrowser {
         self.scheduler.request_stop(task);
     }
 
+    /// 연결만 닫는다 — Chrome·탭·페이지는 남고, 다음 요청이 주소 파일로 다시 붙는다(헬퍼만 다시 뜬 경우와 같다).
+    /// CDP 설정(다운로드 받는 곳)은 연결에 묶여 Chrome 기본값으로 돌아간다 — 기본값도 대기 폴더인지 보는 시험이 쓴다.
+    pub fn close_connection(&self) {
+        let cdp = self.lock().cdp.take();
+        if let Some(c) = cdp {
+            c.close();
+        }
+    }
+
     /// 작업이 끝났다 — 중지 기록·다운로드 귀속을 지우고 그 작업의 탭을 닫는다(닫기 실패는 삼킨다).
     pub async fn close_task(&self, task: Option<&str>) {
         let key = task_key(task);
