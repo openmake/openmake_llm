@@ -3,9 +3,13 @@
 //! 두 가지를 더한다. ① 줄을 UTF-16(UCS-2) 단위로 판정한다 — 기본 API(`find(&str)`)는 글자 단위라 JS 와 갈린다
 //! (`^.$` 대 보충 문자 한 글자). ② 패턴 안의 보충 문자를 대리 쌍 두 단위로 풀어 쓴다 — regress 는 패턴을 글자 단위로
 //! 읽어 UCS-2 판정에서 보충 문자 리터럴이 무엇에도 맞지 않는다(JS 는 패턴도 단위로 읽는다).
-//! 엔진 차이는 남는다: 구문 오류 꼬리 문구, `u` 없는 `\u{61}`, `i` 의 ſ·K 접기(README "fixture 에 넣지 않는 차이").
+//! 엔진 차이는 남는다: 구문 오류 꼬리 문구, `u` 없는 `\u{61}`, `i` 의 ſ·ı·K 접기(README "fixture 에 넣지 않는 차이").
+//! 엔진은 저장소 안 사본이다(`vendor/regress/OMK-PATCHES.md` — 판정 결함 두 개 수정 + 실행 한도). 서버가 준 패턴은
+//! `test_units_limited` 로만 판정한다 — 역추적 스택 상한과 중단 콜백으로 한 줄 안에서도 멈춘다.
 
 use std::borrow::Cow;
+
+use crate::constants::CODE_NAV_REGEX_MAX_BACKTRACK;
 
 /// 컴파일 실패 문구의 접두 — 꼬리는 엔진 문구라 TS(V8)와 다르다(fixture 는 `error-prefix` 로 본다).
 pub const INVALID_PREFIX: &str = "정규식이 올바르지 않습니다: ";
@@ -100,10 +104,33 @@ pub fn compile(src: &str, ignore_case: bool) -> Result<JsRegex, String> {
         .map_err(|e| format!("{INVALID_PREFIX}{e}"))
 }
 
+/// 한도를 둔 판정이 끝나지 못한 까닭.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Halt {
+    /// `stop` 이 참을 돌려줬다(시간 예산).
+    Stopped,
+    /// 역추적 스택이 `CODE_NAV_REGEX_MAX_BACKTRACK` 을 넘었다.
+    TooDeep,
+}
+
 impl JsRegex {
-    /// `re.test(줄)` — 줄은 UTF-16 단위 열.
+    /// `re.test(줄)` — 줄은 UTF-16 단위 열. 한도가 없다 — 고정 패턴·테스트용, 서버가 준 패턴에는 쓰지 않는다.
     pub fn test_units(&self, units: &[u16]) -> bool {
         self.re.find_from_ucs2(units, 0).next().is_some()
+    }
+
+    /// `re.test(줄)` 을 한도 안에서 — 역추적 스택 `CODE_NAV_REGEX_MAX_BACKTRACK`, `stop` 은 엔진이 검사점 256번마다 묻는다.
+    pub fn test_units_limited(&self, units: &[u16], stop: &dyn Fn() -> bool) -> Result<bool, Halt> {
+        let limits = regress::ExecLimits {
+            max_backtrack: CODE_NAV_REGEX_MAX_BACKTRACK,
+            stop,
+        };
+        self.re
+            .is_match_ucs2_limited(units, limits)
+            .map_err(|e| match e {
+                regress::LimitExceeded::Stopped => Halt::Stopped,
+                regress::LimitExceeded::Backtrack => Halt::TooDeep,
+            })
     }
 
     /// `re.exec(s)` 의 캡처 — 0 번은 일치 전체. 맞지 않으면 `None`. 단위 범위를 글자로 되돌린다
@@ -121,7 +148,7 @@ impl JsRegex {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use super::{INVALID_PREFIX, compile, expand_astral};
+    use super::{Halt, INVALID_PREFIX, compile, expand_astral};
 
     fn units(s: &str) -> Vec<u16> {
         s.encode_utf16().collect()
@@ -175,7 +202,27 @@ mod tests {
             ("function\\s+\\w+", false, "function foo(", true),
             ("import .* from", false, "import x from 'y'", true),
             ("TODO|FIXME", true, "// fixme", true),
+            // 원본 regress 가 틀리거나(못 맞춤) 끝나지 않던 꼴 — 사본 패치 ①②(fixture `grep-regex-backtracking` 과 같은 13건).
+            ("((?:x{1,2})+){2}", false, "xx", true),
+            ("((?:x{1,2}A*?)+){2}", false, "xx", true),
+            ("^(([^a]{1,2}){1,2}){2}[^a]*", false, "bbb", true),
+            ("(?:[^a]+?(?:Ａ[^a]?)+)+Ａ[^a]$", false, "xＡＡＡb", true),
+            ("((?:[^a]+가+?[^a]*?)+){1,2}Ａ", false, "x가x가Ａ", true),
+            ("^(?:([^a]*?a+){1,2}){2}", true, "xAxAxA", true),
+            (
+                "((/*){1,2}){1,2}a{2}",
+                false,
+                "////////////////////b",
+                false,
+            ),
+            ("\\s*?((가?){2})+$", false, "  가가 ab/", true),
+            ("(?:( *){1,2})+(\\ba+?)", false, "  a", true),
+            ("(x{1,2}\\1){2}", false, "xx", true),
+            ("((.(/??)*)\\1){2}", false, "_//", true),
+            ("(?:([ab]?)?)+?b+?", false, "aab", true),
+            ("^((/?|[a-z])*)*?\\w", false, "//ab_", true),
         ];
+        let never = || false;
         for (p, icase, line, want) in cases {
             let re = compile(p, *icase).unwrap();
             assert_eq!(
@@ -183,7 +230,22 @@ mod tests {
                 *want,
                 "{p:?} i={icase} {line:?}"
             );
+            assert_eq!(
+                re.test_units_limited(&units(line), &never),
+                Ok(*want),
+                "한도 판정 {p:?} i={icase} {line:?}"
+            );
         }
+    }
+
+    /// 한도를 넘은 판정은 참·거짓으로 새지 않는다 — 시간 예산(`stop`)과 역추적 스택 상한.
+    #[test]
+    fn limited_judgement_halts() {
+        let evil = compile("(a+)+$", false).unwrap();
+        let line = units(&format!("{}!", "a".repeat(40)));
+        assert_eq!(evil.test_units_limited(&line, &|| true), Err(Halt::Stopped));
+        let deep = compile("((a?){9999}){9999}", false).unwrap();
+        assert_eq!(deep.test_units_limited(&[], &|| false), Err(Halt::TooDeep));
     }
 
     /// 짝 없는 반쪽 단위가 든 줄(JS 문자열은 담을 수 있다) — Node 실측.
@@ -202,7 +264,8 @@ mod tests {
     }
 
     /// fixture 에 넣지 않는 차이(README) — Rust 값으로 고정한다. Node 는 모두 반대다.
-    /// `u` 없는 `\u{61}` 를 regress 는 `a` 로 읽고(JS 는 `u` 61번), `i` 에서 ſ(U+017F)를 s 로, 클래스 안의 K(U+212A)를 k 로 접는다.
+    /// `u` 없는 `\u{61}` 를 regress 는 `a` 로 읽고(JS 는 `u` 61번), `i` 에서 ſ(U+017F)를 s 로, ı(U+0131)를 i 로,
+    /// 클래스 안의 K(U+212A)를 k 로 접는다.
     #[test]
     fn known_engine_differences_are_pinned() {
         let a = units("a");
@@ -210,6 +273,7 @@ mod tests {
         assert!(compile("\\u{61}", false).unwrap().test_units(&a));
         assert!(!compile("\\u{61}", false).unwrap().test_units(&u61));
         assert!(compile("s", true).unwrap().test_units(&units("\u{17f}")));
+        assert!(compile("i", true).unwrap().test_units(&units("\u{131}")));
         assert!(
             !compile("k", true).unwrap().test_units(&units("\u{212a}")),
             "리터럴 k 는 두 엔진 모두 접지 않는다"
