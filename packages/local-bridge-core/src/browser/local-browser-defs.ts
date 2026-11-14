@@ -24,6 +24,11 @@ export interface BrowserRunOptions {
     saveFile: (name: string, data: Buffer) => Promise<void>;
     /** 다운로드가 떨어질 폴더(절대 경로) — 허용 폴더 안 */
     downloadDir: string;
+    /**
+     * 다운로드 저장 — 대기 폴더의 `<guid>` 파일(stagedPath)을 제안 이름으로 허용 폴더에 옮기고 저장된 이름을 돌려준다(download-place.ts,
+     * `write` 와 같은 가드). 없으면 다운로드를 받지 않는다(deny).
+     */
+    placeDownload?: PlaceDownload;
     /** 업로드할 파일 검사 — 폴더 기준 상대 경로 → 실제 경로, 걸리면 던진다(upload-files.ts). 없으면 업로드를 실행하지 않는다 */
     resolveUploadFiles?: (files: unknown) => Promise<string[]>;
 }
@@ -46,6 +51,19 @@ export interface BrowserRunResult {
     userControl?: true;
     /** 사이트 정책·사용자 제어로 막은 액션(서버 감사 기록용, 2026-10-06) — 막히면 거기서 멈추므로 한 호출에 하나다. */
     policyBlock?: BrowserPolicyBlock;
+    /** 이 작업에 귀속된 다운로드 중 아직 보고하지 않은 것(2026-11-14, 추가 전용 — 없으면 싣지 않는다). url 은 싣지 않는다(서버가 "도착한 주소"로 읽는다). */
+    downloads?: DownloadReport[];
+}
+
+/** 다운로드 저장 함수 — 제안 이름·대기 파일 경로 → 저장된 이름(허용 폴더 기준). 가드 거절은 DownloadRejectedError. */
+export type PlaceDownload = (suggestedName: string, stagedPath: string) => Promise<string>;
+
+/** 결과에 싣는 다운로드 하나 — saved 면 savedAs, rejected·failed 면 error(가드 문구 그대로). */
+export interface DownloadReport {
+    name: string;
+    state: 'saved' | 'rejected' | 'failed' | 'canceled' | 'inProgress';
+    savedAs?: string;
+    error?: string;
 }
 
 export interface Action { type?: unknown; [k: string]: unknown }
