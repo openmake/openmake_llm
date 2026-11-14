@@ -13,19 +13,26 @@
 import { spawn } from 'child_process';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { createLogger } from '../../utils/logger';
+import { cappedUtf8Text } from '../../utils/capped-utf8-text';
 
 const logger = createLogger('EgressProxy');
 
 /** docker CLI 실행 함수 모양 — 테스트가 가짜를 넣을 수 있게 내보낸다. */
 export type DockerRun = (docker: string, args: string[]) => Promise<{ code: number; stdout: string; stderr: string }>;
 
-function run(docker: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+const DOCKER_CLI_OUTPUT_CAP = 8192;
+
+export function runDockerCli(docker: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
     return new Promise((resolve) => {
         const child = spawn(docker, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-        let stdout = ''; let stderr = '';
-        child.stdout.on('data', (b) => { stdout += b.toString('utf8', 0, 8192); });
-        child.stderr.on('data', (b) => { stderr += b.toString('utf8', 0, 8192); });
-        child.on('close', (code) => resolve({ code: code ?? -1, stdout: stdout.trim(), stderr: stderr.trim() }));
+        // 스트림마다 이어 디코드하고 누적 8192자까지만 모은다(runProcess 와 같은 규칙 — 조각별 디코드·절단은 경계 글자를 깨뜨린다)
+        const out = cappedUtf8Text(DOCKER_CLI_OUTPUT_CAP); const err = cappedUtf8Text(DOCKER_CLI_OUTPUT_CAP);
+        child.stdout.on('data', (b: Buffer) => out.write(b));
+        child.stderr.on('data', (b: Buffer) => err.write(b));
+        child.on('close', (code) => {
+            out.end(); err.end();
+            resolve({ code: code ?? -1, stdout: out.text.trim(), stderr: err.text.trim() });
+        });
         child.on('error', (e) => resolve({ code: -1, stdout: '', stderr: String(e) }));
     });
 }
@@ -161,7 +168,7 @@ async function migrateToIsolated(cfg: TaskSandboxConfig, exec: DockerRun): Promi
 }
 
 /** internal 네트워크 + 프록시 컨테이너를 보장하고 프록시 base URL 을 반환. 멱등. */
-export async function ensureEgressProxy(cfg: TaskSandboxConfig, exec: DockerRun = run): Promise<string> {
+export async function ensureEgressProxy(cfg: TaskSandboxConfig, exec: DockerRun = runDockerCli): Promise<string> {
     const d = cfg.dockerPath;
     // 1) internal 네트워크 (외부 연결 없음) — 없으면 생성, 있는데 gateway 격리가 아니면 이행.
     const net = await exec(d, gatewayModeInspectArgs(cfg));

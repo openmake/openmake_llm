@@ -26,6 +26,7 @@ export async function startModelFixture() {
     let request;
     try {
       let input = '';
+      req.setEncoding('utf8');
       for await (const chunk of req) {
         input += chunk;
         if (input.length > 2_000_000) throw new Error('Fixture request too large');

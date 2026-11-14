@@ -50,7 +50,8 @@ const { WebSocketServer } = require(path.join(__dirname, '..', '..', '..', 'node
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   const events = [];
-  child.stdout.on('data', (d) => { for (const line of d.toString().split('\n')) { try { events.push(JSON.parse(line)); } catch { /* 로그 줄 */ } } });
+  child.stdout.setEncoding('utf8'); // 조각을 이어 디코드한다(줄이 조각 경계에서 갈리는 문제는 별개 — 설계 D-7)
+  child.stdout.on('data', (d) => { for (const line of d.split('\n')) { try { events.push(JSON.parse(line)); } catch { /* 로그 줄 */ } } });
   let failed = null;
   try {
     const hello = await waitFor((f) => f.type === 'bridge_hello');

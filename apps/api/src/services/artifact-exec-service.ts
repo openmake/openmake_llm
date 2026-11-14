@@ -11,6 +11,7 @@
  */
 import { spawn } from 'child_process';
 import { createLogger } from '../utils/logger';
+import { cappedUtf8Text } from '../utils/capped-utf8-text';
 import { resolveDocker } from '../utils/docker-path';
 import { ARTIFACT_EXEC, ARTIFACT_EXEC_RUNTIMES } from '../config/artifact-exec';
 
@@ -63,54 +64,43 @@ function execAvailability(): ExecAvailability {
   return { enabled: true, dockerPath: resolveDocker(ARTIFACT_EXEC.dockerPath) };
 }
 
-function runOnce(dockerPath: string, runtime: string, code: string): Promise<ArtifactExecResult> {
+/** 실행 1회 — 명령·인자·상한을 받는다(테스트가 docker 없이 자식 프로세스로 부른다). */
+export function runOnce(
+  command: string, args: string[], runtime: string, code: string, max: number = ARTIFACT_EXEC.outputMaxBytes,
+): Promise<ArtifactExecResult> {
   return new Promise((resolve) => {
-    const args = buildExecDockerArgs(runtime);
     const started = Date.now();
-    let stdout = '';
-    let stderr = '';
-    let outBytes = 0;
-    let errBytes = 0;
-    let truncated = false;
     let timedOut = false;
-    const max = ARTIFACT_EXEC.outputMaxBytes;
+    // 스트림마다 이어 디코드하고 글자 수(UTF-16 단위) 상한까지만 모은다 — 조각마다 디코드하면 경계 글자가 U+FFFD 로 깨진다.
+    const out = cappedUtf8Text(max);
+    const err = cappedUtf8Text(max);
 
-    const child = spawn(dockerPath, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
 
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill('SIGKILL'); // docker run 종료 → --rm 컨테이너 정리
     }, ARTIFACT_EXEC.timeoutMs);
 
-    child.stdout.on('data', (d: Buffer) => {
-      if (outBytes < max) {
-        outBytes += d.length;
-        stdout += d.toString('utf8');
-        if (outBytes >= max) { stdout = stdout.slice(0, max); truncated = true; }
-      }
-    });
-    child.stderr.on('data', (d: Buffer) => {
-      if (errBytes < max) {
-        errBytes += d.length;
-        stderr += d.toString('utf8');
-        if (errBytes >= max) { stderr = stderr.slice(0, max); truncated = true; }
-      }
-    });
+    child.stdout.on('data', (d: Buffer) => out.write(d));
+    child.stderr.on('data', (d: Buffer) => err.write(d));
     child.on('error', (e) => {
       clearTimeout(timer);
       log.warn(`docker spawn 실패: ${e.message}`);
-      resolve({ runtime, stdout: '', stderr: `실행 환경 오류: ${e.message}`, exitCode: null, durationMs: Date.now() - started, timedOut, truncated });
+      resolve({ runtime, stdout: '', stderr: `실행 환경 오류: ${e.message}`, exitCode: null, durationMs: Date.now() - started, timedOut, truncated: out.truncated || err.truncated });
     });
     child.on('close', (exitCode) => {
       clearTimeout(timer);
+      out.end();
+      err.end();
       resolve({
         runtime,
-        stdout,
-        stderr: timedOut ? (stderr + `\n[시간 초과: ${ARTIFACT_EXEC.timeoutMs}ms 내 미완료, 강제 종료]`) : stderr,
+        stdout: out.text,
+        stderr: timedOut ? (err.text + `\n[시간 초과: ${ARTIFACT_EXEC.timeoutMs}ms 내 미완료, 강제 종료]`) : err.text,
         exitCode,
         durationMs: Date.now() - started,
         timedOut,
-        truncated,
+        truncated: out.truncated || err.truncated,
       });
     });
 
@@ -147,7 +137,7 @@ export async function executeArtifactCode(lang: string, code: string): Promise<A
   }
   inFlight++;
   try {
-    return await runOnce(dockerPath, runtime, code);
+    return await runOnce(dockerPath, buildExecDockerArgs(runtime), runtime, code);
   } finally {
     inFlight--;
   }

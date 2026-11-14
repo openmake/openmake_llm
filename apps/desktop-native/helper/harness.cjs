@@ -78,8 +78,9 @@ const { WebSocketServer } = require('ws');
     const events = [];
     const evWaiters = [];
     let buf = '';
+    helper.stdout.setEncoding('utf8'); // 조각을 이어 디코드한다 — 조각마다 문자열로 바꾸면 경계의 다바이트 글자가 깨진다
     helper.stdout.on('data', (d) => {
-        buf += d.toString();
+        buf += d;
         let nl;
         while ((nl = buf.indexOf('\n')) >= 0) {
             const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
