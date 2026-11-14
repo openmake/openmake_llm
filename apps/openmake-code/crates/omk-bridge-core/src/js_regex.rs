@@ -4,8 +4,9 @@
 //! (`^.$` 대 보충 문자 한 글자). ② 패턴 안의 보충 문자를 대리 쌍 두 단위로 풀어 쓴다 — regress 는 패턴을 글자 단위로
 //! 읽어 UCS-2 판정에서 보충 문자 리터럴이 무엇에도 맞지 않는다(JS 는 패턴도 단위로 읽는다).
 //! 엔진 차이는 남는다: 구문 오류 꼬리 문구, `u` 없는 `\u{61}`, `i` 의 ſ·ı·K 접기(README "fixture 에 넣지 않는 차이").
-//! 엔진은 저장소 안 사본이다(`vendor/regress/OMK-PATCHES.md` — 판정 결함 두 개 수정 + 실행 한도). 서버가 준 패턴은
-//! `test_units_limited` 로만 판정한다 — 역추적 스택 상한과 중단 콜백으로 한 줄 안에서도 멈춘다.
+//! 엔진은 저장소 안 사본이다(`vendor/regress/OMK-PATCHES.md` — 판정 결함 두 개 수정 + 실행 한도). `code_nav` grep 의 패턴
+//! (모델이 준 값)은 `test_units_limited` 로만 판정한다 — 역추적 스택 상한과 중단 콜백으로 한 줄 안에서도 멈춘다.
+//! 한도 없는 `test_units` 는 고정 패턴·사이트 정책 호스트 패턴(`browser::site_policy::host_matches` — 근거는 그 주석)·테스트에 쓴다.
 
 use std::borrow::Cow;
 
@@ -114,7 +115,8 @@ pub enum Halt {
 }
 
 impl JsRegex {
-    /// `re.test(줄)` — 줄은 UTF-16 단위 열. 한도가 없다 — 고정 패턴·테스트용, 서버가 준 패턴에는 쓰지 않는다.
+    /// `re.test(줄)` — 줄은 UTF-16 단위 열. 한도가 없다 — 고정 패턴·사이트 정책 호스트 패턴(별표만, 한 글자 루프)·테스트용.
+    /// 모델이 준 패턴(`code_nav` grep)에는 쓰지 않는다.
     pub fn test_units(&self, units: &[u16]) -> bool {
         self.re.find_from_ucs2(units, 0).next().is_some()
     }
