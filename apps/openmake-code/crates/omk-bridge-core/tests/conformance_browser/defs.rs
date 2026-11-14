@@ -7,7 +7,7 @@ use omk_bridge_core::browser::defs::{
 use omk_bridge_core::browser::js_value::json_string;
 use serde_json::{Value, json};
 
-use super::{arg, cases, load};
+use super::{arg, cases, groups, load};
 
 const SUITE: &str = "browser-defs";
 
@@ -65,18 +65,8 @@ fn run(group: &str, i: &Value) -> Value {
 #[test]
 fn defs_suite() {
     let doc = load(SUITE);
-    let groups = [
-        "str",
-        "screenshotName",
-        "keyEventOf",
-        "approvedUploads",
-        "clickPointJs",
-        "fillPrepareJs",
-        "downloadTaskOf",
-        "jsonString",
-    ];
     let mut failed = Vec::new();
-    for group in groups {
+    for group in groups(SUITE) {
         for (ctx, c) in cases(&doc, SUITE, group) {
             let got = run(group, &c["input"]);
             if got != c["expect"] {

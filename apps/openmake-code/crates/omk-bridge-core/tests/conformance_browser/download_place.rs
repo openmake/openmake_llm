@@ -4,7 +4,7 @@ use omk_bridge_core::browser::download_place::{PlaceError, place_download};
 use omk_bridge_core::git_trust::GitGuard;
 use serde_json::{Value, json};
 
-use super::{cases, load};
+use super::{cases, groups, load};
 use crate::support::browser_fs::{apply_fs_setup, walk};
 use crate::support::{TmpDir, fill_tmp};
 
@@ -13,6 +13,8 @@ const SUITE: &str = "browser-download-place";
 #[test]
 fn download_place_suite() {
     let doc = load(SUITE);
+    // 묶음은 `cases` 하나 — 표(`spec`)에 묶음을 더하면 여기서 실패한다(조용히 건너뛰지 않는다)
+    assert_eq!(groups(SUITE), ["cases"]);
     let mut failed = Vec::new();
     for (ctx, c) in cases(&doc, SUITE, "cases") {
         let tmp = TmpDir::new();

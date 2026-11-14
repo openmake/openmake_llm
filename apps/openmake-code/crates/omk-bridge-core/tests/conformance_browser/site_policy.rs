@@ -6,7 +6,7 @@ use omk_bridge_core::browser::site_policy::{
 };
 use serde_json::{Value, json};
 
-use super::{arg, cases, load};
+use super::{arg, cases, groups, load};
 
 const SUITE: &str = "browser-site-policy";
 
@@ -81,20 +81,8 @@ fn run(doc: &Value, group: &str, i: &Value) -> Value {
 #[test]
 fn site_policy_suite() {
     let doc = load(SUITE);
-    let groups = [
-        "classify",
-        "hostOf",
-        "navigable",
-        "hostMatches",
-        "allowed",
-        "needsApproval",
-        "check",
-        "parsePolicy",
-        "uploadFilesOf",
-        "policyBlock",
-    ];
     let mut failed = Vec::new();
-    for group in groups {
+    for group in groups(SUITE) {
         for (ctx, c) in cases(&doc, SUITE, group) {
             let got = run(&doc, group, &c["input"]);
             if got != c["expect"] {
