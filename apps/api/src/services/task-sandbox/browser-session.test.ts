@@ -180,4 +180,52 @@ describe('browser-session (사용자가 넘겨받는 브라우저)', () => {
         expect(r.stderr).toBe('');
         expect(r.status).toBe(0);
     });
+
+    it('세션 스크립트는 글자 한가운데에서 갈린 요청 본문도 원문 그대로 받는다(type 텍스트)', async () => {
+        const { mkdtemp, mkdir, writeFile, rm } = await import('fs/promises');
+        const { tmpdir } = await import('os');
+        const { join } = await import('path');
+        const { spawn } = await import('child_process');
+        const http = await import('http');
+        const net = await import('net');
+        const dir = await mkdtemp(join(tmpdir(), 'omk-bs-body-'));
+        // playwright 대역 — 스크립트는 createRequire('/opt/browser/') 로 찾으므로 NODE_PATH 로 이걸 잡게 한다. 입력한 글자는 stdout 에 쓴다.
+        await mkdir(join(dir, 'np', 'playwright'), { recursive: true });
+        await writeFile(join(dir, 'np', 'playwright', 'index.js'), `
+            const page = { isClosed: () => false, keyboard: { type: async (t) => { process.stdout.write(JSON.stringify({ typed: t }) + '\\n'); } } };
+            const context = { newPage: async () => page, on() {}, pages: () => [page], storageState: async () => {} };
+            module.exports = { chromium: { launch: async () => ({ newContext: async () => context, close: async () => {} }) } };`);
+        await writeFile(join(dir, 's.mjs'), BROWSER_SESSION_SCRIPT);
+        const port = await new Promise<number>((ok) => {
+            const s = net.createServer().listen(0, '127.0.0.1', () => { const p = (s.address() as { port: number }).port; s.close(() => ok(p)); });
+        });
+        const child = spawn(process.execPath, [join(dir, 's.mjs')], {
+            env: { ...process.env, NODE_PATH: join(dir, 'np'), OMK_PORT: String(port), BROWSER_DEST_GUARD: 'off', BROWSER_PROXY: '' },
+        });
+        let out = '';
+        child.stdout.setEncoding('utf8');
+        child.stdout.on('data', (d: string) => { out += d; });
+        const post = (parts: Buffer[]) => new Promise<string>((ok, fail) => {
+            const req = http.request({ host: '127.0.0.1', port, path: '/cmd', method: 'POST' }, (res) => {
+                const got: Buffer[] = [];
+                res.on('data', (d: Buffer) => got.push(d));
+                res.on('end', () => ok(Buffer.concat(got).toString('utf8')));
+            });
+            req.on('error', fail);
+            req.write(parts[0]);
+            setTimeout(() => req.end(parts[1]), 50);
+        });
+        try {
+            for (let i = 0; ; i++) { // 스크립트가 듣기 시작할 때까지
+                try { await post([Buffer.from('{"op":'), Buffer.from('"ping"}')]); break; } catch (e) { if (i > 100) throw e; await new Promise((r) => setTimeout(r, 100)); }
+            }
+            const body = Buffer.from(JSON.stringify({ op: 'type', text: '한글 입력' }));
+            const at = body.indexOf(Buffer.from('한')) + 1; // '한' 의 첫 바이트 뒤에서 가른다
+            expect(JSON.parse(await post([body.subarray(0, at), body.subarray(at)]))).toEqual({ ok: true });
+            expect(out).toContain(JSON.stringify({ typed: '한글 입력' }));
+        } finally {
+            child.kill('SIGKILL');
+            await rm(dir, { recursive: true, force: true });
+        }
+    }, 30_000);
 });
