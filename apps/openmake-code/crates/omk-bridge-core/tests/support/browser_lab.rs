@@ -1,0 +1,229 @@
+//! `LocalBrowser` 가짜 CDP 실험대 — 임시 프로필 + 가짜 호스트 + 문(gate)·설정 거절을 넣을 수 있는 기본 대본.
+//!
+//! 문: 그 세션의 다음 `location.href` 평가(단순 액션마다 정책 판정 앞에 한 번)에 답하지 않고 붙든다. 테스트는 붙든 동안
+//! 이벤트를 보내고(`Server::emit`) 놓는다(`release`) — TS 테스트가 `runAction` 을 모의해 실행 도중에 이벤트를 보내던 자리.
+
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use omk_bridge_core::browser::download_place::PlaceError;
+use omk_bridge_core::browser::downloads::PlaceDownload;
+use omk_bridge_core::browser::host::BrowserEnv;
+use omk_bridge_core::browser::local_browser::LocalBrowser;
+use omk_bridge_core::browser::run::{BrowserRunOptions, BrowserSpec};
+use serde_json::{Value, json};
+use tokio::sync::Notify;
+
+use super::TmpDir;
+use super::browser::{FakeHost, Out, Responder, Sent, Server, browser_replies};
+
+/// 문 — 세션별로 다음 `location.href` 의 답을 붙든다.
+#[derive(Default)]
+pub struct Gates {
+    hold: Mutex<Vec<String>>,
+    held: Mutex<Vec<Sent>>,
+    notify: Notify,
+}
+
+impl Gates {
+    pub fn hold(&self, session: &str) {
+        self.hold.lock().unwrap().push(session.to_owned());
+    }
+
+    pub async fn until_held(&self, session: &str) {
+        let wait = async {
+            loop {
+                let mut n = std::pin::pin!(self.notify.notified());
+                n.as_mut().enable();
+                if self
+                    .held
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|s| s.session.as_deref() == Some(session))
+                {
+                    return;
+                }
+                n.await;
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(3600), wait)
+            .await
+            .expect("문에 닿지 않았다");
+    }
+
+    /// 붙든 답을 보낸다(`about:blank`).
+    pub fn release(&self, server: &Server, session: &str) {
+        let mut held = self.held.lock().unwrap();
+        let n = held
+            .iter()
+            .position(|s| s.session.as_deref() == Some(session))
+            .expect("붙든 답 없음");
+        let s = held.remove(n);
+        server.raw(
+            &json!({"id": s.id, "result": {"result": {"type": "string", "value": "about:blank"}}, "sessionId": session})
+                .to_string(),
+        );
+    }
+
+    fn take(&self, s: &Sent) -> bool {
+        let is_href = s.method == "Runtime.evaluate" && s.params["expression"] == "location.href";
+        let Some(session) = s.session.as_deref().filter(|_| is_href) else {
+            return false;
+        };
+        let mut hold = self.hold.lock().unwrap();
+        let Some(n) = hold.iter().position(|h| h == session) else {
+            return false;
+        };
+        hold.remove(n);
+        self.held.lock().unwrap().push(s.clone());
+        self.notify.notify_waiters();
+        true
+    }
+}
+
+/// 기본 대본 + 문 + `Browser.setDownloadBehavior` 거절(이 behavior 면 `CDP 설정 거절`).
+pub fn lab_replies(navigate: Value, gates: Arc<Gates>, fail: Arc<Mutex<Vec<String>>>) -> Responder {
+    let inner = browser_replies(navigate);
+    Arc::new(move |s: &Sent| {
+        if gates.take(s) {
+            return vec![];
+        }
+        let behavior = s.params["behavior"].as_str().unwrap_or("");
+        if s.method == "Browser.setDownloadBehavior"
+            && fail.lock().unwrap().iter().any(|b| b == behavior)
+        {
+            return vec![Out::Error("CDP 설정 거절".into())];
+        }
+        inner(s)
+    })
+}
+
+pub struct Lab {
+    pub tmp: TmpDir,
+    pub profile: String,
+    pub staging: String,
+    pub gates: Arc<Gates>,
+    pub fail: Arc<Mutex<Vec<String>>>,
+    pub host: Arc<FakeHost>,
+    pub browser: Arc<LocalBrowser>,
+}
+
+pub fn env() -> BrowserEnv {
+    BrowserEnv::from_env(&|_| None, "darwin", "/work/home")
+}
+
+impl Lab {
+    /// `launching` 이면 떠 있는 Chrome 이 없다(첫 요청이 띄운다).
+    pub fn new(launching: bool) -> Lab {
+        Lab::with_navigate(launching, json!({"loaderId": "l1"}))
+    }
+
+    pub fn with_navigate(launching: bool, navigate: Value) -> Lab {
+        let tmp = TmpDir::new();
+        let profile = tmp.join("profile");
+        let staging = format!("{profile}-downloads");
+        let (gates, fail) = (Arc::new(Gates::default()), Arc::new(Mutex::new(Vec::new())));
+        let host = make_host(launching, &navigate, &gates, &fail);
+        let browser = LocalBrowser::for_profile_with_host(&profile, env(), host.clone());
+        Lab {
+            tmp,
+            profile,
+            staging,
+            gates,
+            fail,
+            host,
+            browser,
+        }
+    }
+
+    /// 같은 프로필로 새 인스턴스(앞 인스턴스는 `dispose` 뒤).
+    pub fn reopen(&mut self, launching: bool) {
+        self.host = make_host(
+            launching,
+            &json!({"loaderId": "l1"}),
+            &self.gates,
+            &self.fail,
+        );
+        self.browser = LocalBrowser::for_profile_with_host(&self.profile, env(), self.host.clone());
+    }
+
+    pub fn server(&self) -> Arc<Server> {
+        self.host.last_server()
+    }
+
+    pub fn staged(&self) -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(&self.staging)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        v.sort();
+        v
+    }
+
+    /// 대기 폴더에 Chrome 이 받은 것처럼 `<guid>` 파일을 둔다.
+    pub fn stage(&self, guid: &str) {
+        std::fs::create_dir_all(&self.staging).unwrap();
+        std::fs::write(format!("{}/{guid}", self.staging), "data").unwrap();
+    }
+}
+
+fn make_host(
+    launching: bool,
+    navigate: &Value,
+    gates: &Arc<Gates>,
+    fail: &Arc<Mutex<Vec<String>>>,
+) -> Arc<FakeHost> {
+    let r = lab_replies(navigate.clone(), gates.clone(), fail.clone());
+    if launching {
+        FakeHost::launching(r)
+    } else {
+        FakeHost::attached(r)
+    }
+}
+
+/// `wait 0` 하나 + 빈 정책.
+pub fn wait_spec() -> BrowserSpec {
+    BrowserSpec {
+        actions: Some(json!([{"type": "wait", "ms": 0}])),
+        site_policy: Some(json!({"allow": [], "deny": []})),
+        ..BrowserSpec::default()
+    }
+}
+
+pub fn opts(task: &str, place: Option<PlaceDownload>) -> BrowserRunOptions {
+    BrowserRunOptions {
+        task_id: Some(task.to_owned()),
+        save_file: Arc::new(|_, _| Box::pin(async { Ok(()) })),
+        download_dir: "/work/out".into(),
+        place_download: place,
+        resolve_upload_files: None,
+    }
+}
+
+/// 받은 (이름, 대기 경로)를 적고 `answer(이름)` 을 돌려주는 저장 함수.
+pub fn place_fn(
+    calls: &Arc<Mutex<Vec<(String, String)>>>,
+    answer: impl Fn(&str, &str) -> Result<String, PlaceError> + Send + Sync + 'static,
+) -> PlaceDownload {
+    let calls = calls.clone();
+    let answer = Arc::new(answer);
+    Arc::new(move |name: String, staged: String| {
+        calls.lock().unwrap().push((name.clone(), staged.clone()));
+        let r = answer(&name, &staged);
+        Box::pin(async move { r })
+    })
+}
+
+/// `downloadWillBegin` params.
+pub fn begin(guid: &str, name: &str, frame: &str) -> Value {
+    json!({"guid": guid, "suggestedFilename": name, "frameId": frame, "url": "http://example.com/"})
+}
+
+pub fn progress(guid: &str, state: &str) -> Value {
+    json!({"guid": guid, "state": state})
+}
+
+pub async fn tick() {
+    tokio::time::sleep(Duration::from_millis(10)).await;
+}
