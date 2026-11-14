@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.133.2](https://github.com/openmake/openmake_llm/compare/v1.133.1...v1.133.2) (2026-11-14)
+
+
+### 🐛 버그 수정
+
+* **local-bridge-core:** 3차 리뷰 R1~R5 — 비ASCII 첫 이름·루트 HEAD·gitfile 해석·읽기 상한 ([02b1542](https://github.com/openmake/openmake_llm/commit/02b15425dfa2d216736b048fc875d292c5f1df95))
+* **local-bridge-core:** 4차 리뷰 S1·S2 — git 가드를 구조 기준 불변식으로(D-11) ([cda7767](https://github.com/openmake/openmake_llm/commit/cda7767cf411b6166931b0cd0b1347b7176b5e1d))
+* **local-bridge-core:** 5차 리뷰 T1 — 파일 kind 는 HEAD 항목의 유무를 바꾸지 못한다(D-11 규칙 3) ([dd219e5](https://github.com/openmake/openmake_llm/commit/dd219e512f0570d554bc87de2552d9d23f41bd9f))
+* **local-bridge-core:** 6차 리뷰 U1 — 폴더째 지우기로도 HEAD 항목의 유무를 바꾸지 못한다(D-11 규칙 3) ([721045c](https://github.com/openmake/openmake_llm/commit/721045c6ff91f4e0d2f5ca1eaff137cf810877db))
+* **local-bridge-core:** commondir 쓰기 금지, folder 로 고른 중첩 레포의 worktree 격리 복구 ([048e567](https://github.com/openmake/openmake_llm/commit/048e567d5f5ef2e8d9fbaf05be93a170c549e255))
+* **local-bridge-core:** 리뷰 F1~F8 — 프로파일 인라인, 탐지 실패에도 .git 보호, 대소문자·config.worktree·omk-base ([a11d362](https://github.com/openmake/openmake_llm/commit/a11d3624aab88e20274b3474b320fb2821804309))
+* **local-bridge-core:** 재리뷰 N1~N3 — 루트 .git 이름 가드, 폴더 안 gitfile·심링크 대상 보호, git 메타는 일반 파일만 읽기 ([080da21](https://github.com/openmake/openmake_llm/commit/080da21da5227d032f2fb679b01d7269e4b4f8f9))
+* **omk-bridge-core:** 3차 리뷰 R1~R5 — TS 와 같은 규칙·같은 글자 ([8ae8cc5](https://github.com/openmake/openmake_llm/commit/8ae8cc58cf6a453255daf6c24d80c3c061cd6082))
+* **omk-bridge-core:** 4차 리뷰 S1·S2 — TS 와 같은 규칙·같은 글자(D-11) ([52d363c](https://github.com/openmake/openmake_llm/commit/52d363ccf62a81c94ed33a7ea977882959f5f8f3))
+* **omk-bridge-core:** 5차 리뷰 T1 — TS 와 같은 규칙·같은 글자(D-11 규칙 3) ([15a9a3c](https://github.com/openmake/openmake_llm/commit/15a9a3cde0223be5489d74858010bacf41da0c4f))
+* **omk-bridge-core:** 6차 리뷰 U1 — TS 와 같은 규칙·같은 글자(D-11 규칙 3) ([45fa2b1](https://github.com/openmake/openmake_llm/commit/45fa2b18a4686356968d842ecfb9f99ea9d13961))
+* **omk-bridge-core:** commondir 쓰기 금지, folder 로 고른 중첩 레포의 worktree 격리 복구 — TS 와 같다 ([1507ebe](https://github.com/openmake/openmake_llm/commit/1507ebeda4da2a63eb4caf67e99a76b7b9125235))
+* **omk-bridge-core:** 리뷰 F1~F8 — TS a11d3624a 와 같은 규칙·같은 글자 ([ff56546](https://github.com/openmake/openmake_llm/commit/ff56546f5e389d5d313a4755690347bdddf112b4))
+* **omk-bridge-core:** 재리뷰 N1~N3 — TS 와 같은 규칙·같은 글자 ([1ccb190](https://github.com/openmake/openmake_llm/commit/1ccb19082e88635af9c2b95baf834ce83e35771c))
+
 ## [1.133.1](https://github.com/openmake/openmake_llm/compare/v1.133.0...v1.133.1) (2026-11-13)
 
 
