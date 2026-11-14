@@ -119,7 +119,10 @@ fn redos_budget_and_stack_limit_keep_the_connection() {
     assert_eq!(server.hellos().len(), 1);
     assert_eq!(h.count(|e| e["code"] == "reconnecting"), 0);
     assert!(!watch.over.load(Ordering::SeqCst), "RSS 800MB 초과");
-    let max_mb = watch.max_kb.load(Ordering::SeqCst) as f64 / 1024.0;
+    let max_kb = watch.max_kb.load(Ordering::SeqCst);
+    // 감시가 실제로 쟀다(`ps` 가 실패하면 감시 스레드가 조용히 끝나 최대값 0 으로 통과하던 것 — 리뷰 r1 L-3)
+    assert!(max_kb > 0, "RSS 를 재지 못했다");
+    let max_mb = max_kb as f64 / 1024.0;
     println!(
         "stdio_redos: RSS 최대 {max_mb:.1}MB, 걸린 시간 {:?}",
         started_at.elapsed()
