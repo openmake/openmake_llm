@@ -358,7 +358,7 @@ pub(crate) async fn handle(
     let h = &st.host;
     let cx = Ctx {
         st,
-        // exec_path 를 비워 두면 자식 PATH 는 호스트 환경의 PATH 다(TS `process.env.PATH`).
+        // exec_path 를 비워 두면 자식 PATH 는 호스트 환경 PATH 의 절대경로 항목이다(TS `absPathEntries(process.env.PATH)`, D-14).
         tool: ToolEnv {
             env: h.env.clone(),
             platform: h.platform,

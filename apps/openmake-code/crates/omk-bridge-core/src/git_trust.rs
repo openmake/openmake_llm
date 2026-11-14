@@ -15,7 +15,7 @@ use crate::constants::{
     GITFILE_MAX_BYTES, SANDBOX_BIN,
 };
 use crate::exec_env::build_exec_env;
-use crate::exec_path::env_get;
+use crate::exec_path::{abs_path_entries, env_get};
 use crate::js_text::js_trim;
 use crate::node_error;
 use crate::node_path::{basename, dirname, join, relative, resolve};
@@ -56,7 +56,12 @@ async fn probe(
         file,
         args,
         cwd: Some(cwd.to_owned()),
-        env: build_exec_env(pairs, env_get(env, "PATH").unwrap_or(""), platform, &[]),
+        env: build_exec_env(
+            pairs,
+            &abs_path_entries(env_get(env, "PATH").unwrap_or(""), platform),
+            platform,
+            &[],
+        ),
         timeout_ms: GIT_PROBE_TIMEOUT_MS,
         max_buffer: 1024 * 1024,
         stdin: Stdin::Null,

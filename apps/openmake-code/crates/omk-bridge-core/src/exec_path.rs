@@ -52,6 +52,19 @@ fn is_abs_entry(p: &str) -> bool {
     p.starts_with('/')
 }
 
+/// 자식에게 넘길 PATH(`:` 구분)에서 절대경로 항목만 남긴다 — TS `absPathEntries`. 상대 항목은 자식 cwd(연결 폴더) 기준으로
+/// 풀려 폴더의 파일을 고를 수 있다(설계 D-5). 호스트 PATH 를 자식 PATH 로 넘기는 자리(git 자식·도구의 PATH 폴백)도 이것을
+/// 지난다(설계 D-14). Windows 는 그대로 — exec PATH 의 Windows 갈래와 같다.
+pub(crate) fn abs_path_entries(p: &str, platform: Platform) -> String {
+    if platform == Platform::Win32 {
+        return p.to_owned();
+    }
+    p.split(':')
+        .filter(|e| is_abs_entry(e))
+        .collect::<Vec<_>>()
+        .join(":")
+}
+
 fn dedupe<'a>(items: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
     let mut out: Vec<&str> = Vec::new();
     for p in items {
@@ -115,7 +128,7 @@ pub async fn resolve_exec_path(
         login_shell(env),
         &["-lc", "echo -n \"$PATH\""],
         Some(home),
-        probe_env(process_path),
+        probe_env(&abs_path_entries(process_path, platform)),
     );
     let login = run_ok(login).await;
     let base = merge_exec_path(login.as_deref(), process_path, home, None);
