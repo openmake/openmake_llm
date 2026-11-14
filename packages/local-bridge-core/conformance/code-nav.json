@@ -66,6 +66,28 @@
       ]
     },
     {
+      "id": "grep-regex-backtracking",
+      "setup": [
+        {"file":"root/r.txt","content":"xx\nxx\nbbb\nxＡＡＡb\nx가x가Ａ\nxAxAxA\n////////////////////b\n  가가 ab/\n  a\nxx\n_//\naab\n//ab_\n"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"((?:x{1,2})+){2}","path":"r.txt"},"expect":{"ok":true,"codeNav":{"matches":["r.txt:1:xx","r.txt:2:xx","r.txt:10:xx"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"((?:x{1,2}A*?)+){2}","path":"r.txt"},"expect":{"ok":true,"codeNav":{"matches":["r.txt:1:xx","r.txt:2:xx","r.txt:6:xAxAxA","r.txt:10:xx"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"^(([^a]{1,2}){1,2}){2}[^a]*","path":"r.txt"},"expect":{"ok":true,"codeNav":{"matches":["r.txt:1:xx","r.txt:2:xx","r.txt:3:bbb","r.txt:4:xＡＡＡb","r.txt:5:x가x가Ａ","r.txt:6:xAxAxA","r.txt:7:////////////////////b","r.txt:8:  가가 ab/","r.txt:9:  a","r.txt:10:xx","r.txt:11:_//","r.txt:13://ab_"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"(?:[^a]+?(?:Ａ[^a]?)+)+Ａ[^a]$","path":"r.txt"},"expect":{"ok":true,"codeNav":{"matches":["r.txt:4:xＡＡＡb"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"((?:[^a]+가+?[^a]*?)+){1,2}Ａ","path":"r.txt"},"expect":{"ok":true,"codeNav":{"matches":["r.txt:5:x가x가Ａ"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"^(?:([^a]*?a+){1,2}){2}","path":"r.txt","ignoreCase":true},"expect":{"ok":true,"codeNav":{"matches":["r.txt:6:xAxAxA","r.txt:12:aab"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"((/*){1,2}){1,2}a{2}","path":"r.txt"},"expect":{"ok":true,"codeNav":{"matches":["r.txt:12:aab"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"\\s*?((가?){2})+$","path":"r.txt"},"expect":{"ok":true,"codeNav":{"matches":["r.txt:1:xx","r.txt:2:xx","r.txt:3:bbb","r.txt:4:xＡＡＡb","r.txt:5:x가x가Ａ","r.txt:6:xAxAxA","r.txt:7:////////////////////b","r.txt:8:  가가 ab/","r.txt:9:  a","r.txt:10:xx","r.txt:11:_//","r.txt:12:aab","r.txt:13://ab_","r.txt:14:"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"(?:( *){1,2})+(\\ba+?)","path":"r.txt"},"expect":{"ok":true,"codeNav":{"matches":["r.txt:8:  가가 ab/","r.txt:9:  a","r.txt:12:aab","r.txt:13://ab_"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"(x{1,2}\\1){2}","path":"r.txt"},"expect":{"ok":true,"codeNav":{"matches":["r.txt:1:xx","r.txt:2:xx","r.txt:10:xx"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"((.(/??)*)\\1){2}","path":"r.txt"},"expect":{"ok":true,"codeNav":{"matches":["r.txt:1:xx","r.txt:2:xx","r.txt:3:bbb","r.txt:4:xＡＡＡb","r.txt:5:x가x가Ａ","r.txt:6:xAxAxA","r.txt:7:////////////////////b","r.txt:8:  가가 ab/","r.txt:9:  a","r.txt:10:xx","r.txt:11:_//","r.txt:12:aab","r.txt:13://ab_"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"(?:([ab]?)?)+?b+?","path":"r.txt"},"expect":{"ok":true,"codeNav":{"matches":["r.txt:3:bbb","r.txt:4:xＡＡＡb","r.txt:7:////////////////////b","r.txt:8:  가가 ab/","r.txt:12:aab","r.txt:13://ab_"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"^((/?|[a-z])*)*?\\w","path":"r.txt"},"expect":{"ok":true,"codeNav":{"matches":["r.txt:1:xx","r.txt:2:xx","r.txt:3:bbb","r.txt:4:xＡＡＡb","r.txt:5:x가x가Ａ","r.txt:6:xAxAxA","r.txt:7:////////////////////b","r.txt:10:xx","r.txt:11:_//","r.txt:12:aab","r.txt:13://ab_"],"truncated":false}}}
+      ]
+    },
+    {
       "id": "cap-max-results",
       "setup": [
         {"file":"root/m.txt","content":"x1\nx2\nx3\nx4\nx5\n"}
