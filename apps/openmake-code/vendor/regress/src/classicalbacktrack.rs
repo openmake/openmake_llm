@@ -824,6 +824,11 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
 
                     &Insn::EndCaptureGroup(cg_idx) => {
                         let cg = self.s.groups.mat(cg_idx as usize);
+                        // [omk] 그룹 안으로 역추적해 돌아가면 "아직 닫히지 않은 그룹"으로 보여야 한다(자기 그룹 역참조).
+                        self.bts.push(BacktrackInsn::SetCaptureGroup {
+                            id: cg_idx,
+                            data: *cg,
+                        });
                         if Dir::FORWARD {
                             debug_assert!(
                                 cg.start_matched(),
