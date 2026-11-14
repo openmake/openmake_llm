@@ -147,7 +147,10 @@ export interface BridgeCoreOptions {
     folder: string;
     /** exec 실행 전 사용자 확인 (비우회). */
     confirm: ConfirmFn;
-    /** sandbox-exec 프로파일 파일을 둘 디렉토리 (데스크톱=userData, CLI=tmpdir). */
+    /**
+     * 더 쓰지 않는다 — 프로파일은 파일 없이 `sandbox-exec -p` 로 넘긴다(파일은 샌드박스 안 자식이 덮어쓸 수 있었다).
+     * 호스트(데스크톱·CLI) 호출부를 깨지 않게 남겨 둔다.
+     */
     sandboxProfileDir: string;
     /** task_end 시 호스트 정리 훅. */
     onTaskEnd?: (taskId: string | undefined) => void;

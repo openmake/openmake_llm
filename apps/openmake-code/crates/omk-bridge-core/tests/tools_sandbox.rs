@@ -14,7 +14,7 @@ use omk_bridge_core::diagnostics;
 use omk_bridge_core::exec::{ConfirmAnswer, ExecHost};
 use omk_bridge_core::msg::BridgeMsg;
 use omk_bridge_core::platform::Platform;
-use omk_bridge_core::sandbox::write_sandbox_profile;
+use omk_bridge_core::sandbox::sandbox_profile;
 use omk_bridge_core::test_runner;
 use omk_bridge_core::timed_fs::FsGate;
 use omk_bridge_core::tool_env::{ToolEnv, ToolSandbox};
@@ -86,9 +86,18 @@ impl Drop for Work {
 }
 
 fn core(w: &Work, sandbox: bool) -> BridgeCore {
+    core_inner(w, sandbox, ConfirmAnswer::No)
+}
+
+/// 샌드박스 켠 코어 — exec 확인에 `answer` 로 답한다.
+fn core_with_answer(w: &Work, answer: ConfirmAnswer) -> BridgeCore {
+    core_inner(w, true, answer)
+}
+
+fn core_inner(w: &Work, sandbox: bool, answer: ConfirmAnswer) -> BridgeCore {
     let home = w.join("home");
     let host = ExecHost {
-        confirm: Box::new(|_| Box::pin(async { ConfirmAnswer::No })),
+        confirm: Box::new(move |_| Box::pin(async move { answer })),
         env: vec![
             (
                 "PATH".to_owned(),
@@ -163,8 +172,7 @@ fn python_tools_run_inside_profile() {
         w.tool("bin/python3", "py", "Error: ");
         std::fs::write(w.join("root/conftest.py"), "").unwrap();
         std::fs::write(w.join("root/b.py"), "").unwrap();
-        let profile =
-            write_sandbox_profile(&w.join("root"), None, &w.join("home"), &w.join("prof/p.sb"));
+        let profile = sandbox_profile(&w.join("root"), None, &[], &w.join("home"), true);
         let tool = ToolEnv {
             env: vec![("HOME".to_owned(), w.join("home"))],
             platform: Platform::Darwin,
@@ -210,34 +218,40 @@ fn python_tools_run_inside_profile() {
 
 const MISSING: &str = "exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.";
 
-/// 준비는 됐지만 프로파일 **파일**이 사라진 코어 — sandbox-exec 자체가 65 로 실패한다. "진단 없음/none" 으로 삼키지 않고
-/// 프로파일 없음과 같이 거절한다(TS 별건 수정 M1 과 같은 규칙).
+/// sandbox-exec 가 프로파일을 받지 못하는 경우 — 프로파일은 파일 없이 `-p` 텍스트로 넘기므로(리뷰 F1) 예전의 "파일 유실"
+/// 대신 문법이 깨진 텍스트로 흉내 낸다(`-p` 도 종료 코드 65 + `sandbox-exec:` — 2026-11-14 실측). "진단 없음/none" 으로 삼키지
+/// 않고 프로파일 없음과 같이 거절한다(TS 별건 수정 M1 과 같은 규칙).
 #[test]
-fn lost_profile_file_is_refused_not_swallowed() {
+fn broken_profile_is_refused_not_swallowed() {
     let w = Work::new();
     std::fs::write(w.join("root/tsconfig.json"), "{}").unwrap();
     std::fs::write(w.join("root/conftest.py"), "").unwrap();
     std::fs::write(w.join("root/b.py"), "def f(:\n").unwrap();
+    std::fs::write(w.join("root/a.ts"), "export const n = 1;\n").unwrap();
     w.tool(
         "root/node_modules/.bin/tsc",
         "tsc",
         "a.ts(1,1): error TS1: ",
     );
-    let c = core(&w, true);
-    for f in std::fs::read_dir(w.join("prof")).unwrap() {
-        std::fs::remove_file(f.unwrap().path()).unwrap();
+    let tool = ToolEnv {
+        env: vec![("HOME".to_owned(), w.join("home"))],
+        platform: Platform::Darwin,
+        exec_path: "/usr/bin:/bin".to_owned(),
+        sandbox: ToolSandbox::Profile("(version 1)(allow default".to_owned()),
+    };
+    let (gate, rt) = (FsGate::new(15_000), runtime());
+    for f in ["root/b.py", "root/a.ts"] {
+        let got = rt.block_on(diagnostics::collect(
+            &w.join("root"),
+            &[w.join(f)],
+            &tool,
+            15_000,
+            &gate,
+        ));
+        assert_eq!(got.err().as_deref(), Some(MISSING), "{f}");
     }
-    let want = json!({"ok": false, "error": MISSING, "exitCode": 126});
-    for msg in [
-        json!({"kind": "lsp_diagnostics", "paths": ["b.py"]}),
-        json!({"kind": "lsp_diagnostics", "paths": ["a.ts"]}),
-        json!({"kind": "test_runner"}),
-    ] {
-        let got = runtime()
-            .block_on(c.handle_exec(&BridgeMsg::from_json(&msg)))
-            .to_json();
-        assert_eq!(got, want, "{msg}");
-    }
+    let got = rt.block_on(test_runner::detect(&w.join("root"), &tool, &gate));
+    assert_eq!(got.err().as_deref(), Some(MISSING));
 }
 
 /// python3 가 PATH 에 없으면 거절(71)이 아니라 종전대로 "띄우지 못함" — 빈 진단·none.
@@ -246,9 +260,7 @@ fn missing_python_is_not_refused() {
     let w = Work::new();
     std::fs::write(w.join("root/conftest.py"), "").unwrap();
     std::fs::write(w.join("root/b.py"), "def f(:\n").unwrap();
-    let profile =
-        write_sandbox_profile(&w.join("root"), None, &w.join("home"), &w.join("prof/p.sb"))
-            .unwrap();
+    let profile = sandbox_profile(&w.join("root"), None, &[], &w.join("home"), true).unwrap();
     let tool = ToolEnv {
         env: vec![("HOME".to_owned(), w.join("home"))],
         platform: Platform::Darwin,
@@ -274,4 +286,40 @@ fn missing_python_is_not_refused() {
         (got.diagnostics.len(), got.truncated, got.server_kind),
         (0, false, "py_compile")
     );
+}
+
+/// 도구 프로파일은 네트워크를 막는다(설계 2026-11-14 D-1) — 폴더의 tsc 가 로컬 TCP 에도 붙지 못한다. 같은 연결의 exec 는 붙는다.
+#[test]
+fn tool_profile_blocks_network_exec_does_not() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let w = Work::new();
+    std::fs::write(w.join("root/tsconfig.json"), "{}").unwrap();
+    let tsc = w.join("root/node_modules/.bin/tsc");
+    std::fs::create_dir_all(w.join("root/node_modules/.bin")).unwrap();
+    let net_ok = w.join("root/net-ok");
+    let body = format!(
+        "#!/bin/bash\n(exec 3<>/dev/tcp/127.0.0.1/{port}) && echo x > '{net_ok}'\nexit 0\n"
+    );
+    std::fs::write(&tsc, body).unwrap();
+    std::fs::set_permissions(&tsc, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let c = core(&w, true);
+    let r = runtime()
+        .block_on(c.handle_exec(&BridgeMsg::from_json(
+            &json!({"kind": "lsp_diagnostics", "paths": ["a.ts"]}),
+        )))
+        .to_json();
+    assert_eq!(r["serverKind"], "tsc", "{r}");
+    assert!(!w.exists("root/net-ok"), "도구 자식이 네트워크에 붙었다");
+    assert!(listener.accept().is_err(), "연결이 들어왔다");
+    // 승인된 exec 는 exec 프로파일(네트워크 허용) — 막는 것은 도구 프로파일뿐이다.
+    let approved = core_with_answer(&w, ConfirmAnswer::Yes);
+    let cmd = format!("(exec 3<>/dev/tcp/127.0.0.1/{port}) && echo connected");
+    let r = runtime()
+        .block_on(approved.handle_exec(&BridgeMsg::from_json(
+            &json!({"kind": "exec", "command": cmd}),
+        )))
+        .to_json();
+    assert_eq!(r["stdout"], "connected\n", "{r}");
 }
