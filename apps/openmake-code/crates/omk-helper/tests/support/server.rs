@@ -40,6 +40,12 @@ pub struct State {
     pub config_requests: usize,
 }
 
+impl State {
+    pub fn has_sock(&self, device: &str) -> bool {
+        self.socks.contains_key(device)
+    }
+}
+
 type Shared = Arc<(Mutex<State>, Condvar)>;
 
 pub struct Server {
@@ -51,6 +57,11 @@ static REQ: AtomicU64 = AtomicU64::new(0);
 
 impl Server {
     pub fn start() -> Server {
+        Server::start_with_config_delay(0)
+    }
+
+    /// 조회(`/api/desktop/config`)에 `ms` 뒤에 답한다 — 주소 찾기 전에 온 명령을 본다.
+    pub fn start_with_config_delay(ms: u64) -> Server {
         let state: Shared = Arc::default();
         let (port_tx, port_rx) = std::sync::mpsc::channel();
         let st = Arc::clone(&state);
@@ -66,7 +77,7 @@ impl Server {
                     let Ok((tcp, _)) = l.accept().await else {
                         return;
                     };
-                    tokio::spawn(handle(tcp, Arc::clone(&st)));
+                    tokio::spawn(handle(tcp, Arc::clone(&st), ms));
                 }
             });
         });
@@ -176,11 +187,12 @@ async fn first_line(tcp: &TcpStream) -> String {
     String::new()
 }
 
-async fn handle(mut tcp: TcpStream, st: Shared) {
+async fn handle(mut tcp: TcpStream, st: Shared, config_delay_ms: u64) {
     if first_line(&tcp)
         .await
         .starts_with("GET /api/desktop/config")
     {
+        tokio::time::sleep(std::time::Duration::from_millis(config_delay_ms)).await;
         notify(&st, |s| s.config_requests += 1);
         let _ = tcp
             .write_all(b"HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\nconnection: close\r\n\r\n")
