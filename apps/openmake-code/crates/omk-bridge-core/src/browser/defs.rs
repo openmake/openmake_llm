@@ -144,26 +144,40 @@ pub struct TabIds {
     pub session_id: String,
 }
 
-/// 다운로드의 귀속 작업 — ① 이벤트의 sessionId 가 작업 탭의 것 ② frameId 가 작업 탭의 targetId ③ 그 순간 실행 중인 작업이
-/// 하나면 그 작업 ④ 없음. 탭 목록 순서대로 첫 것.
+/// 다운로드의 귀속 작업(D-2) — ① 이벤트의 sessionId 가 작업 탭의 것 ② frameId 가 작업 탭의 targetId ③ frameId 가 적어 둔 새 창
+/// (`popups`: (새 창 targetId, 작업 키)) ④ 없음. 추측(그 순간 실행 중인 작업)은 하지 않는다. 목록 순서대로 첫 것.
 pub fn download_task_of(
     tabs: &[(String, TabIds)],
-    is_running: impl Fn(&str) -> bool,
+    popups: &[(String, String)],
     session_id: Option<&str>,
     frame_id: &str,
 ) -> Option<String> {
     let by_session = session_id.and_then(|s| tabs.iter().find(|(_, t)| t.session_id == s));
     let by_frame = || tabs.iter().find(|(_, t)| t.target_id == frame_id);
-    if let Some((k, _)) = by_session.or_else(by_frame) {
-        return Some(k.clone());
-    }
-    let running: Vec<&String> = tabs
-        .iter()
+    by_session
+        .or_else(by_frame)
         .map(|(k, _)| k)
-        .filter(|k| is_running(k))
-        .collect();
-    match running[..] {
-        [k] => Some(k.clone()),
-        _ => None,
+        .or_else(|| popups.iter().find(|(id, _)| id == frame_id).map(|(_, k)| k))
+        .cloned()
+}
+
+/// 새 창의 작업(D-2) — 연 쪽(`opener_id`)이 작업 탭이면 그 작업, 적어 둔 새 창이면 그 창의 작업(창이 연 창). 빈 값이면 없음.
+pub fn popup_task_of(
+    tabs: &[(String, TabIds)],
+    popups: &[(String, String)],
+    opener_id: &str,
+) -> Option<String> {
+    if opener_id.is_empty() {
+        return None;
     }
+    tabs.iter()
+        .find(|(_, t)| t.target_id == opener_id)
+        .map(|(k, _)| k)
+        .or_else(|| {
+            popups
+                .iter()
+                .find(|(id, _)| id == opener_id)
+                .map(|(_, k)| k)
+        })
+        .cloned()
 }

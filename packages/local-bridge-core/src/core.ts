@@ -297,7 +297,6 @@ export class BridgeCore {
                     { actions: m.actions, sitePolicy: m.sitePolicy, approvedHosts: m.approvedHosts, approvedUploads: m.approvedUploads },
                     {
                         ...(m.taskId ? { taskId: m.taskId } : {}),
-                        downloadDir: base,
                         // 폴더 안 심링크로 .git/config 를 가리켜 두면 덮어쓰므로 write 와 같은 git 가드를 지난다(리뷰 F7).
                         saveFile: async (name, data) => {
                             const abs = await safeFromAsync(base, name);

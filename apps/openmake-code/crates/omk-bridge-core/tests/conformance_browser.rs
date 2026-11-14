@@ -93,9 +93,10 @@ fn spec(
                 ("fillPrepareJs", &["sel"], &[]),
                 (
                     "downloadTaskOf",
-                    &["tabs", "running", "frameId"],
+                    &["tabs", "popups", "frameId"],
                     &["sessionId"],
                 ),
+                ("popupTaskOf", &["tabs", "popups", "openerId"], &[]),
                 ("jsonString", &["s"], &[]),
             ],
             &[],
@@ -194,6 +195,8 @@ fn shape_setup(setup: &Value, at: &str) {
             shape(s, &["dir"], &[], &format!("{at}/setup"));
         } else if has("symlink") {
             shape(s, &["symlink", "target"], &[], &format!("{at}/setup"));
+        } else if has("hardlink") {
+            shape(s, &["hardlink", "target"], &[], &format!("{at}/setup"));
         } else if has("series") {
             let keys = ["series", "from", "to", "content"];
             shape(s, &keys, &[], &format!("{at}/setup"));

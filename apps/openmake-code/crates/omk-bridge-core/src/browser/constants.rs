@@ -43,6 +43,8 @@ pub const BROWSER_DIALOG_MESSAGE_MAX: usize = 300;
 pub const BROWSER_DIALOG_RECORD_MAX: usize = 20;
 /// 호출이 끝날 때 받는 중인 다운로드를 기다리는 상한(ms) 기본값 — 환경 `OMK_BRIDGE_BROWSER_DOWNLOAD_WAIT_MS`
 pub const BROWSER_DOWNLOAD_WAIT_MS: u64 = 5000;
+/// 다운로드 귀속용 새 창 표(새 창 targetId → 연 탭의 작업) 크기 상한 — 넘으면 가장 오래된 것부터 버린다
+pub const BROWSER_POPUP_TRACK_MAX: usize = 64;
 /// 다운로드 저장 이름이 겹칠 때 " (n)" 을 붙여 보는 횟수 상한
 pub const BROWSER_DOWNLOAD_NAME_TRIES: usize = 100;
 /// 다운로드 대기 폴더 = 전용 프로필 폴더 + 이 접미사

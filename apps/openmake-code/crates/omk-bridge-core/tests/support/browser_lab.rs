@@ -226,7 +226,6 @@ pub fn opts(task: &str, place: Option<PlaceDownload>) -> BrowserRunOptions {
     BrowserRunOptions {
         task_id: Some(task.to_owned()),
         save_file: Arc::new(|_, _| Box::pin(async { Ok(()) })),
-        download_dir: "/work/out".into(),
         place_download: place,
         resolve_upload_files: None,
     }

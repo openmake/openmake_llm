@@ -23,7 +23,7 @@
 | `browser-constants` | `values` · `tables` · `messages` · `env` · `chrome` (사례 목록이 아니라 값) | `values`: `BROWSER_*`(환경으로 바뀌는 값은 기본값)·`BROWSER_KIND`·`BROWSER_UPLOAD_CAPABILITY`·`BROWSER_FLOW_MAX_DEPTH`·`BROWSER_REPEAT_MAX`. `tables`: `interactiveRoles`·`pageActions`(정렬)·`actionClass`(분류표 — TS 는 소스의 표 키 순서도 본다)·`policyBlockKinds`(TS 는 `types.ts` 의 합 타입을 읽는다). `messages`: 오류 문구·페이지 조각. `env`: 환경 이름 → 기본값(TS 는 소스에 `process.env.<이름>` 이 있는지도 본다). `chrome`: 후보 경로(`{{HOME}}`)·Windows 루트와 파일 조각·실행 인자(`{{PROFILE}}`, `headlessOnly` 는 화면 없음일 때만) — TS 는 함수를 내보내지 않으므로 `chrome.ts` 소스에 그 글자가 이 순서로 있는지 보고, Rust 는 `chrome::candidates`·`launch_args`·`BrowserEnv::from_env` 결과와 대조한다 |
 | `browser-site-policy` | `policies`(이름 → `{allow, deny}`) + `classify` · `hostOf` · `navigable` · `hostMatches` · `allowed` · `needsApproval` · `check` · `parsePolicy` · `uploadFilesOf` · `policyBlock` | `input.policy` 는 `policies` 의 이름. `check.input.approvedUploads` 가 없으면 기본값(`[]`)으로 부른다(이미 `parseApprovedUploads` 를 지난 모양). `policyBlock.input.fn` 은 `of`(`browserPolicyBlockOf`)·`userControl`·`uploadRejected` |
 | `browser-flow` | `validate` · `cond` · `run` | `validate.expect`: `{error}`(문구 전체) 또는 `{error: null, flat}`(펼친 단순 액션 값). `cond.expect.expression`: `condExpression` 글자 전체. `run`: 아래 |
-| `browser-defs` | `str` · `screenshotName` · `keyEventOf` · `approvedUploads` · `clickPointJs` · `fillPrepareJs` · `downloadTaskOf` · `jsonString` | `keyEventOf.expect`: `{text?, common}`(text 가 `undefined` 면 키 없음) 또는 `{error}`. `clickPointJs`·`fillPrepareJs` 의 `sel` 은 호출부가 넘기는 JSON 문자열 그대로. `downloadTaskOf.input`: `tabs`(`[키, {targetId, sessionId}]`)·`running`(실행 중인 작업 키)·`sessionId?`·`frameId`, `expect` 는 키 또는 `null`. `jsonString`: `JSON.stringify(문자열)` 글자 |
+| `browser-defs` | `str` · `screenshotName` · `keyEventOf` · `approvedUploads` · `clickPointJs` · `fillPrepareJs` · `downloadTaskOf` · `popupTaskOf` · `jsonString` | `keyEventOf.expect`: `{text?, common}`(text 가 `undefined` 면 키 없음) 또는 `{error}`. `clickPointJs`·`fillPrepareJs` 의 `sel` 은 호출부가 넘기는 JSON 문자열 그대로. `downloadTaskOf.input`: `tabs`(`[키, {targetId, sessionId}]`)·`popups`(`[새 창 targetId, 작업 키]`)·`sessionId?`·`frameId` — 순서는 sessionId → 탭 targetId → 새 창, 추측 없음. `popupTaskOf.input`: `tabs`·`popups`·`openerId`(빈 값이면 `null`, 탭이 새 창 표보다 먼저). 두 `expect` 는 키 또는 `null`. `jsonString`: `JSON.stringify(문자열)` 글자 |
 | `browser-upload-files` | `baseSetup` + `cases` | `resolveUploadFiles(input.base, input.files)`. `setup` 은 `baseSetup` 뒤에 더한다. `expect`: `{paths}`(realpath) 또는 `{error}` |
 | `browser-download-place` | `cases` | 아래 |
 | `browser-run` | `defaults`(규칙) + `cases` | 가짜 CDP 대본으로 `LocalBrowser.run` 한 번 — 아래 |
@@ -39,14 +39,14 @@
 
 - 러너가 사례마다 `{{TMP}}/root`(연결 폴더)·`{{TMP}}/staging`(대기 폴더)·`{{TMP}}/outside` 를 만들고 `setup` 을 적용한다. `input.staged` 가 있으면 그 글로 `{{TMP}}/staging/guid-1` 을 만들고(없으면 대기 파일 없음), `placeDownload(root, {root, dirs: []}, input.name, 대기 파일)` 을 부른다. 가드는 요청 시점 구조 규칙만 본다 — 연결 때 정한 git 디렉터리 목록이 필요한 사례는 코어 경유 테스트(PR-1.6b)가 본다.
 - `expect`: `{savedAs}` · `{rejected}`(가드 거절 — 다른 이름을 찾지 않는다) · `{failed}`(그 밖의 오류, Node 문구 그대로).
-- `after`: 호출 뒤 `{{TMP}}` 전체 — 경로 → 글(UTF-8) · `{"symlink": 대상}` · `{"dir": true}`. 대기 파일은 어느 결과든 지워진다.
-- `setup`: `{"dir"}` · `{"file", "content"}` · `{"file", "size"}`(성긴 파일) · `{"symlink", "target"}` · `{"series": "root/report ({n}).txt", "from", "to", "content"}`.
+- `after`: 호출 뒤 `{{TMP}}` 전체 — 경로 → 글(UTF-8) · `{"symlink": 대상}` · `{"dir": true}`. 대기 파일은 어느 결과든 지워진다(심링크면 링크만, 대기 자리가 폴더면 지우지 못해 남는다).
+- `setup`: `{"dir"}` · `{"file", "content"}` · `{"file", "size"}`(성긴 파일) · `{"symlink", "target"}` · `{"hardlink", "target"}`(`target` 의 하드링크) · `{"series": "root/report ({n}).txt", "from", "to", "content"}`. 대기 자리(`staging/guid-1`)를 `setup` 으로 만드는 사례는 `input.staged` 를 뺀다 — 보통 파일·링크 수 1 이 아니면 옮기지 않는다(`failed`).
 - **기대값 재현**: 새 사례는 `id`·`input`(파일 suite 는 `setup`)만 적고, `npm run build:packages` 뒤 TS 구현(`packages/config/dist`·`packages/local-bridge-core/dist`)을 jest 밖 Node 에서 러너와 같은 절차(호출·`walk`, `{{TMP}}` 치환)로 불러 `expect`·`after` 를 채운 다음 TS 러너로 확인한다(생성 스크립트는 저장소에 두지 않는다 — 아래 "러너에만 있는 보정" 참고).
-- `link` 가 `EXDEV`·`EPERM`·`ENOTSUP` 일 때의 복사 갈래는 fixture 로 만들 수 없어(다른 볼륨·주입) TS `download-place.test.ts` 와 Rust 단위 테스트(오류 코드 주입)가 본다.
+- `link` 가 `EXDEV`·`EPERM`·`ENOTSUP` 일 때의 복사 갈래와 검사 뒤 대기 자리를 바꿔 치는 틈(옮긴 대상·연 핸들이 검사한 파일인지)은 fixture 로 만들 수 없어(다른 볼륨·주입) TS `download-place.test.ts` 와 Rust 단위 테스트(`link` 주입)가 본다.
 
 ### `browser-run`
 
-- 러너가 사례마다 임시 폴더(`{{TMP}}`)에 `setup` 을 적용하고 `{{TMP}}/profile`(전용 프로필)·`{{TMP}}/root`(연결 폴더 = `downloadDir`)를 만든 뒤, **가짜 CDP** 로
+- 러너가 사례마다 임시 폴더(`{{TMP}}`)에 `setup` 을 적용하고 `{{TMP}}/profile`(전용 프로필)·`{{TMP}}/root`(연결 폴더)를 만든 뒤, **가짜 CDP** 로
   "떠 있는 Chrome 에 붙기" 길을 탄다. TS 는 `ws` 서버를 루프백에 띄우고 프로필에 `DevToolsActivePort` 를 쓴다(모의 없음, Chrome 없음). Rust 는 `BrowserHost`
   가짜(메모리 duplex, 멈춘 시계)다. 사례 끝에 `dispose`.
 - `input`: `spec`(`actions`·`sitePolicy`·`approvedHosts`·`approvedUploads` — 값 그대로) · `opts`(`taskId?` · `saveError?`(스크린샷 저장 함수가 이 문구로 실패) ·
@@ -56,7 +56,7 @@
   "reply"?: {…} | "error"?: "<문구>", "times"?: n, "emit"?: [{"method", "params"?, "session"?: true|"<세션>"}]}`. 받은 명령마다 `cdp` → `defaults` 순으로
   조건이 맞고 횟수가 남은 첫 규칙을 쓴다(`times` 없으면 무한). `reply` 가 없으면 `{}`. **`emit` 은 답보다 먼저 보낸다**(`session: true` 는 그 명령의 세션) —
   확인창을 연 누르기의 답보다 `Page.handleJavaScriptDialog` 가 먼저 나가는 순서를 두 구현이 같게 본다. 맞는 규칙이 없으면 오류로 답하고 사례가 실패한다.
-- `defaults`: 탭 만들기(`T1`)·붙기(`S1`)·`Page`·`Runtime`·`DOM` 활성화·다운로드 설정·`Target.getTargets`(빈 목록)·`Target.closeTarget`. 주소 읽기(`location.href`)는
+- `defaults`: 탭 만들기(`T1`)·붙기(`S1`)·`Page`·`Runtime`·`DOM` 활성화·다운로드 설정·`Target.getTargets`(빈 목록)·`Target.closeTarget`·`Target.setDiscoverTargets`(연결마다 한 번). 주소 읽기(`location.href`)는
   사례가 적는다 — 그래야 `sent` 에 남는다.
 - `expect`: `stdout`(결과 `JSON.stringify` **글자 전체** — 키 순서까지, 계획 D-76) · `sent`(받은 명령 `{method, params, session}` 순서 전체, `defaults` 에 걸린 것은
   `sentDefaults` 가 아니면 뺀다) · `saved`(스크린샷 저장 호출 `{name, hex}`). 경로는 `{{TMP}}` 로 바꿔 적는다.
@@ -78,7 +78,7 @@
 4. 문구의 값을 UTF-16 200 단위로 자를 때(`clip`) 끝이 대리 쌍 한가운데면 TS 는 짝 없는 반쪽을 남기고 Rust 는 그 글자를 뺀다(`README.md` 의 git 오류 꼬리와 같은 차이 — 짝 없는 대리 문자는 fixture JSON 에 담을 수 없다).
 5. 잘못된 punycode 호스트(`xn--`) — TS `URL` 은 받고, Rust `url` 은 주소 오류 → 호스트 모름(쓰기는 승인 대상, 이동은 막힘).
 6. 범위 밖 수(`1e999`)가 든 요청 — TS `JSON.parse` 는 `Infinity`, Rust 는 해석 실패.
-7. 대기 파일(`staging/<guid>`)이 심링크·폴더 — TS `fs.link` 는 OS 의 `link(2)` 를 따라 결과가 OS 마다 다르다(macOS 는 원본 심링크를 따라가 대상 파일의 하드링크 = 보통 파일, Linux 는 심링크 자체를 링크). 두 러너의 OS 가 달라 fixture 에 넣지 않는다. Rust 는 원본을 `canonicalize` 해 늘 대상 파일을 링크한다 — macOS TS 와 같고, Linux 에서도 연결 폴더 안에 심링크를 만들지 않는다(더 엄격). 끊긴·순환 링크는 `link` 의 `ENOENT`·`ELOOP` 문구, 폴더 원본은 macOS `copyfile` 의 `ENOTSUP`(대상이 있으면 `EEXIST` 가 먼저라 다음 이름으로 넘어간다). macOS TS 실측값으로 `src/browser/download_place.rs` 단위 테스트가 고정한다.
+7. (없앰 — 대기 자리 검사로 fixture 에 들어갔다)
 8. `serde_json` 이 못 읽는 정책 JSON — 짝 없는 대리 문자 이스케이프(`{"allow":["\ud800"]}`)·128단 넘게 겹친 값·범위 밖 수(`1e999`). TS `JSON.parse` 는 읽어 `allow` 를 쓰고, Rust 는 빈 정책(전부 승인 대상 — 더 엄격, `tests/browser_js_value.rs`).
 9. 대소문자 변환(`toLowerCase`·`toUpperCase`) — Unicode 판이 달라(Node 24.22.2 ICU 18.0, Rust 1.99.1 std 17.0) 41 코드 포인트가 다르다: BMP 8개(U+0277·U+027C·U+AB4B·U+AB4C 의 대문자 U+A7DD·U+A7E2·U+AB6C·U+AB6D 짝)와 U+1DF40~U+1DF7F 의 32개·U+1DF95(→ `SS`). 호스트는 IDNA 뒤 ASCII 라 정책 판정에는 영향이 없고, `parsePolicy` 결과 글자·한 글자 `press` 의 `windowsVirtualKeyCode` 만 달라질 수 있다. 툴체인 판에 따라 바뀌므로 단위 테스트로 고정하지 않는다.
 10. 결과 글을 UTF-16 단위로 자를 때(`extractText`·`extractHtml` 8000, `fill` 되돌림 200, 확인창 문구 300, 요소 이름 120) 끝이 대리 쌍 한가운데면 4 와 같은 차이다.
