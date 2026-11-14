@@ -24,6 +24,15 @@ export function onPath(bin: string, execPath: string): boolean {
 const isAbsEntry = (p: string): boolean => p.startsWith('/');
 
 /**
+ * 자식에게 넘길 PATH(`:` 구분)에서 절대경로 항목만 남긴다 — 상대 항목(`.`·`bin`)은 자식 cwd(연결 폴더) 기준으로 풀려 폴더의
+ * 파일을 고를 수 있다(설계 D-5). 프로세스 PATH 를 자식 PATH 로 넘기는 자리(git 자식·도구의 PATH 폴백)도 이것을 지난다(설계 D-14).
+ * Windows 는 그대로 — exec PATH 의 Windows 갈래와 같다.
+ */
+export function absPathEntries(p: string, platform: NodeJS.Platform = process.platform): string {
+    return platform === 'win32' ? p : p.split(':').filter(isAbsEntry).join(':');
+}
+
+/**
  * toolSandbox: mise 를 감쌀 도구 프로파일 — undefined = 샌드박스 꺼짐(감싸지 않음), null = 켜졌는데 프로파일 없음(mise 를 건너뛴다).
  * 신뢰된 경로의 mise 설정은 에이전트가 파일 쓰기로 고칠 수 있어, 그 `exec()` 가 샌드박스 밖에서 돌지 않게 한다(설계 D-6).
  */
@@ -35,7 +44,7 @@ export function resolveExecPath(folderRoot: string | null, toolSandbox?: string 
     try {
         // 홈에서 띄운다 — 사용자 로그인 rc 의 cwd 훅(mise activate·direnv)이 연결 폴더 설정을 샌드박스 밖에서 돌리지 않게(설계 D-13).
         parts.push(...execFileSync(process.env.SHELL || '/bin/zsh', ['-lc', 'echo -n "$PATH"'],
-            { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS, cwd: os.homedir(), env: probeEnv(process.env.PATH || '') }).trim().split(':'));
+            { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS, cwd: os.homedir(), env: probeEnv(absPathEntries(process.env.PATH || '')) }).trim().split(':'));
     } catch { /* 로그인 셸 실패 → 아래 폴백만 사용 */ }
     parts.push(...(process.env.PATH || '').split(':'));
     parts.push('/opt/homebrew/bin', '/usr/local/bin',

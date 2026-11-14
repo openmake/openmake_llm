@@ -22,7 +22,7 @@ import * as path from 'path';
 import { execFile } from 'child_process';
 import { DIAG_MAX_PER_FILE, DIAG_MAX_TOTAL, DIAG_MSG_MAX, DIAG_TIMEOUT_MS, MAX_BUFFER } from './constants';
 import { buildExecEnv } from './exec-env';
-import { onPath } from './exec-path';
+import { absPathEntries, onPath } from './exec-path';
 import { sandboxExecError, sandboxExecFailed, wrapInSandbox } from './sandbox';
 import type { BridgeDiagnostic } from './types';
 
@@ -32,7 +32,7 @@ const PY_EXT = new Set(['.py']);
 function run(file: string, args: string[], cwd: string, extraPath: string | undefined, sandbox: string | null | undefined): Promise<{ stdout: string; stderr: string }> {
     const cmd = wrapInSandbox(file, args, sandbox); // 프로파일 없음이면 여기서 throw — 자식을 띄우지 않는다
     const wrapped = typeof sandbox === 'string';
-    const envPath = extraPath || process.env.PATH || process.env.Path || '';
+    const envPath = extraPath || absPathEntries(process.env.PATH || process.env.Path || '');
     // 감쌀 때 이름으로 띄우는 실행 파일(python3)은 먼저 찾는다 — 없으면 sandbox-exec 의 execvp 실패(71)가 아니라
     // 종전과 같은 "띄우지 못함"(빈 출력)이다.
     if (wrapped && !file.includes('/') && !onPath(file, envPath)) return Promise.resolve({ stdout: '', stderr: '' });

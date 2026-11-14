@@ -130,6 +130,23 @@ fn first(path: &str) -> &str {
     path.split(':').next().unwrap_or("")
 }
 
+/// D-14 — 로그인 셸 자식에 넘기는 PATH 도 절대경로 항목만(호스트 PATH 의 `.`·`bin` 을 넘기지 않는다).
+#[test]
+fn login_shell_gets_absolute_path_entries_only() {
+    let w = Work::new();
+    let (sh, mark) = (w.join("fakebin/login-sh"), w.join("login.path"));
+    let script = format!("#!/bin/sh\nprintf %s \"$PATH\" > '{mark}'\nprintf %s \"$PATH\"\n");
+    std::fs::write(&sh, script).unwrap();
+    std::fs::set_permissions(&sh, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let env = env(&[
+        ("HOME", &w.join("home")),
+        ("PATH", ".:bin:/usr/bin:/bin"),
+        ("SHELL", &sh),
+    ]);
+    w.resolve(&env, &ToolSandbox::Missing);
+    assert_eq!(std::fs::read_to_string(&mark).unwrap(), "/usr/bin:/bin");
+}
+
 /// D-6 — 샌드박스 꺼짐(`Off`)이면 종전대로 감싸지 않고 띄운다.
 #[test]
 fn mise_off_runs_unwrapped() {

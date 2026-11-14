@@ -69,6 +69,15 @@ describe('로그인 셸 PATH 조회(D-13)', () => {
     });
 });
 
+describe('로그인 셸 자식의 PATH(D-14)', () => {
+    it('프로세스 PATH 의 상대 항목(`.`·`bin`)을 넘기지 않는다', () => {
+        const [sh, mark] = [path.join(tmp, 'login-sh'), path.join(tmp, 'login.path')];
+        fs.writeFileSync(sh, `#!/bin/sh\nprintf %s "$PATH" > '${mark}'\nprintf %s "$PATH"\n`, { mode: 0o755 });
+        withEnv({ HOME: path.join(tmp, 'home'), PATH: '.:bin:/usr/bin:/bin', SHELL: sh }, () => resolveExecPath(root, null));
+        expect(fs.readFileSync(mark, 'utf8')).toBe('/usr/bin:/bin');
+    });
+});
+
 /**
  * 실제 mise 의 상태(신뢰·추적 기록)는 폴더 밖 임시 폴더에 둔다 — 사용자의 `~/.local/state/mise` 에 남기지 않고, 프로파일이 쓰기를
  * 열지 않은 자리라 감싼 mise 는 실제처럼 상태를 못 쓴다(실측 n4).

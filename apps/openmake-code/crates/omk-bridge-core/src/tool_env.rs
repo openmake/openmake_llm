@@ -4,7 +4,7 @@
 use crate::constants::{MAX_BUFFER, SANDBOX_BIN, SANDBOX_SPAWN_ERROR_PREFIX};
 use crate::exec::FAIL_CLOSED;
 use crate::exec_env::build_exec_env;
-use crate::exec_path::env_get;
+use crate::exec_path::{abs_path_entries, env_get};
 use crate::msg::BridgeResult;
 use crate::node_path;
 use crate::platform::{Platform, path_list_separator};
@@ -51,14 +51,18 @@ pub struct ToolEnv {
 }
 
 impl ToolEnv {
-    /// 자식 PATH — exec PATH, 비어 있으면 환경의 `PATH` → `Path` → `""`(TS `extraPath || PATH || Path || ''`).
-    fn path_value(&self) -> &str {
-        [self.exec_path.as_str()]
+    /// 자식 PATH — exec PATH, 비어 있으면 환경의 `PATH` → `Path` → `""` 의 절대경로 항목만
+    /// (TS `extraPath || absPathEntries(PATH || Path || '')`, 설계 D-14).
+    fn path_value(&self) -> String {
+        if !self.exec_path.is_empty() {
+            return self.exec_path.clone();
+        }
+        let host = env_get(&self.env, "PATH")
             .into_iter()
-            .chain(env_get(&self.env, "PATH"))
             .chain(env_get(&self.env, "Path"))
             .find(|p| !p.is_empty())
-            .unwrap_or("")
+            .unwrap_or("");
+        abs_path_entries(host, self.platform)
     }
 
     /// 자식 하나 — 인자·cwd·환경은 TS 와 같고, 샌드박스가 켜졌으면 `sandbox-exec -p <도구 프로파일 텍스트>` 앞머리만 더한다
@@ -86,7 +90,7 @@ impl ToolEnv {
             file,
             args,
             cwd: Some(cwd.to_owned()),
-            env: build_exec_env(pairs, self.path_value(), self.platform, &[]),
+            env: build_exec_env(pairs, &self.path_value(), self.platform, &[]),
             timeout_ms,
             max_buffer: MAX_BUFFER as usize,
             stdin: Stdin::HeldOpen,
@@ -129,7 +133,7 @@ impl ToolEnv {
     /// PATH 에서 실행 파일 찾기 — TS `onPath`(`access(X_OK)`). `unsafe` 없이 부를 수 없어 "모드에 실행 비트가 하나라도
     /// 있다"로 본다(심링크는 따라간다, 폴더도 통과 — D-69). FS 를 보므로 관문 안에서 부른다.
     /// 절대경로 항목만 본다 — 상대 항목(`bin`·`.`)은 자식 cwd(연결 폴더) 기준으로 풀려 폴더의 실행 파일을 고를 수 있다
-    /// (도구 샌드박스 리뷰 R2-1, TS 는 아직 본다 — Rust 가 더 엄격). 찾은 절대경로로 띄운다.
+    /// (도구 샌드박스 리뷰 R2-1 — TS 는 넘겨받는 PATH 가 이미 절대경로 항목뿐이라 결과가 같다, 설계 D-5·D-14). 찾은 절대경로로 띄운다.
     pub fn find_on_path(&self, bin: &str) -> Option<String> {
         let sep = path_list_separator(self.platform);
         self.path_value()
@@ -250,6 +254,19 @@ mod tests {
             path_of(env("/e", ToolSandbox::Off, &[("PATH", "/a")])),
             "/e"
         );
+    }
+
+    /// 설계 D-14 — 환경 PATH 폴백도 절대경로 항목만(TS `absPathEntries`, 상대 항목은 자식 cwd 기준으로 풀린다). Windows 는 그대로.
+    #[test]
+    fn path_fallback_keeps_only_absolute_entries() {
+        let path_of = |t: ToolEnv| t.spec("x", &[], "/", 1).unwrap().env["PATH"].clone();
+        assert_eq!(
+            path_of(env("", ToolSandbox::Off, &[("PATH", ".:/a:bin::./x:/b")])),
+            "/a:/b"
+        );
+        let mut win = env("", ToolSandbox::Off, &[("PATH", r".;C:\w")]);
+        win.platform = Platform::Win32;
+        assert_eq!(path_of(win), r".;C:\w");
     }
 
     /// 실행 비트(D-69) — 모드에 실행 비트가 하나라도 있으면(심링크는 따라간다), 폴더도 통과. 빈 구간은 건너뛴다.

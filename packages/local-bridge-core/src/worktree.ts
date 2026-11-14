@@ -23,6 +23,7 @@ import * as path from 'path';
 import { execFile } from 'child_process';
 import { EXEC_TIMEOUT_MS, GIT_DIR_MISMATCH_ERROR, GIT_FIXED_ARGS, GITFILE_MAX_BYTES, MAX_BUFFER, TASK_ID_RE, WORKTREE_BRANCH_PREFIX, WORKTREE_DIR } from './constants';
 import { buildExecEnv } from './exec-env';
+import { absPathEntries } from './exec-path';
 import { readRegularFile, type GitPaths } from './git-trust';
 import { SandboxProfileMissingError, SandboxSpawnError, sandboxExecError, sandboxExecFailed, wrapInSandbox } from './sandbox';
 import { safeFrom, safeFromAsync } from './scope';
@@ -46,7 +47,7 @@ export async function gitRun(args: string[], cwd: string, profile: string | null
     const cmd = wrapInSandbox('git', [...GIT_FIXED_ARGS, ...args], profile);
     const r = await new Promise<GitOut>((resolve) => {
         // 자식 환경은 exec 와 같은 allowlist 로 제한한다. 여기서 쓰는 연산은 모두 로컬이라 SSH·GPG·GIT_* 가 필요 없다.
-        execFile(cmd.file, cmd.args, { cwd, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER, env: buildExecEnv(process.env, process.env.PATH ?? '') }, (err, stdout, stderr) => {
+        execFile(cmd.file, cmd.args, { cwd, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER, env: buildExecEnv(process.env, absPathEntries(process.env.PATH ?? '')) }, (err, stdout, stderr) => {
             resolve({
                 code: err ? ((err as NodeJS.ErrnoException & { code?: number }).code ?? 1) : 0,
                 stdout: String(stdout), stderr: String(stderr),
