@@ -8,8 +8,10 @@
  *  - 다중 루트(0.2.0): 루트당 독립 연결·파생 deviceId·스코프 상호 격리·개별 해제
  *  - stdin 종료 = 즉시 정리 종료 (좀비 방지)
  *
- * 실행: node apps/desktop-native/helper/harness.cjs
+ * 실행: node apps/desktop-native/helper/harness.cjs                       — Node 헬퍼(dist/helper.cjs)
  *      (사전: npm run build:packages + esbuild 번들 — build.sh 참조)
+ *      node apps/desktop-native/helper/harness.cjs --helper <실행 파일>     — 그 실행 파일(예: omk-helper)을 직접 띄운다
+ * 두 헬퍼가 같은 단언을 통과해야 한다 — 헬퍼별 분기는 띄우는 방법(spawnHelper) 한 곳뿐이다.
  * 종료코드 0 = 전 케이스 통과.
  */
 const assert = require('node:assert');
@@ -18,6 +20,23 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawn } = require('node:child_process');
 const { WebSocketServer } = require('ws');
+
+// --helper <실행 파일>: 그 실행 파일을 같은 인자(--server …)로 띄운다. 없으면 Node 헬퍼 번들.
+const HELPER_BIN = (() => {
+    const i = process.argv.indexOf('--helper');
+    return i >= 0 && process.argv[i + 1] ? path.resolve(process.argv[i + 1]) : null;
+})();
+const HELPER_NAME = HELPER_BIN ? path.basename(HELPER_BIN) : 'helper.cjs(Node)';
+
+/** 헬퍼를 띄우는 곳은 여기 하나. API key 는 argv·env 가 아니라 stdin 의 auth 명령으로 준다. */
+function spawnHelper(args, opts = {}) {
+    const env = { ...process.env, ...(opts.env || {}) };
+    delete env.OMK_COMPANION_API_KEY;
+    const [cmd, argv] = HELPER_BIN
+        ? [HELPER_BIN, args]
+        : [process.execPath, [path.join(__dirname, 'dist/helper.cjs'), ...args]];
+    return spawn(cmd, argv, { env, stdio: opts.stdio || ['pipe', 'pipe', 'inherit'] });
+}
 
 (async () => {
     const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-cpharness-'));
@@ -70,11 +89,7 @@ const { WebSocketServer } = require('ws');
     };
 
     // 헬퍼 spawn — API key 는 argv·env 가 아니라 stdin 의 auth 명령으로 준다(시작 인자·환경은 다른 프로세스가 읽을 수 있다)
-    const helperEnv = { ...process.env };
-    delete helperEnv.OMK_COMPANION_API_KEY;
-    const helper = spawn(process.execPath, [
-        path.join(__dirname, 'dist/helper.cjs'), '--server', `http://127.0.0.1:${port}`,
-    ], { env: helperEnv, stdio: ['pipe', 'pipe', 'inherit'] });
+    const helper = spawnHelper(['--server', `http://127.0.0.1:${port}`]);
     const events = [];
     const evWaiters = [];
     let buf = '';
@@ -260,6 +275,6 @@ const { WebSocketServer } = require('ws');
     wss.close();
     fs.rmSync(folder, { recursive: true, force: true });
     fs.rmSync(folder2, { recursive: true, force: true });
-    console.log('OK — Companion 헬퍼 하네스 전 케이스 통과 (frames=%d, events=%d, roots=2)', received.length, events.length);
+    console.log('OK — Companion 헬퍼 하네스 전 케이스 통과 (helper=%s, frames=%d, events=%d, roots=2)', HELPER_NAME, received.length, events.length);
     process.exit(0);
 })().catch((e) => { console.error('HARNESS FAIL:', e.message); process.exit(1); });
