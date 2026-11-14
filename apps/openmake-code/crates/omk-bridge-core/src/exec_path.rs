@@ -7,7 +7,9 @@
 
 use std::collections::BTreeMap;
 
-use crate::constants::{PATH_PROBE_ENV_EXTRA_POSIX, PATH_PROBE_TIMEOUT_MS, SANDBOX_BIN};
+use crate::constants::{
+    FALLBACK_CHILD_PATH, PATH_PROBE_ENV_EXTRA_POSIX, PATH_PROBE_TIMEOUT_MS, SANDBOX_BIN,
+};
 use crate::exec_env::build_exec_env;
 use crate::js_text::js_trim;
 use crate::node_path;
@@ -58,15 +60,22 @@ fn is_abs_entry(p: &str) -> bool {
 
 /// 자식에게 넘길 PATH(`:` 구분)에서 절대경로 항목만 남긴다 — TS `absPathEntries`. 상대 항목은 자식 cwd(연결 폴더) 기준으로
 /// 풀려 폴더의 파일을 고를 수 있다(설계 D-5). 호스트 PATH 를 자식 PATH 로 넘기는 자리(git 자식·도구의 PATH 폴백)도 이것을
-/// 지난다(설계 D-14). Windows 는 그대로 — exec PATH 의 Windows 갈래와 같다.
+/// 지난다(설계 D-14). 거른 결과가 비면 `FALLBACK_CHILD_PATH` — 빈 PATH 는 현재 폴더 한 항목이다(설계 D-14 보완).
+/// Windows 는 그대로 — exec PATH 의 Windows 갈래와 같다.
 pub(crate) fn abs_path_entries(p: &str, platform: Platform) -> String {
     if platform == Platform::Win32 {
         return p.to_owned();
     }
-    p.split(':')
+    let kept = p
+        .split(':')
         .filter(|e| is_abs_entry(e))
         .collect::<Vec<_>>()
-        .join(":")
+        .join(":");
+    if kept.is_empty() {
+        FALLBACK_CHILD_PATH.to_owned()
+    } else {
+        kept
+    }
 }
 
 fn dedupe<'a>(items: impl Iterator<Item = &'a str>) -> Vec<&'a str> {

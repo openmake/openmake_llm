@@ -249,7 +249,7 @@ mod tests {
             path_of(env("", ToolSandbox::Off, &[("PATH", ""), ("Path", "/b")])),
             "/b"
         );
-        assert_eq!(path_of(env("", ToolSandbox::Off, &[])), "");
+        assert_eq!(path_of(env("", ToolSandbox::Off, &[])), "/usr/bin:/bin"); // D-14 보완
         assert_eq!(
             path_of(env("/e", ToolSandbox::Off, &[("PATH", "/a")])),
             "/e"
@@ -264,6 +264,13 @@ mod tests {
             path_of(env("", ToolSandbox::Off, &[("PATH", ".:/a:bin::./x:/b")])),
             "/a:/b"
         );
+        // 절대경로 항목이 하나도 없으면 빈 값(= 현재 폴더)이 아니라 기본값(설계 D-14 보완).
+        for p in [".", "bin:./x::"] {
+            assert_eq!(
+                path_of(env("", ToolSandbox::Off, &[("PATH", p)])),
+                "/usr/bin:/bin"
+            );
+        }
         let mut win = env("", ToolSandbox::Off, &[("PATH", r".;C:\w")]);
         win.platform = Platform::Win32;
         assert_eq!(path_of(win), r".;C:\w");

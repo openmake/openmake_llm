@@ -8,7 +8,7 @@ import * as path from 'path';
 import { execFileSync, spawnSync } from 'child_process';
 import { SANDBOX_ENABLED } from '../constants';
 import { BridgeCore } from '../core';
-import { onPath, resolveExecPath } from '../exec-path';
+import { absPathEntries, onPath, resolveExecPath } from '../exec-path';
 import { buildSandboxProfile } from '../sandbox';
 import type { BridgeMsg, BridgeResult } from '../types';
 
@@ -76,6 +76,20 @@ describe('로그인 셸 자식의 PATH(D-14)', () => {
         withEnv({ HOME: path.join(tmp, 'home'), PATH: '.:bin:/usr/bin:/bin', SHELL: sh }, () => resolveExecPath(root, null));
         expect(fs.readFileSync(mark, 'utf8')).toBe('/usr/bin:/bin');
     });
+
+    it('절대경로 항목이 하나도 없으면(`.`) 빈 값이 아니라 기본값을 넘긴다(D-14 보완)', () => {
+        const [sh, mark] = [path.join(tmp, 'login-sh'), path.join(tmp, 'login.path')];
+        fs.writeFileSync(sh, `#!/bin/sh\nprintf %s "$PATH" > '${mark}'\nprintf %s "$PATH"\n`, { mode: 0o755 });
+        withEnv({ HOME: path.join(tmp, 'home'), PATH: '.', SHELL: sh }, () => resolveExecPath(root, null));
+        expect(fs.readFileSync(mark, 'utf8')).toBe('/usr/bin:/bin');
+    });
+});
+
+describe('absPathEntries(D-14 보완)', () => {
+    // POSIX 의 빈 PATH 는 현재 폴더 한 항목이다 — 거른 결과가 비면 고정 기본값(리뷰 r2 F4).
+    it.each(['.', '', 'bin:./x::'])('POSIX %j → 기본값', (p) => expect(absPathEntries(p, 'linux')).toBe('/usr/bin:/bin'));
+    it('절대경로 항목이 있으면 그것만', () => expect(absPathEntries('.:/a:bin', 'darwin')).toBe('/a'));
+    it('Windows 는 그대로', () => expect(absPathEntries('', 'win32')).toBe(''));
 });
 
 describe('PATH 조회 자식의 stderr(D-6 보완)', () => {

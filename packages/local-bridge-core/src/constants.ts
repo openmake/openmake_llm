@@ -49,6 +49,11 @@ export const AUTH_CLOSE_TEXT: Record<BridgeAuthCloseReason, string> = {
 export const PATH_PROBE_TIMEOUT_MS = 5000;
 /** git 디렉터리 탐지(rev-parse) 프로브 타임아웃(ms). */
 export const GIT_PROBE_TIMEOUT_MS = 5000;
+/**
+ * 자식에게 넘길 PATH 를 절대경로 항목만 남겼더니 비었을 때의 값 — POSIX 의 빈 PATH 는 현재 폴더(연결 폴더) 한 항목이라
+ * 폴더의 `git`·`python3` 가 떴다(설계 D-14 보완, 리뷰 r2 F4).
+ */
+export const FALLBACK_CHILD_PATH = '/usr/bin:/bin';
 /** 테스트 러너 탐지에서 pytest 탐지 `python3 -I -c …` 한 번에 주는 시간. */
 export const TEST_RUNNER_PROBE_TIMEOUT_MS = 5000;
 
