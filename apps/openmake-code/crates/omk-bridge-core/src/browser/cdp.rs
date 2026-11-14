@@ -264,10 +264,16 @@ impl CdpClient {
         let shared = Arc::new(Mutex::new(Shared::default()));
         let (out, mut out_rx) = mpsc::unbounded_channel::<Message>();
         let (ev_tx, ev_rx) = mpsc::unbounded_channel();
+        let writer_shared = shared.clone();
         let writer = tokio::spawn(async move {
             while let Some(m) = out_rx.recv().await {
                 let close = matches!(m, Message::Close(_));
-                if sink.send(m).await.is_err() || close {
+                if sink.send(m).await.is_err() {
+                    // 쓰기 끝이 깨지면 읽기가 살아 있어도 닫힌 연결이다(TS `ws.readyState`) — 다음 `connect()` 가 다시 붙는다
+                    fail_all(&writer_shared, CDP_DISCONNECTED_ERROR);
+                    break;
+                }
+                if close {
                     break;
                 }
             }
