@@ -52,7 +52,7 @@ export interface TaskSandboxConfig {
     user: string;
     /** 단일 명령(exec) timeout(ms). */
     execTimeoutMs: number;
-    /** exec stdout/stderr 캡처 상한(byte). */
+    /** exec stdout/stderr 캡처 상한 — 디코드된 글자 수(UTF-16 단위). 한글이면 실제 바이트는 최대 3배. */
     outputCap: number;
     /** workspace 디스크 쿼터(byte) — 초과 시 정리/거절. */
     workspaceQuota: number;
@@ -245,7 +245,7 @@ export const BROWSER_SESSION = {
     READY_TIMEOUT_MS: 30_000,
     /** 명령 하나의 상한(ms) */
     COMMAND_TIMEOUT_MS: 30_000,
-    /** 명령 응답 크기 상한(byte) — 스크린샷(base64)이 실린다 */
+    /** 명령 응답 크기 상한 — 글자 수(UTF-16 단위, runProcess outputCap). 스크린샷(base64)이 실린다 */
     OUTPUT_CAP: 4 * 1024 * 1024,
 } as const;
 
