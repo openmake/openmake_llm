@@ -24,6 +24,7 @@ pub(crate) fn env_get<'a>(env: &'a [(String, String)], key: &str) -> Option<&'a 
 
 /// 병합(순수) — 로그인 셸 출력(`trim` 후 `:` 로 나눔)·프로세스 PATH·고정 4곳을 처음 나온 순서로 중복 없이 합치고,
 /// mise 출력(`trim` 후 줄마다, 빈 줄 제외)이 있으면 그것을 앞에 둔다(겹치면 mise 자리가 이긴다).
+/// 절대경로 항목만 — 상대 항목(`.`·`bin`)은 자식 cwd(연결 폴더) 기준으로 풀려 폴더의 파일을 고를 수 있다(설계 D-5).
 pub fn merge_exec_path(
     login: Option<&str>,
     process_path: &str,
@@ -38,12 +39,16 @@ pub fn merge_exec_path(
     }
     parts.extend(process_path.split(':'));
     parts.extend(["/opt/homebrew/bin", "/usr/local/bin", &local_bin, &shims]);
-    let base = dedupe(parts.into_iter().filter(|p| !p.is_empty()));
+    let base = dedupe(parts.into_iter().filter(|p| is_abs_entry(p)));
     let Some(mise) = mise else {
         return base.join(":");
     };
-    let mise_paths = js_trim(mise).split('\n').filter(|p| !p.is_empty());
+    let mise_paths = js_trim(mise).split('\n').filter(|p| is_abs_entry(p));
     dedupe(mise_paths.chain(base.iter().copied())).join(":")
+}
+
+fn is_abs_entry(p: &str) -> bool {
+    p.starts_with('/')
 }
 
 fn dedupe<'a>(items: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
@@ -147,5 +152,19 @@ mod tests {
         );
         // 홈 끝 `/` 는 path.join 이 정리한다.
         assert!(merge_exec_path(None, "", "/h/", None).contains(":/h/.local/bin:"));
+    }
+
+    /// 설계 D-5 — 상대 항목(`.`·`bin`·`./x`)은 자식 cwd(연결 폴더) 기준으로 풀리므로 세 입력 모두에서 버린다.
+    #[test]
+    fn merge_drops_relative_segments() {
+        let fixed = "/opt/homebrew/bin:/usr/local/bin:/h/.local/bin:/h/.local/share/mise/shims";
+        assert_eq!(
+            merge_exec_path(Some(".:/a:bin:./x"), ".:/c:lib/bin:", "/h", None),
+            format!("/a:/c:{fixed}")
+        );
+        assert_eq!(
+            merge_exec_path(Some("/a"), "/c", "/h", Some("bin\n/m\n.\n./x")),
+            format!("/m:/a:/c:{fixed}")
+        );
     }
 }
