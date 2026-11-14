@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.133.4](https://github.com/openmake/openmake_llm/compare/v1.133.3...v1.133.4) (2026-11-14)
+
+
+### 🐛 버그 수정
+
+* **local-bridge-core:** code_nav 시작 경로가 심링크면 대상 이름으로도 민감 파일 판정 — TS·Rust 같은 규칙(설계 D-10) ([b3842aa](https://github.com/openmake/openmake_llm/commit/b3842aaf837323c1e3b31fc04e3836ba42c817d3))
+* **local-bridge-core:** exec PATH 는 절대경로 항목만 — TS·Rust 같은 규칙(설계 D-5) ([c555c23](https://github.com/openmake/openmake_llm/commit/c555c23ec000b1a76fbd512576ffd4a92a02c6bc))
+* **local-bridge-core:** mise bin-paths 를 도구 프로파일 안에서 — TS·Rust 같은 규칙(설계 D-6) ([e9c1ae3](https://github.com/openmake/openmake_llm/commit/e9c1ae37b38d05bca0b437a450f03737ed27c6ff))
+* **local-bridge-core:** mise bin-paths 한 줄 안의 `:` 도 나눠 항목마다 절대경로만 남긴다(설계 D-5 보완) ([dc5afb0](https://github.com/openmake/openmake_llm/commit/dc5afb04958def6c92784c42a32a0c7699bbf8eb))
+* **local-bridge-core:** PATH 조회 자식(로그인 셸·mise)의 stderr 를 버린다(설계 D-6 보완) ([af9ce98](https://github.com/openmake/openmake_llm/commit/af9ce983883ea5349ca3ee1c9a616d7ebfc3b1a3))
+* **local-bridge-core:** sandbox-exec 71 은 "실행 파일을 띄우지 못함" 으로 거절 — TS·Rust 같은 글자(설계 D-8) ([0ac785f](https://github.com/openmake/openmake_llm/commit/0ac785f4601272331d970daf450df693a8f662ae))
+* **local-bridge-core:** 거른 자식 PATH 가 비면 FALLBACK_CHILD_PATH(/usr/bin:/bin) — 빈 PATH 는 현재 폴더다(설계 D-14 보완) ([6a902b8](https://github.com/openmake/openmake_llm/commit/6a902b839100c2d36feae2b4710979bdd6f72bd7))
+* **local-bridge-core:** 도구 프로파일만 자격 파일 읽기를 막기 — TOOL_SECRET_SUBPATHS, TS·Rust 같은 글자(설계 D-7) ([9c008fb](https://github.com/openmake/openmake_llm/commit/9c008fbce79542cda451f3db09cddfea1026b763))
+* **local-bridge-core:** 로그인 셸 PATH 조회를 홈에서 띄우기 — TS·Rust 같은 규칙(설계 D-13) ([179c9d3](https://github.com/openmake/openmake_llm/commit/179c9d34f932799dadda47adcc159151ab0b25f8))
+* **local-bridge-core:** 진단 대상은 연결 폴더의 엄격한 하위만 — TS·Rust 같은 규칙(설계 D-9) ([6fddb05](https://github.com/openmake/openmake_llm/commit/6fddb052c723dc29bebf09b6555fca917918159e))
+* **local-bridge-core:** 코어가 자식에게 넘기는 PATH 는 어디서 왔든 절대경로 항목만 — git 자식·도구 PATH 폴백·로그인 셸 조회(설계 D-14) ([0b67513](https://github.com/openmake/openmake_llm/commit/0b67513d0be6418adffcdecc890c32941ac72c57))
+
 ## [1.133.3](https://github.com/openmake/openmake_llm/compare/v1.133.2...v1.133.3) (2026-11-14)
 
 
