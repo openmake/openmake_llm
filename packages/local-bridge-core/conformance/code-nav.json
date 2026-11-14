@@ -236,6 +236,24 @@
       ]
     },
     {
+      "id": "secret-symlink-start",
+      "setup": [
+        {"file":"root/.env","content":"hit\n"},
+        {"symlink":"root/notes.txt","target":"{{TMP}}/root/.env"},
+        {"file":"root/credentials/k.txt","content":"hit\n"},
+        {"symlink":"root/docs","target":"{{TMP}}/root/credentials"},
+        {"file":"root/real.txt","content":"hit\n"},
+        {"symlink":"root/alias.txt","target":"{{TMP}}/root/real.txt"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit","path":"notes.txt"},"expect":{"ok":true,"codeNav":{"matches":[],"truncated":false,"skipped":1}}},
+        {"msg":{"kind":"code_nav","op":"files","path":"notes.txt"},"expect":{"ok":true,"codeNav":{"files":[],"truncated":false,"skipped":1}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit","path":"docs"},"expect":{"ok":true,"codeNav":{"matches":[],"truncated":false,"skipped":1}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit","path":"alias.txt"},"expect":{"ok":true,"codeNav":{"matches":["alias.txt:1:hit"],"truncated":false}}}
+      ]
+    },
+    {
       "id": "files-lines",
       "setup": [
         {"file":"root/a.txt","content":"a\nb\n"},

@@ -272,3 +272,17 @@ describe('M3 — info/exclude 가 심링크면 제외 등록을 건너뛴다', (
         expect(fs.existsSync(path.join(repo, '.git', 'i2', 'exclude'))).toBe(false);
     }, 30000);
 });
+
+sbDescribe('D-8 — git 이 PATH 에 없으면(sandbox-exec 71) "재연결" 이 아니라 그 이름으로 126 거절', () => {
+    it('worktree add', async () => {
+        const repo = makeRepo('repo');
+        const core = makeCore(repo);
+        const saved = process.env.PATH;
+        process.env.PATH = path.join(tmp, 'no-such-bin'); // worktree git 은 프로세스 PATH 로 찾는다
+        try {
+            expect(await run(core, wt('add'))).toEqual({ ok: false, error: '샌드박스 안에서 실행 파일을 띄우지 못해 실행을 거부했습니다(git).', exitCode: 126 });
+        } finally { process.env.PATH = saved; }
+        expect(fs.existsSync(path.join(repo, WT))).toBe(false);
+    }, 30000);
+});
+

@@ -292,7 +292,7 @@ fn constants() {
     use omk_bridge_core::constants as c;
     let doc = load("constants");
     let values = doc["values"].as_object().unwrap();
-    let lists: [(&str, &[&str]); 7] = [
+    let lists: [(&str, &[&str]); 8] = [
         ("EXEC_ENV_ALLOWLIST_POSIX", c::EXEC_ENV_ALLOWLIST_POSIX),
         (
             "EXEC_ENV_ALLOWLIST_PREFIX_POSIX",
@@ -302,6 +302,7 @@ fn constants() {
         ("PATH_PROBE_ENV_EXTRA_POSIX", c::PATH_PROBE_ENV_EXTRA_POSIX),
         ("CACHE_SUBPATHS", c::CACHE_SUBPATHS),
         ("SECRET_SUBPATHS", c::SECRET_SUBPATHS),
+        ("TOOL_SECRET_SUBPATHS", c::TOOL_SECRET_SUBPATHS),
         ("BRIDGE_KINDS", c::BRIDGE_KINDS),
     ];
     let mut seen = Vec::new();
@@ -367,6 +368,8 @@ fn constants() {
         ("GIT_PROBE_PROFILE", c::GIT_PROBE_PROFILE),
         ("GIT_DIR_MISMATCH_ERROR", c::GIT_DIR_MISMATCH_ERROR),
         ("GIT_PATH_DENIED_PREFIX", c::GIT_PATH_DENIED_PREFIX),
+        ("SANDBOX_SPAWN_ERROR_PREFIX", c::SANDBOX_SPAWN_ERROR_PREFIX),
+        ("FALLBACK_CHILD_PATH", c::FALLBACK_CHILD_PATH),
     ];
     for (name, ours) in texts {
         assert_eq!(values[name], ours, "constants/{name}");
@@ -382,6 +385,8 @@ fn constants() {
         "constants/GITFILE_MAX_BYTES"
     );
     seen.extend(["GIT_PATH_DENIED_PREFIX", "GITFILE_MAX_BYTES"]);
+    seen.push("SANDBOX_SPAWN_ERROR_PREFIX");
+    seen.push("FALLBACK_CHILD_PATH");
     seen.extend(["WORKTREE_DIR", "WORKTREE_BRANCH_PREFIX"]);
     // 읽기 전용 도구 (PR-1.4) — 두 시간 제한은 기본값(TS 는 환경 변수가 없을 때의 값).
     let tools: [(&str, u64); 12] = [

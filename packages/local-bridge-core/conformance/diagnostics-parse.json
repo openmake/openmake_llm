@@ -64,6 +64,18 @@
       ]
     },
     {
+      "id": "folder-itself-not-diagnosed",
+      "setup": [
+        {"file":"tsconfig.json","content":"{}"},
+        {"fakeTool":"node_modules/.bin/tsc","stdout":"","stderr":"","exit":0,"record":"tsc"},
+        {"file":"proj.ts/a.ts","content":""}
+      ],
+      "root": "proj.ts",
+      "requests": [
+        {"msg":{"kind":"lsp_diagnostics","paths":["."]},"expect":{"ok":true,"diagnostics":[],"truncated":false,"serverKind":"none"},"toolCalls":[]}
+      ]
+    },
+    {
       "id": "non-string",
       "setup": [
         {"file":"root/a.ts","content":""},

@@ -13,6 +13,11 @@
       "expect": {"path": "/a:/b:{{BIN}}:/usr/bin:/opt/homebrew/bin:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"}
     },
     {
+      "id": "relative-segments-dropped",
+      "input": {"shell": {"stdout": ".:/s/a:bin:./x", "exit": 0}, "mise": {"stdout": "bin\n/m/one\n.\n./x\n/m/one:.", "exit": 0}, "processPath": "{{BIN}}:.:./x:lib/bin:/usr/bin", "folder": "root"},
+      "expect": {"path": "/m/one:/s/a:{{BIN}}:/usr/bin:/opt/homebrew/bin:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"}
+    },
+    {
       "id": "duplicates-first-wins",
       "input": {"shell": {"stdout": "/usr/bin:/s/a:/usr/bin:/opt/homebrew/bin", "exit": 0}, "mise": "absent", "processPath": "/s/a:{{BIN}}:/usr/bin", "folder": "root"},
       "expect": {"path": "/usr/bin:/s/a:/opt/homebrew/bin:{{BIN}}:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"}

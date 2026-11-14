@@ -29,6 +29,34 @@ pub const SECRET_SUBPATHS: &[&str] = &[
     ".config/gcloud",
     "Library/Keychains",
 ];
+/// 도구 프로파일에서만 더 막는 자격 파일 — 확인 없이 뜨는 자식(폴더의 tsc 등)은 이 파일이 필요 없다(설계 D-7).
+/// exec 프로파일에는 넣지 않는다 — 승인된 `npm install`·`gh` 가 쓴다. 목록이라 빠지는 이름이 생긴다(닫는 길은 허용 목록, PR-C).
+pub const TOOL_SECRET_SUBPATHS: &[&str] = &[
+    ".npmrc",
+    ".yarnrc.yml",
+    ".netrc",
+    ".git-credentials",
+    ".config/git/credentials",
+    ".config/gh",
+    ".config/hub",
+    ".config/glab-cli",
+    ".pypirc",
+    ".cargo/credentials",
+    ".cargo/credentials.toml",
+    ".gem/credentials",
+    ".m2/settings.xml",
+    ".gradle/gradle.properties",
+    ".composer/auth.json",
+    ".config/composer/auth.json",
+    ".config/op",
+    ".terraform.d",
+    ".azure",
+    ".vault-token",
+    ".pgpass",
+    ".my.cnf",
+    ".boto",
+    ".s3cfg",
+];
 
 /// exec 자식에 넘기는 env 허용 목록 — 호스트 env 를 통째로 물려주면 헬퍼의 API 키 등 비밀이 도구 결과로 샌다.
 pub const EXEC_ENV_ALLOWLIST_POSIX: &[&str] = &[
@@ -128,6 +156,9 @@ pub const FS_MAX_CONCURRENT: usize = 4;
 pub const PATH_PROBE_TIMEOUT_MS: u64 = 5_000;
 /// 샌드박스 git 디렉터리 탐지 시간 제한(ms).
 pub const GIT_PROBE_TIMEOUT_MS: u64 = 5_000;
+/// 자식에게 넘길 PATH 를 절대경로 항목만 남겼더니 비었을 때의 값 — POSIX 의 빈 PATH 는 현재 폴더(연결 폴더) 한 항목이라
+/// 폴더의 `git`·`python3` 가 떴다(설계 D-14 보완, 리뷰 r2 F4).
+pub const FALLBACK_CHILD_PATH: &str = "/usr/bin:/bin";
 /// 확인 없이 띄우는 git(worktree·연결 시점 탐지)에 늘 붙이는 인자 — 레포 설정의 fsmonitor·훅을 끈다(설계 D-2).
 /// 경계는 도구 프로파일이 맡고 이것은 겹방어다.
 pub const GIT_FIXED_ARGS: &[&str] = &[
@@ -143,6 +174,9 @@ pub const GIT_DIR_MISMATCH_ERROR: &str =
     "git 디렉터리가 연결할 때와 달라 worktree 연산을 거부했습니다(폴더 재연결 필요).";
 /// 파일 kind 가 git 금지 경로(git 디렉터리 자신·config·hooks, worktree 의 .git)를 쓰거나 지우려 할 때의 거절 머리.
 pub const GIT_PATH_DENIED_PREFIX: &str = "git 디렉터리 보호 경로는 쓰거나 지울 수 없습니다: ";
+/// 감싼 자식에서 sandbox-exec 가 실행 파일을 띄우지 못했다(종료 코드 71) — 뒤에 `(<파일 이름>).` 가 붙는다, 종료 코드는 같은 126(설계 D-8).
+pub const SANDBOX_SPAWN_ERROR_PREFIX: &str =
+    "샌드박스 안에서 실행 파일을 띄우지 못해 실행을 거부했습니다";
 /// 코어가 직접 읽는 gitfile(`gitdir: <경로>`) 크기 상한(바이트) — 경로 한 줄이면 충분하다. 넘으면 gitfile 이 아니다(TS 같음).
 pub const GITFILE_MAX_BYTES: u64 = 4096;
 /// worktree 를 만드는 자리(연결 폴더 기준).

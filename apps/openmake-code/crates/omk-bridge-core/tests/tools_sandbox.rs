@@ -323,3 +323,62 @@ fn tool_profile_blocks_network_exec_does_not() {
         .to_json();
     assert_eq!(r["stdout"], "connected\n", "{r}");
 }
+
+/// 도구 프로파일만 자격 파일 읽기를 막는다(설계 D-7) — 가짜 홈을 `home` 인자로 준다. exec 프로파일은 승인된 npm·gh 가 쓰므로 읽힌다.
+#[test]
+fn tool_profile_denies_credential_reads_exec_does_not() {
+    let w = Work::new();
+    let home = w.join("home");
+    for (rel, body) in [
+        (".netrc", "omk-conformance-secret-netrc\n"),
+        (".config/gh/hosts.yml", "omk-conformance-secret-gh\n"),
+    ] {
+        let p = format!("{home}/{rel}");
+        std::fs::create_dir_all(std::path::Path::new(&p).parent().unwrap()).unwrap();
+        std::fs::write(&p, body).unwrap();
+    }
+    let cat = |tool: bool, rel: &str| {
+        let profile = sandbox_profile(&w.join("root"), None, &[], &home, tool).unwrap();
+        let out = std::process::Command::new("/usr/bin/sandbox-exec")
+            .args(["-p", &profile, "/bin/cat", &format!("{home}/{rel}")])
+            .stderr(std::process::Stdio::null())
+            .output()
+            .unwrap();
+        if out.status.success() {
+            String::from_utf8(out.stdout).unwrap()
+        } else {
+            "denied".to_owned()
+        }
+    };
+    assert_eq!(
+        [cat(true, ".netrc"), cat(true, ".config/gh/hosts.yml")],
+        ["denied", "denied"]
+    );
+    assert_eq!(
+        [cat(false, ".netrc"), cat(false, ".config/gh/hosts.yml")],
+        [
+            "omk-conformance-secret-netrc\n",
+            "omk-conformance-secret-gh\n"
+        ]
+    );
+}
+
+/// D-8 — 감싼 실행 파일을 띄우지 못하면(sandbox-exec 71) "재연결" 이 아니라 그 이름으로 126 거절한다. 실행 비트가 없는 폴더의 tsc.
+#[test]
+fn unspawnable_tool_is_refused_with_its_name() {
+    let w = Work::new();
+    std::fs::write(w.join("root/tsconfig.json"), "{}").unwrap();
+    std::fs::write(w.join("root/a.ts"), "export const n = 1;\n").unwrap();
+    std::fs::create_dir_all(w.join("root/node_modules/.bin")).unwrap();
+    std::fs::write(w.join("root/node_modules/.bin/tsc"), "#!/bin/sh\nexit 0\n").unwrap();
+    let c = core(&w, true);
+    let r = runtime()
+        .block_on(c.handle_exec(&BridgeMsg::from_json(
+            &json!({"kind": "lsp_diagnostics", "paths": ["a.ts"]}),
+        )))
+        .to_json();
+    assert_eq!(
+        r,
+        json!({"ok": false, "error": "샌드박스 안에서 실행 파일을 띄우지 못해 실행을 거부했습니다(tsc).", "exitCode": 126})
+    );
+}
