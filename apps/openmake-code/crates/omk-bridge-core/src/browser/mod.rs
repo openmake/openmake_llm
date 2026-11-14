@@ -6,6 +6,7 @@
 
 pub mod constants;
 pub mod defs;
+pub mod download_place;
 pub mod flow;
 pub mod js_value;
 pub mod policy_block;
