@@ -516,7 +516,7 @@ describeIfChrome('BridgeCore — 다운로드 (실제 Chrome)', () => {
         await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
         origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
         folder = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'omk-core-dl-')));
-        for (const sub of ['link', 'goto', 'popup', 'head', 'closed']) fs.mkdirSync(path.join(folder, sub));
+        for (const sub of ['link', 'goto', 'popup', 'head', 'pairA', 'pairB', 'closed']) fs.mkdirSync(path.join(folder, sub));
         profile = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-core-dl-profile-'));
         // 프로필 기본 다운로드 폴더를 연결 폴더로 둔다(~/Downloads 를 연결한 경우를 흉내 — 리뷰 r1 A1) — 코어가 기동 때 대기 폴더로 다시 맞춰야 한다
         fs.mkdirSync(path.join(profile, 'Default'));
@@ -561,6 +561,19 @@ describeIfChrome('BridgeCore — 다운로드 (실제 Chrome)', () => {
         expect(out.ok).toBe(true);
         expect(out.downloads).toEqual([{ name: 'HEAD', state: 'rejected', error: 'git 디렉터리 보호 경로는 쓰거나 지울 수 없습니다: HEAD' }]);
         expect(fs.readdirSync(path.join(folder, 'head'))).toEqual([]);
+        expect(staged()).toEqual([]);
+    }, 60000);
+
+    it('두 작업이 함께 도는 중 새 창(target=_blank)에서 받으면 연 탭의 작업 폴더에만 저장하고 그 작업 결과에만 싣는다(D-1·D-2)', async () => {
+        // A 가 먼저 설정하고 B 가 뒤에 설정한다 — 마지막 호출의 저장 함수(B)가 아니라 연 탭의 작업(A)의 것으로 옮겨야 한다
+        const a = browse('pairA', [{ type: 'goto', url: `${origin}/` }, { type: 'wait', ms: 1500 }, { type: 'click', selector: '#pop' }, { type: 'wait', ms: 1000 }]);
+        await new Promise((r) => setTimeout(r, 300));
+        const b = browse('pairB', [{ type: 'goto', url: `${origin}/` }, { type: 'wait', ms: 3500 }]);
+        const [outA, outB] = await Promise.all([a, b]);
+        expect(outA.downloads).toEqual([{ name: 'report.txt', state: 'saved', savedAs: 'report.txt' }]);
+        expect(outB.downloads).toBeUndefined();
+        expect(fs.readFileSync(path.join(folder, 'pairA', 'report.txt'), 'utf8')).toBe('보고서');
+        expect(fs.readdirSync(path.join(folder, 'pairB'))).toEqual([]);
         expect(staged()).toEqual([]);
     }, 60000);
 
