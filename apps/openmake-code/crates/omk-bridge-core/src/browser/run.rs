@@ -97,7 +97,7 @@ pub(super) struct Ctx<'a> {
 }
 
 impl Ctx<'_> {
-    fn session(&self) -> String {
+    pub(super) fn session(&self) -> String {
         lock_tab(self.tab).session_id.clone()
     }
 
