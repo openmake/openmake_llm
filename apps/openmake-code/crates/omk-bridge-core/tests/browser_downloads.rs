@@ -490,3 +490,57 @@ fn no_place_at_begin_is_failed_and_deleted() {
         lab.browser.dispose().await;
     });
 }
+
+/// TS "goto 가 다운로드로 끝나면(isDownload) 던지지 않고 ok·download:true·지금 탭 주소".
+#[test]
+fn goto_ending_in_download_is_ok() {
+    paused().block_on(async {
+        let lab = Lab::with_navigate(false, json!({"errorText": "net::ERR_ABORTED", "isDownload": true}));
+        let calls = Calls::default();
+        let spec = omk_bridge_core::browser::run::BrowserSpec {
+            actions: Some(json!([{"type": "goto", "url": "http://127.0.0.1:9/dl"}])),
+            ..Default::default()
+        };
+        let r = lab.browser.run(&spec, &opts("A", Some(place_fn(&calls, |_, _| Ok("x".into()))))).await;
+        assert_eq!(
+            r.to_json_string(),
+            r#"{"ok":true,"finalUrl":"about:blank","results":[{"i":0,"type":"goto","ok":true,"download":true,"url":"about:blank"}]}"#
+        );
+        lab.browser.dispose().await;
+    });
+}
+
+/// TS "isDownload 없는 ERR_ABORTED 는 종전대로 이동 실패".
+#[test]
+fn aborted_without_download_fails_the_goto() {
+    paused().block_on(async {
+        let lab = Lab::with_navigate(false, json!({"errorText": "net::ERR_ABORTED"}));
+        let calls = Calls::default();
+        let spec = omk_bridge_core::browser::run::BrowserSpec {
+            actions: Some(json!([{"type": "goto", "url": "http://127.0.0.1:9/dl"}])),
+            ..Default::default()
+        };
+        let r = lab
+            .browser
+            .run(
+                &spec,
+                &opts("A", Some(place_fn(&calls, |_, _| Ok("x".into())))),
+            )
+            .await;
+        let results = r.get("results").map(|j| match j {
+            Json::Arr(a) => a
+                .iter()
+                .map(|x| match x {
+                    Json::Obj(o) => o.to_json_string(),
+                    _ => String::new(),
+                })
+                .collect::<Vec<_>>(),
+            _ => Vec::new(),
+        });
+        assert_eq!(
+            results.unwrap(),
+            [r#"{"i":0,"type":"goto","ok":false,"error":"이동하지 못했습니다: net::ERR_ABORTED"}"#]
+        );
+        lab.browser.dispose().await;
+    });
+}
