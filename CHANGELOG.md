@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.134.0](https://github.com/openmake/openmake_llm/compare/v1.133.4...v1.134.0) (2026-11-14)
+
+
+### ✨ 기능
+
+* **openmake-code:** 브라우저 다운로드 저장(browser::download_place, PR-1.6a) ([eaf94ab](https://github.com/openmake/openmake_llm/commit/eaf94ab6990501391ba57f912d7590f42714a47c))
+* **openmake-code:** 브라우저 모듈 뼈대 — url 의존, browser- suite 러너, 워크플로 경로(PR-1.6a) ([30ed0c9](https://github.com/openmake/openmake_llm/commit/30ed0c97e25b6a8801271c6596e292202f10bedf))
+* **openmake-code:** 브라우저 사이트 정책 판정(browser::site_policy, PR-1.6a) ([76a4283](https://github.com/openmake/openmake_llm/commit/76a428324621435910d0f4d72d3a0a50e1039d65))
+* **openmake-code:** 브라우저 상수·JS 값 변환(browser::constants·js_value, PR-1.6a) ([42be47f](https://github.com/openmake/openmake_llm/commit/42be47f6a2b5d70bbee89f5bdb5c11c20c7d870f))
+* **openmake-code:** 브라우저 업로드 파일 검사(browser::upload_files, PR-1.6a) ([4a50784](https://github.com/openmake/openmake_llm/commit/4a50784a5363e79516fd272115df329a122db484))
+* **openmake-code:** 브라우저 요청 도우미(browser::defs, PR-1.6a) ([6c1a97c](https://github.com/openmake/openmake_llm/commit/6c1a97c98898ba412d3ebbe2d82d38e0e2a9d3b5))
+* **openmake-code:** 브라우저 정책 차단 표식(browser::policy_block, PR-1.6a) ([9177afd](https://github.com/openmake/openmake_llm/commit/9177afd360c23e7f118527aa6b74d863fb13e37d))
+* **openmake-code:** 브라우저 제어 흐름과 순서 있는 결과 객체(browser::flow·result, PR-1.6a) ([8cc8f47](https://github.com/openmake/openmake_llm/commit/8cc8f4718358616a1c3e6ad4b37a6c318e3b04f7))
+
+
+### 🐛 버그 수정
+
+* **openmake-code:** 다운로드 대기 파일이 심링크면 대상 파일을 링크(PR-1.6a 리뷰 L1) ([ec100ca](https://github.com/openmake/openmake_llm/commit/ec100cacc010c99ea1a9365290d5e4ec9ada920f))
+* **openmake-code:** 브라우저 흐름 repeat 횟수를 BROWSER_REPEAT_MAX 로 상한(PR-1.6a 리뷰 L3) ([9142623](https://github.com/openmake/openmake_llm/commit/9142623da25b90471c31a727dba6d7491835b193))
+
+
+### ♻️ 리팩터링
+
+* **openmake-code:** NO_HOST·exists 를 tool_env 한 곳으로(PR-1.4 리뷰 N1) ([78b0973](https://github.com/openmake/openmake_llm/commit/78b097377e9f79af51abeee1af2e8a318f22c8d5))
+
 ## [1.133.4](https://github.com/openmake/openmake_llm/compare/v1.133.3...v1.133.4) (2026-11-14)
 
 
