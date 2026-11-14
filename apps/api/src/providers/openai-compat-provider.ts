@@ -401,7 +401,8 @@ export class OpenAICompatProvider implements IProvider {
                 ...(opts.responseFormat ? { response_format: opts.responseFormat } : {}),
                 ...openRouterProvider,
                 ...geminiThinkingDisable,
-                // 추론 강도(UI 낮음·보통·높음) — Gemini 는 위 leak 차단으로 항상 OFF 라 제외.
+                // 추론 강도(UI 낮음·보통·높음) — Gemini 는 제외: 다른 provider 경유 gemini-* 는 위 leak 차단으로 항상 OFF,
+                // Google 직접은 reasoning_effort 를 thinking_config 와 함께 보내면 400(2026-11-15 실측).
                 ...(isGemini ? {} : buildReasoningEffortParams(opts.thinking, opts.modelId, this.id, !!this.modelPrefix)),
                 // Google 직접 provider 사고 요약(thinking 켬일 때만) — providers/openai-compat-gemini-thinking
                 ...buildGeminiThinkingParams(this.id, opts.thinking, !!this.modelPrefix),
