@@ -289,7 +289,8 @@ export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
                 const sym = await runGrep(sandbox, { pattern: SYMBOL_REGEX, rel, max: TASK_CODE_NAV.MAP_MAX_SYMBOLS });
                 if (!sym.error && sym.lines.length > 0) {
                     out.push('', '## 심볼 선언 (파일:줄)', ...sym.lines);
-                    if (sym.overflow) out.push(`… ${TASK_CODE_NAV.MAP_MAX_SYMBOLS}줄에서 잘림 — grep_code 로 좁히세요.`);
+                    if (sym.overflow && sym.lines.length >= TASK_CODE_NAV.MAP_MAX_SYMBOLS) out.push(`… ${TASK_CODE_NAV.MAP_MAX_SYMBOLS}줄에서 잘림 — grep_code 로 좁히세요.`);
+                    else if (sym.truncated) out.push(HALTED_PARTIAL_NOTE.replace(/^\n/, ''));
                 }
             }
             return textResult(`${out.join('\n')}${skippedNote(nativeSkipped)}`);

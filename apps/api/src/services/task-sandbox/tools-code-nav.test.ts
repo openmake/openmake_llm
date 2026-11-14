@@ -337,6 +337,17 @@ describe('네이티브 백엔드(codeNav) 우선 — 로컬 브리지 승인 창
         expect(cmds).toHaveLength(0);
     });
 
+    it('repo_map: 심볼 grep 이 한도에서 멈춰 상한 미달이면 "N줄에서 잘림" 대신 한도 중단 안내', async () => {
+        const { sandbox } = nativeSandbox((spec) => spec.op === 'files'
+            ? { files: [{ path: 'src/a.ts', lines: 12 }] }
+            : { matches: ['src/a.ts:1:export function foo() {'], truncated: true });
+        const map = createCodeNavTools(sandbox).find((t) => t.tool.name === 'repo_map')!;
+        const out = text(await map.handler({}));
+        expect(out).toContain('src/a.ts:1:export function foo() {');
+        expect(out).not.toContain('줄에서 잘림');
+        expect(out).toContain('src/a.ts:1:export function foo() {\n… 검색이 한도(시간·파일 수·파일당 매치 수)에서 중단되어 결과가 일부입니다');
+    });
+
     it('네이티브 무일치는 오류가 아니다', async () => {
         const { sandbox } = nativeSandbox(() => ({ matches: [] }));
         const grep = createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
