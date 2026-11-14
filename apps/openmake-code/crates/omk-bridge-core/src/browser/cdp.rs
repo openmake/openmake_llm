@@ -123,7 +123,8 @@ fn replace_lone_surrogates(s: &str) -> String {
     out
 }
 
-fn parse_frame(text: &str) -> Option<Value> {
+/// JSON 을 읽는다 — 짝 없는 대리 문자 때문에 못 읽으면 그 반쪽을 U+FFFD 로 바꿔 다시 읽는다(JS `JSON.parse` 는 받는다).
+pub(crate) fn parse_lenient(text: &str) -> Option<Value> {
     serde_json::from_str(text)
         .ok()
         .or_else(|| serde_json::from_str(&replace_lone_surrogates(text)).ok())
@@ -136,7 +137,7 @@ fn reply_id(v: &Value) -> Option<u64> {
 }
 
 fn dispatch(shared: &Mutex<Shared>, events: &mpsc::UnboundedSender<CdpEvent>, text: &str) {
-    let Some(m) = parse_frame(text) else { return };
+    let Some(m) = parse_lenient(text) else { return };
     if let Some(id) = m.get("id").filter(|v| v.is_number()) {
         let tx = reply_id(id).and_then(|id| lock(shared).pending.remove(&id));
         if let Some(tx) = tx {
