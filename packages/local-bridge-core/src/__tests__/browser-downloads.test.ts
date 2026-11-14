@@ -21,6 +21,8 @@ type Handler = (params: Record<string, unknown>, sessionId?: string) => void;
 function fakeCdp(navigate: Record<string, unknown> = { loaderId: 'l1' }) {
     const sent: Array<{ method: string; params: Record<string, unknown> }> = [];
     const handlers = new Map<string, Set<Handler>>();
+    /** 이 behavior 의 Browser.setDownloadBehavior 는 거절한다 */
+    const failBehaviors = new Set<string>();
     let n = 0;
     const cdp = {
         isOpen: true,
@@ -33,6 +35,7 @@ function fakeCdp(navigate: Record<string, unknown> = { loaderId: 'l1' }) {
         close: () => undefined,
         send: async (method: string, params: Record<string, unknown> = {}) => {
             sent.push({ method, params });
+            if (method === 'Browser.setDownloadBehavior' && failBehaviors.has(String(params.behavior))) throw new Error('CDP 설정 거절');
             if (method === 'Target.createTarget') return { targetId: `target-${++n}` };
             if (method === 'Target.attachToTarget') return { sessionId: `session-${params.targetId as string}` };
             if (method === 'Target.getTargets') return { targetInfos: [] };
@@ -44,7 +47,7 @@ function fakeCdp(navigate: Record<string, unknown> = { loaderId: 'l1' }) {
     const emit = (event: string, params: Record<string, unknown>, sessionId?: string) => {
         for (const h of [...(handlers.get(event) ?? [])]) h(params, sessionId);
     };
-    return { cdp: cdp as unknown as CdpClient, sent, emit };
+    return { cdp: cdp as unknown as CdpClient, sent, emit, failBehaviors };
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 10));
@@ -74,15 +77,16 @@ function setup(navigate?: Record<string, unknown>, mockActions = true) {
         if (!gates.has(name)) gates.set(name, new Promise<void>((r) => open.set(name, r)));
         return gates.get(name)!;
     };
+    const runAction = jest.spyOn(LocalBrowser.prototype as never, 'runAction' as never);
     if (mockActions) {
-        jest.spyOn(LocalBrowser.prototype as never, 'runAction' as never).mockImplementation((async (_c: unknown, _t: unknown, a: { type?: unknown; hook?: string; gate?: string }, i: number) => {
+        runAction.mockImplementation((async (_c: unknown, _t: unknown, a: { type?: unknown; hook?: string; gate?: string }, i: number) => {
             if (a.gate) await gate(a.gate);
             if (a.hook) await hooks.get(a.hook)!();
             return { i, type: a.type, ok: true };
         }) as never);
     }
     const browser = LocalBrowser.forProfile(profile);
-    return { browser, ...f, hooks, release: (name: string) => { gate(name); open.get(name)!(); } };
+    return { browser, ...f, hooks, runAction, release: (name: string) => { gate(name); open.get(name)!(); } };
 }
 
 const act = (extra: Record<string, unknown> = {}) => ({ actions: [{ type: 'wait', ms: 0, ...extra }], sitePolicy: { allow: [], deny: [] } });
@@ -257,5 +261,165 @@ describe('LocalBrowser 다운로드(가짜 CDP)', () => {
         await launched.browser.run(act(), opts('A', async () => 'x'));
         expect(fs.readdirSync(staging)).toEqual([]);
         await launched.browser.dispose();
+    });
+});
+
+// 설계 B-8 — Chrome 이 연결 폴더에 직접 쓰는 상태를 없앤다: ② 설정이 없을 때(기본값)도 대기 폴더 ③ 설정이 실패하면 실행하지 않는다.
+describe('LocalBrowser 다운로드 — 기본값·설정 실패(B-8)', () => {
+    const prefsPath = () => path.join(profile, 'Default', 'Preferences');
+    const prefs = () => JSON.parse(fs.readFileSync(prefsPath(), 'utf8')) as Record<string, unknown>;
+    /** Chrome 을 새로 띄우는 길(떠 있는 Chrome 없음) — launchChrome 이 불렸을 때의 Preferences 를 기록한다 */
+    function launchMode() {
+        (chrome.readDevToolsEndpoint as jest.Mock).mockReturnValue(null);
+        const atLaunch: Array<string | null> = [];
+        const proc = Object.assign(new EventEmitter(), { exitCode: 0, kill: () => true });
+        (chrome.launchChrome as jest.Mock).mockReset().mockImplementation(async () => {
+            atLaunch.push(fs.existsSync(prefsPath()) ? fs.readFileSync(prefsPath(), 'utf8') : null);
+            return { wsUrl: 'ws://127.0.0.1:1/devtools/browser/y', proc };
+        });
+        return atLaunch;
+    }
+    const DL = { default_directory: '', prompt_for_download: false };
+
+    it('새로 띄우기 전 — Preferences 가 없으면 기본 다운로드 폴더를 대기 폴더로 둔 새 파일(대기 폴더도 만든다)', async () => {
+        const atLaunch = launchMode();
+        const { browser } = setup();
+        await browser.run(act(), opts('A', async () => 'x'));
+        expect(atLaunch).toHaveLength(1);
+        expect(JSON.parse(atLaunch[0]!)).toEqual({ download: { ...DL, default_directory: staging } });
+        expect(fs.statSync(staging).isDirectory()).toBe(true);
+        await browser.dispose();
+    });
+
+    it('있으면 JSON 병합 — 다른 키는 그대로, 두 키만 바꾼다', async () => {
+        fs.mkdirSync(path.dirname(prefsPath()), { recursive: true });
+        fs.writeFileSync(prefsPath(), JSON.stringify({ profile: { name: 'p' }, download: { default_directory: '/elsewhere', prompt_for_download: true, directory_upgrade: true } }));
+        launchMode();
+        const { browser } = setup();
+        await browser.run(act(), opts('A', async () => 'x'));
+        expect(prefs()).toEqual({ profile: { name: 'p' }, download: { default_directory: staging, prompt_for_download: false, directory_upgrade: true } });
+        await browser.dispose();
+    });
+
+    it('깨진 JSON 이면 두 키만 든 새 파일', async () => {
+        fs.mkdirSync(path.dirname(prefsPath()), { recursive: true });
+        fs.writeFileSync(prefsPath(), '{"download": [broken');
+        launchMode();
+        const { browser } = setup();
+        await browser.run(act(), opts('A', async () => 'x'));
+        expect(prefs()).toEqual({ download: { ...DL, default_directory: staging } });
+        await browser.dispose();
+    });
+
+    it('쓰지 못하면 Chrome 을 띄우지 않고 오류 — 액션 0개', async () => {
+        fs.mkdirSync(profile, { recursive: true });
+        fs.writeFileSync(path.join(profile, 'Default'), 'not a dir'); // Default/Preferences 를 만들 수 없다
+        launchMode();
+        const { browser, runAction } = setup();
+        const r = await browser.run(act(), opts('A', async () => 'x'));
+        expect(r.ok).toBe(false);
+        expect(r.error).toMatch(/다운로드 기본 폴더/);
+        expect(chrome.launchChrome).not.toHaveBeenCalled();
+        expect(runAction).not.toHaveBeenCalled();
+        await browser.dispose();
+    });
+
+    it('떠 있는 Chrome 에 붙을 때는 Preferences 를 쓰지 않는다', async () => {
+        const { browser } = setup();
+        await browser.run(act(), opts('A', async () => 'x'));
+        expect(fs.existsSync(prefsPath())).toBe(false);
+        await browser.dispose();
+    });
+
+    it.each([['allowAndName', true], ['deny', false]])('%s 설정이 거절되면 오류로 끝내고 액션을 하나도 실행하지 않는다 — 저장 함수도 그대로', async (behavior, withPlace) => {
+        const { browser, hooks, emit, failBehaviors, runAction } = setup();
+        const first = jest.fn(async () => 'first.txt');
+        await browser.run(act(), opts('A', first));
+        runAction.mockClear();
+        failBehaviors.add(behavior as string);
+        const second = jest.fn(async () => 'second.txt');
+        hooks.set('dl', () => undefined);
+        const r = await browser.run(act({ hook: 'dl' }), opts('A', withPlace ? second : undefined));
+        expect(r.ok).toBe(false);
+        expect(r.results).toEqual([]);
+        expect(r.error).toMatch(/CDP 설정 거절/);
+        expect(runAction).not.toHaveBeenCalled();
+        // 실패한 설정의 저장 함수는 쓰지 않는다 — 그 뒤 시작한 다운로드는 마지막으로 설정에 성공한 함수로 간다
+        stage('g8');
+        emit('Page.downloadWillBegin', begin('g8', 'f.txt', 'target-1'), 'session-target-1');
+        emit('Page.downloadProgress', { guid: 'g8', state: 'completed' }, 'session-target-1');
+        await tick();
+        expect(first).toHaveBeenCalledTimes(1);
+        expect(second).not.toHaveBeenCalled();
+        await browser.dispose();
+    });
+});
+
+describe('LocalBrowser 다운로드 — 생명주기(B-8 Low)', () => {
+    const moveTo = (saved: string[]) => jest.fn(async (name: string, staged: string) => { fs.rmSync(staged); saved.push(name); return name; });
+
+    it('이미 inProgress 로 실은 다운로드는 다음 호출에서 다시 기다리지 않는다', async () => {
+        const { browser, hooks, emit } = setup();
+        hooks.set('dl', () => {
+            stage('g9');
+            emit('Page.downloadWillBegin', begin('g9', 'big.bin', 'target-1'), 'session-target-1');
+        });
+        const r1 = await browser.run(act({ hook: 'dl' }), opts('A', async () => 'x'));
+        expect(r1.downloads).toEqual([{ name: 'big.bin', state: 'inProgress' }]);
+        const t0 = Date.now();
+        const r2 = await browser.run(act(), opts('A', async () => 'x'));
+        expect(Date.now() - t0).toBeLessThan(100);
+        expect(r2.downloads).toBeUndefined();
+        await browser.dispose();
+    });
+
+    it('연결을 새로 열면 옛 연결의 받는 중 기록은 failed 로 끝내고 대기 파일을 지운다 — 그 작업의 다음 결과에 한 번', async () => {
+        const { browser, hooks, emit, cdp } = setup();
+        hooks.set('dl', () => {
+            stage('g10');
+            emit('Page.downloadWillBegin', begin('g10', 'big.bin', 'target-1'), 'session-target-1');
+        });
+        const r1 = await browser.run(act({ hook: 'dl' }), opts('A', async () => 'x'));
+        expect(r1.downloads).toEqual([{ name: 'big.bin', state: 'inProgress' }]);
+        (cdp as unknown as { isOpen: boolean }).isOpen = false;
+        jest.spyOn(CdpClient, 'connect').mockResolvedValue(fakeCdp().cdp);
+        const r2 = await browser.run(act(), opts('A', async () => 'x'));
+        expect(r2.downloads).toEqual([{ name: 'big.bin', state: 'failed', error: '브라우저 연결이 끊겨 받지 못했습니다' }]);
+        expect(fs.readdirSync(staging)).toEqual([]);
+        const r3 = await browser.run(act(), opts('A', async () => 'x'));
+        expect(r3.downloads).toBeUndefined();
+        await browser.dispose();
+    });
+
+    it('closeTask 뒤에 완료돼도 옮기기는 계속하고, 그 작업에 보고하지 않는다', async () => {
+        const { browser, hooks, emit } = setup();
+        const saved: string[] = [];
+        hooks.set('dl', () => {
+            stage('g11');
+            emit('Page.downloadWillBegin', begin('g11', 'late.txt', 'target-1'), 'session-target-1');
+        });
+        await browser.run(act({ hook: 'dl' }), opts('A', moveTo(saved)));
+        await browser.closeTask('A');
+        emit('Page.downloadProgress', { guid: 'g11', state: 'completed' }, 'session-target-1');
+        await tick();
+        expect(saved).toEqual(['late.txt']);
+        expect(fs.readdirSync(staging)).toEqual([]);
+        const r = await browser.run(act(), opts('A', async () => 'x'));
+        expect(r.downloads).toBeUndefined();
+        await browser.dispose();
+    });
+
+    it('시작 때 저장 함수가 없던 다운로드는 완료돼도 옮기지 않는다 — failed, 대기 파일 삭제', async () => {
+        const { browser, hooks, emit } = setup();
+        fs.mkdirSync(staging, { recursive: true });
+        hooks.set('dl', () => {
+            stage('g12');
+            emit('Page.downloadWillBegin', begin('g12', 'f.txt', 'target-1'), 'session-target-1');
+            emit('Page.downloadProgress', { guid: 'g12', state: 'completed' }, 'session-target-1');
+        });
+        const r = await browser.run(act({ hook: 'dl' }), opts('A'));
+        expect(r.downloads).toEqual([{ name: 'f.txt', state: 'failed', error: '다운로드를 저장할 곳이 없습니다' }]);
+        expect(fs.readdirSync(staging)).toEqual([]);
+        await browser.dispose();
     });
 });

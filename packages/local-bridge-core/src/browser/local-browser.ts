@@ -12,10 +12,12 @@
  *     다운로드 폴더가 다른 작업끼리는 동시에 돌리지 않는다.
  *   - 다운로드는 Chrome 이 연결 폴더 밖 대기 폴더(`<프로필>-downloads`)에 `<guid>` 이름으로만 받고, 완료 뒤 호출부의 저장 함수
  *     (`write` 와 같은 가드)가 이름을 판정해 옮긴다(downloads.ts·download-place.ts, 2026-11-14). 결과에 downloads 로 싣는다.
+ *     CDP 설정이 없는 상태(연결이 닫힌 뒤 등)에도 연결 폴더에 직접 쓰지 않게 기동 때 프로필 기본 다운로드 폴더도 대기 폴더로 맞추고,
+ *     설정이 실패하면 그 호출을 실행하지 않는다(B-8).
  *   - 쿠키·저장된 비밀번호·프로필 파일을 돌려주는 동작은 없다.
  *
  * 보안 불변식(변경 금지): http(s)·about:blank 밖으로 이동하지 않는다 · 사이트 정책 판정을 건너뛰는 경로가 없다 ·
- * 스크린샷은 호출부가 준 폴더 안에만, 다운로드는 호출부가 준 저장 함수로만 쓴다(없으면 받지 않는다) · 업로드는 승인된 호스트·파일 목록과 같고 호출부의 파일 검사를 통과한 것만 넣는다.
+ * 스크린샷은 호출부가 준 폴더 안에만, 다운로드는 호출부가 준 저장 함수로만 쓴다(없으면 받지 않는다, 설정 실패면 실행하지 않는다) · 업로드는 승인된 호스트·파일 목록과 같고 호출부의 파일 검사를 통과한 것만 넣는다.
  */
 import type { ChildProcess } from 'child_process';
 import { browserHostOf, checkBrowserAction, parseBrowserSitePolicy, validateBrowserFlow, type BrowserSitePolicy } from '@openmake/config';
@@ -124,12 +126,14 @@ export class LocalBrowser {
 
     private async openConnection(): Promise<CdpClient> {
         this.tabs.clear();
+        await this.downloads.abandon(); // 옛 연결의 받는 중 다운로드 — 완료 이벤트가 더는 오지 않는다
         // 이미 떠 있는 전용 프로필 Chrome 이 있으면 거기에 붙는다(헬퍼만 다시 뜬 경우).
         const existing = readDevToolsEndpoint(this.profileDir);
         let cdp: CdpClient | null = null;
         if (existing) cdp = await CdpClient.connect(existing, 2000).catch(() => null);
         if (!cdp) {
             await this.downloads.clear(); // 새로 띄울 때만 — 떠 있는 Chrome 은 받는 중일 수 있다
+            await this.downloads.setLaunchDefaults(this.profileDir); // 기본 다운로드 폴더도 대기 폴더로 — 쓰지 못하면 띄우지 않는다
             const launched = await launchChrome(this.profileDir);
             this.proc = launched.proc;
             // 호스트 프로세스가 끝나면 띄운 Chrome 도 끈다 — 자식 프로세스는 저절로 끝나지 않는다.
