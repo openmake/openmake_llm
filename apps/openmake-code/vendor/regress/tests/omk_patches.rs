@@ -150,3 +150,25 @@ fn patch3_generous_limits_agree_with_find() {
         assert_eq!(got, Ok(want), "{pattern:?} 대 {line:?}");
     }
 }
+
+#[test]
+fn patch3_poll_interval_shrinks_with_line_length() {
+    // 검사점 사이의 일은 줄 길이에 비례한다(둘러보기 안 한 글자 루프는 검사점 없이 줄을 훑는다).
+    // 묻는 간격을 줄 길이로 줄여, 물음 한 번 사이의 일이 줄 길이와 무관하게 묶이는지 본다 — 시작 위치마다 검사점이 하나 이상이다.
+    let count_asks = |n: usize| {
+        let asked = Cell::new(0usize);
+        let stop = || {
+            asked.set(asked.get() + 1);
+            false
+        };
+        let line = "a".repeat(n);
+        assert_eq!(limited(r"b", &line, usize::MAX, &stop), Ok(false));
+        asked.get()
+    };
+    // 짧은 줄은 그대로(256번마다).
+    assert!(count_asks(255) <= 1);
+    // 4,096 단위 줄 — 64번마다 이하(256 × 1024 / 4096).
+    assert!(count_asks(4096) >= 4096 / 64);
+    // 256 × 1024 단위 이상 줄 — 검사점마다 묻는다.
+    assert!(count_asks(1 << 18) >= 1 << 18);
+}

@@ -525,7 +525,7 @@ impl Regex {
         use crate::exec::MatchProducer;
         let input = Ucs2Input::new(text, self.cr.flags.unicode);
         let mut matcher = MatchAttempter::new(&self.cr, input.left_end());
-        matcher.set_limits(limits);
+        matcher.set_limits(limits, text.len());
         let mut ex = super::classicalbacktrack::BacktrackExecutor::new(input, matcher);
         let Some(pos) = ex.initial_position(0) else {
             return Ok(false);
@@ -1031,7 +1031,7 @@ pub fn escape(text: &str) -> String {
 pub struct ExecLimits<'a> {
     /// 역추적 스택 항목 수 상한(둘러보기 안팎 합).
     pub max_backtrack: usize,
-    /// 검사점 256번마다 묻는다 — true 면 멈춘다(시간 예산 등).
+    /// 검사점 `clamp(256 × 1024 / 줄 길이, 1, 256)` 번마다 묻는다 — true 면 멈춘다(시간 예산 등).
     pub stop: &'a dyn Fn() -> bool,
 }
 

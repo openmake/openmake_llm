@@ -119,7 +119,7 @@ impl JsRegex {
         self.re.find_from_ucs2(units, 0).next().is_some()
     }
 
-    /// `re.test(줄)` 을 한도 안에서 — 역추적 스택 `CODE_NAV_REGEX_MAX_BACKTRACK`, `stop` 은 엔진이 검사점 256번마다 묻는다.
+    /// `re.test(줄)` 을 한도 안에서 — 역추적 스택 `CODE_NAV_REGEX_MAX_BACKTRACK`, `stop` 은 엔진이 검사점 256번마다(긴 줄은 줄 길이에 맞춰 더 자주) 묻는다.
     pub fn test_units_limited(&self, units: &[u16], stop: &dyn Fn() -> bool) -> Result<bool, Halt> {
         let limits = regress::ExecLimits {
             max_backtrack: CODE_NAV_REGEX_MAX_BACKTRACK,

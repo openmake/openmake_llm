@@ -75,15 +75,20 @@ pub(crate) struct MatchAttempter<'a, Input: InputIndexer> {
     s: State<Input::Position>,
     // [omk] 실행 한도 — 없으면(None) 원본과 같다.
     limits: Option<crate::api::ExecLimits<'a>>,
-    // 뒤로 가는 흐름(루프 재진입·역추적)을 센다. POLL_EVERY 마다 stop 을 묻는다.
-    ticks: u32,
+    // 뒤로 가는 흐름(루프 재진입·역추적)을 센다. poll_every 번마다 stop 을 묻는다(0 이 되면 묻고 되감는다).
+    until_poll: u32,
+    // stop 을 묻는 간격 — set_limits 가 줄 길이로 정한다.
+    poll_every: u32,
     // 둘러보기(lookaround)가 잠시 치워 둔 바깥 스택들의 길이 합.
     outer_bts: usize,
     pub(crate) exceeded: Option<crate::api::LimitExceeded>,
 }
 
-// [omk] stop 콜백을 묻는 간격(검사점 수).
+// [omk] stop 콜백을 묻는 간격(검사점 수)의 상한.
 const POLL_EVERY: u32 = 256;
+// [omk] 물음 한 번 사이의 일 상한(단위) — 검사점 사이의 일은 줄 길이에 비례하므로(둘러보기 안 한 글자 루프·역참조는
+// 검사점 없이 줄을 훑는다) 간격을 `POLL_WORK / 줄 길이` 로 줄인다. 1,024 단위 이하 줄은 256, 256Ki 단위 이상은 검사점마다.
+const POLL_WORK: usize = POLL_EVERY as usize * 1024;
 
 impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
     pub(crate) fn new(re: &'a CompiledRegex, entry: Input::Position) -> Self {
@@ -96,7 +101,8 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
             },
             // [omk] 실행 한도 상태 — set_limits 전에는 원본과 같다.
             limits: None,
-            ticks: 0,
+            until_poll: POLL_EVERY,
+            poll_every: POLL_EVERY,
             outer_bts: 0,
             exceeded: None,
         }
@@ -104,8 +110,10 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
 
     // [omk] 한도를 받는 API 는 utf16 판정(is_match_ucs2_limited)뿐이다.
     #[cfg(feature = "utf16")]
-    pub(crate) fn set_limits(&mut self, limits: crate::api::ExecLimits<'a>) {
+    pub(crate) fn set_limits(&mut self, limits: crate::api::ExecLimits<'a>, text_len: usize) {
         self.limits = Some(limits);
+        self.poll_every = (POLL_WORK / text_len.max(1)).clamp(1, POLL_EVERY as usize) as u32;
+        self.until_poll = self.poll_every;
     }
 
     /// [omk] 검사점 — 계속해도 되면 true. 한도를 넘으면 `exceeded` 를 세우고 false.
@@ -121,10 +129,13 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
             self.exceeded = Some(crate::api::LimitExceeded::Backtrack);
             return false;
         }
-        self.ticks = self.ticks.wrapping_add(1);
-        if self.ticks % POLL_EVERY == 0 && (limits.stop)() {
-            self.exceeded = Some(crate::api::LimitExceeded::Stopped);
-            return false;
+        self.until_poll -= 1;
+        if self.until_poll == 0 {
+            self.until_poll = self.poll_every;
+            if (limits.stop)() {
+                self.exceeded = Some(crate::api::LimitExceeded::Stopped);
+                return false;
+            }
         }
         true
     }
