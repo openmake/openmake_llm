@@ -71,6 +71,13 @@ interface WalkResult {
 export async function walkFiles(baseAbs: string, startAbs: string, deadline: number): Promise<WalkResult> {
     const st = await fsp.stat(startAbs).catch(() => null);
     if (!st) return { files: [], truncated: false, skipped: 0 };
+    // 시작 경로가 심링크면 가리키는 대상의 이름으로도 판정한다 — `notes.txt → .env` 를 path 로 지목하면 받은 이름만 보고 제외를
+    // 지났다(훑기 중의 심링크는 따라가지 않으므로 남은 길은 시작 경로뿐, 설계 D-10). 파일·디렉터리 모두, realpath 실패는 "없음".
+    if ((await fsp.lstat(startAbs).catch(() => null))?.isSymbolicLink()) {
+        const real = await fsp.realpath(startAbs).catch(() => null);
+        if (!real) return { files: [], truncated: false, skipped: 0 };
+        if (isSecretFile(path.basename(real))) return { files: [], truncated: false, skipped: 1 };
+    }
     const rel = (abs: string): string => path.relative(baseAbs, abs).split(path.sep).join('/');
     if (st.isFile()) {
         return isSecretFile(path.basename(startAbs))

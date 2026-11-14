@@ -4,7 +4,7 @@
 //! 정책: 기본 allow → 쓰기는 폴더·임시·툴 캐시로 제한, 비밀 경로는 읽기 차단.
 //! SBPL 은 last-match-wins 라 deny 뒤에 allow 를 두어야 예외가 성립하고, 줄 순서가 곧 보안이다.
 
-use crate::constants::{CACHE_SUBPATHS, SECRET_SUBPATHS};
+use crate::constants::{CACHE_SUBPATHS, SECRET_SUBPATHS, TOOL_SECRET_SUBPATHS};
 use crate::git_trust::GitPaths;
 use crate::node_path;
 
@@ -33,7 +33,8 @@ fn literal_path(p: &str) -> String {
 }
 
 /// 프로파일 텍스트. `home` 은 호출 쪽이 realpath 로 넘긴다. 빈 `git_dir` 은 TS(빈 문자열은 거짓)처럼 없음으로 본다.
-/// `tool`: 확인 없이 뜨는 자식용 **도구 프로파일** — exec 프로파일의 모든 줄 + `(deny network*)`(설계 D-1).
+/// `tool`: 확인 없이 뜨는 자식용 **도구 프로파일** — exec 프로파일의 모든 줄 + 자격 파일 읽기 금지(`TOOL_SECRET_SUBPATHS`, 설계 D-7) +
+/// `(deny network*)`(설계 D-1).
 /// `git`(믿는 git 디렉터리)은 **쓰기 허용** — 받은 표기 그대로. linked worktree(common dir 가 따로)는 common dir 쓰기도 연다.
 /// `protect` 는 끝 금지 줄을 걸 git 디렉터리들(하나에 한 줄) — 보통 `[git]` 이고, 믿지 않아도 연결 폴더의 `.git` 디렉터리와 폴더
 /// 안을 가리키는 gitfile·심링크의 대상은 지킨다(리뷰 F2·N2, `git_trust::protected_git_dirs`).
@@ -79,6 +80,10 @@ pub fn build_sandbox_profile(
         sb_sub(home, SECRET_SUBPATHS)
     ));
     if tool {
+        lines.push(format!(
+            "(deny file-read* {})",
+            sb_sub(home, TOOL_SECRET_SUBPATHS)
+        ));
         lines.push("(deny network*)".to_owned());
     }
     lines.extend(protect.iter().filter_map(git_deny_line));

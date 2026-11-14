@@ -468,3 +468,51 @@ fn linked_worktree_commondir_denied_but_add_and_commit_work() {
     let r = send(&c, json!({"kind": "exec", "command": cmd}));
     assert_eq!(r["stdout"], "committed\n", "{r}");
 }
+
+/// D-8 — 연결 뒤 git 을 띄우지 못하게 되면(sandbox-exec 71) "재연결" 이 아니라 그 이름으로 126 거절한다. 연결 때는 PATH 의 git
+/// 감싸개가 돌고(신뢰 판정), 그 뒤 실행 비트를 떼어 execvp 를 실패시킨다(TS 는 프로세스 PATH 를 바꿔 같은 자리를 본다).
+#[test]
+fn unspawnable_git_is_refused_with_its_name() {
+    let w = Work::new();
+    let repo = w.repo("repo");
+    let bin = w.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let real = std::process::Command::new("/usr/bin/which")
+        .arg("git")
+        .output()
+        .unwrap();
+    let real = String::from_utf8(real.stdout).unwrap();
+    let shim = format!("{bin}/git");
+    std::fs::write(&shim, format!("#!/bin/sh\nexec '{}' \"$@\"\n", real.trim())).unwrap();
+    std::fs::set_permissions(&shim, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let home = w.join("home");
+    let host = ExecHost {
+        confirm: Box::new(|_| Box::pin(async { ConfirmAnswer::No })),
+        env: vec![
+            ("PATH".to_owned(), bin.clone()),
+            ("HOME".to_owned(), home.clone()),
+            ("SHELL".to_owned(), "/bin/sh".to_owned()),
+        ],
+        home,
+        platform: Platform::Darwin,
+        sandbox_enabled: true,
+        sandbox_profile_dir: w.join("prof"),
+        auto_approve_all: true,
+        on_auto_approve_change: None,
+        exec_timeout_ms: EXEC_TIMEOUT_MS,
+    };
+    let c = BridgeCore::new(BridgeCoreOptions {
+        folder: repo.clone(),
+        fs_timeout_ms: 15_000,
+        on_task_end: None,
+    })
+    .unwrap()
+    .with_exec_host(host);
+    runtime().block_on(c.prepare());
+    std::fs::set_permissions(&shim, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(
+        wt(&c, "add"),
+        json!({"ok": false, "error": "샌드박스 안에서 실행 파일을 띄우지 못해 실행을 거부했습니다(git).", "exitCode": 126})
+    );
+    assert!(std::fs::metadata(format!("{repo}/{WT}")).is_err());
+}

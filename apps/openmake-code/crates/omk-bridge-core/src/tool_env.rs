@@ -1,10 +1,10 @@
 //! 읽기 전용 도구가 띄우는 자식 하나의 실행 조건 — TS `diagnostics.ts` `run`·`test-runner.ts` `canImportPytest` 의
 //! `execFile` 자리(설계 D-64·D-65).
 
-use crate::constants::{MAX_BUFFER, SANDBOX_BIN};
+use crate::constants::{MAX_BUFFER, SANDBOX_BIN, SANDBOX_SPAWN_ERROR_PREFIX};
 use crate::exec::FAIL_CLOSED;
 use crate::exec_env::build_exec_env;
-use crate::exec_path::env_get;
+use crate::exec_path::{abs_path_entries, env_get};
 use crate::msg::BridgeResult;
 use crate::node_path;
 use crate::platform::{Platform, path_list_separator};
@@ -16,11 +16,20 @@ pub(crate) const NO_HOST: &str = "exec 호스트가 설정되지 않았습니다
 /// 도구 실패 — 샌드박스 거절(프로파일 없음·sandbox-exec 자체 실패)은 exec 와 같은 모양(문구 + exitCode 126).
 /// lsp_diagnostics·test_runner·worktree 가 쓴다.
 pub(crate) fn tool_failure(error: String) -> BridgeResult {
-    let refused = error == FAIL_CLOSED;
+    let refused =
+        error == FAIL_CLOSED || error.starts_with(&format!("{SANDBOX_SPAWN_ERROR_PREFIX}("));
     BridgeResult {
         exit_code: refused.then_some(126),
         ..BridgeResult::failure(error)
     }
+}
+
+/// 감싼 실행 파일을 띄우지 못함(sandbox-exec 71) — 프로파일 문제가 아니라 재연결로 풀리지 않는다(설계 D-8). 이름은 basename.
+fn spawn_refused(file: &str) -> String {
+    format!(
+        "{SANDBOX_SPAWN_ERROR_PREFIX}({}).",
+        node_path::basename(file)
+    )
 }
 
 /// 자식을 감쌀 샌드박스 — 꺼짐, 도구 프로파일(exec 프로파일 + 네트워크 차단, 설계 2026-11-14 D-1), 켜졌는데 프로파일이 없음(fail-closed).
@@ -42,14 +51,18 @@ pub struct ToolEnv {
 }
 
 impl ToolEnv {
-    /// 자식 PATH — exec PATH, 비어 있으면 환경의 `PATH` → `Path` → `""`(TS `extraPath || PATH || Path || ''`).
-    fn path_value(&self) -> &str {
-        [self.exec_path.as_str()]
+    /// 자식 PATH — exec PATH, 비어 있으면 환경의 `PATH` → `Path` → `""` 의 절대경로 항목만
+    /// (TS `extraPath || absPathEntries(PATH || Path || '')`, 설계 D-14).
+    fn path_value(&self) -> String {
+        if !self.exec_path.is_empty() {
+            return self.exec_path.clone();
+        }
+        let host = env_get(&self.env, "PATH")
             .into_iter()
-            .chain(env_get(&self.env, "PATH"))
             .chain(env_get(&self.env, "Path"))
             .find(|p| !p.is_empty())
-            .unwrap_or("")
+            .unwrap_or("");
+        abs_path_entries(host, self.platform)
     }
 
     /// 자식 하나 — 인자·cwd·환경은 TS 와 같고, 샌드박스가 켜졌으면 `sandbox-exec -p <도구 프로파일 텍스트>` 앞머리만 더한다
@@ -77,7 +90,7 @@ impl ToolEnv {
             file,
             args,
             cwd: Some(cwd.to_owned()),
-            env: build_exec_env(pairs, self.path_value(), self.platform, &[]),
+            env: build_exec_env(pairs, &self.path_value(), self.platform, &[]),
             timeout_ms,
             max_buffer: MAX_BUFFER as usize,
             stdin: Stdin::HeldOpen,
@@ -95,8 +108,8 @@ impl ToolEnv {
     }
 
     /// 자식 하나를 띄운다. 감싼 자식에서 sandbox-exec **자체**가 실패하면(프로파일 문법 오류 65 — `-p` 도 같다, 실행 파일
-    /// execvp 실패 71 — stderr 가 `sandbox-exec:` 로 시작) "진단 없음/none" 으로 삼키지 않고 프로파일 없음과 같이 거절한다
-    /// (TS 별건 수정 M1 과 같은 규칙). 이름으로 띄우는 실행 파일은 부르는 쪽이 먼저 찾아 절대경로로 넘긴다(71 과 섞이지 않게).
+    /// execvp 실패 71 — stderr 가 `sandbox-exec:` 로 시작) "진단 없음/none" 으로 삼키지 않고 거절한다 — 65 는 프로파일 없음과
+    /// 같은 문구, 71 은 띄우지 못한 실행 파일 이름으로(TS 별건 수정 M1·설계 D-8 과 같은 규칙). 이름으로 띄우는 실행 파일은 부르는 쪽이 먼저 찾아 절대경로로 넘긴다(71 과 섞이지 않게).
     pub async fn run(
         &self,
         file: &str,
@@ -108,7 +121,11 @@ impl ToolEnv {
         let wrapped = matches!(self.sandbox, ToolSandbox::Profile(_));
         let code = out.end.exec_file_code();
         if wrapped && (code == 65 || code == 71) && out.stderr.starts_with("sandbox-exec:") {
-            return Err(FAIL_CLOSED.to_owned());
+            return Err(if code == 71 {
+                spawn_refused(file)
+            } else {
+                FAIL_CLOSED.to_owned()
+            });
         }
         Ok(out)
     }
@@ -116,7 +133,7 @@ impl ToolEnv {
     /// PATH 에서 실행 파일 찾기 — TS `onPath`(`access(X_OK)`). `unsafe` 없이 부를 수 없어 "모드에 실행 비트가 하나라도
     /// 있다"로 본다(심링크는 따라간다, 폴더도 통과 — D-69). FS 를 보므로 관문 안에서 부른다.
     /// 절대경로 항목만 본다 — 상대 항목(`bin`·`.`)은 자식 cwd(연결 폴더) 기준으로 풀려 폴더의 실행 파일을 고를 수 있다
-    /// (도구 샌드박스 리뷰 R2-1, TS 는 아직 본다 — Rust 가 더 엄격). 찾은 절대경로로 띄운다.
+    /// (도구 샌드박스 리뷰 R2-1 — TS 는 넘겨받는 PATH 가 이미 절대경로 항목뿐이라 결과가 같다, 설계 D-5·D-14). 찾은 절대경로로 띄운다.
     pub fn find_on_path(&self, bin: &str) -> Option<String> {
         let sep = path_list_separator(self.platform);
         self.path_value()
@@ -232,11 +249,31 @@ mod tests {
             path_of(env("", ToolSandbox::Off, &[("PATH", ""), ("Path", "/b")])),
             "/b"
         );
-        assert_eq!(path_of(env("", ToolSandbox::Off, &[])), "");
+        assert_eq!(path_of(env("", ToolSandbox::Off, &[])), "/usr/bin:/bin"); // D-14 보완
         assert_eq!(
             path_of(env("/e", ToolSandbox::Off, &[("PATH", "/a")])),
             "/e"
         );
+    }
+
+    /// 설계 D-14 — 환경 PATH 폴백도 절대경로 항목만(TS `absPathEntries`, 상대 항목은 자식 cwd 기준으로 풀린다). Windows 는 그대로.
+    #[test]
+    fn path_fallback_keeps_only_absolute_entries() {
+        let path_of = |t: ToolEnv| t.spec("x", &[], "/", 1).unwrap().env["PATH"].clone();
+        assert_eq!(
+            path_of(env("", ToolSandbox::Off, &[("PATH", ".:/a:bin::./x:/b")])),
+            "/a:/b"
+        );
+        // 절대경로 항목이 하나도 없으면 빈 값(= 현재 폴더)이 아니라 기본값(설계 D-14 보완).
+        for p in [".", "bin:./x::"] {
+            assert_eq!(
+                path_of(env("", ToolSandbox::Off, &[("PATH", p)])),
+                "/usr/bin:/bin"
+            );
+        }
+        let mut win = env("", ToolSandbox::Off, &[("PATH", r".;C:\w")]);
+        win.platform = Platform::Win32;
+        assert_eq!(path_of(win), r".;C:\w");
     }
 
     /// 실행 비트(D-69) — 모드에 실행 비트가 하나라도 있으면(심링크는 따라간다), 폴더도 통과. 빈 구간은 건너뛴다.
