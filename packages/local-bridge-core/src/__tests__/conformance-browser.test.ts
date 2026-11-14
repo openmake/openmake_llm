@@ -13,7 +13,7 @@ import {
 import * as constants from '../constants';
 import * as defs from '../browser/local-browser-defs';
 import { condExpression, runBrowserFlow } from '../browser/browser-flow';
-import { downloadTaskOf } from '../browser/downloads';
+import { downloadTaskOf, popupTaskOf } from '../browser/downloads';
 import { browserPolicyBlockOf, uploadRejectedPolicyBlock, userControlPolicyBlock } from '../browser/policy-block';
 import { resolveUploadFiles } from '../browser/upload-files';
 import { DownloadRejectedError, placeDownload } from '../browser/download-place';
@@ -189,8 +189,9 @@ describe('browser-defs', () => {
         approvedUploads: (i) => defs.parseApprovedUploads(arg(i, 'raw')),
         clickPointJs: (i) => defs.clickPointJs(i.sel as string),
         fillPrepareJs: (i) => defs.fillPrepareJs(i.sel as string),
-        downloadTaskOf: (i) => downloadTaskOf(i.tabs as Array<[string, Tab]>, (k) => (i.running as string[]).includes(k),
+        downloadTaskOf: (i) => downloadTaskOf(i.tabs as Array<[string, Tab]>, i.popups as Array<[string, string]>,
             arg(i, 'sessionId') as string | undefined, i.frameId as string) ?? null,
+        popupTaskOf: (i) => popupTaskOf(i.tabs as Array<[string, Tab]>, i.popups as Array<[string, string]>, i.openerId as string) ?? null,
         jsonString: (i) => JSON.stringify(i.s),
     };
     for (const group of Object.keys(GROUPS['browser-defs'].groups)) {

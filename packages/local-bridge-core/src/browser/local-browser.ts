@@ -12,12 +12,14 @@
  *     다운로드 폴더가 다른 작업끼리는 동시에 돌리지 않는다.
  *   - 다운로드는 Chrome 이 연결 폴더 밖 대기 폴더(`<프로필>-downloads`)에 `<guid>` 이름으로만 받고, 완료 뒤 호출부의 저장 함수
  *     (`write` 와 같은 가드)가 이름을 판정해 옮긴다(downloads.ts·download-place.ts, 2026-11-14). 결과에 downloads 로 싣는다.
+ *     다운로드는 그것을 시작한 탭(또는 그 탭이 연 창 — `Target.targetCreated` 의 openerId 로 만들어질 때 적는다)의 작업에 귀속하고
+ *     그 작업이 준 저장 함수로 옮긴다. 귀속하지 못하면 저장하지 않는다(2026-11-15 D-1~D-3).
  *     CDP 설정이 없는 상태(연결이 닫힌 뒤 등)에도 연결 폴더에 직접 쓰지 않게 기동 때 프로필 기본 다운로드 폴더도 대기 폴더로 맞추고,
  *     설정이 실패하면 그 호출을 실행하지 않는다(B-8).
  *   - 쿠키·저장된 비밀번호·프로필 파일을 돌려주는 동작은 없다.
  *
  * 보안 불변식(변경 금지): http(s)·about:blank 밖으로 이동하지 않는다 · 사이트 정책 판정을 건너뛰는 경로가 없다 ·
- * 스크린샷은 호출부가 준 폴더 안에만, 다운로드는 호출부가 준 저장 함수로만 쓴다(없으면 받지 않는다, 설정 실패면 실행하지 않는다) · 업로드는 승인된 호스트·파일 목록과 같고 호출부의 파일 검사를 통과한 것만 넣는다.
+ * 스크린샷은 호출부가 준 폴더 안에만, 다운로드는 그것을 시작한 탭(또는 그 탭이 연 창)의 작업이 준 저장 함수로만 쓴다(없으면 받지 않는다, 설정 실패면 실행하지 않는다) · 업로드는 승인된 호스트·파일 목록과 같고 호출부의 파일 검사를 통과한 것만 넣는다.
  */
 import type { ChildProcess } from 'child_process';
 import { browserHostOf, checkBrowserAction, parseBrowserSitePolicy, validateBrowserFlow, type BrowserSitePolicy } from '@openmake/config';
@@ -25,12 +27,12 @@ import {
     BROWSER_ACTION_TIMEOUT_MS, BROWSER_CLICK_SETTLE_MS, BROWSER_EXIT_WAIT_MS, BROWSER_DIALOG_MESSAGE_MAX, BROWSER_DIALOG_RECORD_MAX,
     BROWSER_EXTRACT_MAX_CHARS, BROWSER_EXTRACT_READY_MS, BROWSER_INTERACTIVE_ROLES, BROWSER_MAX_ACTIONS, BROWSER_MAX_TABS, BROWSER_POLL_MS,
     BROWSER_SNAPSHOT_MAX_ELEMENTS, BROWSER_SNAPSHOT_NAME_MAX, BROWSER_WAIT_MAX_MS, BROWSER_FILL_ECHO_MAX_CHARS,
-    BROWSER_DOWNLOAD_STAGING_SUFFIX,
+    BROWSER_DOWNLOAD_STAGING_SUFFIX, BROWSER_POPUP_TRACK_MAX,
 } from '../constants';
 import { condExpression, runBrowserFlow } from './browser-flow';
 import { CdpClient } from './cdp';
 import { launchChrome, readDevToolsEndpoint } from './chrome';
-import { DownloadTracker, downloadTaskOf } from './downloads';
+import { DownloadTracker, downloadTaskOf, popupTaskOf } from './downloads';
 import { BrowserScheduler } from './local-browser-scheduler';
 import { browserPolicyBlockOf, uploadRejectedPolicyBlock, userControlPolicyBlock } from './policy-block';
 import type { BrowserPolicyBlock } from '../types';
@@ -57,6 +59,8 @@ export class LocalBrowser {
     private cdp: CdpClient | null = null;
     private proc: ChildProcess | null = null;
     private readonly tabs = new Map<string, Tab>();
+    /** 새 창 targetId → 연 탭의 작업 키(다운로드 귀속, 넣은 순서 — 상한을 넘으면 가장 오래된 것을 버린다) */
+    private readonly popups = new Map<string, string>();
     private userControl = false;
     /** 작업별 실행 줄·동시 실행 자리·중지 요청(local-browser-scheduler.ts) */
     private readonly scheduler = new BrowserScheduler();
@@ -67,7 +71,7 @@ export class LocalBrowser {
 
     private constructor(private readonly profileDir: string) {
         this.downloads = new DownloadTracker(`${profileDir}${BROWSER_DOWNLOAD_STAGING_SUFFIX}`,
-            (sid, frameId) => downloadTaskOf([...this.tabs.entries()], (k) => this.scheduler.isRunning(k), sid, frameId));
+            (sid, frameId) => downloadTaskOf([...this.tabs.entries()], [...this.popups.entries()], sid, frameId));
     }
 
     /** 사용자가 브라우저를 넘겨받았는가 — 넘겨받은 동안에는 에이전트 요청을 실행하지 않는다. */
@@ -92,6 +96,7 @@ export class LocalBrowser {
         const key = taskId || DEFAULT_TAB;
         this.scheduler.forgetTask(key);
         this.downloads.forget(key);
+        for (const [id, k] of this.popups) if (k === key) this.popups.delete(id);
         const tab = this.tabs.get(key);
         if (!tab) return;
         this.tabs.delete(key);
@@ -126,6 +131,7 @@ export class LocalBrowser {
 
     private async openConnection(): Promise<CdpClient> {
         this.tabs.clear();
+        this.popups.clear();
         await this.downloads.abandon(); // 옛 연결의 받는 중 다운로드 — 완료 이벤트가 더는 오지 않는다
         // 이미 떠 있는 전용 프로필 Chrome 이 있으면 거기에 붙는다(헬퍼만 다시 뜬 경우).
         const existing = readDevToolsEndpoint(this.profileDir);
@@ -143,8 +149,26 @@ export class LocalBrowser {
         }
         cdp.on('Page.javascriptDialogOpening', (params, sessionId) => { void this.onDialog(cdp!, params, sessionId); });
         this.downloads.listen(cdp);
+        cdp.on('Target.targetCreated', (params) => this.onTargetCreated(params));
+        // 새 창이 만들어질 때 연 탭을 알려면 필요하다 — 실패하면 새 창의 다운로드를 귀속하지 못해 저장하지 않을 뿐이다
+        await cdp.send('Target.setDiscoverTargets', { discover: true }).catch(() => undefined);
         this.cdp = cdp;
         return cdp;
+    }
+
+    /** 페이지가 연 새 창 — 연 탭(또는 적어 둔 새 창)의 작업을 적는다. 곧바로 받고 닫히는 창은 나중에 조회할 수 없어 이때만 알 수 있다. */
+    private onTargetCreated(params: Record<string, unknown>): void {
+        const info = (params.targetInfo ?? {}) as Record<string, unknown>;
+        const targetId = str(info.targetId);
+        if (info.type !== 'page' || !targetId) return;
+        const key = popupTaskOf([...this.tabs.entries()], [...this.popups.entries()], str(info.openerId));
+        if (key === undefined) return;
+        this.popups.delete(targetId);
+        this.popups.set(targetId, key);
+        for (const id of this.popups.keys()) {
+            if (this.popups.size <= BROWSER_POPUP_TRACK_MAX) break;
+            this.popups.delete(id);
+        }
     }
 
     private async onDialog(cdp: CdpClient, params: Record<string, unknown>, sessionId?: string): Promise<void> {
@@ -341,7 +365,7 @@ export class LocalBrowser {
         try {
             cdp = await this.connect();
             tab = await this.tabFor(cdp, opts.taskId);
-            await this.downloads.configure(cdp, opts.placeDownload); // 대기 폴더에 guid 이름으로만 받는다(저장 함수가 없으면 받지 않는다)
+            await this.downloads.configure(cdp, opts.taskId || DEFAULT_TAB, opts.placeDownload); // 대기 폴더에 guid 이름으로만 받는다(저장 함수가 없으면 받지 않는다)
         } catch (e) {
             return { ok: false, results, error: e instanceof Error ? e.message : String(e) };
         }
