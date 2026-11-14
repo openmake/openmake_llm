@@ -1,5 +1,6 @@
 //! 브라우저 파일 suite(`browser-upload-files`·`browser-download-place`)의 setup·after — TS `conformance-browser-support.ts` 와
-//! 같은 규칙. setup: `{dir}` · `{file, content}` · `{file, size}`(성긴 파일) · `{symlink, target}` · `{series, from, to, content}`.
+//! 같은 규칙. setup: `{dir}` · `{file, content}` · `{file, size}`(성긴 파일) · `{symlink, target}` · `{hardlink, target}` ·
+//! `{series, from, to, content}`.
 
 use std::collections::BTreeMap;
 
@@ -24,6 +25,9 @@ pub fn apply_fs_setup(tmp: &TmpDir, setup: &Value) {
         } else if let Some(link) = s["symlink"].as_str() {
             let target = fill_str(s["target"].as_str().unwrap(), tmp);
             std::os::unix::fs::symlink(target, tmp.join(link)).unwrap();
+        } else if let Some(link) = s["hardlink"].as_str() {
+            let target = fill_str(s["target"].as_str().unwrap(), tmp);
+            std::fs::hard_link(target, tmp.join(link)).unwrap();
         } else if let Some(series) = s["series"].as_str() {
             for n in s["from"].as_u64().unwrap()..=s["to"].as_u64().unwrap() {
                 let p = tmp.join(&series.replace("{n}", &n.to_string()));
