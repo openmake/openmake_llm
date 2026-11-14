@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
 import { SANDBOX_ENABLED } from '../constants';
 import { BridgeCore } from '../core';
 import { onPath, resolveExecPath } from '../exec-path';
@@ -75,6 +75,25 @@ describe('로그인 셸 자식의 PATH(D-14)', () => {
         fs.writeFileSync(sh, `#!/bin/sh\nprintf %s "$PATH" > '${mark}'\nprintf %s "$PATH"\n`, { mode: 0o755 });
         withEnv({ HOME: path.join(tmp, 'home'), PATH: '.:bin:/usr/bin:/bin', SHELL: sh }, () => resolveExecPath(root, null));
         expect(fs.readFileSync(mark, 'utf8')).toBe('/usr/bin:/bin');
+    });
+});
+
+describe('PATH 조회 자식의 stderr(D-6 보완)', () => {
+    // 감싼 mise 는 상태를 못 써 경고를 보통 낸다(실측 n4) — 에이전트가 쓴 설정 내용이 CLI 사용자의 터미널로 가지 않게 버린다.
+    // 자식이 부모의 stderr(fd 2)를 물려받는지는 프로세스 밖에서만 보인다 — 자식 node 로 resolveExecPath 를 불러 stderr 를 잡는다.
+    it('로그인 셸·mise 가 stderr 에 쓴 글자가 부모 stderr 로 새지 않는다', () => {
+        const bin = path.join(tmp, 'fakebin');
+        fs.mkdirSync(bin);
+        fs.writeFileSync(path.join(bin, 'mise'), '#!/bin/sh\necho MISE-STDERR >&2\necho /m/fake\n', { mode: 0o755 });
+        const sh = path.join(tmp, 'login-sh');
+        fs.writeFileSync(sh, '#!/bin/sh\necho LOGIN-STDERR >&2\nprintf %s /usr/bin\n', { mode: 0o755 });
+        const mod = JSON.stringify(path.join(__dirname, '..', 'exec-path'));
+        const r = spawnSync(process.execPath, ['-r', 'ts-node/register/transpile-only', '-e',
+            `process.stdout.write(require(${mod}).resolveExecPath(${JSON.stringify(root)}))`], {
+            cwd: path.join(__dirname, '..', '..'), encoding: 'utf8',
+            env: { ...process.env, HOME: path.join(tmp, 'home'), PATH: `${bin}:/usr/bin:/bin`, SHELL: sh },
+        });
+        expect({ status: r.status, first: r.stdout.split(':')[0], stderr: r.stderr }).toEqual({ status: 0, first: '/m/fake', stderr: '' });
     });
 });
 
