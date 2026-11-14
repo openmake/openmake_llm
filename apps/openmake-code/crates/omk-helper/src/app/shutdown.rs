@@ -47,5 +47,9 @@ impl App {
             let _ = reply.send(ConfirmAnswer::No);
         }
         self.disconnect(None);
+        // 루트를 모두 해제한 **뒤에**. 이 프로세스가 띄운 Chrome 만 끈다(Browser.close 1초 → 종료 5초 대기 → SIGKILL).
+        if let Some(core) = self.browser_core.take() {
+            core.dispose_browser().await;
+        }
     }
 }
