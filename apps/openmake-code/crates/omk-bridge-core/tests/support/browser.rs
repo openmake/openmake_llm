@@ -237,6 +237,8 @@ pub struct FakeHost {
     pub launch_result: Mutex<Result<String, String>>,
     /// 기동 순간에 부른다(그때의 프로필 파일을 보려고)
     pub on_launch: Mutex<Option<Box<dyn Fn() + Send>>>,
+    /// 기동 때 이 명령을 실제 자식으로 띄워 `Launched.child` 로 준다(정리 절차 확인)
+    pub child_cmd: Mutex<Option<Vec<String>>>,
 }
 
 impl FakeHost {
@@ -252,6 +254,7 @@ impl FakeHost {
             launches: AtomicUsize::new(0),
             launch_result: Mutex::new(Ok("ws://127.0.0.1:2/devtools/browser/y".into())),
             on_launch: Mutex::new(None),
+            child_cmd: Mutex::new(None),
         })
     }
 
@@ -312,11 +315,17 @@ impl BrowserHost for FakeHost {
             f();
         }
         let r = self.launch_result.lock().unwrap().clone();
+        let child = self.child_cmd.lock().unwrap().clone().map(|c| {
+            tokio::process::Command::new(&c[0])
+                .args(&c[1..])
+                .kill_on_drop(true)
+                .spawn()
+                .unwrap()
+        });
         Box::pin(async move {
-            r.map(|ws_url| Launched {
-                ws_url,
-                child: None,
-            })
+            // 기동에 시간이 걸린다 — 동시에 들어온 요청이 이 사이에 겹친다(TS 테스트의 tick)
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            r.map(|ws_url| Launched { ws_url, child })
         })
     }
 }

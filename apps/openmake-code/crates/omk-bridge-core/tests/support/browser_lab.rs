@@ -20,6 +20,8 @@ use super::browser::{FakeHost, Out, Responder, Sent, Server, browser_replies};
 /// 문 — 세션별로 다음 `location.href` 의 답을 붙든다.
 #[derive(Default)]
 pub struct Gates {
+    /// `location.href` 의 답 — 없으면 `about:blank`
+    pub url: Mutex<Option<String>>,
     hold: Mutex<Vec<String>>,
     held: Mutex<Vec<Sent>>,
     notify: Notify,
@@ -60,10 +62,19 @@ impl Gates {
             .position(|s| s.session.as_deref() == Some(session))
             .expect("붙든 답 없음");
         let s = held.remove(n);
+        let url = self.href();
         server.raw(
-            &json!({"id": s.id, "result": {"result": {"type": "string", "value": "about:blank"}}, "sessionId": session})
+            &json!({"id": s.id, "result": {"result": {"type": "string", "value": url}}, "sessionId": session})
                 .to_string(),
         );
+    }
+
+    fn href(&self) -> String {
+        self.url
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| "about:blank".into())
     }
 
     fn take(&self, s: &Sent) -> bool {
@@ -88,6 +99,11 @@ pub fn lab_replies(navigate: Value, gates: Arc<Gates>, fail: Arc<Mutex<Vec<Strin
     Arc::new(move |s: &Sent| {
         if gates.take(s) {
             return vec![];
+        }
+        if s.method == "Runtime.evaluate" && s.params["expression"] == "location.href" {
+            return vec![Out::Reply(
+                json!({"result": {"type": "string", "value": gates.href()}}),
+            )];
         }
         let behavior = s.params["behavior"].as_str().unwrap_or("");
         if s.method == "Browser.setDownloadBehavior"
@@ -120,11 +136,26 @@ impl Lab {
     }
 
     pub fn with_navigate(launching: bool, navigate: Value) -> Lab {
+        Lab::with_responder(launching, |g, f| {
+            lab_replies(navigate, g.clone(), f.clone())
+        })
+    }
+
+    /// 대본을 바꿔 끼운다 — `make(문, 거절 목록)`.
+    pub fn with_responder(
+        launching: bool,
+        make: impl FnOnce(&Arc<Gates>, &Arc<Mutex<Vec<String>>>) -> Responder,
+    ) -> Lab {
         let tmp = TmpDir::new();
         let profile = tmp.join("profile");
         let staging = format!("{profile}-downloads");
         let (gates, fail) = (Arc::new(Gates::default()), Arc::new(Mutex::new(Vec::new())));
-        let host = make_host(launching, &navigate, &gates, &fail);
+        let r = make(&gates, &fail);
+        let host = if launching {
+            FakeHost::launching(r)
+        } else {
+            FakeHost::attached(r)
+        };
         let browser = LocalBrowser::for_profile_with_host(&profile, env(), host.clone());
         Lab {
             tmp,
