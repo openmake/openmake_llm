@@ -22,7 +22,8 @@ describe('buildGeminiThinkingParams', () => {
         expect(JSON.stringify(p)).not.toMatch(/reasoning_effort|thinking_budget|thinking_level/);
     });
 
-    it.each([undefined, false])('thinking %s → 빈 객체', (thinking: undefined | false) => {
+    const offValues: Array<undefined | false> = [undefined, false];
+    it.each(offValues)('thinking %s → 빈 객체', (thinking) => {
         expect(buildGeminiThinkingParams('gemini', thinking, false)).toEqual({});
         expect(buildGeminiThinkingParams('gemini', thinking, true)).toEqual({});
     });
