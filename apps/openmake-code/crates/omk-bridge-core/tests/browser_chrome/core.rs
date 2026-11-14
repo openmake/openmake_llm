@@ -170,10 +170,26 @@ pub async fn download_cases(s: &mut Suite) {
     std::fs::write(format!("{profile}/Default/Preferences"), prefs.to_string()).unwrap();
     let core = core_for(&folder, &profile);
     let staging = format!("{profile}-downloads");
+    // 대기 폴더 목록 — Chrome 이 스스로 받는 구성 요소(CRX3, `Cr24` 로 시작)와 그사이 사라진 파일은 뺀다. 새 프로필 Chrome 은 기동 후
+    // 10여 초에 Optimization Guide 모델을 Download Service 로 받는데, 다운로드 설정(allowAndName)이 브라우저 전역이라 이 폴더에 guid
+    // 이름으로 왔다가 Chrome 이 가져가 지운다 — CDP 다운로드 이벤트가 없어 브리지는 귀속·저장하지 않는다(디버그 2026-11-15).
+    let chrome_own = |file: &std::path::Path| -> bool {
+        use std::io::Read;
+        match std::fs::File::open(file) {
+            Ok(mut f) => {
+                let mut head = [0u8; 4];
+                f.read_exact(&mut head).is_ok() && &head == b"Cr24"
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
+            Err(e) => panic!("대기 폴더 파일 열기: {e}"),
+        }
+    };
     let staged = || -> Vec<String> {
         let mut v: Vec<String> = std::fs::read_dir(&staging)
             .map(|d| {
-                d.map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+                d.map(|e| e.unwrap())
+                    .filter(|e| !chrome_own(&e.path()))
+                    .map(|e| e.file_name().to_string_lossy().into_owned())
                     .collect()
             })
             .unwrap_or_default();
