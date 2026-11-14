@@ -19,6 +19,8 @@ use omk_bridge_conn::runtime::host_runtime;
 
 /// 종료 직전 stdout 을 비우는 한도.
 pub const STDOUT_FLUSH_MS: u64 = 500;
+/// 종료 때 런타임이 태스크를 버리고 블록된 작업을 기다리는 한도.
+pub const RUNTIME_SHUTDOWN_MS: u64 = 1000;
 /// 패닉 종료 코드(Rust 기본과 같다).
 pub const PANIC_EXIT: i32 = 101;
 
@@ -69,8 +71,9 @@ pub fn run(argv: &[String]) -> i32 {
         rt.block_on(app::run(args.server, host, emit.clone()))
     };
     emit.flush(Duration::from_millis(STDOUT_FLUSH_MS));
-    // 블록된 FS 호출·stdin 읽기 스레드를 기다리지 않는다.
-    rt.shutdown_background();
+    // 남은 태스크를 버린다 — 띄우는 중인 Chrome·실행 중인 exec 자식은 `kill_on_drop` 으로 꺼진다. `shutdown_background` 는
+    // 버리기 전에 프로세스가 끝나 경주였다(리뷰 r1 M-1). 블록된 FS 호출은 상한에서 포기한다. stdin 읽기는 OS 스레드라 기다리지 않는다.
+    rt.shutdown_timeout(Duration::from_millis(RUNTIME_SHUTDOWN_MS));
     code
 }
 
