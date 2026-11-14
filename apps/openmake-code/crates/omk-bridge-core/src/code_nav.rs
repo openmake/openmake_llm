@@ -1,9 +1,10 @@
 //! 코드 탐색(code_nav) — TS `code-nav.ts` 의 `isSecretFile`·`walkFiles`·grep·files.
 //!
-//! 읽기 전용이라 사용자 확인 없이 처리한다 — 폭주를 막는 것은 캡(파일 수·파일 크기·매치 수·시간 예산)뿐이다.
+//! 읽기 전용이라 사용자 확인 없이 처리한다 — 폭주를 막는 것은 캡(파일 수·파일 크기·매치 수·시간 예산·역추적 스택)뿐이다.
 //! 외부 실행 파일을 쓰지 않고, 훑기는 심링크를 따라가지 않는다. 자격증명 이름(파일·폴더)은 훑지 않고 수만 센다.
 //! 모두 동기 함수다 — 코어가 code_nav 전용 관문(설계 D-62) 안에서 부른다. 시간 예산은 주입한 "지났나" 함수로 본다.
-//! TS 는 예산을 파일 사이에서만 보지만, 여기서는 줄마다(판정 직전)도 본다 — 다항 시간으로 느린 패턴이 예산에서 끝난다.
+//! TS 는 예산을 파일 사이에서만 보지만, 여기서는 줄마다(판정 직전)도 본다. 한 줄 안에서도 예산·스택 상한에 멈춘다 —
+//! 판정은 한도를 둔 엔진(`js_regex::test_units_limited`)으로 하고, 예산에 멈추면 잘림, 스택 상한을 넘으면 요청 오류다.
 
 use std::fs;
 use std::sync::LazyLock;
@@ -15,10 +16,14 @@ use crate::constants::{
 };
 use crate::fs_kinds::read_dir_sorted;
 use crate::glob::Glob;
-use crate::js_regex;
+use crate::js_regex::{self, Halt};
 use crate::js_text::{js_trim, utf16_cmp, utf16_prefix};
 use crate::msg::{BridgeMsg, CodeNavResult};
 use crate::node_path;
+
+/// 판정이 역추적 스택 상한을 넘었을 때의 요청 오류(TS 는 같은 자리에서 `RangeError` 로 요청 오류).
+const REGEX_TOO_DEEP: &str =
+    "정규식 판정이 너무 깊어 중단했습니다 (역추적 한도 초과) — 패턴을 단순하게 바꾸세요";
 
 /// 바이너리 추정 범위 — 앞부분에 NUL 이 있으면 텍스트가 아니다(grep -I 과 같은 판정).
 const BINARY_SNIFF: usize = 8192;
@@ -188,8 +193,15 @@ fn grep(
             }
             units.clear();
             units.extend(line.encode_utf16());
-            if !re.test_units(&units) {
-                continue;
+            match re.test_units_limited(&units, expired) {
+                Ok(true) => {}
+                Ok(false) => continue,
+                // 줄 안에서 예산이 끝났다 — 줄 단위 검사와 같은 길(바깥 반복 맨 위의 `expired()` 로 끝난다).
+                Err(Halt::Stopped) => {
+                    truncated = true;
+                    break;
+                }
+                Err(Halt::TooDeep) => return Err(REGEX_TOO_DEEP.to_owned()),
             }
             let shown = line.strip_suffix('\r').unwrap_or(line);
             let shown = if shown.encode_utf16().count() > CODE_NAV_LINE_MAX_CHARS {
