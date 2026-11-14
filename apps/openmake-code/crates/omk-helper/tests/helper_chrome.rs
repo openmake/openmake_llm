@@ -1,6 +1,7 @@
 //! 실제 Chrome 종료 정리(D-103, **로컬 전용**) — 헬퍼가 띄운 전용 프로필 Chrome 은 stdin 끝·`quit`·SIGTERM 어느 계기로 끝나도
 //! exit 0 뒤 7초 안에 없다. 붙기만 한 Chrome(테스트가 먼저 띄운 것)은 헬퍼가 끝나도 남는다.
 //! 임시 `HOME` 의 프로필만 쓴다(장비의 지원 폴더를 건드리지 않는다). `--test-threads=1` 로, 다른 Chrome 시험과 겹치지 않게.
+//! 헬퍼는 `RUST_LOG=trace` 로 띄우고 끝난 뒤 stderr 가 비어 있는지 본다. 실패해도 그 프로필의 Chrome 은 정리 가드가 끈다.
 //! SKIP(local-browser): `CI=true`·Chrome 없음·GUI 로그인 세션 없음(`/dev/console` 의 소유자가 이 사용자가 아님 — 로그인 창
 //! 상태에서는 headless Chrome 도 죽는다, 11-15 기록).
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -71,6 +72,19 @@ fn chrome_pids(profile: &str) -> Vec<u32> {
         .collect()
 }
 
+/// 단언 실패·시간 초과로 끝나도 그 프로필의 Chrome 을 남기지 않는다(헬퍼는 `Helper::drop` 이 SIGKILL 해 정리하지 못한다 — 리뷰 r1 L-4).
+struct KillProfileChrome(String);
+
+impl Drop for KillProfileChrome {
+    fn drop(&mut self) {
+        for pid in chrome_pids(&self.0) {
+            let _ = Command::new("kill")
+                .args(["-KILL", &pid.to_string()])
+                .status();
+        }
+    }
+}
+
 fn wait_gone(profile: &str, limit: Duration) -> bool {
     let end = Instant::now() + limit;
     while Instant::now() < end {
@@ -82,14 +96,23 @@ fn wait_gone(profile: &str, limit: Duration) -> bool {
     false
 }
 
-const ENV: [(&str, &str); 2] = [
+/// `RUST_LOG=trace` — CDP 구간에서도 stderr 가 비어 있는지 본다(로거 없음, D-98 — 리뷰 r1 L-5).
+const ENV: [(&str, &str); 3] = [
     ("OMK_COMPANION_BROWSER", "1"),
     ("OMK_BRIDGE_BROWSER_HEADLESS", "1"),
+    ("RUST_LOG", "trace"),
 ];
 
+fn assert_stderr_empty(h: &support::child::Helper) {
+    let (_raw, err) = h.finished_output();
+    assert!(err.is_empty(), "{}", String::from_utf8_lossy(&err));
+}
+
 /// 헬퍼를 띄워 브라우저 요청 한 건 — hello 능력 목록에 browser·browser_upload, 결과가 온다.
-fn browse_once(server: &Server) -> (support::child::Helper, String) {
+fn browse_once(server: &Server) -> (support::child::Helper, String, KillProfileChrome) {
     let (h, _root, dev) = started(server, &ENV, "chrome-root");
+    let profile = profile_of(h.home.path());
+    let guard = KillProfileChrome(profile.clone());
     let caps = server.hellos().last().unwrap().frame["capabilities"].clone();
     let caps: Vec<&str> = caps
         .as_array()
@@ -104,13 +127,12 @@ fn browse_once(server: &Server) -> (support::child::Helper, String) {
     );
     let r = server.exec(&dev, json!({"kind": "browser", "actions": [{"type": "wait", "ms": 0}, {"type": "goto", "url": "about:blank"}]}));
     assert_eq!(r["ok"], true, "{r}");
-    let profile = profile_of(h.home.path());
-    (h, profile)
+    (h, profile, guard)
 }
 
 fn launched_chrome_is_gone_after(trigger: &str) {
     let server = Server::start();
-    let (mut h, profile) = browse_once(&server);
+    let (mut h, profile, _guard) = browse_once(&server);
     let pids = chrome_pids(&profile);
     assert!(!pids.is_empty(), "헬퍼가 띄운 전용 프로필 Chrome 이 있다");
     let t = Instant::now();
@@ -122,6 +144,7 @@ fn launched_chrome_is_gone_after(trigger: &str) {
     }
     let st = h.wait_exit(Duration::from_secs(10));
     assert_eq!(st.code(), Some(0), "{trigger}: {st:?}");
+    assert_stderr_empty(&h);
     assert!(
         wait_gone(&profile, GONE_WITHIN.saturating_sub(t.elapsed())),
         "{trigger}: Chrome 이 남았다 {:?}",
@@ -159,6 +182,8 @@ fn attached_chrome_survives_helper_exit() {
     let home = support::TmpDir::new();
     let profile = profile_of(home.path());
     std::fs::create_dir_all(&profile).unwrap();
+    // 앞쪽 단언이 실패해도 테스트가 띄운 Chrome 을 끈다(같은 프로필 — 리뷰 r1 L-4)
+    let _guard = KillProfileChrome(profile.clone());
     let mut own: Child = Command::new(chrome().unwrap())
         .args(launch_args(&profile, true))
         .stdout(Stdio::null())
@@ -194,6 +219,7 @@ fn attached_chrome_survives_helper_exit() {
     assert_eq!(r["ok"], true, "{r}");
     h.send(&json!({"cmd": "quit"}));
     assert_eq!(h.wait_exit(Duration::from_secs(10)).code(), Some(0));
+    assert_stderr_empty(&h);
     std::thread::sleep(Duration::from_secs(1));
     let alive = own.try_wait().unwrap().is_none();
     let _ = own.kill();
