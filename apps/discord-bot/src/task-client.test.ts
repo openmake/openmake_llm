@@ -19,6 +19,7 @@ function serve(routes: Record<string, { status?: number; body?: unknown; raw?: B
     return new Promise((resolve) => {
         const s = http.createServer((req, res) => {
             let raw = '';
+            req.setEncoding('utf8');
             req.on('data', (c) => { raw += c; });
             req.on('end', () => {
                 seen.push({ method: req.method ?? '', url: req.url ?? '', auth: req.headers.authorization, body: raw ? JSON.parse(raw) : undefined });

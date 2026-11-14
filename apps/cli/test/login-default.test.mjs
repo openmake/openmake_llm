@@ -14,6 +14,7 @@ function login(home, answers) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [CLI, 'login'], { env: { PATH: process.env.PATH, HOME: home }, stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
+    child.stdout.setEncoding('utf8');
     const pending = [...answers];
     child.stdout.on('data', chunk => {
       out += chunk;

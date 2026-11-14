@@ -1,6 +1,6 @@
 import {
     buildEgressProxyRunArgs, ensureEgressProxy, isProxyListening, isGatewayIsolated, isolatedNetworkCreateArgs,
-    EGRESS_GATEWAY_MODE_OPT, daemonSupportsGatewayMode,
+    EGRESS_GATEWAY_MODE_OPT, daemonSupportsGatewayMode, runDockerCli,
 } from './egress-proxy';
 import { getTaskSandboxConfig } from '../../config/task-sandbox';
 
@@ -353,5 +353,21 @@ describe('ensureEgressProxy 내부망 gateway 격리 (2026-11-08 점검 후속)'
         await expect(ensureEgressProxy(off, f2.exec)).resolves.toBe(URL);
         expect(f2.count('network:rm')).toBe(0);
         expect(f2.count('network:create')).toBe(0);
+    });
+});
+
+describe('runDockerCli — 출력 조각 이어 디코드·누적 상한(UTF-8 청크 경계)', () => {
+    it('다바이트 글자가 조각 경계에 걸려도 stdout·stderr 가 원문과 같다', async () => {
+        const w = (text: string, at: number, stream: string) =>
+            `{ const b = Buffer.from(${JSON.stringify(text)}); process.${stream}.write(b.subarray(0, ${at}));`
+            + ` setTimeout(() => process.${stream}.write(b.subarray(${at})), 50); }`;
+        const r = await runDockerCli(process.execPath, ['-e', `${w('한글 출력', 4, 'stdout')} ${w('오류 글', 2, 'stderr')}`]);
+        expect(r).toEqual({ code: 0, stdout: '한글 출력', stderr: '오류 글' });
+    });
+
+    it('상한(8192자)은 조각마다가 아니라 스트림 누적으로 적용한다', async () => {
+        const r = await runDockerCli(process.execPath,
+            ['-e', 'process.stdout.write("a".repeat(5000)); setTimeout(() => process.stdout.write("b".repeat(5000)), 50)']);
+        expect(r.stdout).toBe('a'.repeat(5000) + 'b'.repeat(3192));
     });
 });

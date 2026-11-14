@@ -93,6 +93,8 @@ if (env.OMK_START_URL) {
 
 createServer((req, res) => {
     let body = '';
+    // 조각을 이어 디코드한다 — 조각마다 문자열로 바꾸면 경계에 걸린 한글 등이 깨진다
+    req.setEncoding('utf8');
     req.on('data', (d) => { body += d; });
     req.on('end', async () => {
         let out;
