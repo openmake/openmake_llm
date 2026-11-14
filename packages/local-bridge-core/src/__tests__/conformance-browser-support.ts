@@ -95,8 +95,8 @@ export function fillDeep<T>(v: T, tmp: string): T {
 }
 
 export type FsSetup = { dir: string } | { file: string; content: string } | { file: string; size: number } | { symlink: string; target: string }
-    | { series: string; from: number; to: number; content: string };
-export const SETUP_SHAPES: Array<[string, string[]]> = [['dir', ['dir']], ['symlink', ['symlink', 'target']], ['series', ['series', 'from', 'to', 'content']]];
+    | { hardlink: string; target: string } | { series: string; from: number; to: number; content: string };
+export const SETUP_SHAPES: Array<[string, string[]]> = [['dir', ['dir']], ['symlink', ['symlink', 'target']], ['hardlink', ['hardlink', 'target']], ['series', ['series', 'from', 'to', 'content']]];
 
 export function shapeSetup(setup: unknown, at: string): void {
     expect({ at, setupArray: Array.isArray(setup) }).toEqual({ at, setupArray: true });
@@ -113,6 +113,7 @@ export function applySetup(tmp: string, setup: FsSetup[]): void {
     for (const s of setup) {
         if ('dir' in s) fs.mkdirSync(path.join(tmp, s.dir), { recursive: true });
         else if ('symlink' in s) fs.symlinkSync(fill(s.target, tmp), path.join(tmp, s.symlink));
+        else if ('hardlink' in s) fs.linkSync(fill(s.target, tmp), path.join(tmp, s.hardlink));
         else if ('series' in s) for (let n = s.from; n <= s.to; n++) fs.writeFileSync(path.join(tmp, s.series.replace('{n}', String(n))), s.content);
         else {
             fs.mkdirSync(path.dirname(path.join(tmp, s.file)), { recursive: true });
