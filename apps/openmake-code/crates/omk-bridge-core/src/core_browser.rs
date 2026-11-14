@@ -91,7 +91,7 @@ impl BridgeCore {
             stdout: Some(r.to_json_string()),
             exit_code: Some(if ok { 0 } else { 1 }),
             user_control: r.truthy("userControl").then_some(true),
-            policy_block: r.get("policyBlock").map(json_value),
+            policy_block: r.get("policyBlock").map(|b| Box::new(json_value(b))),
             ..BridgeResult::default()
         })
     }

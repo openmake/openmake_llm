@@ -9,6 +9,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
+use omk_bridge_core::constants::BROWSER_KIND;
 use omk_bridge_core::core::BridgeCore;
 use omk_bridge_core::msg::{BridgeMsg, BridgeResult};
 use omk_bridge_core::platform::folder_name_of;
@@ -382,7 +383,11 @@ impl Actor {
                     StatusCode::Connected,
                     Some(&name),
                 );
-                // 제어권 다시 알리기(TS connection.ts:163)는 코어에 브라우저 상태가 생기는 PR-1.6 에서 잇는다.
+                // 넘겨받은 상태를 서버에 다시 알린다 — 연결이 끊긴 동안 바뀐 제어권을 서버가 놓치지 않게(TS connection.ts:163).
+                let core = &self.opts.core;
+                if core.capabilities().contains(&BROWSER_KIND) {
+                    self.send(&frames::browser_control(core.browser_user_control()));
+                }
             }
             ServerFrame::Error(m) => {
                 self.status(format!("서버 오류: {m}"), StatusCode::ServerError, Some(&m));
