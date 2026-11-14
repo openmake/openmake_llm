@@ -14,7 +14,7 @@
     },
     {
       "id": "relative-segments-dropped",
-      "input": {"shell": {"stdout": ".:/s/a:bin:./x", "exit": 0}, "mise": {"stdout": "bin\n/m/one\n.\n./x", "exit": 0}, "processPath": "{{BIN}}:.:./x:lib/bin:/usr/bin", "folder": "root"},
+      "input": {"shell": {"stdout": ".:/s/a:bin:./x", "exit": 0}, "mise": {"stdout": "bin\n/m/one\n.\n./x\n/m/one:.", "exit": 0}, "processPath": "{{BIN}}:.:./x:lib/bin:/usr/bin", "folder": "root"},
       "expect": {"path": "/m/one:/s/a:{{BIN}}:/usr/bin:/opt/homebrew/bin:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"}
     },
     {

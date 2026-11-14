@@ -24,7 +24,7 @@ pub(crate) fn env_get<'a>(env: &'a [(String, String)], key: &str) -> Option<&'a 
 }
 
 /// 병합(순수) — 로그인 셸 출력(`trim` 후 `:` 로 나눔)·프로세스 PATH·고정 4곳을 처음 나온 순서로 중복 없이 합치고,
-/// mise 출력(`trim` 후 줄마다, 빈 줄 제외)이 있으면 그것을 앞에 둔다(겹치면 mise 자리가 이긴다).
+/// mise 출력(`trim` 후 줄마다, 줄 안은 다시 `:` 로 나눔, 빈 항목 제외)이 있으면 그것을 앞에 둔다(겹치면 mise 자리가 이긴다).
 /// 절대경로 항목만 — 상대 항목(`.`·`bin`)은 자식 cwd(연결 폴더) 기준으로 풀려 폴더의 파일을 고를 수 있다(설계 D-5).
 pub fn merge_exec_path(
     login: Option<&str>,
@@ -44,7 +44,11 @@ pub fn merge_exec_path(
     let Some(mise) = mise else {
         return base.join(":");
     };
-    let mise_paths = js_trim(mise).split('\n').filter(|p| is_abs_entry(p));
+    // 한 줄 안의 `:` 도 항목 경계다(설계 D-5 보완).
+    let mise_paths = js_trim(mise)
+        .split('\n')
+        .flat_map(|l| l.split(':'))
+        .filter(|p| is_abs_entry(p));
     dedupe(mise_paths.chain(base.iter().copied())).join(":")
 }
 

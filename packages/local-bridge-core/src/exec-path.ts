@@ -57,7 +57,7 @@ export function resolveExecPath(folderRoot: string | null, toolSandbox?: string 
         const mise = wrapInSandbox('mise', ['bin-paths'], toolSandbox);
         const misePaths = execFileSync(mise.file, mise.args,
             { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS, cwd: folderRoot || os.homedir(), env: probeEnv(base) })
-            .trim().split('\n').filter(isAbsEntry);
+            .trim().split('\n').flatMap((l) => l.split(':')).filter(isAbsEntry); // 한 줄 안의 `:` 도 항목 경계다(설계 D-5 보완)
         // 프로젝트 버전이 이기도록 mise 경로를 앞에 둔다.
         merged = [...new Set([...misePaths, ...base.split(':')])].join(':');
     } catch { /* mise 부재/미신뢰 설정/감싼 실행 실패(65·71 포함) — base 만 사용 */ }
