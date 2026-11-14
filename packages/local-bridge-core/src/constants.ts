@@ -57,6 +57,8 @@ export const SANDBOX_BIN = '/usr/bin/sandbox-exec';
 export const SANDBOX_ENABLED = process.platform === 'darwin' && process.env.OMK_BRIDGE_SANDBOX !== '0';
 /** 샌드박스가 켜졌는데 프로파일이 없을 때의 거부 문구(fail-closed) — exec 와 도구 자식(test_runner·lsp_diagnostics)이 같이 쓴다. */
 export const SANDBOX_PROFILE_MISSING_ERROR = 'exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.';
+/** 감싼 자식에서 sandbox-exec 가 실행 파일을 띄우지 못했다(종료 코드 71) — 뒤에 `(<파일 이름>).` 가 붙는다, 종료 코드는 같은 126(설계 D-8). */
+export const SANDBOX_SPAWN_ERROR_PREFIX = '샌드박스 안에서 실행 파일을 띄우지 못해 실행을 거부했습니다';
 
 /**
  * 확인 없이 띄우는 git(worktree·연결 시점 탐지)에 늘 붙이는 인자 — 레포 설정의 fsmonitor·훅을 끈다(설계 D-2).

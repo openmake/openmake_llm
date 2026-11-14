@@ -64,7 +64,7 @@ struct Ctx<'a> {
 }
 
 /// git 하나 — `GIT_FIXED_ARGS` 를 붙이고 도구 프로파일로 감싼다. 프로파일이 없거나 sandbox-exec 자체가 실패하면(65·71)
-/// fail-closed 문구로 `Err`(요청이 126 으로 끝난다). 시간 제한 `exec_timeout_ms`(TS `EXEC_TIMEOUT_MS`), 출력 상한 1MiB.
+/// 거절 문구로 `Err`(65 는 fail-closed, 71 은 실행 파일 이름 — D-8, 요청이 126 으로 끝난다). 시간 제한 `exec_timeout_ms`(TS `EXEC_TIMEOUT_MS`), 출력 상한 1MiB.
 async fn git(cx: &Ctx<'_>, args: &[&str], cwd: &str) -> Result<Git, String> {
     let mut argv: Vec<&str> = GIT_FIXED_ARGS.to_vec();
     argv.extend_from_slice(args);

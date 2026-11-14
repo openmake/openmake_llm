@@ -299,3 +299,17 @@ sbDescribe('도구 프로파일의 자격 파일 읽기 금지(D-7)', () => {
         expect([cat(false, '.netrc'), cat(false, '.config/gh/hosts.yml')]).toEqual(['omk-conformance-secret-netrc\n', 'omk-conformance-secret-gh\n']);
     });
 });
+
+sbDescribe('D-8 — 감싼 실행 파일을 띄우지 못하면(sandbox-exec 71) "재연결" 이 아니라 그 이름으로 126 거절', () => {
+    const SPAWN = (name: string): string => `샌드박스 안에서 실행 파일을 띄우지 못해 실행을 거부했습니다(${name}).`;
+
+    it('lsp_diagnostics(tsc): 실행 비트가 없는 폴더의 tsc', async () => {
+        write('tsconfig.json', '{}');
+        write('a.ts', 'export const n = 1;\n');
+        write('node_modules/.bin/tsc', '#!/bin/sh\nexit 0\n', 0o644);
+        const core = makeCore();
+        core.prepare();
+        expect(await run(core, { kind: 'lsp_diagnostics', paths: ['a.ts'] })).toEqual({ ok: false, error: SPAWN('tsc'), exitCode: 126 });
+    }, 30000);
+});
+

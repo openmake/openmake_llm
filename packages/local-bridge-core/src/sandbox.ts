@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { CACHE_SUBPATHS, SANDBOX_BIN, SANDBOX_PROFILE_MISSING_ERROR, SECRET_SUBPATHS, sbq, sbSub, TOOL_SECRET_SUBPATHS } from './constants';
+import { CACHE_SUBPATHS, SANDBOX_BIN, SANDBOX_PROFILE_MISSING_ERROR, SANDBOX_SPAWN_ERROR_PREFIX, SECRET_SUBPATHS, sbq, sbSub, TOOL_SECRET_SUBPATHS } from './constants';
 import type { GitPaths } from './git-trust';
 
 /** SBPL literal 용 정규화 — `path.join` 결과에서 끝 구분자를 뗀다(literal 은 글자 그대로 비교한다). */
@@ -84,6 +84,11 @@ export class SandboxProfileMissingError extends Error {
     constructor() { super(SANDBOX_PROFILE_MISSING_ERROR); }
 }
 
+/** 감싼 자식에서 sandbox-exec 가 실행 파일을 띄우지 못했다(71) — 프로파일 문제가 아니라 재연결로 풀리지 않는다(설계 D-8). 이름은 basename. */
+export class SandboxSpawnError extends Error {
+    constructor(file: string) { super(`${SANDBOX_SPAWN_ERROR_PREFIX}(${path.basename(file)}).`); }
+}
+
 /**
  * 확인 없이 처리하는 도구(test_runner 탐지·lsp_diagnostics)가 띄우는 자식을 exec 와 같은 프로파일로 감싼다.
  * 그 자식(폴더의 node_modules/.bin/tsc, cwd 가 폴더인 python3)은 폴더의 코드를 실행할 수 있다 — 에이전트가 파일
@@ -98,6 +103,11 @@ export class SandboxProfileMissingError extends Error {
  */
 export function sandboxExecFailed(wrapped: boolean, code: unknown, stderr: string): boolean {
     return wrapped && (code === 65 || code === 71) && stderr.startsWith('sandbox-exec:');
+}
+
+/** sandboxExecFailed 일 때의 거절 — 71 은 띄우지 못한 실행 파일 이름으로, 65 는 프로파일 없음과 같은 문구로(설계 D-8). */
+export function sandboxExecError(code: unknown, file: string): Error {
+    return code === 71 ? new SandboxSpawnError(file) : new SandboxProfileMissingError();
 }
 
 /** profile 은 프로파일 **텍스트**다(`sandbox-exec -p` — 파일을 거치지 않는다, 리뷰 F1). */

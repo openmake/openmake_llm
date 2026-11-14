@@ -23,7 +23,7 @@ import { execFile } from 'child_process';
 import { DIAG_MAX_PER_FILE, DIAG_MAX_TOTAL, DIAG_MSG_MAX, DIAG_TIMEOUT_MS, MAX_BUFFER } from './constants';
 import { buildExecEnv } from './exec-env';
 import { onPath } from './exec-path';
-import { SandboxProfileMissingError, sandboxExecFailed, wrapInSandbox } from './sandbox';
+import { sandboxExecError, sandboxExecFailed, wrapInSandbox } from './sandbox';
 import type { BridgeDiagnostic } from './types';
 
 const TS_EXT = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
@@ -49,7 +49,7 @@ function run(file: string, args: string[], cwd: string, extraPath: string | unde
             },
             (err, stdout, stderr) => {
                 // sandbox-exec 자체 실패(프로파일 파일 유실 등)는 "진단 없음"으로 삼키지 않고 프로파일 없음과 같이 거절한다.
-                if (err && sandboxExecFailed(wrapped, err.code, String(stderr ?? ''))) reject(new SandboxProfileMissingError());
+                if (err && sandboxExecFailed(wrapped, err.code, String(stderr ?? ''))) reject(sandboxExecError(err.code, file));
                 else resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? '') });
             },
         );

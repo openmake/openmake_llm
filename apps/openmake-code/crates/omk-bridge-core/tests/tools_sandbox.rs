@@ -362,3 +362,23 @@ fn tool_profile_denies_credential_reads_exec_does_not() {
         ]
     );
 }
+
+/// D-8 — 감싼 실행 파일을 띄우지 못하면(sandbox-exec 71) "재연결" 이 아니라 그 이름으로 126 거절한다. 실행 비트가 없는 폴더의 tsc.
+#[test]
+fn unspawnable_tool_is_refused_with_its_name() {
+    let w = Work::new();
+    std::fs::write(w.join("root/tsconfig.json"), "{}").unwrap();
+    std::fs::write(w.join("root/a.ts"), "export const n = 1;\n").unwrap();
+    std::fs::create_dir_all(w.join("root/node_modules/.bin")).unwrap();
+    std::fs::write(w.join("root/node_modules/.bin/tsc"), "#!/bin/sh\nexit 0\n").unwrap();
+    let c = core(&w, true);
+    let r = runtime()
+        .block_on(c.handle_exec(&BridgeMsg::from_json(
+            &json!({"kind": "lsp_diagnostics", "paths": ["a.ts"]}),
+        )))
+        .to_json();
+    assert_eq!(
+        r,
+        json!({"ok": false, "error": "샌드박스 안에서 실행 파일을 띄우지 못해 실행을 거부했습니다(tsc).", "exitCode": 126})
+    );
+}
