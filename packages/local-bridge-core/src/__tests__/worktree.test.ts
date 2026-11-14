@@ -7,7 +7,10 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { handleWorktree } from '../worktree';
+import { SANDBOX_ENABLED } from '../constants';
+import { detectGit } from '../git-trust';
+import { buildSandboxProfile } from '../sandbox';
+import { handleWorktree, type WorktreeCtx } from '../worktree';
 import type { BridgeMsg, BridgeResult } from '../types';
 
 const TASK = 'aaaabbbb-1111-2222-3333-444455556666';
@@ -16,8 +19,17 @@ function git(args: string[], cwd: string): string {
     return execFileSync('git', args, { cwd, encoding: 'utf8' });
 }
 
+/** 코어가 연결 때 고정하는 것 — 믿기로 한 git 디렉터리와 도구 프로파일(macOS 면 실제 sandbox-exec 안에서 돈다). */
+function ctxFor(base: string): WorktreeCtx {
+    const root = fs.realpathSync.native(base);
+    const git = detectGit(root);
+    const profile = SANDBOX_ENABLED ? buildSandboxProfile(root, git, true) : undefined;
+    return { root, git, profile };
+}
+
 function run(m: BridgeMsg, base: string): Promise<BridgeResult> {
-    return new Promise((resolve) => { void handleWorktree(m, resolve, base); });
+    const ctx = ctxFor(base);
+    return new Promise((resolve, reject) => { handleWorktree(m, resolve, base, ctx).catch(reject); });
 }
 
 describe('handleWorktree', () => {
@@ -112,8 +124,8 @@ describe('handleWorktree', () => {
         expect(fs.existsSync(path.join(sub, again.worktreeRel!))).toBe(true);
     });
 
-    // 검사(요청 첫머리)와 git worktree add·remove 사이에 git 3회가 낀다 — 그 사이에 .openmake 를 폴더 밖 심링크로
-    // 바꾸면 밖에 만들고 지울 수 있다. 가짜 git 이 마지막 rev-parse --absolute-git-dir 때 한 번 바꿔 그 틈을 흉내 낸다.
+    // 검사(요청 첫머리)와 git worktree add·remove 사이에 git 여러 번이 낀다 — 그 사이에 .openmake 를 폴더 밖 심링크로
+    // 바꾸면 밖에 만들고 지울 수 있다. 가짜 git 이 첫 rev-parse --absolute-git-dir(git 디렉터리 대조) 때 한 번 바꿔 그 틈을 흉내 낸다.
     describe('git 실행 바로 앞 재검사', () => {
         let out: string;
         let swap: string;
@@ -126,7 +138,8 @@ describe('handleWorktree', () => {
             const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
             fs.writeFileSync(path.join(bin, 'git'), [
                 '#!/bin/sh',
-                `if [ "$1" = rev-parse ] && [ "$2" = --absolute-git-dir ] && [ -e '${swap}' ]; then sh '${swap}'; rm -f '${swap}'; fi`,
+                // 앞 네 인자는 고정 인자(-c core.fsmonitor=false -c core.hooksPath=/dev/null)다.
+                `if [ "$5" = rev-parse ] && [ "$6" = --absolute-git-dir ] && [ -e '${swap}' ]; then sh '${swap}'; rm -f '${swap}'; fi`,
                 `exec '${realGit}' "$@"`, '',
             ].join('\n'), { mode: 0o755 });
             savedPath = process.env.PATH;

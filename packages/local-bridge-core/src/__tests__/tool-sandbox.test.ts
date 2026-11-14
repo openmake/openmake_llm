@@ -9,13 +9,14 @@
  * 임시·캐시 경로 밖이라, 검증 스크립트가 HOME 을 임시 폴더로 바꿔도(캐시 허용 구역이 그쪽으로 옮겨 간다) 탈출 단언이 성립한다.
  */
 import * as fs from 'fs';
+import * as net from 'net';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { SANDBOX_ENABLED } from '../constants';
 import { BridgeCore } from '../core';
 import { collectDiagnostics } from '../diagnostics';
-import { writeSandboxProfile } from '../sandbox';
+import { buildSandboxProfile } from '../sandbox';
 import { detectTestRunner } from '../test-runner';
 import type { BridgeMsg, BridgeResult } from '../types';
 
@@ -56,11 +57,6 @@ function expectNoEscape(name: string): void {
     expect(fs.existsSync(path.join(outside, name))).toBe(false);
 }
 
-const coreProfile = (): string => {
-    const files = fs.readdirSync(prof);
-    expect(files).toHaveLength(1);
-    return path.join(prof, files[0]);
-};
 
 const sbDescribe = SANDBOX_ENABLED ? describe : describe.skip;
 
@@ -99,6 +95,30 @@ sbDescribe('도구 자식 샌드박스 — 폴더의 코드가 샌드박스 밖�
         expect(r).toMatchObject({ ok: true, serverKind: 'tsc' });
         expect(fs.existsSync(path.join(base, 'tsc-ran-inside'))).toBe(true); // 돌기는 돈다
         expectNoEscape('tsc-ran');
+    }, 30000);
+});
+
+sbDescribe('도구 자식 샌드박스 — 도구 프로파일은 네트워크를 막는다(exec 프로파일과 다르다)', () => {
+    it('lsp_diagnostics: 폴더의 tsc 가 로컬 TCP 에도 붙지 못한다', async () => {
+        let connections = 0;
+        const server = net.createServer((sock) => { connections++; sock.destroy(); });
+        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+        const port = (server.address() as net.AddressInfo).port;
+        try {
+            write('tsconfig.json', '{}');
+            write('a.ts', 'export const n = 1;\n');
+            write('node_modules/.bin/tsc', `#!/bin/bash\n(exec 3<>/dev/tcp/127.0.0.1/${port}) && echo x > ${JSON.stringify(path.join(base, 'net-ok'))}\nexit 0\n`, 0o755);
+            const core = makeCore();
+            core.prepare();
+            expect(await run(core, { kind: 'lsp_diagnostics', paths: ['a.ts'] })).toMatchObject({ ok: true, serverKind: 'tsc' });
+            expect(fs.existsSync(path.join(base, 'net-ok'))).toBe(false);
+            expect(connections).toBe(0);
+            // 같은 연결의 exec(승인된 명령)는 네트워크를 쓴다 — 막는 것은 도구 프로파일뿐이다.
+            const approved = new BridgeCore({ folder: base, confirm: async () => 'yes', sandboxProfileDir: prof });
+            approved.prepare();
+            expect(await run(approved, { kind: 'exec', command: `(exec 3<>/dev/tcp/127.0.0.1/${port}) && echo connected` }))
+                .toMatchObject({ ok: true, exitCode: 0, stdout: 'connected\n' });
+        } finally { server.close(); }
     }, 30000);
 });
 
@@ -147,36 +167,32 @@ sbDescribe('도구 자식 샌드박스 — 프로파일이 없으면 자식을 �
 
 sbDescribe('도구 자식 샌드박스 — sandbox-exec 자체가 실패하면 "진단 없음/none" 으로 삼키지 않고 거절한다', () => {
     const MISSING = 'exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.';
-    /** 준비는 됐지만 프로파일 **파일**이 사라진 코어(경로 문자열은 남아 있다 — 임시 폴더 정리 등). */
-    function coreWithLostProfile(): BridgeCore {
-        const core = makeCore();
-        core.prepare();
-        fs.rmSync(coreProfile());
-        return core;
-    }
+    /**
+     * sandbox-exec 가 프로파일을 받지 못하는 경우 — 프로파일은 파일 없이 `-p` 텍스트로 넘기므로(리뷰 F1) 예전의 "파일 유실"
+     * 대신 문법이 깨진 텍스트로 흉내 낸다(`-p` 도 종료 코드 65 + `sandbox-exec:` — 2026-11-14 실측).
+     */
+    const BROKEN = '(version 1)(allow default';
+    const refused = (p: Promise<unknown>): Promise<void> => expect(p).rejects.toThrow(MISSING);
 
     it('lsp_diagnostics(.py): 거절', async () => {
-        write('a.py', 'def f(:\n');
-        expect(await run(coreWithLostProfile(), { kind: 'lsp_diagnostics', paths: ['a.py'] }))
-            .toEqual({ ok: false, error: MISSING, exitCode: 126 });
+        const f = write('a.py', 'def f(:\n');
+        await refused(collectDiagnostics(base, [f], undefined, BROKEN));
     }, 30000);
 
     it('lsp_diagnostics(tsc): 거절', async () => {
         write('tsconfig.json', '{}');
-        write('a.ts', 'export const n = 1;\n');
+        const f = write('a.ts', 'export const n = 1;\n');
         write('node_modules/.bin/tsc', '#!/bin/sh\necho "a.ts(1,1): error TS1000: x"\nexit 1\n', 0o755);
-        expect(await run(coreWithLostProfile(), { kind: 'lsp_diagnostics', paths: ['a.ts'] }))
-            .toEqual({ ok: false, error: MISSING, exitCode: 126 });
+        await refused(collectDiagnostics(base, [f], undefined, BROKEN));
     }, 30000);
 
     it('test_runner(pytest 탐지): 거절', async () => {
         write('conftest.py', '');
-        expect(await run(coreWithLostProfile(), { kind: 'test_runner', path: '.' }))
-            .toEqual({ ok: false, error: MISSING, exitCode: 126 });
+        await refused(detectTestRunner(base, process.env.PATH ?? '', BROKEN));
     }, 30000);
 
     it('python3 가 PATH 에 없으면 거절이 아니라 종전대로 "띄우지 못함"(sandbox-exec 의 execvp 실패와 섞지 않는다)', async () => {
-        const p = writeSandboxProfile(base, null, path.join(prof, 'p.sb')) as string;
+        const p = buildSandboxProfile(base, null, true) as string;
         const f = write('a.py', 'def f(:\n');
         write('conftest.py', '');
         expect(await detectTestRunner(base, '/nonexistent-omk-path', p)).toBe('none');
@@ -195,7 +211,7 @@ sbDescribe('도구 자식 샌드박스 — 모듈 단위(가짜 python3 로 인�
     }
     const args = (): string[] => fs.readFileSync(path.join(base, 'py-args'), 'utf8').split('\n').slice(0, -1);
     const profile = (): string => {
-        const p = writeSandboxProfile(base, null, path.join(prof, 'p.sb'));
+        const p = buildSandboxProfile(base, null, true);
         expect(p).not.toBeNull();
         return p as string;
     };
