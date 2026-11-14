@@ -15,12 +15,14 @@ on:
     paths:
       - 'apps/openmake-code/**'
       - 'packages/local-bridge-core/conformance/**'
+      - 'infra/task-runtime/__fixtures__/browser-flow-cases.json'
       - '.github/workflows/openmake-code.yml'
   pull_request:
     branches: [main, dev]
     paths:
       - 'apps/openmake-code/**'
       - 'packages/local-bridge-core/conformance/**'
+      - 'infra/task-runtime/__fixtures__/browser-flow-cases.json'
       - '.github/workflows/openmake-code.yml'
 
 permissions:
