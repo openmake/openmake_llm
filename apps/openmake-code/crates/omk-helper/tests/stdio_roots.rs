@@ -345,6 +345,54 @@ fn connect_waits_for_discovery_other_commands_do_not() {
     server.until("둘 다 붙음", |s| s.hellos.len() == 2);
 }
 
+/// 리뷰 r1 M-2 — 주소 찾기가 끝난 **뒤**에는 요청 순서대로 처리한다(Node `connectFolder` 는 매번 `await endpointsReady` 라 같은
+/// 읽기 조각의 뒷줄보다 늦게 돈다 — README "다른 점" 14). 한 번의 쓰기로 온 `connect`·`auth` 는 키 없음으로 끝나고(Node 는 연결됨),
+/// `auth`·`connect`·`disconnect` 는 해제로 끝난다(Node 는 연결 유지). 둘 다 "덜 붙는" 쪽이다.
+#[test]
+fn after_discovery_commands_run_in_order() {
+    let server = Server::start();
+    let mut h = Helper::spawn(&server.url(), &[]);
+    h.wait_ev("endpoints", is("endpoints"));
+    let (a, b) = (h.home.dir("ord-a"), h.home.dir("ord-b"));
+    let lines = |v: &[Value]| v.iter().map(|x| format!("{x}\n")).collect::<String>();
+    h.send_raw(
+        lines(&[
+            json!({"cmd": "connect", "folder": b}),
+            json!({"cmd": "auth", "apiKey": KEY}),
+        ])
+        .as_bytes(),
+    );
+    h.wait_ev("키 없음", |e| e["code"] == "api_key_required");
+    h.send_raw(
+        lines(&[
+            json!({"cmd": "auth", "apiKey": KEY}),
+            json!({"cmd": "connect", "folder": a}),
+            json!({"cmd": "disconnect", "folder": a}),
+        ])
+        .as_bytes(),
+    );
+    h.wait_n("해제 뒤 idle", 2, |e| {
+        e["code"] == "idle" && e.get("folder").is_none()
+    });
+    let evs = h.events();
+    let at = |pred: &dyn Fn(&Value) -> bool| evs.iter().position(pred).unwrap();
+    let connected = at(&|e| e["ev"] == "connected" && e["folder"] == a.as_str());
+    let disconnected = at(&|e| e["ev"] == "disconnected" && e["folder"] == a.as_str());
+    let idle = evs
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e["code"] == "idle" && e.get("folder").is_none())
+        .nth(1)
+        .unwrap()
+        .0;
+    assert!(connected < disconnected && disconnected < idle, "{evs:?}");
+    assert_eq!(
+        h.count(|e| e["ev"] == "connected" && e["folder"] == b.as_str()),
+        0,
+        "키가 오기 전의 connect 는 붙지 않는다"
+    );
+}
+
 /// ⑤-B — 서버가 1008 `api_key_revoked` 로 닫으면 그 루트의 상태 코드가 사유 그대로, 곧바로 다시 붙지 않는다.
 /// 그 루트를 해제해도(재연결 대기 중) `status closed` 는 없다(연결 크레이트 §12-2).
 #[test]
