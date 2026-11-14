@@ -28,11 +28,14 @@ fn decode(mut line: &[u8]) -> String {
 
 impl LineSplitter {
     pub fn push(&mut self, chunk: &[u8], out: &mut impl FnMut(String)) {
+        // 남은 조각에는 `\n` 이 없다 — 새 조각에서만 찾는다(쌓인 버퍼를 다시 훑으면 긴 줄이 제곱 시간, 리뷰 r1 L-1).
+        let mut from = self.buf.len();
         self.buf.extend_from_slice(chunk);
         let mut start = 0;
-        while let Some(i) = self.buf[start..].iter().position(|b| *b == b'\n') {
-            out(decode(&self.buf[start..start + i]));
-            start += i + 1;
+        while let Some(i) = self.buf[from..].iter().position(|b| *b == b'\n') {
+            out(decode(&self.buf[start..from + i]));
+            start = from + i + 1;
+            from = start;
         }
         self.buf.drain(..start);
     }
@@ -165,5 +168,27 @@ mod tests {
         let mut chunks: Vec<&[u8]> = long.as_bytes().chunks(8192).collect();
         chunks.push(b"\n");
         assert_eq!(split(&chunks), [long]);
+    }
+
+    /// 리뷰 r1 L-1 — 줄바꿈 없는 긴 줄이 조각마다 쌓인 버퍼 전체를 다시 훑지 않는다(제곱 시간이면 debug 에서 8MiB 가 수십 초).
+    #[test]
+    fn long_line_is_linear() {
+        let long = vec![b'x'; 8 * 1024 * 1024];
+        let t = std::time::Instant::now();
+        let mut s = LineSplitter::default();
+        let mut n = 0;
+        for c in long.chunks(8192) {
+            s.push(c, &mut |_| n += 1);
+        }
+        s.push(b"\nnext\n", &mut |l| {
+            n += 1;
+            assert!(l.len() == long.len() || l == "next");
+        });
+        assert_eq!(n, 2);
+        assert!(
+            t.elapsed() < std::time::Duration::from_secs(2),
+            "{:?}",
+            t.elapsed()
+        );
     }
 }
