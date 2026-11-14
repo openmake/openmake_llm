@@ -16,7 +16,7 @@ import type { TaskExecutor, ExecResult, CodeNavSpec, CodeNavData } from '../task
 import { stripWorkspacePrefix } from '../task-sandbox/workspace-path';
 import { getLocalBridgeRegistry, type BridgeKind, type BridgeResult, type BridgeRequestPayload } from './registry';
 import { getLocalBridgeUnknownOutcomeNotice } from '../../prompts/agent-task-prompt';
-import { LocalDeviceUnavailableError, type DeviceLoss } from './device-errors';
+import { LocalDeviceUnavailableError, isUnsupportedKindError, type DeviceLoss } from './device-errors';
 import { classifyBrowserAction, planBrowserActions, type BrowserSitePlan, type BrowserUploadApproval } from '@openmake/config';
 import { resolveEffectivePolicy } from '../org/effective-policy';
 import { auditBrowserPolicyBlock } from './browser-policy-audit';
@@ -183,7 +183,9 @@ export class RemoteExecutor implements TaskExecutor {
      * 코드 탐색(grep_code·repo_map) — 디바이스가 셸 없이 파일을 훑어 결과만 돌려준다.
      * exec 로 내보내면 읽기 전용인데도 confirmExec 승인 창이 매 호출 떠서 실사용이 불가능하다
      * (lsp_diagnostics 와 같은 취지의 전용 kind). 구 디바이스는 "지원하지 않는 kind" 오류를
-     * 돌려주므로 **null** → 호출측(tools-code-nav)이 셸 경로로 폴백한다.
+     * 돌려주므로 **null** → 호출측(tools-code-nav)이 셸 경로로 폴백한다. 전달 실패(transport)도 null 이다.
+     * 디바이스가 요청을 받아 거절한 요청 오류(정규식 오류·역추적 한도 등)는 `{ error }` 로 돌려 폴백하지 않는다 —
+     * 셸로 다시 돌리면 같은 패턴이 승인 창을 띄우고 원래 안내 문구가 사라진다.
      */
     async codeNav(spec: CodeNavSpec): Promise<CodeNavData | null> {
         const r = await this.req({
@@ -195,6 +197,11 @@ export class RemoteExecutor implements TaskExecutor {
             ...(spec.ignoreCase ? { ignoreCase: true } : {}),
             ...(spec.maxResults ? { maxResults: spec.maxResults } : {}),
         }).catch(() => ({ ok: false }) as BridgeResult);
+        const requestError = !r.ok && !r.transport && r.error?.trim() ? r.error : undefined;
+        if (requestError && !isUnsupportedKindError(requestError)) {
+            logger.info(`[${this.taskId}] code_nav 요청 오류 — 폴백 없음: ${requestError}`);
+            return { error: requestError };
+        }
         if (!r.ok || !r.codeNav) {
             logger.info(`[${this.taskId}] code_nav 미지원·실패 — 셸 경로로 폴백: ${r.error ?? 'codeNav 없음'}`);
             return null;
