@@ -138,9 +138,10 @@ describe('LocalBrowser 동시 실행(가짜 CDP)', () => {
         runs.push(browser.run(held('W2'), opts('W2')));
         await tick(); await tick();
         g.release('T0');
+        runs.push(browser.run(held('W3'), opts('W3'))); // 자리가 나는 그 순간 온 W3 보다 앞서 기다린 W1 이 든다
         await tick(); await tick();
         expect(g.started.slice(BROWSER_MAX_CONCURRENT)).toEqual(['W1']);
-        for (const n of [...names, 'W1', 'W2']) g.release(n);
+        for (const n of [...names, 'W1', 'W2', 'W3']) g.release(n);
         await Promise.all(runs);
         await browser.dispose();
     });
