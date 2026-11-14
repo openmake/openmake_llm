@@ -372,8 +372,10 @@ export class OpenAICompatProvider implements IProvider {
             // 별로 다름. OpenRouter spec 의 reasoning.exclude 와 LiteLLM 의 Gemini
             // 매핑 두 가지 동시 시도 — 모르는 옵션은 vendor 가 무시하므로 안전.
             // 단, Google 자체의 OpenAI 호환 주소(provider id 'gemini')는 모르는 필드를 무시하지 않고 400 으로 거절하고
-            // (2026-10-02 라이브: Unknown name "reasoning" / "generation_config" at 'extra_body'), thinking 을 본문에 섞지도 않는다
+            // (2026-10-02 라이브: Unknown name "reasoning" / "generation_config" at 'extra_body' — extra_body 아래는 google 만 받는다)
             // — 그 경로에는 아래 필드를 보내지 않는다. 다른 provider 를 거쳐 가는 gemini-* 모델만 대상이다.
+            // Google 직접의 사고 요약은 thinking 켬일 때 providers/openai-compat-gemini-thinking 이 따로 요청하고,
+            // 요청하지 않으면 본문에 섞이지 않는다(2026-11-15 실측).
             const isGoogleDirect = this.id === 'gemini';
             const isGemini = isGoogleDirect || /^gemini-/.test(opts.modelId);
             const geminiThinkingDisable = isGemini && !isGoogleDirect ? {
