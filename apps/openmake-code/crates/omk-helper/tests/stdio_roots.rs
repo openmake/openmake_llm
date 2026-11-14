@@ -89,7 +89,7 @@ fn connect_hello_and_file_kinds() {
     );
     // TS 순서: connected → connecting → connected
     let evs = h.events();
-    let pos = |p: &dyn Fn(&Value) -> bool| evs.iter().position(|e| p(e)).unwrap();
+    let pos = |p: &dyn Fn(&Value) -> bool| evs.iter().position(p).unwrap();
     assert!(pos(&|e| e["ev"] == "connected") < pos(&status_of(&root, "connecting")));
     assert_eq!(
         server.exec(&dev, json!({"kind": "read", "path": "seed.txt"}))["content"],

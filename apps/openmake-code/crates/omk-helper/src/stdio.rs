@@ -164,6 +164,6 @@ mod tests {
         let long = "x".repeat(200 * 1024);
         let mut chunks: Vec<&[u8]> = long.as_bytes().chunks(8192).collect();
         chunks.push(b"\n");
-        assert_eq!(split(&chunks), [long.clone()]);
+        assert_eq!(split(&chunks), [long]);
     }
 }
