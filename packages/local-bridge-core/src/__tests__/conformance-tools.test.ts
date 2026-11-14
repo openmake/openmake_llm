@@ -26,6 +26,7 @@ jest.mock('os', () => {
 type Req = { msg: BridgeMsg; expect: Record<string, unknown>; compare?: string; divergence?: string; rustExpect?: unknown; toolCalls?: WantCall[] };
 type CoreCase = { id: string; setup: ToolSetup[]; root: string; requests: Req[] };
 type Direct<I, E> = { id: string; setup: ToolSetup[]; input: I; expect: E; toolCalls?: WantCall[] };
+type DirectWithCalls<I, E> = Direct<I, E> & { toolCalls: WantCall[] };
 
 const REQ_OPTIONAL = ['compare', 'divergence', 'rustExpect', 'toolCalls'];
 
@@ -42,10 +43,11 @@ function shapeCoreCases(doc: Record<string, unknown>, suite: string): void {
         });
     }
 }
-function shapeDirect(doc: Record<string, unknown>, suite: string, inputKeys: string[]): void {
+/** callsRequired — 모든 사례에 toolCalls(띄운 자식이 없으면 빈 배열)를 둔다(test-runner, PR-1.4 리뷰 N2). */
+function shapeDirect(doc: Record<string, unknown>, suite: string, inputKeys: string[], callsRequired = false): void {
     for (const c of nonEmpty(doc.direct, `${suite}/direct`)) {
         const at = `${suite}/direct/${String(c.id)}`;
-        shape(c, ['id', 'setup', 'input', 'expect'], ['toolCalls'], at);
+        shape(c, ['id', 'setup', 'input', 'expect', ...(callsRequired ? ['toolCalls'] : [])], callsRequired ? [] : ['toolCalls'], at);
         shapeToolSetup(c.setup, at);
         shape(c.input, inputKeys, [], `${at}/input`);
         if (c.toolCalls !== undefined) shapeToolCalls(c.toolCalls, at);
@@ -91,7 +93,7 @@ describe('fixture 모양 — 묶음 이름·키 허용 목록·빈 목록', () =
         const doc = load<Record<string, unknown>>('test-runner');
         shape(doc, ['suite', 'version', 'cases', 'direct'], [], 'test-runner');
         shapeCoreCases(doc, 'test-runner');
-        shapeDirect(doc, 'test-runner', ['dir', 'execPath']);
+        shapeDirect(doc, 'test-runner', ['dir', 'execPath'], true);
         for (const c of doc.direct as Record<string, unknown>[]) expect(['npm', 'pytest', 'go', 'none']).toContain(c.expect);
     });
 });
@@ -185,7 +187,7 @@ describe('diagnostics-parse', () => {
 
 describe('test-runner', () => {
     type Input = { dir: string; execPath: string };
-    const doc = load<{ cases: CoreCase[]; direct: Direct<Input, string>[] }>('test-runner');
+    const doc = load<{ cases: CoreCase[]; direct: DirectWithCalls<Input, string>[] }>('test-runner');
 
     it.each(doc.cases.map((c) => [c.id, c] as const))('cases/%s', (_id, c) => runCoreCase('test-runner', 'test_runner', c), 20000);
 
@@ -196,10 +198,8 @@ describe('test-runner', () => {
             const input = fill(c.input, tmp);
             const got = await withEnv(runnerEnv(tmp), () => detectTestRunner(input.dir, input.execPath));
             expect(got).toBe(c.expect);
-            if (c.toolCalls) {
-                const want = fill(c.toolCalls, tmp);
-                expect(toolCallsView(readToolCalls(tmp), want)).toEqual(want);
-            }
+            const want = fill(c.toolCalls, tmp);
+            expect(toolCallsView(readToolCalls(tmp), want)).toEqual(want);
         } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
     });
 });

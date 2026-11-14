@@ -5,7 +5,6 @@
 //! 실행 파일·인자는 코어가 고정 조립한다(서버 문자열은 명령줄에 들어가지 않는다). 자식은 exec 와 같은 샌드박스·환경
 //! 허용 목록 안에서 돈다(`tool_env`, D-65 — TS 는 밖에서 돈다). 파일 확인은 관문 안, 자식 실행은 관문 밖이다(D-64).
 
-use std::fs;
 use std::sync::LazyLock;
 
 use serde_json::{Value, json};
@@ -15,7 +14,7 @@ use crate::js_regex::{self, JsRegex};
 use crate::js_text::{js_trim, utf16_prefix};
 use crate::node_path;
 use crate::timed_fs::FsGate;
-use crate::tool_env::ToolEnv;
+use crate::tool_env::{ToolEnv, exists};
 
 const LABEL: &str = "lsp_diagnostics";
 const TS_EXT: [&str; 8] = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
@@ -59,10 +58,6 @@ pub struct Collected {
     pub truncated: bool,
     /// 처음 나온 순서의 중복 없는 `+` 이음 — tsc 가 언제나 앞이라 넷 중 하나다.
     pub server_kind: &'static str,
-}
-
-fn exists(p: &str) -> bool {
-    fs::metadata(p).is_ok()
 }
 
 /// 파일에서 위로 올라가며 `rel` 이 있는 첫 자리 — 그 폴더를 **검사한 뒤** base 또는 루트에서 멈춘다(TS 순서).

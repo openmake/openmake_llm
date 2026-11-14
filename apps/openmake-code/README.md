@@ -5,7 +5,7 @@
 `exec`(차단 → 사용자 확인 → macOS 샌드박스의 3단 방어·일괄 승인·exec PATH 계산·샌드박스 프로파일 파일)와 `worktree`(`add`·`diff`·`remove`),
 읽기 전용 도구 `code_nav`(grep·files)·`lsp_diagnostics`(tsc·py_compile)·`test_runner`(탐지)가 있다.
 기준은 TS 구현(`packages/local-bridge-core`)의 현재 동작이며, 두 구현이 같은 적합성 fixture 를 통과해야 한다.
-능력 목록은 `BRIDGE_KINDS` 12종 전부다. 브라우저는 이후 PR 에서 더한다 — 그때까지 코어는 `browser` 를 "지원하지 않는 kind" 로 거절한다.
+능력 목록은 `BRIDGE_KINDS` 12종 전부다. 브라우저는 기기 쪽 판정·파일 경계(`browser::` — 사이트 정책·제어 흐름·요청 도우미·차단 표식·업로드 파일 검사·다운로드 저장, PR-1.6a)만 있고 CDP·실행은 PR-1.6b 에서 더한다 — 그때까지 코어는 `browser` 를 "지원하지 않는 kind" 로 거절한다.
 `exec`·`worktree`·`lsp_diagnostics`·`test_runner` 는 호스트가 `BridgeCore::with_exec_host(ExecHost { … })` 로 확인 창·환경 사본·홈·플랫폼·샌드박스 설정을 얹어야 돈다
 (코어는 프로세스 환경을 읽지 않는다). 호스트가 없는 코어는 exec 를 "거부"(126)로, worktree·lsp_diagnostics·test_runner 를 거절로 끝낸다
 (code_nav 는 호스트 없이 돈다). 도구 자식(tsc·python3)은 exec 와 같은 샌드박스 안에서 돈다.
@@ -45,6 +45,7 @@ cargo deny check advisories licenses   # cargo-deny 필요(CI 는 버전 고정 
 - 위치: `packages/local-bridge-core/conformance/*.json` (형식·알려진 차이는 그 폴더의 `README.md`)
 - Rust 러너: `crates/omk-bridge-core/tests/conformance.rs`
 - TS 러너: `packages/local-bridge-core/src/__tests__/conformance.test.ts`(exec·worktree 계열은 `conformance-exec.test.ts`)
+- 브라우저: fixture `browser-*.json`(형식·넣지 않는 차이는 `BROWSER.md`), 러너 `tests/conformance_browser.rs`(TS 는 `conformance-browser.test.ts`), 공용 흐름 사례 `tests/browser_flow_cases.rs`, JS 값 변환·Rust 전용 사례 `tests/browser_js_value.rs`.
 - 시간·크기에 기대는 프로세스 동작은 `tests/exec_proc.rs`, 샌드박스가 실제로 막는 것은 `tests/exec_sandbox.rs`(macOS, 실제 `sandbox-exec`)가 본다.
 - 읽기 전용 도구: 러너 `tests/conformance/code_nav.rs`·`diagnostics.rs`·`test_runner.rs`(TS 는 `conformance-tools.test.ts`), fixture 밖은
   `tests/tools_core.rs`, 끝나지 않는 판정의 CPU 묶기는 `tests/tools_redos.rs`(CPU 2개를 묶어 따로 둔다 — 메모리 폭주는 시험하지 않는다), 도구 자식 샌드박스는 `tests/tools_sandbox.rs`(macOS).
