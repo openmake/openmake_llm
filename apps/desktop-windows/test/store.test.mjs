@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -6,7 +6,9 @@ import * as path from 'node:path';
 import { Store, DEFAULT_SERVER } from '../src/store.mjs';
 import { MESSAGES, pickLocale, translate } from '../src/i18n.mjs';
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'omk-desktop-store-'));
+const made = []; // tmp() 가 만든 폴더 — 끝나면 지운다
+after(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
+const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-desktop-store-')); made.push(d); return d; };
 const xor = { isAvailable: () => true, encrypt: (t) => Buffer.from(t).map((b) => b ^ 0x5a), decrypt: (b) => Buffer.from(b).map((x) => x ^ 0x5a).toString() };
 
 test('설정 — 기본값, 저장, 잘못된 서버 주소는 기본으로', () => {

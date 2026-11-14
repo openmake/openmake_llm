@@ -28,8 +28,10 @@ const PAGES: Record<string, string> = {
         <p id="out"></p></body></html>`,
     '/upload': `<html><body><input id="one" type="file"><input id="many" type="file" multiple><p id="up"></p><div id="notfile"></div>
         <script>for (const id of ['one', 'many']) document.getElementById(id).addEventListener('change', async (e) => {
+            await new Promise((r) => setTimeout(r, 100)); // 비동기로 받는 페이지 흉내 — 테스트는 완료 표식을 기다려야 한다
             const parts = []; for (const f of e.target.files) parts.push(f.name + '=' + (await f.text()));
-            document.getElementById('up').textContent = id + ':' + parts.join(','); });</script></body></html>`,
+            const up = document.getElementById('up'); up.textContent = id + ':' + parts.join(',');
+            up.dataset.done = id + ':' + [...e.target.files].map((f) => f.name).join(','); });</script></body></html>`,
     '/hop': `<html><body><script>setTimeout(() => { location.href = location.href.replace('127.0.0.1', 'localhost').replace('/hop', '/upload'); }, 300);</script></body></html>`,
     // 열리자마자 /slow 로 넘어간다 — /slow 는 응답을 끝내지 않아 문서가 계속 'loading' 이다
     '/slow-hop': '<html><body><script>setTimeout(() => { location.href = "/slow"; }, 50);</script></body></html>',
@@ -306,19 +308,21 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
             const file = path.join(outDir, 'hello.txt');
             fs.writeFileSync(file, '안녕');
             const r = await browser.run({ actions: [
-                { type: 'goto', url: `${origin}/upload` }, { type: 'uploadFile', selector: '#one', files: ['hello.txt'] }, { type: 'extractText', selector: '#up' },
+                { type: 'goto', url: `${origin}/upload` }, { type: 'uploadFile', selector: '#one', files: ['hello.txt'] },
+                { type: 'waitFor', selector: '#up[data-done="one:hello.txt"]' }, { type: 'extractText', selector: '#up' },
             ], sitePolicy: allowAll(), approvedUploads: approved(['hello.txt']) }, uploadOpts([file]));
             expect(r.ok).toBe(true);
             expect(r.results[1]).toMatchObject({ ok: true, type: 'uploadFile', files: ['hello.txt'] });
-            expect(r.results[2].text).toBe('one:hello.txt=안녕');
+            expect(r.results[3].text).toBe('one:hello.txt=안녕');
         }, 60000);
 
         it('여러 파일은 multiple 칸에만 넣는다', async () => {
             const a = path.join(outDir, 'a.txt'); const b = path.join(outDir, 'b.txt');
             fs.writeFileSync(a, 'A'); fs.writeFileSync(b, 'B');
-            const ok = await browser.run({ actions: [{ type: 'uploadFile', selector: '#many', files: ['a.txt', 'b.txt'] }, { type: 'extractText', selector: '#up' }],
+            const ok = await browser.run({ actions: [{ type: 'uploadFile', selector: '#many', files: ['a.txt', 'b.txt'] },
+                { type: 'waitFor', selector: '#up[data-done="many:a.txt,b.txt"]' }, { type: 'extractText', selector: '#up' }],
                 sitePolicy: allowAll(), approvedUploads: approved(['a.txt', 'b.txt']) }, uploadOpts([a, b]));
-            expect(ok.results[1].text).toBe('many:a.txt=A,b.txt=B');
+            expect(ok.results[2].text).toBe('many:a.txt=A,b.txt=B');
             const single = await browser.run({ actions: [{ type: 'uploadFile', selector: '#one', files: ['a.txt', 'b.txt'] }],
                 sitePolicy: allowAll(), approvedUploads: approved(['a.txt', 'b.txt']) }, uploadOpts([a, b]));
             expect(single.results[0]).toMatchObject({ ok: false });
@@ -449,9 +453,10 @@ describeIfChrome('BridgeCore — browser 요청 (실제 Chrome)', () => {
         fs.writeFileSync(path.join(folder, 'report.txt'), '보고서');
         fs.writeFileSync(path.join(folder, '.env'), 'SECRET=1');
         const set = await run({ kind: 'browser', taskId: 'core-up', sitePolicy: { allow: ['127.0.0.1'] }, approvedUploads: [{ host: '127.0.0.1', files: ['report.txt'] }],
-            actions: [{ type: 'goto', url: `${origin}/upload` }, { type: 'uploadFile', selector: '#one', files: ['report.txt'] }, { type: 'extractText', selector: '#up' }] });
+            actions: [{ type: 'goto', url: `${origin}/upload` }, { type: 'uploadFile', selector: '#one', files: ['report.txt'] },
+                { type: 'waitFor', selector: '#up[data-done="one:report.txt"]' }, { type: 'extractText', selector: '#up' }] });
         expect(set).toMatchObject({ ok: true, exitCode: 0 });
-        expect((JSON.parse(set.stdout ?? '{}') as { results: Array<{ text?: string }> }).results[2].text).toBe('one:report.txt=보고서');
+        expect((JSON.parse(set.stdout ?? '{}') as { results: Array<{ text?: string }> }).results[3].text).toBe('one:report.txt=보고서');
         const hidden = await run({ kind: 'browser', taskId: 'core-up', sitePolicy: { allow: ['127.0.0.1'] }, approvedUploads: [{ host: '127.0.0.1', files: ['.env'] }],
             actions: [{ type: 'uploadFile', selector: '#pick', files: ['.env'] }] });
         expect(hidden).toMatchObject({ exitCode: 1, policyBlock: { kind: 'upload_rejected', host: '127.0.0.1', action: 'uploadFile' } });

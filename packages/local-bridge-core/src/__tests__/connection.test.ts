@@ -101,7 +101,7 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
         fs.writeFileSync(path.join(base, 'f.txt'), 'data');
         statuses.length = 0;
     });
-    afterEach(async () => { conn?.disconnect(); conn = null; await server.stop(); });
+    afterEach(async () => { conn?.disconnect(); conn = null; try { await server.stop(); } finally { fs.rmSync(base, { recursive: true, force: true }); } });
 
     const socketOpen = (): boolean => conn?.socket()?.readyState === WebSocket.OPEN;
     const hellos = (): number => server.received.filter((f) => f.type === 'bridge_hello').length;

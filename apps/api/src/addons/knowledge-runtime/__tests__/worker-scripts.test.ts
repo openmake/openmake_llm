@@ -3,7 +3,7 @@
  * 종료 코드·복구 안내(가짜 psql 로 DB 없이). 실 DB 동작은 knowledge-worker-mode.db.test.ts.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -18,6 +18,7 @@ function run(script: string, args: string[], env: Record<string, string> = {}) {
 }
 
 const TMP = mkdtempSync(join(tmpdir(), 'knowledge-drill-'));
+afterAll(() => rmSync(TMP, { recursive: true, force: true }));
 /** 훈련이 읽을 설정 파일 — 저장소 루트 .env 대신 쓴다 */
 function envFile(name: string, body: string): string {
     const file = join(TMP, name);
