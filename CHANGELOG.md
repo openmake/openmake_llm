@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.134.3](https://github.com/openmake/openmake_llm/compare/v1.134.2...v1.134.3) (2026-11-14)
+
+
+### 🐛 버그 수정
+
+* **openmake-code:** code_nav 정규식 엔진 regress 사본 — 역추적 결함 2건·실행 한도(PR-1.7 선행) ([9a9bd6a](https://github.com/openmake/openmake_llm/commit/9a9bd6a4ba55bc6577edae5819ebe64287bce7d6))
+* **openmake-code:** 긴 줄에서는 중단 콜백을 더 자주 묻는다 — 예산 시각에 칸을 돌려준다 ([1bf379f](https://github.com/openmake/openmake_llm/commit/1bf379fe52f8d4fdef705ee78d6ddb070347b36c))
+
 ## [1.134.2](https://github.com/openmake/openmake_llm/compare/v1.134.1...v1.134.2) (2026-11-14)
 
 
