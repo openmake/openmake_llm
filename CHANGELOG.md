@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.133.3](https://github.com/openmake/openmake_llm/compare/v1.133.2...v1.133.3) (2026-11-14)
+
+
+### 🐛 버그 수정
+
+* **local-bridge-core:** Preferences 임시 파일을 0600 으로 — rename 뒤 권한이 넓어지지 않게 ([f41ffbc](https://github.com/openmake/openmake_llm/commit/f41ffbc07737f2f47cd902d75a66da2de1142a56))
+* **local-bridge-core:** 브라우저 다운로드 기본값도 대기 폴더로 + 설정 실패면 실행하지 않기 ([10397c9](https://github.com/openmake/openmake_llm/commit/10397c94bb2d979b4632a33a451833d15958055a))
+* **local-bridge-core:** 전용 Chrome 을 Default 프로필로 띄우기 + Preferences 를 임시 파일·rename 으로 ([5fff50b](https://github.com/openmake/openmake_llm/commit/5fff50bbe4f2f1b60596fd95db053f549606d4a9))
+
 ## [1.133.2](https://github.com/openmake/openmake_llm/compare/v1.133.1...v1.133.2) (2026-11-14)
 
 
