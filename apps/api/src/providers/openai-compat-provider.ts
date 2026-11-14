@@ -30,6 +30,7 @@ import { ProviderError } from './provider-errors';
 import type { UsageMetrics } from '../llm';
 import { createLogger } from '../utils/logger';
 import { buildReasoningEffortParams } from './openai-compat-reasoning';
+import { buildGeminiThinkingParams, GeminiThoughtSplitter, wantsGeminiThoughts } from './openai-compat-gemini-thinking';
 import { createPinnedFetch } from '../security/ssrf-guard';
 import { needsExplicitPromptCache, toOpenAIMessages, toOpenAITools } from './openai-compat-mapping';
 import { ToolNameCodec } from './tool-name-codec';
@@ -371,8 +372,10 @@ export class OpenAICompatProvider implements IProvider {
             // 별로 다름. OpenRouter spec 의 reasoning.exclude 와 LiteLLM 의 Gemini
             // 매핑 두 가지 동시 시도 — 모르는 옵션은 vendor 가 무시하므로 안전.
             // 단, Google 자체의 OpenAI 호환 주소(provider id 'gemini')는 모르는 필드를 무시하지 않고 400 으로 거절하고
-            // (2026-10-02 라이브: Unknown name "reasoning" / "generation_config" at 'extra_body'), thinking 을 본문에 섞지도 않는다
+            // (2026-10-02 라이브: Unknown name "reasoning" / "generation_config" at 'extra_body' — extra_body 아래는 google 만 받는다)
             // — 그 경로에는 아래 필드를 보내지 않는다. 다른 provider 를 거쳐 가는 gemini-* 모델만 대상이다.
+            // Google 직접의 사고 요약은 thinking 켬일 때 providers/openai-compat-gemini-thinking 이 따로 요청하고,
+            // 요청하지 않으면 본문에 섞이지 않는다(2026-11-15 실측).
             const isGoogleDirect = this.id === 'gemini';
             const isGemini = isGoogleDirect || /^gemini-/.test(opts.modelId);
             const geminiThinkingDisable = isGemini && !isGoogleDirect ? {
@@ -398,8 +401,11 @@ export class OpenAICompatProvider implements IProvider {
                 ...(opts.responseFormat ? { response_format: opts.responseFormat } : {}),
                 ...openRouterProvider,
                 ...geminiThinkingDisable,
-                // 추론 강도(UI 낮음·보통·높음) — Gemini 는 위 leak 차단으로 항상 OFF 라 제외.
+                // 추론 강도(UI 낮음·보통·높음) — Gemini 는 제외: 다른 provider 경유 gemini-* 는 위 leak 차단으로 항상 OFF,
+                // Google 직접은 reasoning_effort 를 thinking_config 와 함께 보내면 400(2026-11-15 실측).
                 ...(isGemini ? {} : buildReasoningEffortParams(opts.thinking, opts.modelId, this.id, !!this.modelPrefix)),
+                // Google 직접 provider 사고 요약(thinking 켬일 때만) — providers/openai-compat-gemini-thinking
+                ...buildGeminiThinkingParams(this.id, opts.thinking, !!this.modelPrefix),
             };
 
             const stream = await this.client.chat.completions.create(
@@ -409,6 +415,22 @@ export class OpenAICompatProvider implements IProvider {
 
             let content = '';
             const pseudoGate = new PseudoToolCallGate();
+            // 사고 요약을 요청한 Google 직접 호출만 content 맨 앞 <thought>…</thought> 를 사고로 가른다(그 밖엔 종전 그대로).
+            const thoughtSplitter = wantsGeminiThoughts(this.id, opts.thinking) ? new GeminiThoughtSplitter() : null;
+            const emitBody = (text: string) => {
+                // 텍스트로 새어나온 툴콜은 사용자 채널로 방출하지 않고 캡처 — 스트림 종료 시
+                // 실제 tool call 로 복구한다 (로컬 경로 stream-parser 와 동일 안전망).
+                const visible = pseudoGate.feed(text);
+                if (visible) {
+                    content += visible;
+                    callbacks.onToken?.(visible);
+                }
+            };
+            const emitContent = (delta: string) => {
+                const part = thoughtSplitter ? thoughtSplitter.feed(delta) : { thinking: '', content: delta };
+                if (part.thinking) callbacks.onThinking?.(part.thinking);
+                emitBody(part.content);
+            };
             const toolBuffers = new Map<number, { id: string; name: string; jsonBuffer: string; extra?: Record<string, unknown> }>();
             const reasoningDetails: unknown[] = [];
             let promptTokens = 0;
@@ -447,15 +469,7 @@ export class OpenAICompatProvider implements IProvider {
                 if (aborted) break;
 
                 const choice = chunk.choices?.[0];
-                if (choice?.delta?.content) {
-                    // 텍스트로 새어나온 툴콜은 사용자 채널로 방출하지 않고 캡처 — 스트림 종료 시
-                    // 실제 tool call 로 복구한다 (로컬 경로 stream-parser 와 동일 안전망).
-                    const visible = pseudoGate.feed(choice.delta.content);
-                    if (visible) {
-                        content += visible;
-                        callbacks.onToken?.(visible);
-                    }
-                }
+                if (choice?.delta?.content) emitContent(choice.delta.content);
                 // reasoning chunk — i-provider 의 onThinking 콜백으로 전달. 로컬 stream-parser 와 같은 순서로
                 // reasoning 우선, 없으면 reasoning_content(둘 다 오면 한 번만).
                 const reasoningDelta = choice?.delta?.reasoning ?? choice?.delta?.reasoning_content;
@@ -487,6 +501,12 @@ export class OpenAICompatProvider implements IProvider {
                 }
             }
 
+            // 사고 가르개 flush — 닫힘 없이 끝난 사고·미완 여는 태그 접두를 내보낸다(가짜 도구 호출 게이트보다 먼저).
+            if (thoughtSplitter) {
+                const rest = thoughtSplitter.flush();
+                if (rest.thinking) callbacks.onThinking?.(rest.thinking);
+                emitBody(rest.content);
+            }
             // Pseudo tool call 게이트 flush — 유보 꼬리 방출 + 캡처분에서 tool call 복구.
             const pseudoFlush = pseudoGate.flush();
             if (pseudoFlush.emit) {
