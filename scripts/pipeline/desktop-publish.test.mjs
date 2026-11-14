@@ -80,7 +80,10 @@ const DMG = Buffer.from('fake dmg 0.3.8');
 const DMG_SHA = createHash('sha256').update(DMG).digest('hex');
 const PREVIOUS = JSON.stringify({ native: { version: '0.3.7', file: 'OpenMake-Companion-0.3.7-arm64.dmg', sha256: 'e'.repeat(64) }, windows: { version: '0.1.0', file: 'OpenMake-Companion-Setup-0.1.0.exe', sha256: 'f'.repeat(64) } }) + '\n';
 
-async function fixture(t) {
+const AUTOMATION = 'scripts/pipeline/desktop-publish.mjs', VERSION_FILE = 'apps/desktop-native/VERSION';
+
+// automated: false 면 VERSION 이 게시 자동화(이 스크립트)보다 먼저 저장소에 들어온 이력 — 릴리스가 만들어지지 않는 버전.
+async function fixture(t, { automated = true } = {}) {
     const root = mkdtempSync(path.join(tmpdir(), 'desktop-publish-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const llm = path.join(root, 'llm');
@@ -89,6 +92,7 @@ async function fixture(t) {
     mkdirSync(path.join(llm, 'scripts'));
     copyFileSync(path.join(ROOT, 'scripts/publish-desktop.sh'), path.join(llm, 'scripts/publish-desktop.sh'));
     writeFileSync(path.join(llm, 'apps/desktop-native/VERSION'), '0.3.8\n');
+    if (automated) { mkdirSync(path.join(llm, 'scripts/pipeline')); writeFileSync(path.join(llm, AUTOMATION), '// automation\n'); }
     git('init', '-q', '-b', 'main');
     git('add', '.'); git('commit', '-qm', 'base');
     const base = git('rev-parse', 'HEAD');
@@ -96,6 +100,12 @@ async function fixture(t) {
     git('commit', '-q', '--allow-empty', '-m', 'installed'); const installed = git('rev-parse', 'HEAD');
     git('switch', '-q', '-c', 'side', base); git('commit', '-q', '--allow-empty', '-m', 'side'); const side = git('rev-parse', 'HEAD');
     git('switch', '-q', 'main');
+    const commit = (file, content, message) => {
+        mkdirSync(path.dirname(path.join(llm, file)), { recursive: true });
+        writeFileSync(path.join(llm, file), content);
+        git('add', file); git('commit', '-qm', message);
+        return git('rev-parse', 'HEAD');
+    };
 
     const routes = new Map(), requests = [];
     const asset = (name) => `/acme/app/releases/download/desktop-native-v0.3.8/${name}`;
@@ -120,7 +130,7 @@ async function fixture(t) {
     const setPublished = (text) => { mkdirSync(dir, { recursive: true }); writeFileSync(latest, text); };
     const run = (deps, extra = {}) => publish({ cwd: llm, sha: installed, dir: 'data/desktop-updates', repo: 'acme/app', output: receiptPath, web, ...extra }, deps);
     const receipt = () => JSON.parse(readFileSync(receiptPath, 'utf8'));
-    return { root, llm, built, installed, side, routes, requests, serve, dir, latest, receiptPath, setPublished, run, receipt, web };
+    return { root, llm, git, commit, base, built, installed, side, routes, requests, serve, dir, latest, receiptPath, setPublished, run, receipt, web };
 }
 
 const manifestOf = (latest) => readFileSync(latest, 'utf8');
@@ -153,6 +163,75 @@ test('publish: 릴리스 자산이 아직 없으면(404) 75, latest.json 그대�
     assert.equal(r.status, 'pending');
     assert.equal(r.sha, f.installed);
     assert.equal(r.version, '0.3.8');
+});
+
+test('publish: 자동화 이전에 정해진 버전이면(404) 건너뜀 0, 영수증 unreleased, latest.json 을 만들지 않는다', async (t) => {
+    const f = await fixture(t, { automated: false });
+    const sha = f.commit(AUTOMATION, '// automation\n', 'automation');
+    assert.equal(await f.run(undefined, { sha }), 0);
+    const r = f.receipt();
+    assert.equal(r.status, 'unreleased');
+    assert.equal(r.sha, sha);
+    assert.equal(r.version, '0.3.8');
+    assert.match(r.reason, /before release automation/);
+    assert.ok(r.reason.includes(f.base.slice(0, 7)), 'names the commit that set the version');
+    assert.ok(!existsSync(f.latest));
+    assert.ok(f.requests.some((u) => u.endsWith('/desktop-native.json')), 'asked for the release asset first');
+});
+
+test('publish: 자동화 이전 버전이고 더 낮은 게시본이 있으면 0, latest.json 바이트 그대로', async (t) => {
+    const f = await fixture(t, { automated: false });
+    const sha = f.commit(AUTOMATION, '// automation\n', 'automation');
+    f.setPublished(PREVIOUS);
+    assert.equal(await f.run(undefined, { sha }), 0);
+    assert.equal(f.receipt().status, 'unreleased');
+    assert.equal(manifestOf(f.latest), PREVIOUS);
+    assert.ok(!existsSync(`${f.latest}.prev`));
+});
+
+test('publish: 자동화 뒤에 VERSION 을 올렸으면 404 는 종전대로 75 pending', async (t) => {
+    const f = await fixture(t, { automated: false });
+    f.commit(AUTOMATION, '// automation\n', 'automation');
+    const sha = f.commit(VERSION_FILE, '0.3.9\n', 'bump');
+    assert.equal(await f.run(undefined, { sha }), 75);
+    assert.equal(f.receipt().status, 'pending');
+    assert.equal(f.receipt().version, '0.3.9');
+});
+
+test('publish: 자동화 이전 가지의 VERSION 이 자동화 뒤에 병합되면(첫 부모 줄) 75 pending', async (t) => {
+    const f = await fixture(t, { automated: false });
+    f.git('switch', '-q', '-c', 'old', f.base);
+    f.commit(VERSION_FILE, '0.3.9\n', 'bump before automation');
+    f.git('switch', '-q', 'main');
+    f.commit(AUTOMATION, '// automation\n', 'automation');
+    f.git('merge', '-q', '--no-ff', '-m', 'merge old', 'old');
+    const sha = f.git('rev-parse', 'HEAD');
+    assert.equal(await f.run(undefined, { sha }), 75);
+    assert.equal(f.receipt().status, 'pending');
+    assert.equal(f.receipt().version, '0.3.9');
+});
+
+test('publish: git 으로 판정할 수 없으면(저장소 아님·VERSION 커밋 없음·ls-tree 실패) 404 는 종전대로 75', async (t) => {
+    const f = await fixture(t, { automated: false });
+    const sha = f.git('rev-parse', 'HEAD');
+    assert.equal(await f.run({ gitOutput: () => ({ status: 0, stdout: '' }) }), 75);
+    assert.equal(f.receipt().status, 'pending');
+    assert.equal(await f.run({ gitOutput: (args) => (args[0] === 'log' ? { status: 0, stdout: `${sha}\n` } : { status: 128, stdout: '' }) }), 75);
+    assert.equal(f.receipt().status, 'pending');
+    rmSync(path.join(f.llm, '.git'), { recursive: true, force: true });
+    assert.equal(await f.run(), 75);
+    assert.equal(f.receipt().status, 'pending');
+});
+
+test('publish: 자동화 이전 버전이라도 릴리스 자산이 있으면 종전대로 게시하고 git 판정을 부르지 않는다', async (t) => {
+    const f = await fixture(t, { automated: false });
+    f.serve();
+    const calls = [];
+    const gitOutput = (...args) => { calls.push(args); return { status: 0, stdout: '' }; };
+    assert.equal(await f.run({ gitOutput }), 0);
+    assert.equal(f.receipt().status, 'published');
+    assert.deepEqual(JSON.parse(manifestOf(f.latest)).native, { version: '0.3.8', file: FILE, sha256: DMG_SHA });
+    assert.deepEqual(calls, []);
 });
 
 test('publish: 자산 매니페스트를 받다가 404 외 HTTP 오류면 실패', async (t) => {
@@ -304,4 +383,16 @@ test('CLI: manifest 는 --output 에 매니페스트를 쓰고, 규칙 밖 파�
     assert.deepEqual(JSON.parse(readFileSync(out, 'utf8')), { schemaVersion: 1, version: '0.3.8', file: FILE, sha256: DMG_SHA, gitSha: sha });
     writeFileSync(path.join(dir, 'bad.dmg'), DMG);
     assert.equal(spawnSync(process.execPath, [SCRIPT, 'manifest', '--dmg', path.join(dir, 'bad.dmg'), '--sha', sha, '--output', out]).status, 1);
+});
+
+test('CLI: 자동화 이전 버전의 404 는 프로세스 종료 코드 0, 영수증 unreleased', async (t) => {
+    const f = await fixture(t, { automated: false });
+    const sha = f.commit(AUTOMATION, '// automation\n', 'automation');
+    const args = ['publish', '--cwd', f.llm, '--sha', sha, '--dir', f.dir, '--repo', 'acme/app', '--output', f.receiptPath];
+    const code = await new Promise((resolve) => {
+        const child = spawn(process.execPath, [SCRIPT, ...args], { env: { ...process.env, OMK_GITHUB_WEB: f.web }, stdio: 'ignore' });
+        child.on('exit', resolve);
+    });
+    assert.equal(code, 0);
+    assert.equal(f.receipt().status, 'unreleased');
 });
