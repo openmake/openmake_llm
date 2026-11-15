@@ -43,7 +43,7 @@ function oauthKeyRow(): ExternalApiKeyRow {
     return {
         id: 1, userId: 'u1', providerId: 'chatgpt', sdkType: 'openai-compatible', authMethod: 'oauth',
         displayName: 'ChatGPT', baseUrl: null, keyPrefix: null, oauthAccountId: 'acc', oauthExpiresAt: null,
-        isActive: true, lastValidatedAt: null, lastValidationOk: null, lastValidationError: null, lastUsedAt: null,
+        isActive: true, enabled: true, lastValidatedAt: null, lastValidationOk: null, lastValidationError: null, lastUsedAt: null,
         createdAt: new Date(0), updatedAt: new Date(0),
     } as unknown as ExternalApiKeyRow;
 }

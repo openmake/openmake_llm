@@ -168,8 +168,9 @@ async function tryBuildExternalResolution(
         return `provider '${providerId}' sdkType '${entry.sdkType}' 은 role 실행 미지원 (openai-compatible 만)`;
     }
 
-    const keyRow = await externalKeysRepo.getByUserAndProvider(userId, providerId);
+    const keyRow = await externalKeysRepo.getByUserAndProvider(userId, providerId, { includeDisabled: true });
     if (!keyRow) return `'${providerId}' API 키 미등록`;
+    if (!keyRow.enabled) return `'${providerId}' API 키가 꺼져 있습니다`;
 
     const plaintextKey = await externalKeysRepo.decryptKey(userId, providerId);
     if (!plaintextKey) return `'${providerId}' 키 복호화 실패`;
