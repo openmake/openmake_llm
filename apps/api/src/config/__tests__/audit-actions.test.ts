@@ -60,6 +60,7 @@ describe('audit action registry', () => {
             'security.tool_args_blocked': 'warning',
             'external_key.set': 'info',
             'external_key.delete': 'warning',
+            'external_key.set_enabled': 'info',
             'mcp_server.create': 'info',
             'mcp_server.delete': 'warning',
         }));
