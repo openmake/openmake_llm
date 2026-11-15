@@ -1,0 +1,21 @@
+{"ev":"status","text":"미연결","code":"idle"}
+{"ev":"status","text":"API key 필요 — 앱 설정에서 입력","code":"api_key_required"}
+{"ev":"status","text":"폴더 열기 실패: ENOENT: no such file or directory, lstat '한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시'","code":"folder_open_failed","arg":"ENOENT: no such file or directory, lstat '한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시'"}
+{"ev":"status","folder":"/tmp/한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시","text":"연결 중…","code":"connecting"}
+{"ev":"status","folder":"/tmp/한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시","text":"연결됨: 한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시","code":"connected","arg":"한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시"}
+{"ev":"status","folder":"/tmp/한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시","text":"서버 오류: 한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시","code":"server_error","arg":"한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시"}
+{"ev":"endpoints","bridgeUrl":"http://127.0.0.1:1","webUrl":"http://127.0.0.1:2","discovered":true}
+{"ev":"endpoints","bridgeUrl":"한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시","webUrl":"한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시","discovered":false}
+{"ev":"connected","folder":"/tmp/한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시"}
+{"ev":"disconnected","folder":"/tmp/한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시"}
+{"ev":"confirm","id":1,"command":"한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시","taskId":null,"base":"/tmp/한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시","folder":"/tmp/한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시","sandbox":true}
+{"ev":"confirm","id":9007199254740991,"command":"echo","taskId":"task-0001","base":"/tmp/한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시","folder":"/tmp/한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시","sandbox":false}
+{"ev":"autoApprove","count":0}
+{"ev":"autoApprove","count":3}
+{"ev":"taskEnd","taskId":null,"folder":"/tmp/한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시"}
+{"ev":"taskEnd","taskId":"task-0001","folder":"/tmp/한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시"}
+{"ev":"approvalPending","taskId":"task-0001","toolName":"한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시","folder":"/tmp/한글 \"따옴표\" \\역슬래시\\ \u0001\u001f\t\n\r 이모지😀    /슬래시"}
+{"ev":"browserControl","user":true}
+{"ev":"browserControl","user":false}
+{"ev":"browserStopped"}
+{"bridgeUrl":"http://127.0.0.1:1","webUrl":"http://127.0.0.1:1","discovered":false}

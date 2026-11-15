@@ -46,6 +46,11 @@ import {
 export type { BrowserSpec, BrowserRunOptions, BrowserActionResult, BrowserRunResult } from './local-browser-defs';
 export { BROWSER_USER_CONTROL_ERROR, screenshotName };
 
+/** 정리한 인스턴스로 온 요청(호스트가 끝나는 중) — Chrome 을 띄우지 않는다(Rust 코어와 같은 글자, PR-1.7 리뷰 r1 M-1). */
+export const BROWSER_DISPOSED_ERROR = '브라우저를 정리했습니다 — 호스트가 끝나는 중입니다';
+/** 정리가 진행 중인 연결 시도의 끝을 기다리는 한도 — 시도는 정리 신호로 곧 끊기므로 넉넉한 상한일 뿐이다. */
+const DISPOSE_CONNECT_WAIT_MS = 1000;
+
 export class LocalBrowser {
     private static readonly instances = new Map<string, LocalBrowser>();
 
@@ -68,6 +73,9 @@ export class LocalBrowser {
     private readonly scheduler = new BrowserScheduler();
     /** 진행 중인 연결 — 동시에 들어온 첫 요청들이 Chrome 을 둘 띄우지 않게 공유한다 */
     private connecting: Promise<CdpClient> | null = null;
+    /** 정리됨 — 진행 중인 기동을 끊고 이후 연결은 거부한다(PR-1.7 리뷰 r1 M-1) */
+    private disposed = false;
+    private readonly disposing = new AbortController();
     /** 다운로드 추적 — 대기 폴더·guid 별 저장 함수·귀속(downloads.ts) */
     private readonly downloads: DownloadTracker;
 
@@ -105,8 +113,22 @@ export class LocalBrowser {
         await this.cdp?.send('Target.closeTarget', { targetId: tab.targetId }).catch(() => undefined);
     }
 
-    /** 연결을 닫고, 이 인스턴스가 띄운 Chrome 을 끈다(로그인 정보는 프로필 디렉토리에 남는다). */
+    /**
+     * 연결을 닫고, 이 인스턴스가 띄운 Chrome 을 끈다(로그인 정보는 프로필 디렉토리에 남는다).
+     * 먼저 정리됨 표식을 세운다 — 진행 중인 기동은 끊겨 띄우던 자식이 꺼지고, 그 끝을 상한까지 기다린 뒤 띄운 Chrome 을 끈다.
+     * 이후 이 인스턴스로 온 요청은 Chrome 을 띄우지 않는다.
+     */
     async dispose(): Promise<void> {
+        this.disposed = true;
+        this.disposing.abort();
+        if (this.connecting) {
+            let timer: NodeJS.Timeout | undefined;
+            await Promise.race([
+                this.connecting.catch(() => undefined),
+                new Promise<void>((r) => { timer = setTimeout(r, DISPOSE_CONNECT_WAIT_MS); }),
+            ]);
+            clearTimeout(timer);
+        }
         this.tabs.clear();
         this.cdp?.close();
         this.cdp = null;
@@ -126,6 +148,7 @@ export class LocalBrowser {
     // ── 연결·탭 ────────────────────────────────────────────────
 
     private connect(): Promise<CdpClient> {
+        if (this.disposed) return Promise.reject(new Error(BROWSER_DISPOSED_ERROR));
         if (this.cdp?.isOpen) return Promise.resolve(this.cdp);
         this.connecting ??= this.openConnection().finally(() => { this.connecting = null; });
         return this.connecting;
@@ -142,7 +165,14 @@ export class LocalBrowser {
         if (!cdp) {
             await this.downloads.clear(); // 새로 띄울 때만 — 떠 있는 Chrome 은 받는 중일 수 있다
             await this.downloads.setLaunchDefaults(this.profileDir); // 기본 다운로드 폴더도 대기 폴더로 — 쓰지 못하면 띄우지 않는다
-            const launched = await launchChrome(this.profileDir);
+            const launched = await launchChrome(this.profileDir, this.disposing.signal).catch((e: unknown) => {
+                throw this.disposed ? new Error(BROWSER_DISPOSED_ERROR) : e;
+            });
+            // 정리가 기다림 상한을 넘겨 먼저 끝났으면 상태에 넣지 않고 끈다
+            if (this.disposed) {
+                try { launched.proc.kill(); } catch { /* noop */ }
+                throw new Error(BROWSER_DISPOSED_ERROR);
+            }
             this.proc = launched.proc;
             // 호스트 프로세스가 끝나면 띄운 Chrome 도 끈다 — 자식 프로세스는 저절로 끝나지 않는다.
             const proc = launched.proc;
@@ -154,6 +184,7 @@ export class LocalBrowser {
         cdp.on('Target.targetCreated', (params) => this.onTargetCreated(params));
         // 새 창이 만들어질 때 연 탭을 알려면 필요하다 — 실패하면 새 창의 다운로드를 귀속하지 못해 저장하지 않을 뿐이다
         await cdp.send('Target.setDiscoverTargets', { discover: true }).catch(() => undefined);
+        if (this.disposed) { cdp.close(); throw new Error(BROWSER_DISPOSED_ERROR); }
         this.cdp = cdp;
         return cdp;
     }
