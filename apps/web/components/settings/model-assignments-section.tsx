@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Cpu, Loader2, RotateCcw, Save } from "lucide-react";
 import {
@@ -21,6 +22,7 @@ import type {
 } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { fetchModels, type ModelEntry } from "@/lib/models-api";
+import { useAppStore } from "@/lib/store";
 import {
   DEFAULT_VALUE,
   EMBED_SLOT_ID,
@@ -44,44 +46,31 @@ export function ModelAssignmentsSection({ scope }: { scope: "user" | "global" })
       ? "/api/admin/model-assignments"
       : "/api/users/me/model-assignments";
 
-  const [data, setData] = useState<ModelAssignmentsResponse | null>(null);
-  const [textModels, setTextModels] = useState<ModelEntry[]>([]);
-  const [modalityModels, setModalityModels] = useState<ModelEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busySlot, setBusySlot] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  // 슬롯별 params 초안 — 저장 후 다시 로드하면 dirty 표시가 사라지도록 서버값으로 되돌린다.
-  const [paramDrafts, setParamDrafts] = useState<Record<string, Record<string, string>>>({});
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const currentUserId = useAppStore((st) => st.auth.currentUser?.id ?? null);
+  // 키가 ["models"] 로 시작한다 — 외부 키 토글·삭제·등록의 invalidateQueries(["models"]) 가 배정·목록·effective 를 다시 읽게 한다
+  // (mount 때 한 번만 읽으면 새로고침 전까지 "(목록에 없음)"·키 꺼짐 경고가 남았다)
+  const query = useQuery({
+    queryKey: ["models", "assignments", scope, currentUserId ?? "guest"],
+    queryFn: async () => {
       const [res, usable, all] = await Promise.all([
         ApiClient.get<ApiSuccess<ModelAssignmentsResponse>>(base),
         fetchModels({ usableOnly: true }),
         fetchModels(),
       ]);
-      const payload = res?.data ?? null;
-      setData(payload);
-      const drafts: Record<string, Record<string, string>> = {};
-      for (const a of payload?.assignments ?? []) {
-        drafts[a.slot] = toStringMap(a.params);
-      }
-      setParamDrafts(drafts);
-      setTextModels(usable.models);
-      setModalityModels(all.models);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("loadError"));
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [base, t]);
-
-  useEffect(() => {
-    queueMicrotask(() => void load());
-  }, [load]);
+      return { data: res?.data ?? null, textModels: usable.models, modalityModels: all.models };
+    },
+  });
+  // 다시 읽기가 실패해도 직전 데이터를 유지한다(useQuery 기본) — 첫 읽기만 로딩 표시
+  const data = query.data?.data ?? null;
+  const textModels = query.data?.textModels ?? [];
+  const modalityModels = query.data?.modalityModels ?? [];
+  const loading = query.isLoading;
+  const [busySlot, setBusySlot] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const error = actionError ?? (query.error ? (query.error instanceof Error ? query.error.message : t("loadError")) : null);
+  // 슬롯별 params 초안 — 사용자가 고친 값만 둔다(보여 줄 값 = 초안 ?? 서버 값). 배경 다시 읽기가 입력을 날리지 않고,
+  // 저장 성공 뒤 그 슬롯의 초안만 지운다.
+  const [paramDrafts, setParamDrafts] = useState<Record<string, Record<string, string>>>({});
 
   const assignments = useMemo(
     () => new Map((data?.assignments ?? []).map((a) => [a.slot, a])),
@@ -92,23 +81,33 @@ export function ModelAssignmentsSection({ scope }: { scope: "user" | "global" })
     [data],
   );
 
+  /** 서버 params 위에 사용자가 고친 값을 얹은 화면 값 */
+  function draftFor(slot: string): Record<string, string> {
+    return { ...toStringMap(assignments.get(slot)?.params ?? {}), ...(paramDrafts[slot] ?? {}) };
+  }
+
   /** 슬롯에 모델을 배정(fullId) 하거나 해제(DEFAULT_VALUE)한다. params 는 초안에서 비어있지 않은 값만 보낸다. */
   async function assign(slot: ModelSlotInfo, fullId: string) {
     setBusySlot(slot.id);
-    setError(null);
+    setActionError(null);
     try {
       if (fullId === DEFAULT_VALUE) {
         if (assignments.has(slot.id)) await ApiClient.del(`${base}/${slot.id}`);
       } else {
-        const params = compactParams(paramDrafts[slot.id]);
+        const params = compactParams(draftFor(slot.id));
         await ApiClient.put(`${base}/${slot.id}`, {
           model: fullId,
           ...(params ? { params } : {}),
         });
       }
-      await load();
+      setParamDrafts((d) => {
+        const next = { ...d };
+        delete next[slot.id];
+        return next;
+      });
+      await query.refetch();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("saveFailed"));
+      setActionError(e instanceof Error ? e.message : t("saveFailed"));
     } finally {
       setBusySlot(null);
     }
@@ -167,7 +166,7 @@ export function ModelAssignmentsSection({ scope }: { scope: "user" | "global" })
                       models={slot.kind === "modality" ? modalityModels : textModels}
                       assigned={assignments.get(slot.id)?.fullId ?? DEFAULT_VALUE}
                       eff={effective.get(slot.id)}
-                      draft={paramDrafts[slot.id] ?? {}}
+                      draft={draftFor(slot.id)}
                       saved={toStringMap(assignments.get(slot.id)?.params ?? {})}
                       busy={busySlot === slot.id}
                       disabledAll={busySlot !== null}
