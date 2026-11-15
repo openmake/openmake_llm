@@ -236,3 +236,76 @@ fn stderr_null_is_discarded_and_cwd_is_used() {
         (format!("{}\n", tmp.path), String::new())
     );
 }
+
+/// 프로세스가 아직 있는가(`kill -0` — 신호는 보내지 않는다).
+fn alive(pid: &str) -> bool {
+    std::process::Command::new("/bin/kill")
+        .args(["-0", pid])
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap()
+        .success()
+}
+
+/// 끝난 손자는 init 이 거둘 때까지 좀비로 남아 `kill -0` 에 보인다 — 2초까지 기다린다.
+fn gone_soon(pid: &str) -> bool {
+    let until = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < until {
+        if !alive(pid) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    false
+}
+
+fn first_line(s: &str) -> String {
+    let pid = s.lines().next().unwrap_or_default().to_owned();
+    assert!(
+        !pid.is_empty() && pid.bytes().all(|b| b.is_ascii_digit()),
+        "{s:?}"
+    );
+    pid
+}
+
+/// 코어가 끊은 명령(시간 초과·출력 상한)은 그룹째 끝난다 — 손자가 남지 않는다(설계 D-2).
+#[test]
+fn cut_short_kills_the_whole_group() {
+    let mut s = spec("sleep 30 & echo $!; wait");
+    s.timeout_ms = 300;
+    let (o, _) = go(s);
+    assert!(
+        matches!(o.end, ProcEnd::TimedOut { exited: None }),
+        "{:?}",
+        o.end
+    );
+    let pid = first_line(&o.stdout);
+    assert!(gone_soon(&pid), "시간 초과 뒤 손자 {pid} 가 남았다");
+
+    let mut s = spec("sleep 30 & echo $!; yes | head -c 4096; wait");
+    s.max_buffer = 1024;
+    let (o, _) = go(s);
+    assert!(matches!(o.end, ProcEnd::Overflow), "{:?}", o.end);
+    let pid = first_line(&o.stdout);
+    assert!(gone_soon(&pid), "출력 상한 뒤 손자 {pid} 가 남았다");
+}
+
+/// 직접 자식을 이미 거뒀으면(종료 코드로든 신호로든) 뒤에 남긴 프로세스는 건드리지 않는다(설계 D-2 — 종전 그대로).
+#[test]
+fn reaped_child_leaves_background_alone() {
+    for (cmd, file_code) in [
+        ("sleep 5 & echo $!; exit 3", 3),
+        ("sleep 5 & echo $!; kill -9 $$", 1),
+    ] {
+        let mut s = spec(cmd);
+        s.timeout_ms = 300;
+        let (o, _) = go(s);
+        assert_eq!(o.end.exec_file_code(), file_code, "{cmd}: {:?}", o.end);
+        let pid = first_line(&o.stdout);
+        let still = alive(&pid);
+        let _ = std::process::Command::new("/bin/kill")
+            .args(["-KILL", &pid])
+            .status();
+        assert!(still, "{cmd}: 배경 프로세스 {pid} 가 끝났다");
+    }
+}
