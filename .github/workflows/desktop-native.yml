@@ -81,7 +81,7 @@ jobs:
         run: swift build -c release --package-path apps/desktop-native/OpenMakeCompanion
 
       # ─── Gate 3: .app 조립 + ad-hoc 서명 + dmg ───
-      # build.sh 가 Gate 1·2 를 다시 돌린 뒤 dmg 까지 만든다(이미 빌드돼 있어 빠르다). 서버 게시는 아래 release job → 서버 파이프라인.
+      # build.sh 가 Gate 1-R·1-B·2 를 다시 돌린 뒤 dmg 까지 만든다(이미 빌드돼 있어 빠르다). 서버 게시는 아래 release job → 서버 파이프라인.
       - name: "Gate 3: dmg"
         run: bash apps/desktop-native/build.sh
 
