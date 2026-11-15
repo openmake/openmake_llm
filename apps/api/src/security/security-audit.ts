@@ -26,6 +26,7 @@ export type SecurityAuditAction =
     | 'security.approval_auto_rejected'
     | 'external_key.set'
     | 'external_key.delete'
+    | 'external_key.set_enabled'
     | 'mcp_server.create'
     | 'mcp_server.delete'
     | 'mcp_server.register_denied'

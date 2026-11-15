@@ -38,6 +38,7 @@ function makeKeyRow(overrides: Partial<ExternalApiKeyRow>): ExternalApiKeyRow {
         oauthAccountId: null,
         oauthExpiresAt: null,
         isActive: true,
+        enabled: true,
         lastValidatedAt: null,
         lastValidationOk: null,
         lastValidationError: null,
