@@ -194,6 +194,8 @@ export const CODE_NAV_MAX_PER_FILE = 20;
 export const CODE_NAV_LINE_MAX_CHARS = 300;
 /** 정규식 소스 길이 상한. */
 export const CODE_NAV_PATTERN_MAX_CHARS = 500;
+/** 줄 판정이 엔진 한도(V8 스택)를 넘었을 때의 요청 오류 — Rust 코어 code_nav.rs REGEX_TOO_DEEP 와 같은 글자. */
+export const CODE_NAV_REGEX_TOO_DEEP_ERROR = '정규식 판정이 너무 깊어 중단했습니다 (역추적 한도 초과) — 패턴을 단순하게 바꾸세요';
 /**
  * 탐색에서 제외하는 자격증명 글롭 — 단일 출처는 @openmake/config 의 SENSITIVE_FILE_PATTERNS
  * (서버 approval-gate·셸 폴백과 같은 목록). 승인은 도구 단위라 어떤 파일을 읽을지 사용자에게
