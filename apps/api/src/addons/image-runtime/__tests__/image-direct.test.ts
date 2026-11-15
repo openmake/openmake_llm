@@ -37,7 +37,7 @@ afterAll(() => { global.fetch = realFetch; });
 function deps(capability: 'image.generate' | 'image.edit', fullId: string) {
     return {
         models: { get: jest.fn(async () => ({ scope: 'u1', capability, fullId, params: {}, updatedAt: new Date() })), listGlobal: jest.fn(async () => []) } as unknown as CapabilityModelsRepository,
-        userKeys: { decryptKey: jest.fn(async () => 'byok'), getByUserAndProvider: jest.fn(async () => ({ isActive: true, authMethod: 'api_key', baseUrl: null })) } as unknown as ExternalKeysRepository,
+        userKeys: { decryptKey: jest.fn(async () => 'byok'), getByUserAndProvider: jest.fn(async () => ({ isActive: true, enabled: true, authMethod: 'api_key', baseUrl: null })) } as unknown as ExternalKeysRepository,
         serverKeys: { decryptKey: jest.fn(async () => 'srv'), get: jest.fn(async () => null) } as unknown as ServerExternalKeysRepository,
     };
 }
