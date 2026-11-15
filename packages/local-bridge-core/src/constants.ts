@@ -184,6 +184,13 @@ export const LIST_ALL_MAX = 1000;
  * 전적으로 이 캡이다. 서버(TASK_CODE_NAV)도 같은 축의 캡을 갖지만 디바이스가 자체 강제한다.
  */
 export const CODE_NAV_TIMEOUT_MS = Number(process.env.OMK_BRIDGE_CODE_NAV_TIMEOUT_MS || 15000);
+/**
+ * 실제로 쓰는 code_nav 예산 — 설정한 값(위 상수)은 상한이고, 감싼 관문 제한(FS_OP_TIMEOUT_MS)의 4/5 이하로 묶는다.
+ * 예산이 관문보다 늦게 끝나면 잘린 결과 대신 관문 오류가 먼저 나간다(설계 2026-11-15 D-3). 기본값은 12000ms.
+ */
+export function codeNavBudgetMs(configured: number, gateMs: number): number {
+    return Math.min(configured, Math.floor((gateMs * 4) / 5));
+}
 /** 1회 요청에서 훑을 최대 파일 수(대형 레포 보호). 초과하면 truncated. */
 export const CODE_NAV_MAX_FILES = 4000;
 /** 내용을 읽을 파일 크기 상한 — 초과 파일은 건너뛴다(번들·미니파이·데이터 덤프). */
