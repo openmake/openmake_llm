@@ -41,7 +41,7 @@ function deps(capability: 'image.generate' | 'image.edit', fullId: string, keys:
     const row = { scope: server ? 'global' : 'u1', capability, fullId, params: {}, updatedAt: new Date() };
     return {
         models: { get: jest.fn(async () => (server ? null : row)), listGlobal: jest.fn(async () => (server ? [row] : [])) } as unknown as CapabilityModelsRepository,
-        userKeys: { decryptKey: jest.fn(async () => 'byok'), getByUserAndProvider: jest.fn(async () => ({ isActive: true, authMethod: 'api_key', baseUrl: keys.userBaseUrl ?? null })) } as unknown as ExternalKeysRepository,
+        userKeys: { decryptKey: jest.fn(async () => 'byok'), getByUserAndProvider: jest.fn(async () => ({ isActive: true, enabled: true, authMethod: 'api_key', baseUrl: keys.userBaseUrl ?? null })) } as unknown as ExternalKeysRepository,
         serverKeys: {
             decryptKey: jest.fn(async () => 'srv'),
             get: jest.fn(async () => (server ? { isActive: true, baseUrl: keys.serverBaseUrl, dailyTokenLimit: null, monthlyTokenLimit: null } : null)),

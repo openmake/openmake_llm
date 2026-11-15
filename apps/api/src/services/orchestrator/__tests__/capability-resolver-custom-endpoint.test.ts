@@ -34,7 +34,7 @@ function deps(o: { user?: CapabilityModelRow | null; global?: CapabilityModelRow
     } as unknown as CapabilityModelsRepository;
     const userKeys = {
         decryptKey: jest.fn(async () => 'byok'),
-        getByUserAndProvider: jest.fn(async () => ({ isActive: true, authMethod: 'api_key', baseUrl: o.userBaseUrl ?? null })),
+        getByUserAndProvider: jest.fn(async () => ({ isActive: true, enabled: true, authMethod: 'api_key', baseUrl: o.userBaseUrl ?? null })),
     } as unknown as ExternalKeysRepository;
     const serverKeys = {
         decryptKey: jest.fn(async () => 'srv'),

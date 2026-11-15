@@ -32,6 +32,16 @@ const logger = createLogger('ExternalKeysRepo');
 
 export type { ExternalSdkType, ExternalAuthMethod, ExternalApiKeyRow } from './external-keys-row';
 
+/** listByUser·getByUserAndProvider 옵션 — 기본은 켜진 키만 */
+export interface ListExternalKeysOptions {
+    /** true 면 꺼진(enabled=FALSE) 키도 포함한다. 삭제된(is_active=FALSE) 키는 언제나 빠진다 */
+    includeDisabled?: boolean;
+}
+
+function enabledFilter(opts?: ListExternalKeysOptions): string {
+    return opts?.includeDisabled ? '' : ' AND enabled = TRUE';
+}
+
 export class ExternalKeysRepository extends BaseRepository {
     /**
      * 사용자의 provider별 API 키를 등록 또는 갱신합니다.
@@ -62,6 +72,7 @@ export class ExternalKeysRepository extends BaseRepository {
                 oauth_account_id = EXCLUDED.oauth_account_id,
                 oauth_expires_at = EXCLUDED.oauth_expires_at,
                 is_active = TRUE,
+                enabled = TRUE,
                 last_validated_at = NULL,
                 last_validation_ok = NULL,
                 last_validation_error = NULL,
@@ -90,11 +101,14 @@ export class ExternalKeysRepository extends BaseRepository {
 
     /**
      * 사용자가 등록한 모든 provider 키 목록 (평문 미반환)
+     *
+     * 기본은 켜진 키만(fail-closed) — 꺼진 키는 삭제한 키처럼 빠진다. 관리 화면처럼 꺼진 키도
+     * 보여야 하는 곳만 `includeDisabled: true` 를 넘긴다(마이그레이션 199).
      */
-    async listByUser(userId: string): Promise<ExternalApiKeyRow[]> {
+    async listByUser(userId: string, opts?: ListExternalKeysOptions): Promise<ExternalApiKeyRow[]> {
         const result = await this.query<DbRow>(
             `SELECT * FROM user_external_api_keys
-             WHERE user_id = $1 AND is_active = TRUE
+             WHERE user_id = $1 AND is_active = TRUE${enabledFilter(opts)}
              ORDER BY provider_id ASC`,
             [userId],
         );
@@ -103,14 +117,17 @@ export class ExternalKeysRepository extends BaseRepository {
 
     /**
      * 특정 (user, provider) 쌍의 키 메타데이터 조회 (평문 미반환)
+     *
+     * 기본은 켜진 키만 — `includeDisabled: true` 면 꺼진 키도 돌려준다(listByUser 와 같은 규칙).
      */
     async getByUserAndProvider(
         userId: string,
         providerId: string,
+        opts?: ListExternalKeysOptions,
     ): Promise<ExternalApiKeyRow | null> {
         const result = await this.query<DbRow>(
             `SELECT * FROM user_external_api_keys
-             WHERE user_id = $1 AND provider_id = $2 AND is_active = TRUE`,
+             WHERE user_id = $1 AND provider_id = $2 AND is_active = TRUE${enabledFilter(opts)}`,
             [userId, providerId],
         );
         const row = result.rows[0];
@@ -121,12 +138,14 @@ export class ExternalKeysRepository extends BaseRepository {
      * 평문 API 키 복호화 — provider 호출 직전에만 사용해야 합니다.
      * 호출 결과는 메모리 외부로 유출되지 않도록 주의 (로그/에러 메시지 금지).
      *
-     * @returns 평문 키 또는 null (키 미등록 / 비활성)
+     * 꺼진 키는 옵션 없이 항상 null — 모든 실행 경로가 평문 키를 거치므로 마지막 방어선이다.
+     *
+     * @returns 평문 키 또는 null (키 미등록 / 삭제 / 꺼짐)
      */
     async decryptKey(userId: string, providerId: string): Promise<string | null> {
         const result = await this.query<DbRow>(
             `SELECT encrypted_key FROM user_external_api_keys
-             WHERE user_id = $1 AND provider_id = $2 AND is_active = TRUE`,
+             WHERE user_id = $1 AND provider_id = $2 AND is_active = TRUE AND enabled = TRUE`,
             [userId, providerId],
         );
         const row = result.rows[0];
@@ -143,7 +162,29 @@ export class ExternalKeysRepository extends BaseRepository {
     }
 
     /**
+     * 키 켜기·끄기 — 키·이름·base URL·검증 기록·모델 캐시는 그대로 둔다(마이그레이션 199).
+     * 같은 값으로 다시 불러도 같은 행을 돌려준다(멱등).
+     *
+     * @returns 갱신된 행, 삭제된 행·없는 행이면 null
+     */
+    async setEnabled(userId: string, providerId: string, enabled: boolean): Promise<ExternalApiKeyRow | null> {
+        const result = await this.query<DbRow>(
+            `UPDATE user_external_api_keys
+             SET enabled = $3, updated_at = now()
+             WHERE user_id = $1 AND provider_id = $2 AND is_active = TRUE
+             RETURNING *`,
+            [userId, providerId, enabled],
+        );
+        const row = result.rows[0];
+        if (!row) return null;
+        logger.info(`외부 키 ${enabled ? '켜기' : '끄기'}: user=${userId} provider=${providerId}`);
+        return toRow(row);
+    }
+
+    /**
      * OAuth 세션 갱신 (refresh token rotate) 후 암호화 페이로드·만료 메타를 갱신합니다.
+     * enabled 조건을 넣지 않는다 — 진행 중 요청이 돌린 refresh token 이 꺼진 뒤에도 저장돼야
+     * 다시 켰을 때 세션이 깨지지 않는다.
      * 평문 세션 JSON 은 즉시 암호화되며 로그에 남기지 않습니다.
      */
     async updateOAuthSession(

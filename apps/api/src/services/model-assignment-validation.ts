@@ -41,9 +41,9 @@ async function validateExternalAssignment(userId: string, fullId: string): Promi
     }
 
     const keysRepo = new ExternalKeysRepository(getPool());
-    const keyRow = await keysRepo.getByUserAndProvider(userId, providerId);
+    const keyRow = await keysRepo.getByUserAndProvider(userId, providerId, { includeDisabled: true });
     if (!keyRow) return `'${providerId}' API 키를 먼저 등록하세요`;
-    if (!keyRow.isActive) return `'${providerId}' API 키가 비활성 상태입니다`;
+    if (!keyRow.enabled) return `'${providerId}' API 키가 꺼져 있습니다`;
 
     // 실호출 probe — /models 카탈로그에 있어도 계정별로 추론이 404/403 인 모델이 있다
     // (NVIDIA 무료티어 등). 실제 역할 수행 불가 모델을 배정 시점에 거부한다.

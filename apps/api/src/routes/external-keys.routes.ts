@@ -14,6 +14,7 @@
  * 라우트:
  *   - GET    /api/external-keys                    — 카탈로그 + 사용자 등록 키 목록
  *   - POST   /api/external-keys/:providerId        — 키 등록/갱신 (upsert)
+ *   - PATCH  /api/external-keys/:providerId        — 키 켜기·끄기 (지우지 않음)
  *   - DELETE /api/external-keys/:providerId        — 키 비활성화 (소프트 삭제)
  *   - POST   /api/external-keys/:providerId/validate — 키 검증 (Phase 3+ 구현)
  *
@@ -81,6 +82,8 @@ const upsertKeySchema = z.object({
     api_key: z.string().min(8).max(512),
 });
 
+const setEnabledSchema = z.object({ enabled: z.boolean() }).strict();
+
 router.get('/',
     requireAuth,
     asyncHandler(async (req: Request, res: Response) => {
@@ -90,7 +93,8 @@ router.get('/',
             return;
         }
 
-        const userKeys = await getRepo().listByUser(userId);
+        // 관리 화면 — 꺼진 키도 "꺼짐" 으로 보여야 한다
+        const userKeys = await getRepo().listByUser(userId, { includeDisabled: true });
         const userKeysByProvider = new Map(userKeys.map((k) => [k.providerId, k]));
 
         const catalog = EXTERNAL_PROVIDER_CATALOG.map((entry) => {
@@ -119,6 +123,8 @@ router.get('/',
                           last_validation_ok: userKey.lastValidationOk,
                           last_validation_error: userKey.lastValidationError,
                           last_used_at: userKey.lastUsedAt,
+                          // 사용자 켜기·끄기 — provider 수준 enabled(카탈로그 값)와 다르다
+                          enabled: userKey.enabled,
                           created_at: userKey.createdAt,
                           updated_at: userKey.updatedAt,
                       }
@@ -272,6 +278,32 @@ router.post('/:providerId',
                 validation_error: validationError,
             }),
         );
+    }),
+);
+
+// 켜기·끄기 — 키·검증 기록·모델 캐시는 그대로 둔다. 꺼진 키는 다음 키 해석부터 삭제한 키처럼 쓰이지 않는다.
+router.patch('/:providerId',
+    requireAuth,
+    validate(setEnabledSchema),
+    asyncHandler(async (req: Request, res: Response) => {
+        const userId = getUserId(req);
+        if (!userId) {
+            res.status(401).json(unauthorized('User ID not found.'));
+            return;
+        }
+
+        const providerId = req.params.providerId;
+        const enabled: boolean = req.body.enabled;
+        const row = await getRepo().setEnabled(userId, providerId, enabled);
+        if (!row) {
+            res.status(404).json(notFound('Key not found or already inactive'));
+            return;
+        }
+        void auditSecurityEvent({
+            action: 'external_key.set_enabled', userId, resourceType: 'external_key', resourceId: providerId,
+            details: { providerId, enabled }, ipAddress: req.ip, userAgent: req.get('user-agent'),
+        });
+        res.json(success({ provider_id: providerId, enabled: row.enabled }));
     }),
 );
 

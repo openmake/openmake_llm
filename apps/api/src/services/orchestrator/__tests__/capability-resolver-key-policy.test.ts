@@ -26,7 +26,7 @@ function deps(o: { global?: CapabilityModelRow[]; userKey?: string | null; keyRo
     } as unknown as CapabilityModelsRepository;
     const userKeys = {
         decryptKey: jest.fn(async () => o.userKey ?? null),
-        getByUserAndProvider: jest.fn(async () => o.keyRow !== undefined ? o.keyRow : (o.userKey ? { isActive: true, authMethod: 'api_key', baseUrl: null } : null)),
+        getByUserAndProvider: jest.fn(async () => o.keyRow !== undefined ? o.keyRow : (o.userKey ? { isActive: true, enabled: true, authMethod: 'api_key', baseUrl: null } : null)),
     } as unknown as ExternalKeysRepository;
     const serverKeys = {
         decryptKey: jest.fn(async () => o.serverKey ?? null),
@@ -63,7 +63,17 @@ describe('resolveCapabilityTarget — text.embed actor-byok', () => {
     it('사용자 키 누락·OAuth 는 서버 키로 바꾸지 않고 명시 실패', async () => {
         const g = [row('__global__', 'text.embed', 'openrouter:emb-1')];
         await expect(resolveCapabilityTarget('text.embed', 'u1', deps({ global: g, keyRow: null, serverKey: 'srv' }))).rejects.toMatchObject({ code: 'CAPABILITY_KEY_MISSING' });
-        await expect(resolveCapabilityTarget('text.embed', 'u1', deps({ global: g, keyRow: { isActive: true, authMethod: 'oauth' } }))).rejects.toMatchObject({ code: 'CAPABILITY_PROVIDER_NOT_GATEWAY' });
+        await expect(resolveCapabilityTarget('text.embed', 'u1', deps({ global: g, keyRow: { isActive: true, enabled: true, authMethod: 'oauth' } }))).rejects.toMatchObject({ code: 'CAPABILITY_PROVIDER_NOT_GATEWAY' });
+    });
+
+    it('사용자 키가 꺼져 있으면 CAPABILITY_KEY_INACTIVE — 서버 키로 바꾸지 않고 복호화하지 않는다', async () => {
+        const g = [row('__global__', 'text.embed', 'openrouter:emb-1')];
+        const d = deps({ global: g, keyRow: { isActive: true, enabled: false, authMethod: 'api_key', baseUrl: null }, serverKey: 'srv' });
+        await expect(resolveCapabilityTarget('text.embed', 'u1', d)).rejects.toMatchObject({ code: 'CAPABILITY_KEY_INACTIVE', message: expect.stringContaining("'openrouter' API 키가 꺼져 있어") });
+        expect(d.userKeys.getByUserAndProvider).toHaveBeenCalledWith('u1', 'openrouter', { includeDisabled: true });
+        expect(d.userKeys.decryptKey).not.toHaveBeenCalled();
+        expect(d.serverKeys.decryptKey).not.toHaveBeenCalled();
+        expect(await checkCapabilityTargetAvailability('text.embed', 'openrouter:emb-1', 'u1', d)).toMatchObject({ ok: false, code: 'CAPABILITY_KEY_INACTIVE' });
     });
 
     it('개인 외부 배정이 전역 배정보다 우선 → 사용자 키, source user', async () => {
@@ -137,6 +147,12 @@ describe('validateCapabilityAssignment — text.embed 전역은 서버 키 검�
         expect(await validateCapabilityAssignment('__global__', 'nvidia:emb', deps(), 'text.embed')).toMatch(/LLM_GATEWAY_PROVIDERS/);
     });
 
+    it('사용자 scope 배정 — 꺼진 키는 "꺼져 있습니다 — 켠 뒤 배정하세요" 로 거부', async () => {
+        const d = deps({ keyRow: { isActive: true, enabled: false, authMethod: 'api_key', baseUrl: null } });
+        expect(await validateCapabilityAssignment('u1', 'openrouter:emb-1', d, 'text.embed')).toBe("'openrouter' API 키가 꺼져 있습니다 — 켠 뒤 배정하세요");
+        expect(d.userKeys.getByUserAndProvider).toHaveBeenCalledWith('u1', 'openrouter', { includeDisabled: true });
+    });
+
     it('사용자 scope text.embed 는 종전처럼 사용자 키 필요', async () => {
         expect(await validateCapabilityAssignment('u1', 'openrouter:emb-1', deps({ keyRow: null }), 'text.embed')).toMatch(/키를 먼저 등록/);
         expect(await validateCapabilityAssignment('u1', 'openrouter:emb-1', deps({ userKey: 'k' }), 'text.embed')).toBeNull();
@@ -154,7 +170,7 @@ describe('checkCapabilityTargetAvailability — 복호화 없는 상태 검사',
     it('키 누락·OAuth·사용자 문맥 없음·게이트웨이 미편입은 코드와 문구로', async () => {
         const check = (fullId: string, userId: string | undefined, d: ReturnType<typeof deps>) => checkCapabilityTargetAvailability('text.embed', fullId, userId, d);
         expect(await check('openrouter:emb-1', 'u1', deps({ keyRow: null }))).toMatchObject({ ok: false, code: 'CAPABILITY_KEY_MISSING' });
-        expect(await check('openrouter:emb-1', 'u1', deps({ keyRow: { isActive: true, authMethod: 'oauth' } }))).toMatchObject({ ok: false, code: 'CAPABILITY_PROVIDER_NOT_GATEWAY' });
+        expect(await check('openrouter:emb-1', 'u1', deps({ keyRow: { isActive: true, enabled: true, authMethod: 'oauth' } }))).toMatchObject({ ok: false, code: 'CAPABILITY_PROVIDER_NOT_GATEWAY' });
         expect(await check('openrouter:emb-1', undefined, deps({ serverKey: 'srv' }))).toMatchObject({ ok: false, code: 'CAPABILITY_KEY_MISSING' });
         expect(await check('nvidia:emb', 'u1', deps({ userKey: 'k' }))).toMatchObject({ ok: false, code: 'CAPABILITY_PROVIDER_NOT_GATEWAY' });
         const r = await check('openrouter:emb-1', 'u1', deps({ keyRow: null }));

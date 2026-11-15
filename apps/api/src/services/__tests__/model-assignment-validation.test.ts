@@ -9,6 +9,10 @@ jest.mock('../../llm', () => ({
     createClient: () => ({ listModels }),
 }));
 jest.mock('../../data/models/unified-database', () => ({ getPool: () => ({}) }));
+const keysRepo = { getByUserAndProvider: jest.fn(), decryptKey: jest.fn() };
+jest.mock('../../data/repositories/external-keys-repo', () => ({
+    ExternalKeysRepository: jest.fn().mockImplementation(() => keysRepo),
+}));
 
 import { validateModelAssignment } from '../model-assignment-validation';
 
@@ -38,5 +42,21 @@ describe('validateModelAssignment — 로컬 태그', () => {
     it('LLM 서버 무응답이면 fail-open', async () => {
         listModels.mockRejectedValue(new Error('ECONNREFUSED'));
         expect(await validateModelAssignment('3', 'local-llm:anything')).toBeNull();
+    });
+});
+
+describe('validateModelAssignment — 외부 키 켜짐 여부', () => {
+    beforeEach(() => { keysRepo.getByUserAndProvider.mockReset(); keysRepo.decryptKey.mockReset(); });
+
+    it('꺼진 키 → "꺼져 있습니다" 로 거부, 복호화·실호출하지 않는다', async () => {
+        keysRepo.getByUserAndProvider.mockResolvedValue({ isActive: true, enabled: false, authMethod: 'api_key', baseUrl: null });
+        expect(await validateModelAssignment('3', 'gemini:gemini-x')).toBe("'gemini' API 키가 꺼져 있습니다");
+        expect(keysRepo.getByUserAndProvider).toHaveBeenCalledWith('3', 'gemini', { includeDisabled: true });
+        expect(keysRepo.decryptKey).not.toHaveBeenCalled();
+    });
+
+    it('미등록 키 → 종전 문구', async () => {
+        keysRepo.getByUserAndProvider.mockResolvedValue(null);
+        expect(await validateModelAssignment('3', 'gemini:gemini-x')).toBe("'gemini' API 키를 먼저 등록하세요");
     });
 });

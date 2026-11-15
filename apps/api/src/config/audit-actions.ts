@@ -152,9 +152,10 @@ const BASE_AUDIT_ACTION_SEVERITY = {
     'security.ssrf_blocked': 'warning',
     'security.tool_args_blocked': 'warning',
     'security.approval_auto_rejected': null,
-    // BYOK 외부 키 등록·삭제
+    // BYOK 외부 키 등록·삭제·켜고 끄기
     'external_key.set': 'info',
     'external_key.delete': 'warning',
+    'external_key.set_enabled': 'info',
     // MCP 서버 등록·삭제와 등록 거부
     'mcp_server.create': 'info',
     'mcp_server.delete': 'warning',

@@ -43,6 +43,7 @@ function makeKeyRow(overrides: Partial<ExternalApiKeyRow> = {}): ExternalApiKeyR
         oauthAccountId: null,
         oauthExpiresAt: null,
         isActive: true,
+        enabled: true,
         lastValidatedAt: null,
         lastValidationOk: null,
         lastValidationError: null,
@@ -162,6 +163,21 @@ describe('resolveRoleClient — 3단 폴백', () => {
         expect(r.providerId).toBe('local-llm');
         expect(r.modelId).toBe('qwen3.6-35b-a3b');
         expect(r.degraded).toMatch(/키 미등록/);
+    });
+
+    it('외부 매핑 + 꺼진 키 → 삭제한 키처럼 로컬 폴백 + "꺼져 있습니다" 사유, 복호화하지 않음', async () => {
+        const repo = makeRepo({
+            getByUserAndProvider: jest.fn().mockResolvedValue(makeKeyRow({ enabled: false })),
+        } as Partial<ExternalKeysRepository>);
+        const r = await resolveRoleClient('judge', {
+            userId: 'u1',
+            userMappingLookup: makeLookup('openrouter:openai/gpt-5'),
+            externalKeysRepo: repo,
+        });
+        expect(r.providerId).toBe('local-llm');
+        expect(r.degraded).toMatch(/'openrouter' API 키가 꺼져 있습니다/);
+        expect(repo.getByUserAndProvider).toHaveBeenCalledWith('u1', 'openrouter', { includeDisabled: true });
+        expect(repo.decryptKey).not.toHaveBeenCalled();
     });
 
     it('외부 매핑 + 키 복호화 실패 → 폴백', async () => {
