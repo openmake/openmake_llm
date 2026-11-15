@@ -6,7 +6,7 @@
 import { Request, Response } from 'express';
 import { realpath } from 'fs/promises';
 import { basename, relative } from 'path';
-import { badRequest, notFound } from '../utils/api-response';
+import { badRequest, notFound, error } from '../utils/api-response';
 import { safeRealWorkspacePath } from '../services/task-sandbox/sandbox';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { getPool, getUnifiedDatabase } from '../data/models/unified-database';
@@ -55,8 +55,13 @@ export async function sendWorkspaceFile(res: Response, wp: string, rel: string):
     // root 를 주고 workspace 상대경로로 넘긴다 — root 없이 절대경로를 넘기면 send 가 경로의 모든 조각에서
     // 점 파일을 찾아, 설치본의 workspace 조상 폴더(`~/.openmake/…`) 때문에 모든 파일이 404 가 된다.
     const root = await realpath(wp);
-    res.download(relative(root, abs), basename(rel), { root }, (err) => {
-        if (err && !res.headersSent) res.status(404).json(notFound('파일을 찾을 수 없습니다.'));
+    res.download(relative(root, abs), basename(rel), { root }, (err: (Error & { status?: number }) | undefined) => {
+        if (!err || res.headersSent) return;
+        // send 가 먼저 넣은 파일용 헤더를 지워 JSON 오류 응답에 남지 않게 하고, 416·412 등 send 의 상태 코드는 유지한다.
+        for (const h of ['Content-Disposition', 'Content-Type', 'Content-Range']) res.removeHeader(h);
+        const status = err.status ?? 404;
+        if (status === 404) res.status(404).json(notFound('파일을 찾을 수 없습니다.'));
+        else res.status(status).json(error(`HTTP_${status}`, '파일을 내려보낼 수 없습니다.'));
     });
 }
 
