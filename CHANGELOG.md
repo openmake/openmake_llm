@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.138.1](https://github.com/openmake/openmake_llm/compare/v1.138.0...v1.138.1) (2026-11-15)
+
+
+### 🐛 버그 수정
+
+* **api:** 데스크톱 설치 파일 내려받기 — 점 폴더 404·JSON content-type ([8729ffb](https://github.com/openmake/openmake_llm/commit/8729ffbc34bf471d38aba0fac62d5be356f716e1))
+* **api:** 데스크톱 설치 파일 내려받기 — 점 폴더 404·JSON content-type·오류 상태 코드 ([d6c6ac8](https://github.com/openmake/openmake_llm/commit/d6c6ac8e875deeebd626f6173f663675227e2610))
+* **api:** 파일 내려받기 오류 응답 — send 상태 코드 유지·파일 헤더 제거 ([06282ab](https://github.com/openmake/openmake_llm/commit/06282ab7e0db1d6edb37098e63dd0587a4bb754e))
+
 ## [1.138.0](https://github.com/openmake/openmake_llm/compare/v1.137.0...v1.138.0) (2026-11-15)
 
 
