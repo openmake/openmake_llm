@@ -21,7 +21,7 @@ use crate::js_text::{js_trim, utf16_cmp, utf16_prefix};
 use crate::msg::{BridgeMsg, CodeNavResult};
 use crate::node_path;
 
-/// 판정이 역추적 스택 상한을 넘었을 때의 요청 오류(TS 는 같은 자리에서 `RangeError` 로 요청 오류).
+/// 판정이 역추적 스택 상한을 넘었을 때의 요청 오류(TS 는 같은 자리의 스택 초과를 같은 문구로 답한다 — fixture `grep-regex-too-deep`).
 const REGEX_TOO_DEEP: &str =
     "정규식 판정이 너무 깊어 중단했습니다 (역추적 한도 초과) — 패턴을 단순하게 바꾸세요";
 
