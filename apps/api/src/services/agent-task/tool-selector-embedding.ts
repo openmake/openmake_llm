@@ -13,6 +13,7 @@
 import OpenAI from 'openai';
 import type { ToolDefinition } from '../../llm/types';
 import { getConfig } from '../../config/env';
+import { GATEWAY_NO_RETRY_HEADERS } from '../../llm/gateway-headers';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { selectRelevantTools, type SelectToolsOptions } from './tool-selector';
 import { recordCost } from '../cost/cost-ledger-service';
@@ -25,7 +26,8 @@ const vecCache = new Map<string, { desc: string; vec: number[] }>();
 
 async function embedBatch(texts: string[]): Promise<number[][]> {
     const cfg = getConfig();
-    const client = new OpenAI({ baseURL: cfg.llmBaseUrl, apiKey: cfg.llmApiKey });
+    // 기한(Promise.race) 뒤엔 키워드 폴백으로 넘어가는 호출이라 재시도 층을 두지 않는다(앱 SDK 0 + 게이트웨이 Router 0).
+    const client = new OpenAI({ baseURL: cfg.llmBaseUrl, apiKey: cfg.llmApiKey, maxRetries: 0, defaultHeaders: { ...GATEWAY_NO_RETRY_HEADERS } });
     const res = await client.embeddings.create({ model: cfg.searchRerankEmbedModel, input: texts });
     return res.data.map((d) => d.embedding as number[]);
 }

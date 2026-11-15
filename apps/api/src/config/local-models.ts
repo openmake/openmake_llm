@@ -36,6 +36,7 @@ import { createLogger } from '../utils/logger';
 import { MODEL_PROBE } from './model-defaults';
 import { fetchGatewayModelInfo, selectLocalEntriesFromModelInfo } from './local-models-discovery';
 import { resolveLocalModelId } from './local-model-alias';
+import { GATEWAY_NO_RETRY_HEADERS } from '../llm/gateway-headers';
 
 const logger = createLogger('LocalModels');
 
@@ -196,6 +197,11 @@ export function getLocalChatModels(opts: { includeUnavailable?: boolean } = {}):
     });
 }
 
+/** 모델 호출 probe 요청 헤더 — 게이트웨이 Router 재시도를 끈다(probe 실패 한 번이 upstream 여러 번이 되지 않게). */
+function probeHeaders(apiKey: string | undefined): Record<string, string> {
+    return { 'Content-Type': 'application/json', ...GATEWAY_NO_RETRY_HEADERS, ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) };
+}
+
 /**
  * 단일 chat 모델 connectivity ping — 1 token completion 호출.
  * 200 응답 + completion content/reasoning 있으면 가용.
@@ -236,10 +242,7 @@ async function probeContextLength(
     try {
         const res = await fetch(baseUrl.replace(/\/$/, '') + '/v1/chat/completions', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-            },
+            headers: probeHeaders(apiKey),
             body: JSON.stringify({
                 model: modelId,
                 messages: [{ role: 'user', content: 'hi' }],
@@ -290,10 +293,7 @@ async function probeToolCalling(
     try {
         const res = await fetch(baseUrl.replace(/\/$/, '') + '/v1/chat/completions', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-            },
+            headers: probeHeaders(apiKey),
             body: JSON.stringify({
                 model: modelId,
                 messages: [{ role: 'user', content: 'hi' }],
@@ -327,10 +327,7 @@ async function pingChatModel(
     try {
         const res = await fetch(baseUrl.replace(/\/$/, '') + '/v1/chat/completions', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-            },
+            headers: probeHeaders(apiKey),
             body: JSON.stringify({
                 model: modelId,
                 messages: [{ role: 'user', content: 'hi' }],
@@ -367,10 +364,7 @@ async function pingEmbeddingModel(
     try {
         const res = await fetch(baseUrl.replace(/\/$/, '') + '/v1/embeddings', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-            },
+            headers: probeHeaders(apiKey),
             body: JSON.stringify({ model: modelId, input: 'hi' }),
             signal: controller.signal,
         });
