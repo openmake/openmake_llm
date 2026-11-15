@@ -1,6 +1,6 @@
 //! ReDoS 가두기(D-62) — grep 판정은 한도를 둔 엔진(regress 사본, `vendor/regress/OMK-PATCHES.md`)으로 돌아
 //! 한 줄 안에서도 시간 예산(잘림)과 역추적 스택 상한(요청 오류)에 멈춘다. 그래서 code_nav 전용 관문(2칸)의 스레드가
-//! 묶인 채 남지 않는다 — 관문 시간 제한이 먼저 답한 경우에도 판정 스레드는 예산 시각(늦어도 0.2초 안팎)에 칸을 돌려준다.
+//! 묶인 채 남지 않는다 — 실제 예산은 관문 시간 제한의 4/5 이하라(D-3) 판정 스레드는 관문보다 먼저 예산 시각에 칸을 돌려준다.
 //! 시나리오마다 판정이 예산 동안 CPU 코어 하나를 쓰므로 시간 단언이 서로 끼어들지 않게 한 테스트 안에서 차례로 돈다.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -84,15 +84,14 @@ fn deep_nesting_is_a_request_error() {
     assert_eq!(send(&rt, &c, &grep("world")), world());
 }
 
-/// ③ 관문 500ms·예산 2000ms: 관문이 먼저 시간 초과로 답해도, 예산이 지나면 두 칸 모두 풀려 동시 두 요청이 정상이다.
-fn gate_answers_first_and_threads_still_free_at_budget() {
+/// ③ 관문 500ms·설정 예산 2000ms: 실제 예산은 관문의 4/5(400ms)로 묶인다(설계 2026-11-15 D-3) — 끝나지 않는 판정 둘은
+/// 관문 오류가 아니라 잘림(`truncated`)으로 관문보다 먼저 답하고, 두 칸이 풀려 뒤이은 동시 두 요청이 정상이다.
+/// (옛 성질 "관문이 먼저 답해도 스레드는 예산에 풀린다"는 예산 > 관문을 공개 API 로 만들 수 없어 닿지 않게 됐다.)
+fn budget_answers_before_gate_and_frees_both_permits() {
     let tmp = TmpDir::new();
     let c = Arc::new(core(&evil_folder(&tmp), 500, 2_000));
     let rt = support::runtime();
-    let timeout = json!({
-        "ok": false,
-        "error": "code_nav 시간 초과 (1s) — 폴더 접근이 차단됐을 수 있습니다(디스크 접근 권한 확인)"
-    });
+    let cut = json!({"ok": true, "codeNav": {"matches": [], "truncated": true}});
     // 같은 요청 둘을 동시에 보내고 두 답을 받는다.
     let pair = |pattern: &str| {
         let m = grep(pattern);
@@ -104,11 +103,9 @@ fn gate_answers_first_and_threads_still_free_at_budget() {
             (a.await.unwrap(), b.await.unwrap())
         })
     };
-    let t = Instant::now();
-    // 두 칸을 모두 끝나지 않는 판정으로 — 관문 시간 제한(500ms → 문구는 Math.round 로 1s)에 답한다.
-    assert_eq!(pair("(a+)+$"), (timeout.clone(), timeout));
-    // 예산(2초) 시각이 지나도록 기다린 뒤 — 묶인 스레드가 남았다면 두 요청 모두 관문 시간 초과다.
-    std::thread::sleep(Duration::from_millis(2_500).saturating_sub(t.elapsed()));
+    // 두 칸을 모두 끝나지 않는 판정으로 — 예산(400ms)에 잘려 답한다(관문 500ms 가 먼저였다면 시간 초과 오류다).
+    assert_eq!(pair("(a+)+$"), (cut.clone(), cut));
+    // 묶인 스레드가 남았다면 두 요청 모두 관문 시간 초과다.
     assert_eq!(pair("world"), (world(), world()));
 }
 
@@ -171,5 +168,5 @@ fn code_nav_gate_contains_slow_matches() {
     waiting_for_a_permit_counts_toward_the_budget();
     endless_match_stops_at_budget_and_returns_the_permit();
     deep_nesting_is_a_request_error();
-    gate_answers_first_and_threads_still_free_at_budget();
+    budget_answers_before_gate_and_frees_both_permits();
 }

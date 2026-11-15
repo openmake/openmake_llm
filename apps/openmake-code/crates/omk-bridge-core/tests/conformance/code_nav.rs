@@ -5,7 +5,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use omk_bridge_core::code_nav::{is_secret_file, walk_files};
-use omk_bridge_core::constants::{CODE_NAV_EXCLUDED_DIRS, CODE_NAV_EXCLUDED_FILES};
+use omk_bridge_core::constants::{
+    CODE_NAV_EXCLUDED_DIRS, CODE_NAV_EXCLUDED_FILES, code_nav_budget_ms,
+};
 use omk_bridge_core::core::{BridgeCore, BridgeCoreOptions};
 use omk_bridge_core::exec::{ConfirmAnswer, ConfirmFn, ConfirmRequest};
 use omk_bridge_core::glob::Glob;
@@ -163,6 +165,7 @@ fn tools_fixture_shapes() {
         "secretFiles",
         "excludedFiles",
         "excludedDirs",
+        "budget",
     ];
     shape(&doc, &top, &[], "code-nav");
     shape_core_cases(&doc, "code-nav");
@@ -186,6 +189,11 @@ fn tools_fixture_shapes() {
     }
     non_empty(&doc["excludedFiles"], "code-nav/excludedFiles");
     non_empty(&doc["excludedDirs"], "code-nav/excludedDirs");
+    for c in non_empty(&doc["budget"], "code-nav/budget") {
+        shape(c, &["id", "input", "expect"], &[], "code-nav/budget");
+        let at = format!("code-nav/budget/{}/input", c["id"].as_str().unwrap_or("?"));
+        shape(&c["input"], &["configured", "gateMs"], &[], &at);
+    }
 
     let doc = load("diagnostics-parse");
     shape(
@@ -382,6 +390,21 @@ fn code_nav_tables() {
     for c in doc["secretFiles"].as_array().unwrap() {
         let name = c["name"].as_str().unwrap();
         assert_eq!(is_secret_file(name), c["expect"], "secretFiles: {name:?}");
+    }
+}
+
+/// 실제 code_nav 예산 = min(설정 예산, floor(관문 제한 × 4/5))(설계 2026-11-15 D-3).
+#[test]
+fn code_nav_budget() {
+    let doc = load("code-nav");
+    for (ctx, c) in case_list(&doc, "code-nav", "budget") {
+        let configured = c["input"]["configured"].as_u64().unwrap();
+        let gate = c["input"]["gateMs"].as_u64().unwrap();
+        assert_eq!(
+            code_nav_budget_ms(configured, gate),
+            c["expect"].as_u64().unwrap(),
+            "{ctx}"
+        );
     }
 }
 

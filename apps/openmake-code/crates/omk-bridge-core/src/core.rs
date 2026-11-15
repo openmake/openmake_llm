@@ -17,6 +17,7 @@ use crate::browser::local_browser::LocalBrowser;
 use crate::code_nav;
 use crate::constants::{
     BRIDGE_KINDS, BROWSER_KIND, CODE_NAV_MAX_CONCURRENT, CODE_NAV_TIMEOUT_MS, DIAG_TIMEOUT_MS,
+    code_nav_budget_ms,
 };
 use crate::diagnostics;
 use crate::exec::{self, ExecHost, ExecState};
@@ -59,6 +60,8 @@ pub struct BridgeCore {
     gate: FsGate,
     /// code_nav 전용 관문(D-62) — 느린 판정은 예산까지만 이 칸을 쥔다. 파일 kind 의 칸은 그대로 돈다.
     nav_gate: FsGate,
+    /// 두 관문의 시간 제한(ms) — code_nav 예산을 이 값의 4/5 이하로 묶는다(D-3).
+    gate_ms: u64,
     timeouts: ToolTimeouts,
     on_task_end: Option<TaskEndHook>,
     exec: Option<ExecState>,
@@ -98,6 +101,7 @@ impl BridgeCore {
             folder_root: root.to_string_lossy().into_owned(),
             gate: FsGate::new(opts.fs_timeout_ms),
             nav_gate: FsGate::with_permits(opts.fs_timeout_ms, CODE_NAV_MAX_CONCURRENT),
+            gate_ms: opts.fs_timeout_ms,
             timeouts: ToolTimeouts {
                 code_nav_ms: CODE_NAV_TIMEOUT_MS,
                 diag_ms: DIAG_TIMEOUT_MS,
@@ -288,8 +292,8 @@ impl BridgeCore {
             }
             Kind::CodeNav => {
                 // 예산이 Instant 범위를 넘으면 끝나지 않는 예산이다.
-                let deadline =
-                    received.checked_add(Duration::from_millis(self.timeouts.code_nav_ms));
+                let budget = code_nav_budget_ms(self.timeouts.code_nav_ms, self.gate_ms);
+                let deadline = received.checked_add(Duration::from_millis(budget));
                 let req = m.clone();
                 let nav = self
                     .nav_gate
