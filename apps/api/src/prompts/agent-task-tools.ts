@@ -51,6 +51,20 @@ export const GREP_MISS_HINTS = {
     hidden: (file: string) => ` — 숨김 또는 .gitignore 대상 파일에는 일치하는 줄이 있습니다(예: ${file}). 그 파일이나 폴더를 path 로 지목해 다시 찾으세요.`,
 } as const;
 
+/**
+ * grep_code 의 pattern 인자 설명 — 백엔드마다 정규식 엔진이 달라(기기 네이티브 = JavaScript, 셸 = rg, rg 가 없으면 grep -E)
+ * 한 엔진의 문법을 안내하지 않고 공통 부분집합만 안내한다. 정확한 방언은 구문 오류 때 GREP_REGEX_DIALECT_HINTS 로 알린다.
+ */
+export const GREP_CODE_PATTERN_DESCRIPTION =
+    '정규식 — 환경마다 엔진(rg/JS)이 달라 공통 문법만: 클래스·수량자·그룹·|·^$·[0-9] \\s \\w \\b. '
+    + '인라인 플래그((?i) 등)·lookaround·역참조·[[:alpha:]] 불가, 대소문자 무시는 ignore_case. 예: "function\\s+render"';
+
+/** grep_code 정규식 구문 오류 — 실제로 돈 백엔드의 문법을 오류 문구 다음 줄에 한 줄로 알린다. */
+export const GREP_REGEX_DIALECT_HINTS = {
+    native: '(이 실행 환경의 정규식은 JavaScript 문법입니다 — (?i)·(?-u:…) 같은 인라인 플래그와 [[:alpha:]] 같은 POSIX 클래스는 쓸 수 없습니다. 대소문자 무시는 ignore_case:true, 정규식 문자를 문자 그대로 찾으려면 \\ 로 이스케이프하세요)',
+    rg: '(이 실행 환경의 정규식은 rg(Rust regex) 문법입니다 — lookaround((?=…)·(?<=…))와 역참조(\\1)는 쓸 수 없습니다. 패턴을 단순하게 바꾸거나 나눠서 찾으세요)',
+} as const;
+
 /** 편집 후 문법 검사 — 쓰기 결과 뒤에 붙는다. tool 은 검사한 도구 이름, report 는 오류 출력 끝부분. */
 export function getEditSyntaxErrorNote(path: string, tool: string, report: string): string {
     return `[문법 오류 — 방금 쓴 ${path} 가 ${tool} 문법 검사를 통과하지 못했습니다. 파일은 저장됐습니다. 다음 작업 전에 고치세요]\n${report}`;

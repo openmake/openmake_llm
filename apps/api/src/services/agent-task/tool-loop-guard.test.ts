@@ -1,6 +1,11 @@
-import { priorRepetition, repetitionVerdict, cycleVerdict, rereadNote, retryAfterUnknownOutcome } from './tool-loop-guard';
-import { getLocalBridgeUnknownOutcomeNotice, getAgentTaskUnknownOutcomeDeclinedNotice } from '../../prompts/agent-task-prompt';
-import { getDuplicateToolCallResult } from '../../prompts/agent-task-turn-loop';
+import { priorRepetition, repetitionVerdict, cycleVerdict, rereadNote, retryAfterUnknownOutcome, sameErrorVerdict } from './tool-loop-guard';
+import {
+    getLocalBridgeUnknownOutcomeNotice, getAgentTaskUnknownOutcomeDeclinedNotice,
+    getToolLoopBlockedResult, getToolLoopSameErrorBlockedResult, getToolLoopSameErrorNote, isToolLoopBlockedResult,
+} from '../../prompts/agent-task-prompt';
+import { getDuplicateToolCallResult, getToolLoopCycleBlockedResult, getMalformedToolArgsResult } from '../../prompts/agent-task-turn-loop';
+import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
+import { getSubagentApprovalRequiredNotice } from '../../prompts/subagent-system';
 import type { ChatMessage } from '../../llm/types';
 
 let seq = 0;
@@ -303,5 +308,146 @@ describe('retryAfterUnknownOutcome — 결과 불명으로 끝난 쓰기를 다�
         round(conv, 'file_ops', { op: 'write', path: 'a.txt', content: 'x' }, unknown);
         expect(retryAfterUnknownOutcome(conv, 'file_ops', { op: 'write', path: 'a.txt', content: 'x' })).toBe('ask');
         expect(retryAfterUnknownOutcome(conv, 'file_ops', { op: 'write', path: 'b.txt', content: 'x' })).toBeNull();
+    });
+});
+
+describe('isToolLoopBlockedResult — 가드가 실행하지 않고 돌려준 결과', () => {
+    it('기존 차단 3종과 같은 오류 차단을 모두 알아본다(래퍼에 싸여 있어도)', () => {
+        for (const r of [
+            getToolLoopBlockedResult('bash', 4, 'failure'),
+            getToolLoopBlockedResult('grep_code', 5, 'same_result'),
+            getToolLoopCycleBlockedResult('bash', 2, 3),
+            getToolLoopSameErrorBlockedResult('grep_code', 6, '정규식이 올바르지 않습니다: x'),
+        ]) {
+            expect(isToolLoopBlockedResult(r)).toBe(true);
+            expect(isToolLoopBlockedResult(`<tool_output tool="x">\n${r}\n</tool_output>\n목표: g`)).toBe(true);
+        }
+    });
+
+    it('실행한 도구의 오류는 차단 결과가 아니다', () => {
+        expect(isToolLoopBlockedResult('Error: 정규식이 올바르지 않습니다: Invalid group modifier')).toBe(false);
+        expect(isToolLoopBlockedResult('Error: 이 호출은 실패했습니다')).toBe(false);
+    });
+
+    it('꼴이 비슷한 승인 거절·깨진 인자 문구는 가드 차단이 아니다(래퍼에 싸여 있어도)', () => {
+        for (const r of [
+            getApprovalRejectedNotice('bash', 'unattended'),
+            getSubagentApprovalRequiredNotice('bash'),
+            getMalformedToolArgsResult('bash'),
+        ]) {
+            expect(isToolLoopBlockedResult(r)).toBe(false);
+            expect(isToolLoopBlockedResult(`<tool_output tool="x">\n${r}\n</tool_output>\n목표: g`)).toBe(false);
+        }
+    });
+});
+
+describe('sameErrorVerdict — 인자를 바꿔도 같은 오류로 연속 실패', () => {
+    const ERR = 'Error: 정규식이 올바르지 않습니다: Invalid group modifier';
+    const sameErrLimits = { warn: 3, block: 6, excerptMaxChars: 200 };
+    /** 같은 도구(grep_code)를 인자만 바꿔 n번 같은 오류로 실패시킨 대화. */
+    const failing = (n: number, conv = base(), result = ERR): ChatMessage[] => {
+        for (let i = 0; i < n; i++) round(conv, 'grep_code', { pattern: `(?-u:a${seq})` }, result);
+        return conv;
+    };
+    const verdict = (conv: ChatMessage[]) => sameErrorVerdict(conv, 'grep_code', sameErrLimits);
+
+    it('세 번째로 같은 오류가 나면 결과 뒤에 한 줄 안내를 붙인다', () => {
+        expect(verdict(failing(1)).noteFor(ERR)).toBe('');
+        const note = verdict(failing(2)).noteFor(ERR);
+        expect(note).toBe(getToolLoopSameErrorNote(3));
+        expect(note).toContain('[반복 안내]');
+        expect(note).toContain('인자를 바꿔도');
+        expect(note.trim().split('\n')).toHaveLength(1);
+        expect(verdict(failing(2)).noteFor('Error: 다른 오류')).toBe('');
+        expect(verdict(failing(2)).noteFor('a.ts:1:a')).toBe('');
+    });
+
+    it('같은 오류가 여섯 번 이어지면 다음 호출은 실행하지 않고 마지막 오류의 첫 줄을 싣는다', () => {
+        expect(verdict(failing(5)).block).toBe(false);
+        const v = verdict(failing(6, base(), `${ERR}\n(힌트 줄)`));
+        expect(v.block).toBe(true);
+        expect(v.blockedResult).toBe(getToolLoopSameErrorBlockedResult('grep_code', 6, '정규식이 올바르지 않습니다: Invalid group modifier'));
+        expect(v.blockedResult).toMatch(/^Error: 이 호출\(grep_code\)은 인자를 바꿔도 같은 오류로 6번 연속 실패해 실행하지 않았습니다/);
+        expect(v.blockedResult).not.toContain('힌트 줄');
+    });
+
+    it('마지막 오류 발췌는 설정 글자 수에서 자른다', () => {
+        const long = `Error: ${'x'.repeat(500)}`;
+        const v = sameErrorVerdict(failing(6, base(), long), 'grep_code', { ...sameErrLimits, excerptMaxChars: 50 });
+        expect(v.blockedResult).toContain(`${'x'.repeat(50)}…`);
+        expect(v.blockedResult).not.toContain('x'.repeat(51));
+    });
+
+    it('차단 직후에는 한 번 실행한다(탐침) — 그것도 같은 오류면 다음 호출은 다시 막는다', () => {
+        const conv = failing(6);
+        round(conv, 'grep_code', { pattern: 'p7' }, verdict(conv).blockedResult);
+        expect(verdict(conv).block).toBe(false);
+        expect(verdict(conv).noteFor(ERR)).toBe(getToolLoopSameErrorNote(7));
+        round(conv, 'grep_code', { pattern: 'p8' }, ERR);
+        expect(verdict(conv).block).toBe(true);
+    });
+
+    it('오류 문구가 다르거나 성공 결과가 끼면 다시 센다', () => {
+        const diff = failing(5);
+        round(diff, 'grep_code', { pattern: 'q' }, 'Error: 다른 오류');
+        expect(verdict(diff).block).toBe(false);
+        expect(verdict(diff).noteFor('Error: 다른 오류')).toBe('');
+        const ok = failing(5);
+        round(ok, 'grep_code', { pattern: 'a' }, 'a.ts:1:a');
+        failing(2, ok);
+        expect(verdict(ok).block).toBe(false);
+        expect(verdict(ok).noteFor(ERR)).toBe(getToolLoopSameErrorNote(3));
+    });
+
+    it('다른 도구의 호출은 건너뛴다(사이에 bash 가 끼어도 이어서 센다)', () => {
+        const conv = base();
+        for (let i = 0; i < 6; i++) {
+            round(conv, 'grep_code', { pattern: `p${i}` }, ERR);
+            if (i % 2 === 0) round(conv, 'bash', { command: `ls ${i}` }, '[stdout]\na\n[exit=0 1ms]');
+        }
+        expect(verdict(conv).block).toBe(true);
+        expect(sameErrorVerdict(conv, 'bash', sameErrLimits).block).toBe(false);
+    });
+
+    it('기존 가드의 차단 결과는 실행 결과가 아니어서 건너뛴다', () => {
+        const conv = failing(3);
+        round(conv, 'grep_code', { pattern: 'same' }, getToolLoopBlockedResult('grep_code', 4, 'failure'));
+        round(conv, 'grep_code', { pattern: 'c' }, getToolLoopCycleBlockedResult('grep_code', 2, 3));
+        failing(3, conv);
+        expect(verdict(conv).block).toBe(true);
+    });
+
+    it('무인 실행 승인 거절은 보통의 오류 결과로 센다 — 같은 오류 사이에 끼면 연속이 끊긴다', () => {
+        const unattended = getApprovalRejectedNotice('grep_code', 'unattended');
+        const conv = failing(6);
+        round(conv, 'grep_code', { pattern: 'u' }, unattended);
+        const v = verdict(conv);
+        expect(v.block).toBe(false);
+        expect(v.noteFor(ERR)).toBe('');
+        expect(v.blockedResult).not.toContain('정규식이 올바르지 않습니다');
+    });
+
+    it('무인 실행 승인 거절만 여섯 번 이어지면 일곱 번째는 같은 오류 차단이다', () => {
+        const unattended = getApprovalRejectedNotice('grep_code', 'unattended');
+        expect(verdict(failing(5, base(), unattended)).block).toBe(false);
+        const v = verdict(failing(6, base(), unattended));
+        expect(v.block).toBe(true);
+        expect(v.blockedResult).toMatch(/^Error: 이 호출\(grep_code\)은 인자를 바꿔도 같은 오류로 6번 연속 실패해 실행하지 않았습니다/);
+        expect(v.blockedResult).toContain('(마지막 오류: 이 호출(grep_code)은 승인이 필요한데');
+    });
+
+    it('반복 안내 줄이 붙은 앞 결과도 같은 오류로 센다', () => {
+        const conv = failing(1);
+        round(conv, 'grep_code', { pattern: 'b' }, `${ERR}\n\n[반복 안내] 같은 인자의 같은 호출이 2번 연속 실패했습니다.`);
+        expect(verdict(conv).noteFor(ERR)).toBe(getToolLoopSameErrorNote(3));
+    });
+
+    it('데이터 래퍼(<tool_output>)에 싸인 결과도 같은 오류로 센다', () => {
+        const wrapped = `<tool_output tool="grep_code">\n${ERR}\n</tool_output>\n목표: g`;
+        const conv = failing(6, base(), wrapped);
+        const v = verdict(conv);
+        expect(v.block).toBe(true);
+        expect(v.blockedResult).toContain('(마지막 오류: 정규식이 올바르지 않습니다: Invalid group modifier)');
+        expect(verdict(failing(2, base(), wrapped)).noteFor(wrapped)).toBe(getToolLoopSameErrorNote(3));
     });
 });
