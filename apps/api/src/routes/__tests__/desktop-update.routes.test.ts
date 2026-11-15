@@ -8,7 +8,11 @@ import * as path from 'path';
 import express from 'express';
 import request from 'supertest';
 
-const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-desktop-update-'));
+// 게시 폴더를 점 폴더 아래에 둔다 — 설치본은 `~/.openmake/data/desktop-updates` 이고,
+// root 없이 절대경로를 send 에 넘기면 조상의 점 폴더 때문에 404 가 된다(스테이징 재현).
+const BASE = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-desktop-update-'));
+const DIR = path.join(BASE, '.openmake', 'data', 'desktop-updates');
+fs.mkdirSync(DIR, { recursive: true });
 const NATIVE = { version: '0.2.6', file: 'OpenMake-Companion-0.2.6-arm64.dmg', sha256: 'a'.repeat(64) };
 const ELECTRON = { version: '1.10.0', file: 'OpenMake-1.10.0-arm64.dmg', sha256: 'b'.repeat(64) };
 
@@ -22,13 +26,15 @@ beforeAll(async () => {
     process.env.DESKTOP_UPDATE_DIR = DIR; // DESKTOP_UPDATE.DIR 는 모듈 로드 시점에 읽힌다
     const { default: router } = await import('../desktop-update.routes');
     app = express();
+    // 전역 setupSecurity(middlewares/setup.ts) 가 /api 응답에 JSON content-type 을 미리 박는 것을 흉내 낸다.
+    app.use((_req, res, next) => { res.setHeader('Content-Type', 'application/json; charset=utf-8'); next(); });
     app.use('/api/desktop', router);
     fs.writeFileSync(path.join(DIR, NATIVE.file), 'companion');
     fs.writeFileSync(path.join(DIR, ELECTRON.file), 'electron');
 });
 
 afterAll(() => {
-    fs.rmSync(DIR, { recursive: true, force: true });
+    fs.rmSync(BASE, { recursive: true, force: true });
     delete process.env.DESKTOP_UPDATE_DIR;
 });
 
@@ -66,10 +72,23 @@ describe('GET /api/desktop/latest', () => {
 });
 
 describe('GET /api/desktop/download/:file', () => {
-    it('컴패니언 dmg 는 내려준다', async () => {
-        const res = await request(app).get(`/api/desktop/download/${NATIVE.file}`);
+    it('컴패니언 dmg 는 내려준다 — 점 폴더 아래여도 200, JSON 이 아닌 디스크 이미지 MIME', async () => {
+        const res = await request(app).get(`/api/desktop/download/${NATIVE.file}`).buffer(true).parse((r, cb) => {
+            const chunks: Buffer[] = [];
+            r.on('data', (c: Buffer) => chunks.push(c));
+            r.on('end', () => cb(null, Buffer.concat(chunks)));
+        });
         expect(res.status).toBe(200);
+        expect((res.body as Buffer).toString()).toBe('companion');
+        expect(res.headers['content-type']).toBe('application/x-apple-diskimage');
+        expect(res.headers['content-disposition']).toMatch(/^attachment;/);
         expect(res.headers['content-disposition']).toContain(NATIVE.file);
+    });
+
+    it('없는 컴패니언 dmg 는 404 파일 없음', async () => {
+        const res = await request(app).get('/api/desktop/download/OpenMake-Companion-9.9.9-arm64.dmg');
+        expect(res.status).toBe(404);
+        expect(JSON.stringify(res.body)).toContain('파일 없음');
     });
 
     it('구 Electron dmg 는 파일이 남아 있어도 거부한다', async () => {
@@ -106,7 +125,16 @@ describe('Windows 설치 파일 (Companion P4)', () => {
     });
 
     it('설치 파일은 내려받을 수 있고, 다른 exe 는 거부한다', async () => {
-        expect((await request(app).get(`/api/desktop/download/${WIN.file}`)).status).toBe(200);
+        const ok = await request(app).get(`/api/desktop/download/${WIN.file}`).buffer(true).parse((r, cb) => {
+            const chunks: Buffer[] = [];
+            r.on('data', (c: Buffer) => chunks.push(c));
+            r.on('end', () => cb(null, Buffer.concat(chunks)));
+        });
+        expect(ok.status).toBe(200);
+        expect((ok.body as Buffer).toString()).toBe('windows-installer');
+        expect(ok.headers['content-type']).not.toMatch(/json/);
+        expect(ok.headers['content-disposition']).toMatch(/^attachment;/);
+        expect(ok.headers['content-disposition']).toContain(WIN.file);
         expect((await request(app).get('/api/desktop/download/evil.exe')).status).toBe(400);
         expect((await request(app).get('/api/desktop/download/OpenMake-Companion-Setup-1.0.0.exe')).status).toBe(404);
     });
