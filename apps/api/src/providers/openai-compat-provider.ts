@@ -212,7 +212,7 @@ export class OpenAICompatProvider implements IProvider {
                 apiKey: opts.gateway.masterKey,
                 baseURL: `${opts.gateway.url.replace(/\/+$/, '')}/v1`,
                 // 앱 SDK 재시도도 끈다 — 기본 2회면 게이트웨이가 5xx·429 를 줄 때마다 다시 보내 upstream 에 한 번씩 더 간다.
-                // 한 번 호출 = upstream 한 번(429 는 오류로 드러나 채팅 폴백 판정을 탄다). 직결(catalogClient)은 종전대로.
+                // 한 번 호출 = upstream 한 번(429 는 오류로 드러나 채팅 폴백 판정을 탄다). 직결 채팅은 요청 옵션으로 같다(streamChat).
                 maxRetries: 0,
                 // 게이트웨이 재시도 끄기(llm/gateway-headers) — 채팅·배정 probe 가 provider 거절 뒤 게이트웨이 재시도로 경고를 쌓지 않게.
                 defaultHeaders: {
@@ -410,7 +410,7 @@ export class OpenAICompatProvider implements IProvider {
 
             const stream = await this.client.chat.completions.create(
                 requestParams as never,
-                opts.abortSignal ? { signal: opts.abortSignal } : undefined,
+                { maxRetries: 0, ...(opts.abortSignal ? { signal: opts.abortSignal } : {}) }, // 게이트웨이·직결 모두 SDK 재시도 0
             );
 
             let content = '';
