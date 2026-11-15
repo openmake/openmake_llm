@@ -29,6 +29,13 @@ export type DeviceLoss = 'rerunnable' | 'unknown' | 'browser_takeover';
  */
 export const BRIDGE_UNSUPPORTED_KIND_PREFIX = '지원하지 않는 kind';
 
+/**
+ * 디바이스가 code_nav grep 의 정규식을 해석하지 못했을 때 돌려주는 오류 문구의 접두(`정규식이 올바르지 않습니다: <엔진 메시지>`).
+ * 출처: 적합성 fixture `packages/local-bridge-core/conformance/code-nav.json` 의 `errorPrefix`(device-errors.test 가 대조한다).
+ * 서버는 이 접두로 기기(JavaScript 엔진) 문법 힌트를 붙인다(tools-code-nav). 디바이스 코어와 짝인 프로토콜 문구라 env 로 바꾸지 않는다.
+ */
+export const BRIDGE_INVALID_REGEX_PREFIX = '정규식이 올바르지 않습니다: ';
+
 /** 구 디바이스의 "모르는 kind" 응답인가 — 아니면 디바이스가 요청을 받아 거절한 요청 오류다. */
 export function isUnsupportedKindError(error: string): boolean {
     return error.startsWith(BRIDGE_UNSUPPORTED_KIND_PREFIX);
