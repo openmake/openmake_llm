@@ -35,15 +35,17 @@ export const GUARD_STEP_MARKERS: readonly GuardStepMarker[] = [
     { id: 'loop_warn_same_result', label: '반복 가드 안내(같은 결과)', stepType: 'tool_result', pattern: /\[반복 안내\] 이 호출은 \d+번 연속 같은 결과/ },
     { id: 'loop_block_failure', label: '반복 가드 차단(연속 실패)', stepType: 'tool_result', pattern: /^Error: 이 호출\([^)]*\)은 같은 인자로 \d+번 연속 실패해 실행하지 않았습니다/ },
     { id: 'loop_block_same_result', label: '반복 가드 차단(같은 결과)', stepType: 'tool_result', pattern: /^Error: 이 호출\([^)]*\)은 같은 결과를 \d+번 연속 돌려줘 실행하지 않았습니다/ },
+    { id: 'loop_warn_same_error', label: '반복 가드 안내(인자 바꾼 같은 오류)', stepType: 'tool_result', pattern: /\[반복 안내\] 이 도구는 인자를 바꿔도 같은 오류로 \d+번 연속 실패/ },
+    { id: 'loop_block_same_error', label: '반복 가드 차단(인자 바꾼 같은 오류)', stepType: 'tool_result', pattern: /^Error: 이 호출\([^)]*\)은 인자를 바꿔도 같은 오류로 \d+번 연속 실패해 실행하지 않았습니다/ },
     // 컨텍스트·출력 — turn-call 의 기록 전용 스텝
     { id: 'context_trim', label: '컨텍스트 절단', stepType: 'context_trim' },
     { id: 'output_repetition', label: '출력 반복', stepType: 'output_repetition' },
     // 완료 관문 — task-steps 의 verify_skipped 스텝(사유 두 가지)
     { id: 'verify_skipped', label: '검증 건너뜀(재시도 상한)', stepType: 'verify_skipped', pattern: /^미검증 완료/ },
     { id: 'verify_held_answer', label: '검증 미통과 답변 채택(턴 상한)', stepType: 'verify_skipped', pattern: /^검증 미통과/ },
-    // 승인 — prompts/agent-task-approval 의 거절 결과
+    // 승인 — prompts/agent-task-approval 의 거절 결과. `Error: ` 부터 맞춘다 — 같은 오류 차단의 발췌(`Error: ` 를 뗀 첫 줄)에는 걸리지 않는다.
     { id: 'approval_rejected_user', label: '승인 거절(사용자)', stepType: 'tool_result', pattern: /Error: 사용자가 도구 실행을 승인하지 않았습니다/ },
-    { id: 'approval_rejected_unattended', label: '승인 거절(무인 실행)', stepType: 'tool_result', pattern: /승인이 필요한데, 지금은 승인할 사람이 없는 무인 실행/ },
+    { id: 'approval_rejected_unattended', label: '승인 거절(무인 실행)', stepType: 'tool_result', pattern: /Error: 이 호출\([^)]*\)은 승인이 필요한데, 지금은 승인할 사람이 없는 무인 실행/ },
     { id: 'approval_timeout', label: '승인 무응답', stepType: 'tool_result', pattern: /Error: 승인 대기 시간이 초과되었습니다/ },
     // 브라우저 — browser-result-guard 가 결과 뒤에 붙이는 경고
     { id: 'bot_block_warning', label: '봇 차단 경고', stepType: 'tool_result', pattern: /\[경고\] 이 페이지는 봇 차단·캡차 확인 화면으로 보입니다/ },

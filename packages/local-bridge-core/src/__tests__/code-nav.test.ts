@@ -9,6 +9,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { BridgeCore } from '../core';
 import { globToRegExp, isSecretFile, runCodeNav, walkFiles } from '../code-nav';
+import { CODE_NAV_REGEX_TOO_DEEP_ERROR } from '../constants';
 import type { BridgeResult } from '../types';
 
 let root: string;
@@ -165,6 +166,17 @@ describe('code_nav kind', () => {
         await expect(runCodeNav(root, root, { op: 'grep', pattern: '(' })).rejects.toThrow(/정규식/);
         await expect(runCodeNav(root, root, { op: 'grep', pattern: '  ' })).rejects.toThrow(/pattern/);
         await expect(runCodeNav(root, root, { op: 'grep', pattern: 'x'.repeat(600) })).rejects.toThrow(/너무 깁니다/);
+    });
+
+    it('깊은 정규식의 스택 초과는 Rust 와 같은 문구의 요청 오류이고, 다음 grep 은 정상이다', async () => {
+        await expect(runCodeNav(root, root, { op: 'grep', pattern: '((a?){9999}){9999}' }))
+            .rejects.toThrow(new Error(CODE_NAV_REGEX_TOO_DEEP_ERROR));
+        const r = await runCodeNav(root, root, { op: 'grep', pattern: 'def bar' });
+        expect(r.matches).toEqual(['lib/thing.py:1:def bar():']);
+    });
+
+    it('정규식 구문 오류는 기존 접두 문구 그대로다', async () => {
+        await expect(runCodeNav(root, root, { op: 'grep', pattern: '(' })).rejects.toThrow(/^정규식이 올바르지 않습니다: /);
     });
 });
 

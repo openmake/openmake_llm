@@ -1,5 +1,7 @@
 import { createCodeNavTools, shq, normalizeRelPath, relArg } from './tools-code-nav';
 import type { TaskExecutor, ExecResult, CodeNavSpec, CodeNavData } from './executor';
+import { GREP_REGEX_DIALECT_HINTS, GREP_CODE_PATTERN_DESCRIPTION } from '../../prompts/agent-task-tools';
+import { GREP_DIALECT_HINT } from '../../config/agent-task-tools';
 
 function exec(stdout: string, exitCode = 0, stderr = ''): ExecResult {
     return { stdout, stderr, exitCode, truncated: false, timedOut: false, durationMs: 1 };
@@ -448,5 +450,66 @@ describe('민감 파일 제외 (2026-09-06)', () => {
         const { sandbox } = nativeSandbox(() => ({ matches: ['a.ts:1:x'] }));
         const grep = createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
         expect(text(await grep.handler({ pattern: 'x' }))).not.toContain('정책상');
+    });
+});
+
+describe('grep_code 정규식 방언 — 도구 설명과 구문 오류 힌트', () => {
+    const grepOf = (sandbox: TaskExecutor) => createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
+    const NATIVE_REGEX_ERROR = '정규식이 올바르지 않습니다: Invalid group modifier';
+    const RG_PARSE_ERROR = 'rg: regex parse error:\n    (?<=a)b\n    ^^^^^^\nerror: look-around, including look-ahead and look-behind, is not supported';
+
+    it('도구 설명은 한 엔진(rg)을 전제하지 않고 공통 문법만 안내한다', () => {
+        const tool = grepOf(fakeSandbox(() => exec('')).sandbox).tool;
+        const pattern = (tool.inputSchema.properties as Record<string, { description: string }>).pattern.description;
+        expect(tool.description).not.toContain('ripgrep');
+        expect(pattern).not.toContain('rg 문법');
+        expect(pattern).toBe(GREP_CODE_PATTERN_DESCRIPTION);
+        expect(pattern).toContain('공통 문법');
+        expect(pattern).toContain('ignore_case');
+        expect(pattern).toContain('(?i)');
+        expect(pattern).not.toContain('\\d'); // GNU grep -E 는 \d 를 모른다(조용히 일치 없음)
+    });
+
+    it('네이티브 백엔드의 정규식 구문 오류에는 JavaScript 문법 힌트를 한 줄 덧붙인다(셸 없음)', async () => {
+        const { sandbox, cmds } = nativeSandbox(() => ({ error: NATIVE_REGEX_ERROR }));
+        const r = await grepOf(sandbox).handler({ pattern: '(?-u:a)' });
+        expect(r.isError).toBe(true);
+        expect(text(r)).toBe(`${NATIVE_REGEX_ERROR}\n${GREP_REGEX_DIALECT_HINTS.native}`);
+        expect(GREP_REGEX_DIALECT_HINTS.native).toContain('JavaScript');
+        expect(GREP_REGEX_DIALECT_HINTS.native.split('\n')).toHaveLength(1);
+        expect(cmds).toHaveLength(0);
+    });
+
+    it('네이티브의 다른 요청 오류(역추적 한도 등)는 그대로 돌려준다', async () => {
+        const msg = 'code_nav 시간 초과 (5s) — 범위를 좁히세요';
+        const { sandbox } = nativeSandbox(() => ({ error: msg }));
+        expect(text(await grepOf(sandbox).handler({ pattern: 'x' }))).toBe(msg);
+    });
+
+    it('rg 의 정규식 구문 오류(regex parse error)에는 rg 문법 힌트를 덧붙인다', async () => {
+        const { sandbox } = fakeSandbox(() => exec('\n__OMK_SKIPPED__ 0\n', 0, RG_PARSE_ERROR));
+        const r = await grepOf(sandbox).handler({ pattern: '(?<=a)b' });
+        expect(r.isError).toBe(true);
+        expect(text(r)).toContain('검색 실패: rg: regex parse error');
+        expect(text(r).endsWith(`\n${GREP_REGEX_DIALECT_HINTS.rg}`)).toBe(true);
+        expect(GREP_REGEX_DIALECT_HINTS.rg.split('\n')).toHaveLength(1);
+    });
+
+    it('rg 의 다른 실패와 grep -E 폴백의 오류에는 힌트를 붙이지 않는다', async () => {
+        const other = fakeSandbox(() => exec('', 0, 'rg: ./x: Permission denied'));
+        expect(text(await grepOf(other.sandbox).handler({ pattern: 'x' }))).toBe('검색 실패: rg: ./x: Permission denied');
+        const viaGrep = fakeSandbox((cmd) => cmd.startsWith('rg') ? exec('', 127, 'rg: not found') : exec('', 0, 'grep: Unmatched ( or \\('));
+        expect(text(await grepOf(viaGrep.sandbox).handler({ pattern: '(' }))).toBe('검색 실패: grep: Unmatched ( or \\(');
+    });
+
+    it('AGENT_TASK_GREP_DIALECT_HINT=false 면 오류 문구만 돌려준다', async () => {
+        const cfg = GREP_DIALECT_HINT as { ENABLED: boolean };
+        cfg.ENABLED = false;
+        try {
+            const { sandbox } = nativeSandbox(() => ({ error: NATIVE_REGEX_ERROR }));
+            expect(text(await grepOf(sandbox).handler({ pattern: '(?i)a' }))).toBe(NATIVE_REGEX_ERROR);
+            const rg = fakeSandbox(() => exec('', 0, RG_PARSE_ERROR));
+            expect(text(await grepOf(rg.sandbox).handler({ pattern: '(?<=a)b' }))).toBe(`검색 실패: ${RG_PARSE_ERROR}`);
+        } finally { cfg.ENABLED = true; }
     });
 });
