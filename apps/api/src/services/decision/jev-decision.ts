@@ -7,6 +7,7 @@
  */
 import { DECISION } from '../../config/decision';
 import { getConfig } from '../../config/env';
+import { GATEWAY_NO_RETRY_HEADERS } from '../../llm/gateway-headers';
 
 export interface NoulDecision {
     /** true 일 확률(0~1). 판정하지 못했으면 null */
@@ -51,7 +52,7 @@ export async function decideNoul(input: { state: string; question: string }, dep
         const timeout = AbortSignal.timeout(DECISION.TIMEOUT_MS);
         const res = await (deps.fetchFn ?? fetch)(`${baseUrl}/v1/completions`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
+            headers: { 'Content-Type': 'application/json', ...GATEWAY_NO_RETRY_HEADERS, ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
             // top_k 0 · top_p 1 · repetition_penalty 1 은 필수 — 서버 기본값이 logprob 을 자르거나 왜곡한다.
             body: JSON.stringify({
                 model: DECISION.MODEL,

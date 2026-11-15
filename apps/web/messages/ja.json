@@ -476,7 +476,15 @@
         "failed": "失敗"
       },
       "tasksCount": "タスク {count} 件",
-      "taskModel": "処理モデル: {model}"
+      "taskModel": "処理モデル: {model}",
+      "failure": {
+        "timeoutExternal": "外部サービス({provider})が制限時間内に応答しなかったため中断しました",
+        "timeout": "制限時間内に応答がなかったため中断しました",
+        "unassigned": "このタスクに割り当てられたモデルがありません",
+        "unavailable": "このタスクは現在利用できません",
+        "skipped": "前のタスクが完了しなかったためスキップしました",
+        "deadline": "全体の制限時間を超えたため実行できませんでした"
+      }
     },
     "tool": {
       "running": "{tool} を実行中"

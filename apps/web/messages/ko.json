@@ -476,7 +476,15 @@
         "failed": "실패"
       },
       "tasksCount": "작업 {count}개",
-      "taskModel": "처리 모델: {model}"
+      "taskModel": "처리 모델: {model}",
+      "failure": {
+        "timeoutExternal": "외부 서비스({provider})가 제한 시간 안에 응답하지 않아 중단했습니다",
+        "timeout": "제한 시간 안에 응답이 오지 않아 중단했습니다",
+        "unassigned": "이 작업에 배정된 모델이 없습니다",
+        "unavailable": "이 작업은 현재 사용할 수 없습니다",
+        "skipped": "앞선 작업이 끝나지 않아 건너뛰었습니다",
+        "deadline": "전체 제한 시간을 넘겨 실행하지 못했습니다"
+      }
     },
     "tool": {
       "running": "{tool} 실행 중"

@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let center = UNUserNotificationCenter.current()
         center.delegate = self
         center.requestAuthorization(options: [.alert, .sound]) { _, _ in /* 거부는 fail-open */ }
+        KeyHandoff.consume() // 업데이트한 옛 버전이 넘긴 키를 연결 전에 자기 신원으로 다시 저장(D-119)
         Task { @MainActor in
             HelperManager.shared.reconnectIfPossible()
             Updater.shared.scheduleStartupCheck(backendUrl: HelperManager.shared.serverAddress)

@@ -62,6 +62,8 @@ export const SANDBOX_BIN = '/usr/bin/sandbox-exec';
 export const SANDBOX_ENABLED = process.platform === 'darwin' && process.env.OMK_BRIDGE_SANDBOX !== '0';
 /** 샌드박스가 켜졌는데 프로파일이 없을 때의 거부 문구(fail-closed) — exec 와 도구 자식(test_runner·lsp_diagnostics)이 같이 쓴다. */
 export const SANDBOX_PROFILE_MISSING_ERROR = 'exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.';
+/** exec 의 command 가 JS 거짓 값(없음·null·false·0·""·NaN)일 때의 거절 문구 — 차단 검사·확인 창 앞에서 낸다(종료 코드 126). */
+export const EXEC_NO_COMMAND_ERROR = '실행할 명령이 없습니다';
 /** 감싼 자식에서 sandbox-exec 가 실행 파일을 띄우지 못했다(종료 코드 71) — 뒤에 `(<파일 이름>).` 가 붙는다, 종료 코드는 같은 126(설계 D-8). */
 export const SANDBOX_SPAWN_ERROR_PREFIX = '샌드박스 안에서 실행 파일을 띄우지 못해 실행을 거부했습니다';
 
@@ -182,6 +184,13 @@ export const LIST_ALL_MAX = 1000;
  * 전적으로 이 캡이다. 서버(TASK_CODE_NAV)도 같은 축의 캡을 갖지만 디바이스가 자체 강제한다.
  */
 export const CODE_NAV_TIMEOUT_MS = Number(process.env.OMK_BRIDGE_CODE_NAV_TIMEOUT_MS || 15000);
+/**
+ * 실제로 쓰는 code_nav 예산 — 설정한 값(위 상수)은 상한이고, 감싼 관문 제한(FS_OP_TIMEOUT_MS)의 4/5 이하로 묶는다.
+ * 예산이 관문보다 늦게 끝나면 잘린 결과 대신 관문 오류가 먼저 나간다(설계 2026-11-15 D-3). 기본값은 12000ms.
+ */
+export function codeNavBudgetMs(configured: number, gateMs: number): number {
+    return Math.min(configured, Math.floor((gateMs * 4) / 5));
+}
 /** 1회 요청에서 훑을 최대 파일 수(대형 레포 보호). 초과하면 truncated. */
 export const CODE_NAV_MAX_FILES = 4000;
 /** 내용을 읽을 파일 크기 상한 — 초과 파일은 건너뛴다(번들·미니파이·데이터 덤프). */
