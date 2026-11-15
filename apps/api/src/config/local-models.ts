@@ -197,6 +197,11 @@ export function getLocalChatModels(opts: { includeUnavailable?: boolean } = {}):
     });
 }
 
+/** 모델 호출 probe 요청 헤더 — 게이트웨이 Router 재시도를 끈다(probe 실패 한 번이 upstream 여러 번이 되지 않게). */
+function probeHeaders(apiKey: string | undefined): Record<string, string> {
+    return { 'Content-Type': 'application/json', ...GATEWAY_NO_RETRY_HEADERS, ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) };
+}
+
 /**
  * 단일 chat 모델 connectivity ping — 1 token completion 호출.
  * 200 응답 + completion content/reasoning 있으면 가용.
@@ -212,11 +217,6 @@ export function getLocalChatModels(opts: { includeUnavailable?: boolean } = {}):
  * 판정 불가(네트워크 오류·타임아웃·5xx)는 `undefined` — 호출부가 프리셋/기본값을 유지한다
  * (일시 오류로 능력을 잘못 낮추지 않는다).
  */
-/** 모델 호출 probe 요청 헤더 — 게이트웨이 Router 재시도를 끈다(probe 실패 한 번이 upstream 여러 번이 되지 않게). */
-function probeHeaders(apiKey: string | undefined): Record<string, string> {
-    return { 'Content-Type': 'application/json', ...GATEWAY_NO_RETRY_HEADERS, ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) };
-}
-
 /**
  * 컨텍스트 길이 실측 — 불가능한 max_tokens 를 요청해 백엔드가 돌려주는 상한을 읽는다.
  *
