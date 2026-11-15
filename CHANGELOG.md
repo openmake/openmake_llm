@@ -7,6 +7,8 @@
 
 * **openmake-code:** PR-1.7 omk-helper — Rust 헬퍼 실행 파일(Node 헬퍼와 같은 stdio 계약) ([9d39f8a](https://github.com/openmake/openmake_llm/commit/9d39f8a304dec03f1186f7a25cf56b1c1c7cb57d))
 
+> 참고: 이 릴리스 뒤 dev 에 머지된 [#1795](https://github.com/openmake/openmake_llm/pull/1795)(앱 버전 올림 — macOS 0.3.9·Windows 0.1.9, 코어 동봉 갱신)는 커밋이 chore 뿐이라 release-please 가 릴리스 PR 을 만들지 않아 1.136.2 로 배포한다.
+
 ## [1.135.0](https://github.com/openmake/openmake_llm/compare/v1.134.3...v1.135.0) (2026-11-14)
 
 
