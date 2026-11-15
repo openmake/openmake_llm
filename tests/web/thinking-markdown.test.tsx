@@ -35,6 +35,14 @@ test('제목은 블록 굵은 글씨, 단락 안 줄바꿈은 p 에서만 유지
   assert.match(out, /<li>항목 1<\/li>/);
 });
 
+test('단락이 나뉜 번호 목록은 원래 시작 번호를 유지한다 — 빈 줄로 띄운 2. 단락이 1. 로 보이지 않게', () => {
+  const paras = splitThinkingParagraphs('1.  **Analyze:**\n    - sub a\n\n2.  **Decide:** do it\n\n3. Done');
+  assert.equal(paras.length, 3);
+  assert.match(html(paras[1]), /<ol start="2" class="[^"]*list-decimal[^"]*">/);
+  assert.match(html(paras[2]), /<ol start="3" /);
+  assert.doesNotMatch(html(paras[0]), /start=/);
+});
+
 test('코드 블록은 가로 스크롤 pre 로 그린다', () => {
   assert.match(html('```\nconst a = 1;\n```'), /<pre class="[^"]*overflow-x-auto[^"]*"><code>const a = 1;\n<\/code><\/pre>/);
 });

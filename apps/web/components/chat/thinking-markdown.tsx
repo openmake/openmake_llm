@@ -17,7 +17,8 @@ const heading: Components["h1"] = ({ children }) => <strong className="block">{c
 const COMPONENTS: Components = {
   p: ({ children }) => <p className="whitespace-pre-line">{children}</p>,
   ul: ({ children }) => <ul className="list-disc pl-4">{children}</ul>,
-  ol: ({ children }) => <ol className="list-decimal pl-4">{children}</ol>,
+  // start 유지 — 타임라인은 빈 줄로 단락을 나눠 따로 그리므로 `2. …` 로 시작하는 단락은 혼자 2 부터 세야 한다
+  ol: ({ children, start }) => <ol start={start} className="list-decimal pl-4">{children}</ol>,
   blockquote: ({ children }) => <blockquote className="border-l-2 border-border pl-2">{children}</blockquote>,
   pre: ({ children }) => <pre className="overflow-x-auto rounded bg-surface-2 p-2">{children}</pre>,
   // 이미지는 불러오지 않고 대체 글만 남긴다
