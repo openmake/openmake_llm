@@ -305,6 +305,8 @@ export function useChatSocket() {
         summary?: string;
         ms?: number;
         model?: string;
+        reason?: unknown;
+        provider?: unknown;
       };
       const prev = useAppStore.getState().orchestratorProgress;
       if (type === "orchestrator_status") {
@@ -355,6 +357,8 @@ export function useChatSocket() {
           ...(md.summary ? { summary: String(md.summary) } : {}),
           ...(typeof md.ms === "number" ? { ms: md.ms } : {}),
           ...(typeof md.model === "string" && md.model ? { model: md.model } : {}),
+          ...(typeof md.reason === "string" && md.reason ? { reason: md.reason } : {}),
+          ...(typeof md.provider === "string" && md.provider ? { provider: md.provider } : {}),
         });
       }
     };

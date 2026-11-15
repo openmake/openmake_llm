@@ -227,8 +227,10 @@ export async function chatTurnWithRoleFallback(
     // 외부 role 모델(resolver 의 onUsage 가 `role:agent` 로 기록)은 비용 귀속 문맥으로 같은 id 가 붙는다.
     // 무응답 감시는 스트리밍이어야 청크를 볼 수 있다 — 호출자가 토큰 훅을 주지 않았으면 빈 훅으로 스트리밍만 켠다.
     // local-llm 슬롯 대기(LOCAL_LLM_MAX_CONCURRENT>0)는 모델 무응답이 아니다 — 대기 동안 첫 청크 감시·호출 상한을 멈추고 슬롯을 받으면 다시 건다(#1656).
+    // SDK 재시도 0: 일시 오류 재시도는 아래 루프(TURN_RETRY_MAX + 복구 대기) 한 층만 — 서브에이전트·model-wait 와 같다.
+    // AGENT_TASK_TURN_RETRY_MAX=0 이면 일시 오류 재시도는 복구 대기만 남는다.
     const call = (signal: AbortSignal, onChunk?: () => void, slot?: { onSlotWait: () => void; onSlotAcquired: () => void }) => runWithCostSession(p.taskId, () => state.client
-        .derive({ timeout: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS, costContext: { feature: 'agent_task', sessionId: p.taskId } })
+        .derive({ timeout: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS, maxRetries: 0, costContext: { feature: 'agent_task', sessionId: p.taskId } })
         .chat(p.conversation, undefined, p.onToken ?? (onChunk ? () => { /* 스트리밍 강제 */ } : undefined), {
             tools: p.tools, signal, think: thinkOptionFor(runStateOf(state)), requestClass: 'agent_turn', ...(onChunk && { onChunk }),
             ...slot,
