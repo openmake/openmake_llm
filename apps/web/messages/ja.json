@@ -1971,7 +1971,11 @@
     "connected": "接続済み",
     "keyPage": "APIキー発行ページ",
     "signInPage": "認証ページ",
-    "homepage": "ホームページ"
+    "homepage": "ホームページ",
+    "toggleOn": "{name} のキーをオンにする",
+    "toggleOff": "{name} のキーをオフにする",
+    "disabled": "オフ",
+    "toggleFailed": "オン/オフの切り替えに失敗しました: {error}"
   },
   "apiKeys": {
     "title": "APIキー",
