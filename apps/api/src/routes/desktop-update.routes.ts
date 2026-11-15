@@ -74,7 +74,13 @@ router.get('/download/:file', (req: Request, res: Response) => {
         return;
     }
     logger.info(`데스크톱 설치 파일 다운로드: ${file}`);
-    res.download(abs, file);
+    // 전역 setupSecurity 가 /api 응답에 JSON content-type 을 미리 박아 send 의 확장자 MIME 이 덮어쓰지 못한다 — 제거한다.
+    res.removeHeader('Content-Type');
+    // root 를 주고 파일명만 넘긴다 — root 없이 절대경로를 넘기면 send 가 경로의 모든 조각에서 점 파일을 찾아,
+    // 게시 폴더 조상(`~/.openmake/…`) 때문에 404 가 된다. 경로 탈출은 파일명 패턴이 막고 root 가 이중으로 막는다.
+    res.download(file, file, { root: DESKTOP_UPDATE.DIR }, (err) => {
+        if (err && !res.headersSent) res.status(404).json(notFound('파일 없음'));
+    });
 });
 
 export default router;
