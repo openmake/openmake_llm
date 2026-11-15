@@ -100,12 +100,16 @@ export function ModelAssignmentsSection({ scope }: { scope: "user" | "global" })
           ...(params ? { params } : {}),
         });
       }
-      setParamDrafts((d) => {
-        const next = { ...d };
-        delete next[slot.id];
-        return next;
-      });
-      await query.refetch();
+      // 다시 읽기가 끝난 뒤에 초안을 지운다 — 먼저 지우면 읽는 동안 입력칸이 옛 서버 값으로 돌아가고,
+      // 다시 읽기가 실패하면(refetch 는 throw 하지 않는다) 저장한 값 대신 옛 값이 남는다.
+      const refetched = await query.refetch();
+      if (!refetched.isError) {
+        setParamDrafts((d) => {
+          const next = { ...d };
+          delete next[slot.id];
+          return next;
+        });
+      }
     } catch (e) {
       setActionError(e instanceof Error ? e.message : t("saveFailed"));
     } finally {
