@@ -71,6 +71,8 @@ pub fn auto_approve_from_env(v: Option<&str>) -> bool {
 }
 
 pub(crate) const REJECTED: &str = "사용자가 명령 실행을 거부했습니다";
+/// `command` 가 JS 거짓 값이면 차단 검사·확인 창 앞에서 이 문구로 거절한다(TS `EXEC_NO_COMMAND_ERROR` 와 같은 글자).
+const NO_COMMAND: &str = "실행할 명령이 없습니다";
 pub(crate) const FAIL_CLOSED: &str = "exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.";
 const EXIT_REFUSED: i32 = 126;
 
@@ -247,7 +249,7 @@ impl ExecState {
     }
 }
 
-/// exec 요청 하나 — 순서: (폴더는 코어가 먼저) → 차단 → 확인 → fail-closed → PATH → 실행.
+/// exec 요청 하나 — 순서: (폴더는 코어가 먼저) → 명령 유무 → 차단 → 확인 → fail-closed → PATH → 실행.
 /// 호스트가 없는 코어는 확인을 "거부"로 본다(D-37, 비대화형 fail-safe). 실행 결과는 언제나 `ok: true` 이고
 /// 종료 코드로만 성패를 알린다(띄우기 실패·시간 초과·상한 초과·신호는 1 — TS 그대로).
 pub(crate) async fn run_exec(
@@ -256,14 +258,17 @@ pub(crate) async fn run_exec(
     base: &str,
     m: &BridgeMsg,
 ) -> Result<BridgeResult, String> {
-    let shown = m.command.as_deref().unwrap_or("");
-    if let Some(why) = match_denylist(shown) {
+    // 명령이 없으면(JS 거짓 값) 확인 창 앞에서 거절한다. 지난 뒤로는 차단·확인·실행이 같은 글자 하나를 쓴다.
+    let Some(command) = m.command.as_deref() else {
+        return Ok(refused(NO_COMMAND));
+    };
+    if let Some(why) = match_denylist(command) {
         return Ok(refused(format!("위험 명령으로 차단됨: {why}")));
     }
     let Some(st) = state else {
         return Ok(refused(REJECTED));
     };
-    if !st.confirm(shown, m.task_id.as_deref(), base).await {
+    if !st.confirm(command, m.task_id.as_deref(), base).await {
         return Ok(refused(REJECTED));
     }
     let profile = lock(&st.profile).clone();
@@ -272,10 +277,9 @@ pub(crate) async fn run_exec(
     }
     let path = st.exec_path(root).await;
     let h = &st.host;
-    let command = m.command_text.clone();
     let (file, args) = match profile.filter(|_| h.sandbox_enabled) {
         Some(p) => {
-            let args = ["-p", &p, "/bin/bash", "-c", &command]
+            let args = ["-p", &p, "/bin/bash", "-c", command]
                 .map(str::to_owned)
                 .to_vec();
             (SANDBOX_BIN.to_owned(), args)
@@ -286,14 +290,14 @@ pub(crate) async fn run_exec(
                 .iter()
                 .find(|(k, _)| k.eq_ignore_ascii_case("ComSpec"))
                 .map(|(_, v)| v.as_str());
-            let sh = shell_invocation(&command, h.platform, com_spec);
+            let sh = shell_invocation(command, h.platform, com_spec);
             (sh.file, sh.args)
         }
     };
     // Node 는 인자에 NUL 이 있으면 띄우기 전에 던진다(확인은 이미 받았다 — TS 순서 그대로). 명령은 늘 마지막 인자다.
     if command.contains('\0') {
         let arg = format!("args[{}]", args.len() - 1);
-        return Err(node_error::null_bytes_arg(&arg, &command));
+        return Err(node_error::null_bytes_arg(&arg, command));
     }
     let pairs = h.env.iter().map(|(k, v)| (k.as_str(), v.as_str()));
     let out = proc::run(ProcSpec {

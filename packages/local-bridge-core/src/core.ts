@@ -17,7 +17,7 @@ import * as path from 'path';
 import { execFile } from 'child_process';
 import {
     BRIDGE_KINDS, BROWSER_KIND, BROWSER_UPLOAD_CAPABILITY, DIAG_MAX_TOTAL, EXEC_TIMEOUT_MS, FOLDERS_MAX_ENTRIES, FS_OP_TIMEOUT_MS, LIST_ALL_MAX, MAX_BUFFER,
-    SANDBOX_BIN, SANDBOX_ENABLED, SANDBOX_PROFILE_MISSING_ERROR,
+    EXEC_NO_COMMAND_ERROR, SANDBOX_BIN, SANDBOX_ENABLED, SANDBOX_PROFILE_MISSING_ERROR,
 } from './constants';
 import { collectDiagnostics } from './diagnostics';
 import { runCodeNav } from './code-nav';
@@ -182,11 +182,14 @@ export class BridgeCore {
         const base = await this.timedFs('실행 폴더 확인', () => this.resolveBase(m));
         switch (m.kind) {
             case 'exec': {
+                // ⓪ 실행할 명령이 없으면(JS 거짓 값) 확인 창 앞에서 거절. 지난 뒤로는 차단·확인·실행이 같은 글자 하나를 쓴다.
+                if (!m.command) { done({ ok: false, error: EXEC_NO_COMMAND_ERROR, exitCode: 126 }); return; }
+                const command = String(m.command);
                 // ① 명백히 위험한 패턴은 확인 없이 즉시 거부 (guardrail).
-                const denied = matchDenylist(String(m.command || ''));
+                const denied = matchDenylist(command);
                 if (denied) { done({ ok: false, error: `위험 명령으로 차단됨: ${denied}`, exitCode: 126 }); return; }
                 // ② 나머지는 실행 전 사용자 확인 (비우회). 같은 작업 안에서는 사용자가 일괄 승인할 수 있다.
-                if (!(await this.confirmExec(String(m.command || ''), m.taskId, base))) {
+                if (!(await this.confirmExec(command, m.taskId, base))) {
                     done({ ok: false, error: '사용자가 명령 실행을 거부했습니다', exitCode: 126 }); return;
                 }
                 // ③ OS 샌드박스로 감싸 실행 — 폴더 밖 쓰기·비밀 읽기를 커널이 차단한다.
@@ -205,10 +208,10 @@ export class BridgeCore {
                     done({ ok: true, stdout: String(stdout), stderr: String(stderr), exitCode: err ? (typeof err.code === 'number' ? err.code : 1) : 0 });
                 };
                 if (SANDBOX_ENABLED && this.sandboxProfile) {
-                    execFile(SANDBOX_BIN, ['-p', this.sandboxProfile, '/bin/bash', '-c', String(m.command)], opts, cb);
+                    execFile(SANDBOX_BIN, ['-p', this.sandboxProfile, '/bin/bash', '-c', command], opts, cb);
                 } else {
                     // 샌드박스가 없는 OS — Windows 는 cmd.exe, 그 밖은 bash (platform.ts)
-                    const sh = shellInvocation(String(m.command));
+                    const sh = shellInvocation(command);
                     execFile(sh.file, sh.args, { ...opts, windowsVerbatimArguments: process.platform === 'win32' }, cb);
                 }
                 return;
