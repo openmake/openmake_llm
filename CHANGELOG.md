@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.137.0](https://github.com/openmake/openmake_llm/compare/v1.136.2...v1.137.0) (2026-11-15)
+
+
+### ✨ 기능
+
+* **desktop-native:** 앱이 Rust 헬퍼(omk-helper)를 쓴다 — 0.4.0 ([3fdb084](https://github.com/openmake/openmake_llm/commit/3fdb084463602c8df3c1e268c08bfe62c15e0f50))
+
+
+### 🐛 버그 수정
+
+* **bridge:** code_nav 예산을 관문 제한의 4/5 이하로 묶는다 ([1834fb4](https://github.com/openmake/openmake_llm/commit/1834fb49dee667e2234fc696d6366e8cde5f110c))
+* **bridge:** exec command 가 없으면 확인 창 앞에서 거절한다 ([9e0e737](https://github.com/openmake/openmake_llm/commit/9e0e73754683c6f7d148be4022a953274f12a147))
+* **bridge:** Rust exec 를 끊을 때 프로세스 그룹째 끝낸다 ([44064bd](https://github.com/openmake/openmake_llm/commit/44064bd7b2065d0b639fc4d537f037beb6b6272b))
+* **bridge:** 자식 띄우기를 프로세스 전역 자물쇠로 하나씩 지나게 한다 ([d18658c](https://github.com/openmake/openmake_llm/commit/d18658c215d651cf948c469213658d813917f62d))
+* **bridge:** 코어 소형 수정 묶음 — exec 명령 누락 거절·시간 초과 때 프로세스 그룹 정리·code_nav 예산 ([4326b76](https://github.com/openmake/openmake_llm/commit/4326b762ddead652ba3a75f787c2044bc437bce2))
+* **ci:** Jest 가 관련 테스트를 못 찾는 packages 소스는 매니페스트 고정 매핑 테스트로 돈다 ([0aa788a](https://github.com/openmake/openmake_llm/commit/0aa788a2a9be7066844e01000775d38a55f6bf17))
+* **desktop-native:** 업데이트 때 API key 를 새 버전에 넘겨 Keychain 창을 다시 띄우지 않는다 ([6be0f01](https://github.com/openmake/openmake_llm/commit/6be0f01ea2e591fd4fb4b810e763523cf83f2c5d))
+* **desktop-native:** 키체인 저장 실패 때 캐시를 되돌리고, FIFO 경로는 환경으로 넘긴다 ([abae232](https://github.com/openmake/openmake_llm/commit/abae232bdcfa982cee0b2f44a8339c18d93337dc))
+* **llm:** 로컬 주소 호출의 게이트웨이 Router 재시도를 끈다 ([a7abadb](https://github.com/openmake/openmake_llm/commit/a7abadb89d76f73c3dcffd8b824970cb565b7559))
+* **orchestrator:** 작업 실패 이벤트에 실패 종류(reason)·외부 대상(provider)을 싣는다 ([f1acceb](https://github.com/openmake/openmake_llm/commit/f1accebf94f67db8caf7588cd31ea3f721931ec4))
+* **providers:** 외부 직결 채팅·구독 OAuth 채팅의 SDK 재시도를 끈다 ([ff3b0a0](https://github.com/openmake/openmake_llm/commit/ff3b0a0adcebba0bd6ec80021e912f62511dced3))
+* **web:** 실패 문구 조회가 프로토타입 키를 무시하고, 잘린 문구는 title 로 전체를 보여 준다 ([756c2f5](https://github.com/openmake/openmake_llm/commit/756c2f502eadf69b13dd7cde5b059eecf273c201))
+* **web:** 작업 카드에 실패 사유를 사용자 언어로, 실행 중 경과 시간을 보여 준다 ([2201f14](https://github.com/openmake/openmake_llm/commit/2201f149602e4b2b88c10e6bb5adc51525492f4c))
+
 ## [1.136.2](https://github.com/openmake/openmake_llm/compare/v1.136.1...v1.136.2) (2026-11-15)
 
 
