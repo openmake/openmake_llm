@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.136.1](https://github.com/openmake/openmake_llm/compare/v1.136.0...v1.136.1) (2026-11-15)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** grep_code 정규식 방언을 공통 문법으로 안내하고 구문 오류에 엔진별 힌트를 붙인다 ([c54098a](https://github.com/openmake/openmake_llm/commit/c54098ac31cc2c6490eac0c5d6c96c6c2fda2247))
+* **agent-task:** 반복 가드 차단 판별을 차단 문구의 고정 구절로 좁히고 공통 문법 안내에서 \d 를 뺀다 ([3f4af3d](https://github.com/openmake/openmake_llm/commit/3f4af3d1259053a231a287caed07baa71459b0dd))
+* **agent-task:** 인자를 바꿔도 같은 오류로 연속 실패하는 도구 호출을 안내·차단한다 ([cf7cc8c](https://github.com/openmake/openmake_llm/commit/cf7cc8c37d020abdd4f4e2c59231ad661088444d))
+* **local-bridge-core:** code_nav 깊은 정규식의 스택 초과를 Rust 와 같은 문구로 답한다 ([ee6bb1c](https://github.com/openmake/openmake_llm/commit/ee6bb1c4a4868afa86aafd8ca76e94d4f1e913e4))
+* **local-bridge-core:** code_nav 깊은 정규식의 스택 초과를 Rust 와 같은 문구로 답한다 ([4b0c03b](https://github.com/openmake/openmake_llm/commit/4b0c03b83fd72ba71e90fcc7340beb2537f264be))
+
 ## [1.136.0](https://github.com/openmake/openmake_llm/compare/v1.135.0...v1.136.0) (2026-11-15)
 
 
