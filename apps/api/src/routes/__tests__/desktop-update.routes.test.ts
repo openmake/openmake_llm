@@ -91,6 +91,14 @@ describe('GET /api/desktop/download/:file', () => {
         expect(JSON.stringify(res.body)).toContain('파일 없음');
     });
 
+    it('send 오류는 상태 코드를 유지하고 파일용 헤더를 남기지 않는다 — 범위 밖 Range 는 416 JSON', async () => {
+        const res = await request(app).get(`/api/desktop/download/${NATIVE.file}`).set('Range', 'bytes=999-');
+        expect(res.status).toBe(416);
+        expect(res.headers['content-disposition']).toBeUndefined();
+        expect(res.headers['content-range']).toBeUndefined();
+        expect(res.headers['content-type']).toMatch(/json/);
+    });
+
     it('구 Electron dmg 는 파일이 남아 있어도 거부한다', async () => {
         expect((await request(app).get(`/api/desktop/download/${ELECTRON.file}`)).status).toBe(400);
     });
