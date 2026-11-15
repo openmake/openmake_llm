@@ -1,8 +1,12 @@
 //! 자식 프로세스 하나 — Node `execFile`·`execFileSync` 에 해당한다. 이 크레이트에서 프로세스를 띄우는 유일한 자리.
 //!
 //! 끝나는 조건은 Node 와 같다: 자식이 끝나고 **두 파이프가 모두 닫혀야** 끝난다(뒤에 남긴 프로세스가 stdout 을
-//! 쥐고 있으면 그것을 기다린다). 시간 초과·출력 상한이면 직접 자식만 끝내고(SIGKILL — Node 는 SIGTERM, 설계 D-31),
-//! 파이프가 닫히기를 기다리지 않고 그때까지 읽은 것으로 답한다. 프로세스 그룹은 건드리지 않는다(TS 와 같다).
+//! 쥐고 있으면 그것을 기다린다). 시간 초과·출력 상한이면 자식을 끝내고(SIGKILL — Node 는 SIGTERM, 설계 D-31),
+//! 파이프가 닫히기를 기다리지 않고 그때까지 읽은 것으로 답한다.
+//! 프로세스 그룹(unix): 자식은 자기 그룹의 우두머리로 뜬다(`process_group(0)`, 그룹 번호 = 자식 pid). 코어가 끊을 때
+//! 직접 자식을 아직 거두지 않았으면(`child.id()` 가 `Some`) 그 그룹 전체에 `/bin/kill` 로 SIGKILL 을 보낸다 — 손자도
+//! 끝난다. 이미 거뒀으면(명령이 끝났고 뒤에 일부러 남긴 프로세스만 있다) 아무것도 끝내지 않는다(거둔 pid 는 다시 쓰일
+//! 수 있다). TS 는 직접 자식만 끝낸다(설계 2026-11-15 D-2).
 //! 시간 초과 때 직접 자식이 이미 끝나 있었으면 그 종료 코드를 [`ProcEnd::TimedOut`] 에 싣는다 — `execFile` 은 그것을
 //! 결과로 내고 `execFileSync` 는 실패로 던지므로, 판정(종료 코드를 무엇으로 볼지)은 부르는 자리가 한다.
 //! tokio 런타임(시간 + I/O)이 켜져 있어야 한다.
@@ -64,6 +68,9 @@ pub struct ProcOutput {
 
 /// 신호를 보낸 뒤 직접 자식이 끝나기를 기다리는 상한 — 끝낼 수 없는 상태(막힌 볼륨의 D 상태)여도 답은 나간다.
 const REAP_WAIT: Duration = Duration::from_secs(1);
+/// 그룹째 끝낼 때 띄우는 것 — `unsafe`(`killpg`)도 새 크레이트도 쓰지 않는다. 인자 꼴 `-KILL -- -<pgid>` 는 macOS·Linux 같다.
+#[cfg(unix)]
+const KILL_BIN: &str = "/bin/kill";
 const CHUNK: usize = 16 * 1024;
 
 struct Pipe<R> {
@@ -168,6 +175,8 @@ pub async fn run(spec: ProcSpec) -> ProcOutput {
     if let Some(cwd) = &spec.cwd {
         cmd.current_dir(cwd);
     }
+    #[cfg(unix)]
+    cmd.process_group(0);
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
@@ -212,6 +221,11 @@ pub async fn run(spec: ProcSpec) -> ProcOutput {
     let end = match outcome {
         Outcome::Done(s) => exit_end(s),
         cut_short => {
+            // tokio 는 `wait` 가 끝까지 poll 된 뒤 `id()` 를 `None` 으로 낸다 — `Some` 이면 아직 거두지 않아 pid(= 그룹 번호)가
+            // 예약돼 있다(좀비 포함).
+            if let Some(pgid) = child.id() {
+                kill_group(pgid).await;
+            }
             let _ = child.start_kill();
             let _ = tokio::time::timeout(REAP_WAIT, child.wait()).await;
             match cut_short {
@@ -227,6 +241,24 @@ pub async fn run(spec: ProcSpec) -> ProcOutput {
         end,
     }
 }
+
+/// 그룹 `pgid` 전체에 SIGKILL. 띄우지 못하거나 실패해도 부르는 자리의 `start_kill` 이 이어진다.
+#[cfg(unix)]
+async fn kill_group(pgid: u32) {
+    let mut cmd = tokio::process::Command::new(KILL_BIN);
+    cmd.args(["-KILL", "--", &format!("-{pgid}")])
+        .env_clear()
+        .kill_on_drop(true)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    if let Ok(mut k) = cmd.spawn() {
+        let _ = tokio::time::timeout(REAP_WAIT, k.wait()).await;
+    }
+}
+
+#[cfg(not(unix))]
+async fn kill_group(_pgid: u32) {}
 
 #[cfg(test)]
 mod tests {
