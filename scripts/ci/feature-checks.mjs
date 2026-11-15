@@ -96,6 +96,7 @@ export function selectRelatedTests(files, options = {}) {
   // Deleted API source cannot be resolved by Jest: the manifest "deletedSources" maps it to existing regression tests that must run.
   const deletedSources = options.deletedSources ?? manifest.deletedSources ?? {};
   // Source outside the API Jest roots (packages/) has no Jest graph edge: the manifest "fixedTests" names the API tests that check it.
+  // Jest checks only the values (constants) there; the type-equivalence lines (`pin`) are checked by tsc in `npm run build`.
   const fixedTests = options.fixedTests ?? manifest.fixedTests ?? {};
   const listRelated = options.listRelated || (file => JSON.parse(execute(process.execPath, [resolve(root, 'node_modules/jest/bin/jest.js'), '--config', 'apps/api/jest.config.js', '--findRelatedTests', resolve(root, file), '--listTests', '--json', '--runInBand'], { cwd: root, env: options.env || process.env, encoding: 'utf8', stdio: 'pipe' }).stdout));
   // Every module (not only tests) that reaches the file through the same graph — its transitive importers.

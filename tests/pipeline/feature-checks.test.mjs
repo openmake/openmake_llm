@@ -243,6 +243,7 @@ test('selectRelatedTests maps deleted API source to its manifest regression test
 });
 
 // packages/ source is outside the API Jest roots, so --findRelatedTests is empty: the manifest "fixedTests" names the API test that checks it.
+// Jest checks only its values (constants); the type-equivalence lines (`pin`) are checked by tsc in `npm run build`.
 test('selectRelatedTests uses manifest fixedTests when Jest finds no related test (existing test files only)', async t => {
   const { mkdtempSync, mkdirSync, rmSync, writeFileSync } = await import('node:fs');
   const { join, resolve } = await import('node:path');
@@ -264,6 +265,10 @@ test('selectRelatedTests uses manifest fixedTests when Jest finds no related tes
   assert.deepEqual([...selected.tests], [resolve(root, compat)]);
   assert.throws(() => selectRelatedTests([source], { ...opts, fixedTests: { [source]: ['apps/api/src/__tests__/missing.test.ts'] } }), /Fixed mapping test does not exist: apps\/api\/src\/__tests__\/missing\.test\.ts/);
   assert.throws(() => selectRelatedTests([other], { ...opts, fixedTests: { [source]: [compat] } }), /No related Jest tests for packages\/plugin-contracts\/src\/other\.ts/);
+  const found = '/repo/apps/api/src/__tests__/found.test.ts';
+  const jest = selectRelatedTests([source], { ...opts, listRelated: () => [found], fixedTests: { [source]: [compat] } });
+  assert.deepEqual(jest.related.get(source), [found]);
+  assert.equal(jest.tests.has(resolve(root, compat)), false);
 });
 
 // Type-only edges are in Jest's graph (apps/api/jest.dependency-extractor.mjs). Last resort: a type-only source with no related
