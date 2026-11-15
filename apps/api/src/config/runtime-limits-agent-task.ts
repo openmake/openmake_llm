@@ -261,6 +261,12 @@ export const AGENT_TASK_LIMITS = {
     /** 읽기 호출의 같은 결과 연속: 이 횟수부터 안내 / 이 횟수를 넘겨 다시 부르면 실행하지 않음. */
     TOOL_LOOP_WARN_SAME_RESULT: parseInt(process.env.AGENT_TASK_TOOL_LOOP_WARN_SAME_RESULT || '3', 10),
     TOOL_LOOP_BLOCK_SAME_RESULT: parseInt(process.env.AGENT_TASK_TOOL_LOOP_BLOCK_SAME_RESULT || '5', 10),
+    /** 같은 도구가 인자만 바뀐 채 같은 오류 문구로 연속 실패: 이 횟수부터 안내 / 이 횟수를 넘겨 다시 부르면 실행하지 않음
+     *  (직전 결과가 차단이면 한 번은 실행한다). 같은 인자 실패(2·4)보다 느슨하다 — 인자를 바꾸는 것은 정상 탐색일 수 있다. 실측이 아니다. */
+    TOOL_LOOP_WARN_SAME_ERROR: parseInt(process.env.AGENT_TASK_TOOL_LOOP_WARN_SAME_ERROR || '3', 10),
+    TOOL_LOOP_BLOCK_SAME_ERROR: parseInt(process.env.AGENT_TASK_TOOL_LOOP_BLOCK_SAME_ERROR || '6', 10),
+    /** 같은 오류 차단 결과에 싣는 마지막 오류 첫 줄의 최대 글자 수. */
+    TOOL_LOOP_SAME_ERROR_EXCERPT_MAX_CHARS: 200,
     /** 목표 달성 judge — 아티팩트 없는 최종 답변 완료 시 판정 전용 LLM 1회 호출로 목표 달성
      *  여부를 검증(마커 미준수 보완). 미달성 판정 시 completed 대신 failed(goal_incomplete).
      *  판정 실패/파싱 불가는 fail-open(완료 유지). AGENT_TASK_GOAL_JUDGE=false 로 비활성. */
