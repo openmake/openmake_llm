@@ -394,6 +394,26 @@ export function getToolLoopBlockedResult(toolName: string, count: number, kind: 
     return `Error: 이 호출(${toolName})은 ${why} 실행하지 않았습니다. 다른 인자나 다른 방법을 쓰고, 더 진행할 수 없으면 지금까지의 결과로 마무리하세요.`;
 }
 
+/** 도구 호출 반복 가드 — 같은 도구가 인자만 바뀐 채 같은 오류로 연속 실패했을 때 결과 뒤에 붙이는 안내(한 줄). */
+export function getToolLoopSameErrorNote(count: number): string {
+    return `\n\n[반복 안내] 이 도구는 인자를 바꿔도 같은 오류로 ${count}번 연속 실패했습니다. 인자만 바꿔 되풀이하지 말고 오류 내용을 읽고 방식을 바꾸거나 다른 도구를 쓰세요.`;
+}
+
+/** 도구 호출 반복 가드 — 같은 오류 연속 실패가 임계를 넘어 실행하지 않았을 때의 결과. lastError 는 마지막 오류의 첫 줄(발췌). */
+export function getToolLoopSameErrorBlockedResult(toolName: string, count: number, lastError: string): string {
+    return `Error: 이 호출(${toolName})은 인자를 바꿔도 같은 오류로 ${count}번 연속 실패해 실행하지 않았습니다. 같은 방식의 호출을 그만두고 오류 내용을 읽고 방식을 바꾸거나 다른 도구를 쓰고, 더 진행할 수 없으면 지금까지의 결과로 마무리하세요. (마지막 오류: ${lastError})`;
+}
+
+/**
+ * 반복 가드가 실행하지 않고 돌려준 결과인가 — getToolLoopBlockedResult(연속 실패·같은 결과), getToolLoopCycleBlockedResult(주기,
+ * prompts/agent-task-turn-loop), getToolLoopSameErrorBlockedResult(같은 오류)의 공통 꼴 `Error: 이 호출(<도구>)은 … 실행하지 않았습니다`.
+ * 데이터 래퍼(<tool_output>)에 싸여 있어도 본다. 차단 문구를 바꾸면 tool-loop-guard.test 가 깨진다 — 그때 여기도 고친다.
+ */
+const TOOL_LOOP_BLOCKED_RE = /^(?:<tool_output(?:\s[^>]*)?>\s*)?Error: 이 호출\([^)\n]*\)은 [^\n]*? 실행하지 않았습니다\./;
+export function isToolLoopBlockedResult(content: string): boolean {
+    return TOOL_LOOP_BLOCKED_RE.test(content);
+}
+
 /** 파일 보기 창(file-view)의 머리말 — 전체 줄 수, 지금 보이는 구간, 이어 볼 줄 번호(next 가 null 이면 끝). */
 export function getFileViewHeader(path: string, total: number, start: number, end: number, next: number | null): string {
     return `[${path}: 전체 ${total}줄 · ${start}-${end}줄 표시${next !== null ? ` — 이어서 보려면 start_line=${next}` : ''}]`;

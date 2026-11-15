@@ -1,6 +1,7 @@
 /**
  * 도구 호출 반복 가드 — 같은 호출이 연속으로 실패하거나 같은 결과만 돌려줄 때 안내하고, 임계를 넘으면 실행하지 않는다.
  * 서로 다른 호출 두세 개가 같은 결과로 번갈아 되풀이되는 주기(A-B-A-B)도 같은 두 단계로 다룬다(cycleVerdict).
+ * 위 둘은 호출 서명(이름+인자)이 같아야 센다 — 인자만 조금씩 바꿔 같은 오류로 실패하는 반복은 같은 도구의 오류 문구로 센다(sameErrorVerdict).
  *
  * 종전의 반복 감지(turn-guards.pushStuckSignature)는 응답 전체(본문 + 호출)가 완전히 같을 때만 걸려,
  * 본문이 조금만 달라도 같은 실패 호출을 되풀이하며 턴을 태웠다. 여기서는 호출 단위로 본다.
@@ -12,7 +13,10 @@
  */
 import type { ChatMessage } from '../../llm/types';
 import { hashApprovalArgs } from '../../data/repositories/agent-task-approval-repository';
-import { getToolLoopBlockedResult, getToolLoopFailureNote, getToolLoopSameResultNote, LOCAL_BRIDGE_UNKNOWN_OUTCOME_MARKER, UNKNOWN_OUTCOME_PHRASE, UNKNOWN_OUTCOME_DECLINED_PHRASE } from '../../prompts/agent-task-prompt';
+import {
+    getToolLoopBlockedResult, getToolLoopFailureNote, getToolLoopSameResultNote, getToolLoopSameErrorNote, getToolLoopSameErrorBlockedResult,
+    isToolLoopBlockedResult, LOCAL_BRIDGE_UNKNOWN_OUTCOME_MARKER, UNKNOWN_OUTCOME_PHRASE, UNKNOWN_OUTCOME_DECLINED_PHRASE,
+} from '../../prompts/agent-task-prompt';
 import { classifyBrowserAction } from '@openmake/config';
 import { DUPLICATE_TOOL_CALL_PREFIX, TOOL_LOOP_NOTE_MARKER, getToolLoopCycleNote, getToolLoopCycleBlockedResult, getRereadNote } from '../../prompts/agent-task-turn-loop';
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
@@ -192,6 +196,49 @@ export function cycleVerdict(
         noteFor: (result: string): string =>
             cycle.laps + 1 >= AGENT_TASK_TURN_LOOP.TOOL_LOOP_CYCLE_WARN && stripLoopNotes(result) === cycle.expected
                 ? getToolLoopCycleNote(cycle.period, cycle.laps + 1) : '',
+    };
+}
+
+/** 데이터 래퍼(<tool_output>)의 여는 태그 — 차단 결과에 싣는 오류 발췌에서 뗀다. */
+const TOOL_OUTPUT_OPEN_RE = /^<tool_output(?:\s[^>]*)?>\s*/;
+
+/** PURE: 오류 결과의 첫 줄(래퍼·`Error: ` 를 떼고 maxChars 에서 자른다). */
+function errorExcerpt(content: string, maxChars: number): string {
+    const line = content.replace(TOOL_OUTPUT_OPEN_RE, '').split('\n')[0].replace(/^Error:\s*/, '');
+    return line.length > maxChars ? `${line.slice(0, maxChars)}…` : line;
+}
+
+/**
+ * 같은 오류 반복 판정(repetitionVerdict 와 같은 두 단계, 인자 무관) — 지금 부르려는 도구와 이름이 같은 끝난 호출만 뒤에서부터 보고
+ * (다른 도구 호출은 건너뛴다), 연속으로 `Error:` 이고 본문(반복 안내 줄 제외)이 글자까지 같은 횟수를 센다. 가드의 차단 결과
+ * (isToolLoopBlockedResult)는 실행 결과가 아니라 건너뛴다. 성공이나 다른 오류가 나오면 거기서 멈춘다.
+ * block 이면 실행하지 않고 blockedResult 를 결과로 쓴다 — 단 이 도구의 직전 결과가 차단이면 한 번은 실행한다(탐침).
+ * 인자가 다른 호출은 성공할 수 있어 도구를 영구히 막지 않는다. 오류 문구에 인자가 실리는 도구(rg 구문 오류 등)는 걸리지 않는다.
+ * 아니면 실행한 뒤 noteFor(모델에 보일 결과)가 직전 오류와 같고 누적이 limits.warn 이상이면 안내를 돌려준다.
+ */
+export function sameErrorVerdict(
+    conversation: readonly ChatMessage[], name: string, limits: { warn: number; block: number; excerptMaxChars: number },
+): { block: boolean; blockedResult: string; noteFor: (result: string) => string } {
+    const done = doneCalls(conversation);
+    let count = 0;
+    let lastError: string | undefined;
+    let lastBlocked: boolean | undefined; // 이 도구의 직전 결과가 차단이었나(처음 만난 같은 이름 호출로 정한다)
+    for (let i = done.length - 1; i >= 0; i--) {
+        if (done[i].name !== name) continue;
+        const content = done[i].content;
+        const blocked = isToolLoopBlockedResult(content);
+        if (lastBlocked === undefined) lastBlocked = blocked;
+        if (blocked) continue;
+        if (!isErrorResult(content) || (lastError !== undefined && content !== lastError)) break;
+        lastError = content;
+        count++;
+    }
+    return {
+        block: lastError !== undefined && count >= limits.block && lastBlocked !== true,
+        blockedResult: lastError !== undefined ? getToolLoopSameErrorBlockedResult(name, count, errorExcerpt(lastError, limits.excerptMaxChars)) : '',
+        noteFor: (result: string): string =>
+            lastError !== undefined && count + 1 >= limits.warn && isErrorResult(result) && stripLoopNotes(result) === lastError
+                ? getToolLoopSameErrorNote(count + 1) : '',
     };
 }
 

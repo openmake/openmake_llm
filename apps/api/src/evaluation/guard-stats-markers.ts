@@ -35,6 +35,8 @@ export const GUARD_STEP_MARKERS: readonly GuardStepMarker[] = [
     { id: 'loop_warn_same_result', label: '반복 가드 안내(같은 결과)', stepType: 'tool_result', pattern: /\[반복 안내\] 이 호출은 \d+번 연속 같은 결과/ },
     { id: 'loop_block_failure', label: '반복 가드 차단(연속 실패)', stepType: 'tool_result', pattern: /^Error: 이 호출\([^)]*\)은 같은 인자로 \d+번 연속 실패해 실행하지 않았습니다/ },
     { id: 'loop_block_same_result', label: '반복 가드 차단(같은 결과)', stepType: 'tool_result', pattern: /^Error: 이 호출\([^)]*\)은 같은 결과를 \d+번 연속 돌려줘 실행하지 않았습니다/ },
+    { id: 'loop_warn_same_error', label: '반복 가드 안내(인자 바꾼 같은 오류)', stepType: 'tool_result', pattern: /\[반복 안내\] 이 도구는 인자를 바꿔도 같은 오류로 \d+번 연속 실패/ },
+    { id: 'loop_block_same_error', label: '반복 가드 차단(인자 바꾼 같은 오류)', stepType: 'tool_result', pattern: /^Error: 이 호출\([^)]*\)은 인자를 바꿔도 같은 오류로 \d+번 연속 실패해 실행하지 않았습니다/ },
     // 컨텍스트·출력 — turn-call 의 기록 전용 스텝
     { id: 'context_trim', label: '컨텍스트 절단', stepType: 'context_trim' },
     { id: 'output_repetition', label: '출력 반복', stepType: 'output_repetition' },

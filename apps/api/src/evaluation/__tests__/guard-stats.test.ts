@@ -7,6 +7,7 @@ import { GUARD_STEP_MARKERS } from '../guard-stats-markers';
 import { truncateToolResult } from '../../services/agent-task/tool-result-truncate';
 import {
     getToolLoopFailureNote, getToolLoopSameResultNote, getToolLoopBlockedResult,
+    getToolLoopSameErrorNote, getToolLoopSameErrorBlockedResult,
 } from '../../prompts/agent-task-prompt';
 import {
     getTransientRetryNote, getRecoveryWaitNote, getAgentTaskStallNote, getContextTrimNote, getMalformedToolArgsResult,
@@ -34,6 +35,8 @@ describe('classifyGuardStep — 코드가 남기는 실제 문구', () => {
         ['loop_warn_same_result', step('tool_result', `same${getToolLoopSameResultNote(3)}`)],
         ['loop_block_failure', step('tool_result', getToolLoopBlockedResult('bash', 4, 'failure'))],
         ['loop_block_same_result', step('tool_result', getToolLoopBlockedResult('grep_code', 5, 'same_result'))],
+        ['loop_warn_same_error', step('tool_result', `Error: boom${getToolLoopSameErrorNote(3)}`)],
+        ['loop_block_same_error', step('tool_result', getToolLoopSameErrorBlockedResult('grep_code', 6, '정규식이 올바르지 않습니다: Invalid group modifier'))],
         ['context_trim', step('context_trim', getContextTrimNote(3, 40))],
         ['output_repetition', step('output_repetition', getOutputRepetitionNote(5, 60, 'abc'))],
         ['verify_skipped', step('verify_skipped', verifySkippedMessage(['tests']))],
