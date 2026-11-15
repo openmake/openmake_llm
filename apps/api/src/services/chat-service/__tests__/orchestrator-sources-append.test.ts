@@ -54,7 +54,7 @@ describe('appendDeterministicBlocks — 오케스트레이터 출처', () => {
         expect(out).not.toContain('https://pre.example/1)');
     });
 
-    it('번호표 밖 번호만 든 표식은 지우고, 무관한 사전 주입 출처를 인용으로 읽지 않는다', () => {
+    it('표식 안의 번호표 번호는 인용으로 고쳐 쓰고, 작업 번호 t1 의 1 은 인용으로 읽지 않는다', () => {
         const out = run('맑음 [오케스트레이터 작업 결과 t1, 결과 6, 8]. 기온 [출처 12].', {
             ctx: pipelineCtx(10, 11), toolSources: [orchSearch(11, 8)],
         });
