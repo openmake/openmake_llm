@@ -125,8 +125,9 @@ export function ProviderKeysSection() {
   >({});
   const [toggling, setToggling] = useState<Record<string, boolean>>({});
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  /** quiet: 표를 로딩 표시로 바꾸지 않고 목록만 갱신한다(토글 뒤 — 스위치 초점·aria-checked 유지). */
+  const load = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (!opts?.quiet) setLoading(true);
     setError(null);
     try {
       const res = await ApiClient.get<ApiSuccess<{ providers: ProviderEntry[] }>>(
@@ -138,7 +139,7 @@ export function ProviderKeysSection() {
       setError(e instanceof Error ? e.message : t("loadError"));
       setProviders([]);
     } finally {
-      setLoading(false);
+      if (!opts?.quiet) setLoading(false);
     }
     // 사용량 요약은 부가 정보 — 실패해도 키 목록 표시를 막지 않는다(fail-soft).
     try {
@@ -217,7 +218,7 @@ export function ProviderKeysSection() {
     setToggling((v) => ({ ...v, [providerId]: true }));
     try {
       await ApiClient.patch(`/api/external-keys/${providerId}`, { enabled });
-      await load();
+      await load({ quiet: true });
       // 끄면 그 provider 모델이 목록에서 빠지고, 켜면 돌아온다 — 기본 모델 picker/컴포저 즉시 반영
       void queryClient.invalidateQueries({ queryKey: ["models"] });
     } catch (e) {
@@ -367,7 +368,8 @@ export function ProviderKeysSection() {
                               <KeyEnabledSwitch
                                 checked={k.enabled}
                                 disabled={!!toggling[p.provider_id]}
-                                label={pt(k.enabled ? "toggleOff" : "toggleOn", { name: p.display_name })}
+                                label={pt("toggleLabel", { name: p.display_name })}
+                                title={pt(k.enabled ? "toggleOff" : "toggleOn", { name: p.display_name })}
                                 onChange={(next) => void handleToggle(p.provider_id, next)}
                               />
                               <Button
@@ -421,11 +423,13 @@ function KeyEnabledSwitch({
   checked,
   disabled,
   label,
+  title,
   onChange,
 }: {
   checked: boolean;
   disabled: boolean;
   label: string;
+  title: string;
   onChange: (next: boolean) => void;
 }) {
   return (
@@ -434,10 +438,14 @@ function KeyEnabledSwitch({
       role="switch"
       aria-checked={checked}
       aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-pill transition disabled:opacity-50 ${
+      title={title}
+      // disabled 대신 aria-disabled — 요청 중에도 초점이 남고, 눌러도 아래에서 무시한다
+      aria-disabled={disabled}
+      onClick={() => {
+        if (disabled) return;
+        onChange(!checked);
+      }}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-pill transition aria-disabled:opacity-50 ${
         checked ? "bg-accent" : "bg-surface-3"
       }`}
     >

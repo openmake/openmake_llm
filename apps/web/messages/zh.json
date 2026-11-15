@@ -1974,6 +1974,7 @@
     "homepage": "官网",
     "toggleOn": "开启 {name} 密钥",
     "toggleOff": "关闭 {name} 密钥",
+    "toggleLabel": "使用 {name} 密钥",
     "disabled": "已关闭",
     "toggleFailed": "开关切换失败：{error}"
   },

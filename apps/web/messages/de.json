@@ -1974,6 +1974,7 @@
     "homepage": "Startseite",
     "toggleOn": "{name}-Schlüssel einschalten",
     "toggleOff": "{name}-Schlüssel ausschalten",
+    "toggleLabel": "{name}-Schlüssel verwenden",
     "disabled": "Aus",
     "toggleFailed": "Umschalten fehlgeschlagen: {error}"
   },

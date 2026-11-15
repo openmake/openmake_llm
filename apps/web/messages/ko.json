@@ -1974,6 +1974,7 @@
     "homepage": "홈페이지",
     "toggleOn": "{name} 키 켜기",
     "toggleOff": "{name} 키 끄기",
+    "toggleLabel": "{name} 키 사용",
     "disabled": "꺼짐",
     "toggleFailed": "켜기/끄기 실패: {error}"
   },
