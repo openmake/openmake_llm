@@ -162,6 +162,8 @@ impl ProcEnd {
 /// `pipe()` 뒤에 따로 `FD_CLOEXEC` 를 건다 — 그 사이 다른 스레드가 띄운 자식이 이 파이프의 쓰는 쪽을 물려받으면 짧은
 /// 명령이 끝나도 파이프가 그 자식이 끝날 때까지 닫히지 않는다(설계 2026-11-15 D-5, `tests/exec_spawn_race.rs`).
 /// 이 크레이트에서 자식을 띄우는 모든 자리(`run`·`kill_group`·Chrome)가 이것을 거친다. `spawn()` 호출 동안만 쥔다.
+/// 알려진 범위: `spawn` 이 막히면(막힌 볼륨의 cwd 등) 그동안 다른 띄우기도 모두 기다린다.
+/// 소켓(`socket()` 뒤 `FD_CLOEXEC`)의 같은 창과 `omk-helper` 의 기동 때 `hostname` 은 다루지 않는다.
 static SPAWN_LOCK: Mutex<()> = Mutex::new(());
 
 pub(crate) fn spawn(cmd: &mut tokio::process::Command) -> std::io::Result<tokio::process::Child> {
