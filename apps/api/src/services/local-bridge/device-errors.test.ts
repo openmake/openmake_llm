@@ -4,12 +4,13 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { BRIDGE_UNSUPPORTED_KIND_PREFIX, isUnsupportedKindError } from './device-errors';
+import { BRIDGE_UNSUPPORTED_KIND_PREFIX, BRIDGE_INVALID_REGEX_PREFIX, isUnsupportedKindError } from './device-errors';
 
 interface FixtureRequest { msg: { kind?: unknown; folder?: string }; expect: { ok: boolean; error?: string } }
 interface Fixture { cases: { id: string; requests: FixtureRequest[] }[] }
 
 const FIXTURE = resolve(__dirname, '../../../../../packages/local-bridge-core/conformance/file-kinds.json');
+const CODE_NAV_FIXTURE = resolve(__dirname, '../../../../../packages/local-bridge-core/conformance/code-nav.json');
 
 describe('isUnsupportedKindError', () => {
     it('적합성 fixture 의 미지원 kind 응답은 모두 이 접두로 시작한다', () => {
@@ -29,5 +30,16 @@ describe('isUnsupportedKindError', () => {
         expect(isUnsupportedKindError('지원하지 않는 code_nav op: x')).toBe(false);
         expect(isUnsupportedKindError('정규식이 올바르지 않습니다: (')).toBe(false);
         expect(isUnsupportedKindError('')).toBe(false);
+    });
+});
+
+describe('BRIDGE_INVALID_REGEX_PREFIX', () => {
+    it('적합성 fixture(code-nav)의 정규식 구문 오류 접두와 같다', () => {
+        const fixture = JSON.parse(readFileSync(CODE_NAV_FIXTURE, 'utf8')) as { cases: { requests: { msg: { op?: string }; expect: { errorPrefix?: string } }[] }[] };
+        const prefixes = fixture.cases.flatMap((c) => c.requests)
+            .filter((r) => r.msg.op === 'grep' && r.expect.errorPrefix !== undefined)
+            .map((r) => r.expect.errorPrefix);
+        expect(prefixes.length).toBeGreaterThan(0);
+        for (const p of prefixes) expect(p).toBe(BRIDGE_INVALID_REGEX_PREFIX);
     });
 });

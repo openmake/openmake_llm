@@ -7,6 +7,7 @@ import { GUARD_STEP_MARKERS } from '../guard-stats-markers';
 import { truncateToolResult } from '../../services/agent-task/tool-result-truncate';
 import {
     getToolLoopFailureNote, getToolLoopSameResultNote, getToolLoopBlockedResult,
+    getToolLoopSameErrorNote, getToolLoopSameErrorBlockedResult,
 } from '../../prompts/agent-task-prompt';
 import {
     getTransientRetryNote, getRecoveryWaitNote, getAgentTaskStallNote, getContextTrimNote, getMalformedToolArgsResult,
@@ -16,6 +17,8 @@ import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 import { BROWSER_BOT_BLOCK_NOTICE } from '../../prompts/agent-task-browser-web';
 import { getToolResultSpillNotice } from '../../prompts/agent-task-context';
 import { verifySkippedMessage } from '../../services/agent-task/task-steps';
+import { sameErrorVerdict } from '../../services/agent-task/tool-loop-guard';
+import type { ChatMessage } from '../../llm/types';
 
 const step = (step_type: string, content: string, task_id = 't1'): GuardStepRow => ({ task_id, step_type, content });
 
@@ -34,6 +37,8 @@ describe('classifyGuardStep — 코드가 남기는 실제 문구', () => {
         ['loop_warn_same_result', step('tool_result', `same${getToolLoopSameResultNote(3)}`)],
         ['loop_block_failure', step('tool_result', getToolLoopBlockedResult('bash', 4, 'failure'))],
         ['loop_block_same_result', step('tool_result', getToolLoopBlockedResult('grep_code', 5, 'same_result'))],
+        ['loop_warn_same_error', step('tool_result', `Error: boom${getToolLoopSameErrorNote(3)}`)],
+        ['loop_block_same_error', step('tool_result', getToolLoopSameErrorBlockedResult('grep_code', 6, '정규식이 올바르지 않습니다: Invalid group modifier'))],
         ['context_trim', step('context_trim', getContextTrimNote(3, 40))],
         ['output_repetition', step('output_repetition', getOutputRepetitionNote(5, 60, 'abc'))],
         ['verify_skipped', step('verify_skipped', verifySkippedMessage(['tests']))],
@@ -46,6 +51,35 @@ describe('classifyGuardStep — 코드가 남기는 실제 문구', () => {
 
     it.each(cases)('%s 하나로만 분류된다', (id, row) => {
         expect(classifyGuardStep(row)).toEqual([id]);
+    });
+
+    /** 같은 결과를 n번 돌려준 대화로 실제 같은 오류 차단 문구를 만든다(발췌에 그 결과의 첫 줄이 실린다). */
+    const sameErrorBlocked = (result: string): string => {
+        const conv: ChatMessage[] = [{ role: 'system', content: 's' }, { role: 'user', content: 'g' }];
+        for (let i = 0; i < 6; i++) {
+            conv.push({ role: 'assistant', content: '', tool_calls: [{ id: `c${i}`, type: 'function', function: { name: 'bash', arguments: { command: `x${i}` } } }] });
+            conv.push({ role: 'tool', content: result, tool_name: 'bash', tool_call_id: `c${i}` });
+        }
+        const v = sameErrorVerdict(conv, 'bash', { warn: 3, block: 6, excerptMaxChars: 200 });
+        expect(v.block).toBe(true);
+        return v.blockedResult;
+    };
+
+    it.each([
+        ['unattended', getApprovalRejectedNotice('bash', 'unattended')],
+        ['user', getApprovalRejectedNotice('bash', 'user')],
+        ['timeout', getApprovalRejectedNotice('bash', 'timeout')],
+    ])('승인 거절(%s) 발췌가 실린 같은 오류 차단은 loop_block_same_error 하나로만 분류된다', (_kind, rejected) => {
+        expect(classifyGuardStep(step('tool_result', sameErrorBlocked(rejected)))).toEqual(['loop_block_same_error']);
+        expect(classifyGuardStep(step('tool_result', sameErrorBlocked(`<tool_output tool="bash">\n${rejected}\n</tool_output>\n목표: g`))))
+            .toEqual(['loop_block_same_error']);
+    });
+
+    it('데이터 래퍼(<tool_output>) 안의 승인 거절 문구도 센다', () => {
+        const wrap = (c: string): string => `<tool_output tool="bash">\n${c}\n</tool_output>\n목표: g`;
+        expect(classifyGuardStep(step('tool_result', wrap(getApprovalRejectedNotice('bash', 'unattended'))))).toEqual(['approval_rejected_unattended']);
+        expect(classifyGuardStep(step('tool_result', wrap(getApprovalRejectedNotice('bash', 'user'))))).toEqual(['approval_rejected_user']);
+        expect(classifyGuardStep(step('tool_result', wrap(getApprovalRejectedNotice('bash', 'timeout'))))).toEqual(['approval_timeout']);
     });
 
     it('설정의 모든 표지에 실제 문구 표본이 있다', () => {

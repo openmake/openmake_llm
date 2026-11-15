@@ -4,7 +4,7 @@
  */
 import { AGENT_TASK_STABILITY_STEP_SIGNALS } from '../agent-task-metrics';
 import { getTransientRetryNote, getRecoveryWaitNote, getToolCallTimeoutResult, getMalformedToolArgsResult } from '../../prompts/agent-task-turn-loop';
-import { getToolLoopBlockedResult } from '../../prompts/agent-task-prompt';
+import { getToolLoopBlockedResult, getToolLoopSameErrorBlockedResult } from '../../prompts/agent-task-prompt';
 import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 
 /** SQL LIKE → 정규식(% 만 쓴다). */
@@ -40,6 +40,7 @@ describe('AGENT_TASK_STABILITY_STEP_SIGNALS', () => {
     it('반복 가드 차단 — 연속 실패·같은 결과 둘 다, 다른 "실행하지 않았습니다" 결과는 아니다', () => {
         expect(matches('loop_guard_block', getToolLoopBlockedResult('bash', 4, 'failure'))).toBe(true);
         expect(matches('loop_guard_block', getToolLoopBlockedResult('web_search', 5, 'same_result'))).toBe(true);
+        expect(matches('loop_guard_block', getToolLoopSameErrorBlockedResult('grep_code', 6, '정규식이 올바르지 않습니다: x'))).toBe(true);
         expect(matches('loop_guard_block', getMalformedToolArgsResult('bash'))).toBe(false);
         expect(matches('loop_guard_block', getApprovalRejectedNotice('bash', 'unattended'))).toBe(false);
     });

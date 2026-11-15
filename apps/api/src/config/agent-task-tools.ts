@@ -78,6 +78,18 @@ export const PIPE_STATUS_HINT = {
 export const GREP_MISS_HINT_ENABLED = process.env.AGENT_TASK_GREP_MISS_HINT !== 'false';
 
 /**
+ * 정규식 방언 힌트 — grep_code 가 정규식 구문 오류로 끝나면 실제로 돈 백엔드의 문법을 오류 문구 뒤에 한 줄로 덧붙인다
+ * (문구는 prompts/agent-task-tools 의 GREP_REGEX_DIALECT_HINTS). 네이티브(기기)는 기기 프로토콜의 오류 접두
+ * (services/local-bridge/device-errors 의 BRIDGE_INVALID_REGEX_PREFIX)로, rg 는 stderr 의 RG_REGEX_ERROR_RE 로 가른다.
+ * grep -E 는 구현마다 문구가 달라 가르지 않는다. AGENT_TASK_GREP_DIALECT_HINT=false 로 끄면 오류 문구만 준다.
+ */
+export const GREP_DIALECT_HINT = {
+    ENABLED: process.env.AGENT_TASK_GREP_DIALECT_HINT !== 'false',
+    /** rg 가 정규식을 해석하지 못했을 때 stderr 에 내는 문구. */
+    RG_REGEX_ERROR_RE: /regex parse error/,
+} as const;
+
+/**
  * 편집 후 문법 검사 — 진단을 못 주는 실행기(Docker 샌드박스)에서 파일 쓰기 직후, 이미지에 이미 있는 인터프리터로
  * 문법만 본다(코드를 실행하지 않는다). 로컬 실행기는 자체 진단이 있어 대상이 아니다.
  * AGENT_TASK_EDIT_SYNTAX_CHECK=false 로 끈다.
