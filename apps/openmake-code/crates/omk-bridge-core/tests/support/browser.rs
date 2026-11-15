@@ -239,6 +239,10 @@ pub struct FakeHost {
     pub on_launch: Mutex<Option<Box<dyn Fn() + Send>>>,
     /// 기동 때 이 명령을 실제 자식으로 띄워 `Launched.child` 로 준다(정리 절차 확인)
     pub child_cmd: Mutex<Option<Vec<String>>>,
+    /// 띄운 자식들의 PID(정리 확인)
+    pub child_pids: Mutex<Vec<u32>>,
+    /// 기동이 끝나지 않는다(주소 파일을 쓰지 않는 Chrome — 띄우는 중의 정리 확인)
+    pub launch_hang: Mutex<bool>,
 }
 
 impl FakeHost {
@@ -255,6 +259,8 @@ impl FakeHost {
             launch_result: Mutex::new(Ok("ws://127.0.0.1:2/devtools/browser/y".into())),
             on_launch: Mutex::new(None),
             child_cmd: Mutex::new(None),
+            child_pids: Mutex::new(Vec::new()),
+            launch_hang: Mutex::new(false),
         })
     }
 
@@ -322,7 +328,16 @@ impl BrowserHost for FakeHost {
                 .spawn()
                 .unwrap()
         });
+        if let Some(pid) = child.as_ref().and_then(tokio::process::Child::id) {
+            self.child_pids.lock().unwrap().push(pid);
+        }
+        let hang = *self.launch_hang.lock().unwrap();
         Box::pin(async move {
+            if hang {
+                // 자식은 future 안에 있다 — future 가 버려지면 `kill_on_drop` 이 끈다(실제 `launch_chrome` 과 같다)
+                let _keep = child;
+                return std::future::pending().await;
+            }
             // 기동에 시간이 걸린다 — 동시에 들어온 요청이 이 사이에 겹친다(TS 테스트의 tick)
             tokio::time::sleep(Duration::from_millis(10)).await;
             r.map(|ws_url| Launched { ws_url, child })

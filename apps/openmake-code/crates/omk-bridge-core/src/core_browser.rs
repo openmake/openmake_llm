@@ -59,6 +59,15 @@ impl BridgeCore {
         }
     }
 
+    /// 호스트 종료 정리(PR-1.7 D-100) — 이 프로세스가 띄운 Chrome 을 끄고(붙기만 한 Chrome 은 그대로) 인스턴스를 표에서 뺀다
+    /// ([`LocalBrowser::dispose`]). 인스턴스 표가 `static` 이라 `Drop` 이 돌지 않는다 — 호스트가 끝낼 때 불러야 한다. 브라우저가
+    /// 없으면 아무것도 하지 않는다.
+    pub async fn dispose_browser(&self) {
+        if let Some(b) = &self.browser {
+            b.dispose().await;
+        }
+    }
+
     /// 작업이 끝났다 — 그 작업의 탭 닫기를 띄우고 기다리지 않는다(TS `void closeTask`).
     pub(super) fn close_browser_task(&self, task: Option<&str>) {
         if let Some(b) = &self.browser {

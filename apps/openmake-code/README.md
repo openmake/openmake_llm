@@ -36,9 +36,11 @@ CDP·Chrome 기동·실행 조정·다운로드 추적·`LocalBrowser`·액션 1
   (TS 생성자와 같은 조건). 프로필마다 `LocalBrowser` 하나(프로세스 전역 표)라 여러 연결 폴더의 코어가 같은 브라우저를 쓴다. 코어는 환경을 읽지 않는다 —
   호스트가 `OMK_BRIDGE_CHROME`·`OMK_BRIDGE_BROWSER_HEADLESS`·`OMK_BRIDGE_BROWSER_TIMEOUT_MS`·`OMK_BRIDGE_BROWSER_EXTRACT_READY_MS`·
   `OMK_BRIDGE_BROWSER_DOWNLOAD_WAIT_MS`·`OMK_BRIDGE_UPLOAD_MAX_FILE_BYTES` 와 플랫폼·홈을 넘긴다.
-- **호스트가 이을 것**(PR-1.7): 제어권 넘기기·돌려주기 = `set_browser_user_control(on)` + 연결의 `notify_browser_control(on)`, 중지 = `stop_browser()`.
-  연결은 `bridge_ready` 마다 지금 제어권을 다시 알린다(브라우저 있는 코어만). **헬퍼가 끝날 때 `LocalBrowser::dispose()` 를 불러야 한다** — 인스턴스 표가
-  `static` 이라 프로세스 종료 때 `Drop` 이 돌지 않고, 부르지 못하고 죽으면 Chrome 이 남아 다음 기동이 주소 파일로 거기에 붙는다(TS 와 같다).
+- **호스트가 잇는 것**(PR-1.7, `omk-helper`): 제어권 넘기기·돌려주기 = 모든 루트에 `set_browser_user_control(on)` + 연결의 `notify_browser_control(on)`,
+  중지 = `stop_browser()`. 연결은 `bridge_ready` 마다 지금 제어권을 다시 알린다(브라우저 있는 코어만). 헬퍼는 끝날 때 루트를 모두 해제한 **뒤**
+  `BridgeCore::dispose_browser()` 를 부른다 — 인스턴스 표가 `static` 이라 프로세스 종료 때 `Drop` 이 돌지 않는다. SIGKILL·패닉으로 죽으면 Chrome 이
+  남아 다음 기동이 주소 파일로 거기에 붙는다(TS 와 같다). 정리는 먼저 "정리됨" 표식을 세운다 — 띄우는 중인 연결 시도는 끊겨(띄우던 자식은
+  `kill_on_drop`) 1초 상한까지 그 끝을 기다리고, 이후 그 인스턴스로 온 요청은 Chrome 을 띄우지 않고 `BROWSER_DISPOSED_ERROR` 다(TS 코어도 같다).
 - **런타임**: tokio 하나(`net` 기능 추가). CDP 는 `tokio-tungstenite` 위 최소 클라이언트(읽기·쓰기 태스크, 보내기는 소켓 쓰기를 기다리지 않는다)이고
   `127.0.0.1` 로만 붙는다. 확인창·다운로드 이벤트는 연결마다 태스크 하나가 실행 줄기와 따로 처리한다. 공유 상태는 `std::sync::Mutex` 를 짧게만 쥔다.
 - **종료**: 띄운 Chrome 에만 `Browser.close`(1초까지) → 종료 5초 대기 → 남아 있으면 SIGKILL(workspace 가 `unsafe` 를 금지해 SIGTERM 을 보낼 안전한 API 가 없다).
@@ -49,6 +51,45 @@ CDP·Chrome 기동·실행 조정·다운로드 추적·`LocalBrowser`·액션 1
   `browser_timeouts.rs`, fixture `browser-run.json`. 실제 Chrome 은 `tests/browser_chrome.rs` — **로컬 전용**(Chrome 없음 또는 `CI=true` 면
   `SKIP(local-browser)`), 다른 무거운 실행과 겹치지 않게
   `cargo test -j 2 --locked -p omk-bridge-core --test browser_chrome -- --test-threads=1 --nocapture`.
+
+## omk-helper (PR-1.7)
+
+`crates/omk-helper` — Node 헬퍼(`apps/desktop-native/helper/src/helper.mjs`)와 **같은 stdio JSON-lines 계약**의 실행 파일이다. 계약의 원본은
+`helper.mjs` 머리 주석(이벤트 10종·명령 8종)이고, 이벤트 줄은 `JSON.stringify` 의 키 순서까지 같다. 판정 로직은 없다 — 코어·연결을 호스트 값으로 잇는다.
+Node 와 다른 점·그대로 옮긴 점은 `crates/omk-helper/README.md`. 배포되는 앱은 아직 Node 헬퍼를 쓴다(전환은 PR-2.1).
+
+- **띄우기**: `omk-helper --server <주소>`(없으면 `http://localhost:52416`) — 첫 줄 `status idle`, 주소 찾기 뒤 `endpoints` 한 번. 키는 stdin 의
+  `{"cmd":"auth","apiKey":…}` 로만 받는다. `omk-helper --server <주소> --resolve` 는 `{"bridgeUrl","webUrl","discovered"}` 한 줄만 내고 끝낸다(stdin 을 읽지 않는다).
+- **런타임**: `runtime::host_runtime()` 하나. 주 actor 하나가 루트 표·확인 대기·종료 표식을 혼자 쥐고(자물쇠 없음), stdin 읽기·stdout 쓰기는 OS 스레드 하나씩이다
+  (stdout 에 쓰는 곳은 그 스레드뿐). 끝낼 때 `shutdown_background()`.
+- **환경 변수**(기동 때 한 번 읽는다 — 이름·기본값은 TS 와 같다):
+
+  | 변수 | 뜻 |
+  |---|---|
+  | `HOME` | 지원 폴더 `<HOME>/Library/Application Support/OpenMakeCompanion`(device-id·샌드박스·브라우저 프로필 — Node 헬퍼와 같은 자리) |
+  | `OMK_COMPANION_BROWSER` | 정확히 `1` 이면 전용 프로필 브라우저(`<지원 폴더>/browser-profile`) |
+  | `OMK_COMPANION_API_KEY` | **쓰지 않는다** — 있으면 stderr 한 줄 + exit 2(지울 수 없어 자식에 넘어간다. 조회 전용 실행은 보지 않는다) |
+  | `OMK_BRIDGE_SANDBOX` | `0` 이면 exec 샌드박스 끔(macOS) |
+  | `OMK_BRIDGE_AUTO_APPROVE` | `1` 이면 확인 없이 실행(개발·테스트 훅) |
+  | `OMK_BRIDGE_FS_TIMEOUT_MS`·`OMK_BRIDGE_CODE_NAV_TIMEOUT_MS`·`OMK_BRIDGE_DIAG_TIMEOUT_MS` | 시간 제한(기본 15초) |
+  | `OMK_BRIDGE_CHROME`·`OMK_BRIDGE_BROWSER_*`·`OMK_BRIDGE_UPLOAD_MAX_FILE_BYTES` | 브라우저 환경(위 "로컬 브라우저") |
+
+- **종료**: stdin 끝(부모가 죽었다)·`quit`·SIGTERM·SIGINT 가 같은 길 — ① 확인 대기 전부 거부 ② 100ms(거부 결과가 서버로 나갈 시간) ③ 전체 해제
+  (`disconnected`·`autoApprove`·마지막 `status idle`) ④ 띄운 Chrome 정리(`dispose_browser` — 띄우는 중이면 그 시도를 끊는다) ⑤ stdout 비우기(500ms 까지)
+  ⑥ 런타임 정리(`shutdown_timeout` 1초 — 남은 태스크를 버려 실행 중인 exec 자식·띄우는 중인 Chrome 이 `kill_on_drop` 으로 꺼진다, 블록된 FS 호출은
+  상한에서 포기) → exit 0. 최악 약 8.6초. 두 번째 계기는 무시한다(앱은 `quit` 1초 뒤 SIGTERM 을 보낸다).
+- **로그를 달지 않는다**: 로거를 설치하지 않아 `tungstenite`·`rustls` 의 `log` 기록(핸드셰이크의 Authorization, CDP 프레임의 입력값)이 찍힐 길이 없다.
+  stderr 는 고정 문구 셋뿐이다(기동 실패, 키 env 거절, 패닉 위치 — 패닉은 exit 101). `RUST_LOG=trace` 에서도 stderr 가 비어 있음을 테스트가 본다.
+- **시험**: `cargo test --locked -j 2 -p omk-helper` — 실제 프로세스·실 TCP 가짜 서버(`tests/stdio_*.rs`), ReDoS 뒤 같은 연결 유지와 RSS 800MB 감시
+  (`stdio_redos.rs`), 자식이 도는 중의 종료(`stdio_browser_shutdown.rs` — 가짜 Chrome·exec 자식이라 CI 에서도 돈다), 실제 Chrome 종료 정리
+  (`helper_chrome.rs` — **로컬 전용**, `CI=true`·Chrome 없음·GUI 로그인 세션 없음이면 `SKIP(local-browser)`, `RUST_LOG=trace` 로 띄워 stderr 빈 것도 본다,
+  `-- --test-threads=1 --nocapture`). 같은 하네스를 두 헬퍼로:
+
+  ```bash
+  node apps/desktop-native/helper/harness.cjs                                                    # Node 헬퍼(사전: build:packages + esbuild 번들)
+  (cd apps/openmake-code && cargo build -j 2 --locked -p omk-helper)
+  node apps/desktop-native/helper/harness.cjs --helper apps/openmake-code/target/debug/omk-helper  # omk-helper
+  ```
 
 ## 검사
 
