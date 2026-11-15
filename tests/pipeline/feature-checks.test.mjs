@@ -43,6 +43,10 @@ test('Rust core sources select the bridge suite so the TS conformance runner re-
   const r = selectFeatures(['apps/openmake-code/crates/omk-bridge-core/src/denylist.rs', 'apps/openmake-code/Cargo.toml']);
   assert.equal(r.bridge, true); assert.deepEqual(r.api, []); assert.equal(r.pipeline, false);
 });
+test('the shared browser-flow fixture selects both the infra and bridge suites', () => {
+  const r = selectFeatures(['infra/task-runtime/__fixtures__/browser-flow-cases.json']);
+  assert.equal(r.infra, true); assert.equal(r.bridge, true); assert.deepEqual(r.api, []); assert.equal(r.pipeline, false);
+});
 test('an unmapped root shell script still throws', () => {
   assert.throws(() => selectFeatures(['never-mapped.sh']), /Unmapped changed source: never-mapped\.sh/);
 });

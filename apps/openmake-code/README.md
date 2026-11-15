@@ -56,7 +56,7 @@ CDP·Chrome 기동·실행 조정·다운로드 추적·`LocalBrowser`·액션 1
 
 `crates/omk-helper` — Node 헬퍼(`apps/desktop-native/helper/src/helper.mjs`)와 **같은 stdio JSON-lines 계약**의 실행 파일이다. 계약의 원본은
 `helper.mjs` 머리 주석(이벤트 10종·명령 8종)이고, 이벤트 줄은 `JSON.stringify` 의 키 순서까지 같다. 판정 로직은 없다 — 코어·연결을 호스트 값으로 잇는다.
-Node 와 다른 점·그대로 옮긴 점은 `crates/omk-helper/README.md`. 배포되는 앱은 아직 Node 헬퍼를 쓴다(전환은 PR-2.1).
+Node 와 다른 점·그대로 옮긴 점은 `crates/omk-helper/README.md`. 앱 0.4.0 부터 이 실행 파일을 쓴다(`apps/desktop-native/build.sh`).
 
 - **띄우기**: `omk-helper --server <주소>`(없으면 `http://localhost:52416`) — 첫 줄 `status idle`, 주소 찾기 뒤 `endpoints` 한 번. 키는 stdin 의
   `{"cmd":"auth","apiKey":…}` 로만 받는다. `omk-helper --server <주소> --resolve` 는 `{"bridgeUrl","webUrl","discovered"}` 한 줄만 내고 끝낸다(stdin 을 읽지 않는다).
