@@ -112,6 +112,17 @@ function taskModelField(task: PlanTask, ctx: ExecContext): { model?: string } {
     return { model: target.providerId === 'local-llm' ? target.model : target.fullId };
 }
 
+/** 실패 이벤트의 reason·provider — provider 는 실행 대상이 외부일 때만(웹이 model 문자열로 외부 여부를 추측하지 않게) */
+function failureFields(task: PlanTask, ctx: ExecContext, reason: string): { reason: string; provider?: string } {
+    const target = ctx.targets?.get(task.id);
+    return target && target.providerId !== 'local-llm' ? { reason, provider: target.providerId } : { reason };
+}
+
+/** `[kind] 사유` 규약 text 의 맨 앞 kind — 형식이 아니면 'failed' */
+function textKind(text: string): string {
+    return /^\[([^\]\s]+)\]/.exec(text)?.[1] ?? 'failed';
+}
+
 /**
  * 실행을 시도했다가 실패한 작업의 TaskResult — 실패 경로가 어디든(handler throw·타임아웃·runTask reject) 여기서 만든다.
  * model 은 preflight 가 승인한 실행 대상의 fullId(성공 결과·task_results 와 같은 표기). 대상이 없는 작업(web.search·저장본 재조회)은 생략.
@@ -147,13 +158,16 @@ async function runTask(task: PlanTask, ctx: ExecContext, turnSignal: AbortSignal
         const { job: _job, ...rest } = out;
         // pending(제출됐지만 미완료)은 ok=false — 자식 실행 금지·성공 집계 제외. 실패로도 단정하지 않는다.
         const result: TaskResult = { taskId: task.id, capability: task.capability, ms: Date.now() - startedAt, ...rest, ok: status === 'completed', status };
-        ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: status === 'completed' ? 'ok' : status === 'pending' ? 'pending' : 'failed', summary: result.text.slice(0, 120), ms: result.ms, ...modelField });
+        ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: status === 'completed' ? 'ok' : status === 'pending' ? 'pending' : 'failed', summary: result.text.slice(0, 120), ms: result.ms, ...modelField, ...(status === 'failed' ? failureFields(task, ctx, 'failed') : {}) });
         return result;
     } catch (err) {
         const c = classify(err);
+        // 작업·턴 시간 제한으로 끊긴 대기가 Error('취소됨') 을 던진 경우 — 사용자 취소가 아니다(abortError 와 같은 규칙). 문구도 시간 초과 원문으로
+        const reason = signal.reason as { name?: unknown; message?: unknown } | undefined;
+        if (c.kind === 'cancelled' && reason?.name === 'TimeoutError') { c.kind = 'timeout'; c.error = String(reason.message ?? c.error); }
         const result = failedRunResult(task, ctx, `[${c.kind}] ${c.error}`, c.error, Date.now() - startedAt);
         logger.warn(`[Executor] ${task.id} ${task.capability} ${c.kind}: ${c.error.slice(0, 200)}`);
-        ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: c.error.slice(0, 120), ms: result.ms, ...modelField });
+        ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: c.error.slice(0, 120), ms: result.ms, ...modelField, ...failureFields(task, ctx, c.kind) });
         return result;
     } finally {
         release?.();
@@ -173,12 +187,12 @@ export async function executePlan(plan: ValidatedPlan, ctx: ExecContext): Promis
         for (const task of level) {
             // preflight 가 실행 전에 거절한 작업(미배정·키·미지원·입력·쿼터) — 호출·과금 없이 실패로 확정
             const pre = ctx.results.get(task.id);
-            if (pre) { results.push(pre); failedOrSkipped.add(task.id); ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: pre.text.slice(0, 120) }); continue; }
+            if (pre) { results.push(pre); failedOrSkipped.add(task.id); ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: pre.text.slice(0, 120), ...failureFields(task, ctx, textKind(pre.text)) }); continue; }
             const blockedBy = task.dependsOn.find((d) => failedOrSkipped.has(d));
             if (blockedBy) {
                 const r: TaskResult = { taskId: task.id, capability: task.capability, ok: false, status: 'skipped', text: `[skipped] 선행 작업 '${blockedBy}' 미완료(${ctx.results.get(blockedBy)?.status ?? 'failed'})`, media: [], ms: 0, error: `skipped: ${blockedBy}` };
                 results.push(r); ctx.results.set(task.id, r); failedOrSkipped.add(task.id);
-                ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: r.text });
+                ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: r.text, ...failureFields(task, ctx, 'skipped') });
                 continue;
             }
             runnable.push(task);
@@ -197,14 +211,17 @@ export async function executePlan(plan: ValidatedPlan, ctx: ExecContext): Promis
         if (ctx.signal?.aborted) { cancelled = true; break; }
     }
     // 실행하지 못한 나머지 레벨(취소·deadline)은 skipped 로 채운다
+    const wasCancelled = () => cancelled || !!ctx.signal?.aborted;
     const done = new Set(results.map((r) => r.taskId));
     for (const task of plan.tasks) {
         if (done.has(task.id)) continue;
         const r: TaskResult = { taskId: task.id, capability: task.capability, ok: false, status: 'skipped', text: cancelled ? '[cancelled]' : '[skipped] 턴 시간 초과', media: [], ms: 0, error: cancelled ? 'cancelled' : 'turn deadline' };
         results.push(r); ctx.results.set(task.id, r);
+        // 턴 시간 초과면 배너가 남으므로 실패로 알린다(취소면 배너가 사라져 알리지 않는다)
+        if (!wasCancelled()) ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: r.text, ...failureFields(task, ctx, 'deadline') });
     }
     const ok = results.filter((r) => r.status === 'completed').length;
     const pending = results.filter((r) => r.status === 'pending').length;
     const skipped = results.filter((r) => r.status === 'skipped').length;
-    return { results, ok, pending, failed: results.length - ok - pending - skipped, skipped, ms: Date.now() - startedAt, cancelled: cancelled || !!ctx.signal?.aborted };
+    return { results, ok, pending, failed: results.length - ok - pending - skipped, skipped, ms: Date.now() - startedAt, cancelled: wasCancelled() };
 }

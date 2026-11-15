@@ -19,6 +19,7 @@
  */
 import OpenAI from 'openai';
 import { llmFetch } from './llm-fetch';
+import { GATEWAY_NO_RETRY_HEADERS } from './gateway-headers';
 import { getConfig } from '../config';
 import { createLogger } from '../utils/logger';
 import { withSpan } from '../observability/otel';
@@ -76,6 +77,8 @@ export class LLMClient {
             timeout: this.config.timeout,
             fetch: llmFetch,
             ...(this.config.maxRetries !== undefined && { maxRetries: this.config.maxRetries }),
+            // 로컬 주소(게이트웨이)는 Router 재시도를 끈다 — 재시도는 앱 SDK 한 층만. 외부 provider(quotaExempt)는 싣지 않는다.
+            ...(!this.config.quotaExempt && { defaultHeaders: { ...GATEWAY_NO_RETRY_HEADERS } }),
         });
         logger.debug(`LLMClient init: chat=${this.config.baseUrl} (model=${this.config.model})`);
     }

@@ -31,6 +31,7 @@ import { ThemeToggle } from "./theme-toggle";
 import { ActivityStatus } from "./activity-status";
 import { cn } from "@/lib/utils";
 import { useEnabledWebAddons } from "@/addons/registry";
+import { conversationsQueryKey } from "@/lib/conversations-query";
 
 interface SessionRow {
   id?: string;
@@ -192,7 +193,7 @@ export function Sidebar() {
 
   // 최근 대화 — /api/chat/conversations ({data:{sessions:[]}}). 실패/빈이면 목록 숨김.
   const { data: sessions = [] } = useQuery<SessionRow[]>({
-    queryKey: ["conversations"],
+    queryKey: conversationsQueryKey(user?.id),
     queryFn: async () => {
       // excludeHidden=true — 프로젝트(Knowledge)에 연결된 대화는 최근 대화 목록에서 빼고 프로젝트 섹션에만 둔다.
       // 서버 측 필터라 페이지가 짧아지지 않는다. /history 는 이 플래그 없이 호출해 전부 보여준다.

@@ -31,6 +31,7 @@ import { SLASH_COMMAND_DEBOUNCE_MS } from "@/lib/constants/ui-limits";
 import { uuid } from "@/lib/local-id";
 import { groupBridgeDevicesByHost } from "@/lib/bridge-devices";
 import { CHAT_MAX_IMAGES } from "@/lib/chat-history-wire";
+import { isOutside } from "@/lib/outside-pointer";
 
 // 슬래시 스킬 호출: "/" + 공백없는 단일 토큰일 때만 드롭다운 표시.
 const SLASH_PATTERN = /^\/(\S*)$/;
@@ -109,6 +110,8 @@ export function Composer() {
   const [dragging, setDragging] = useState(false);
   // 모드 시트(모바일 최적화) — 7개 토글을 가로스크롤 칩 대신 '도구' 버튼 + 시트로 수납
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
+  const modeSheetRef = useRef<HTMLDivElement>(null);
+  const modeButtonRef = useRef<HTMLButtonElement>(null);
   // + 메뉴 — 파일 첨부/폴더 선택 진입점 통합. 폴더 선택은 에이전트 모드+로컬 실행이
   // 전제라 클릭 시 함께 활성화한다(폴더는 로컬 실행 작업에서만 의미가 있음).
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
@@ -466,6 +469,17 @@ export function Composer() {
     return () => window.removeEventListener("keydown", onKey);
   }, [modeSheetOpen]);
 
+  // 모드 시트: 바깥 pointerdown 으로 닫기. 투명 막을 깔면 전송·승인 첫 클릭을 막이 삼킨다 —
+  // 막 없이 눌린 대상은 그대로 동작한다. '도구' 버튼은 빼야 pointerdown 닫힘 뒤 click 이 다시 열지 않는다.
+  useEffect(() => {
+    if (!modeSheetOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (isOutside(e.target as Node, [modeSheetRef.current, modeButtonRef.current])) setModeSheetOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [modeSheetOpen]);
+
   // 토글 = Base 토글 + 켜진 add-on 의 채팅 모드. 모드는 가로채기(intercept) — 백엔드가 전용 파이프라인을 타며
   // 일반 도구·아티팩트를 무시한다(앰버 신호). 자리는 order 로 정한다(모드가 Base 토글 사이에 끼어든다).
   const TOGGLES = [
@@ -549,12 +563,7 @@ export function Composer() {
             수납해 바가 가로 스크롤/넘침 없이 동작한다. (OD openmake-mobile '+' 시트 패턴) */}
         {modeSheetOpen && (
           <>
-            <div
-              className="fixed inset-0 z-30"
-              onClick={() => setModeSheetOpen(false)}
-              aria-hidden
-            />
-            <div className="absolute bottom-full left-0 right-0 z-40 mb-2 rounded-xl border border-border bg-surface-2 p-1.5 shadow-lg">
+            <div ref={modeSheetRef} className="absolute bottom-full left-0 right-0 z-40 mb-2 rounded-xl border border-border bg-surface-2 p-1.5 shadow-lg">
               <div className="mx-auto mb-1.5 h-1 w-9 rounded-full bg-border-strong" aria-hidden />
               <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-faint">
                 {t("modeHeading")}
@@ -615,6 +624,7 @@ export function Composer() {
         {/* 모드 트리거 '도구' + 활성 모드 칩(flex-wrap) — 가로 스크롤 없음 */}
         <div className="flex flex-wrap items-center gap-1.5 px-3 pt-2.5">
           <button
+            ref={modeButtonRef}
             type="button"
             onClick={() => setModeSheetOpen((v) => !v)}
             aria-expanded={modeSheetOpen}
