@@ -335,7 +335,6 @@ Node 버전의 기준은 저장소 루트 `.node-version` 하나다. `mise.toml`
 | `openmake_llm.sh deploy`·`canary-deploy` | 빌드 전에 셸의 node 와 **PM2 데몬의 node** 가 `.node-version` 과 같은지 본다. 다르면 고치는 방법을 보이고 멈춘다 |
 | `install_mac.sh` | brew `node@24` 가 `.node-version` 과 같은지 보고, 통과하면 `brew pin node@24`(`brew upgrade` 가 다른 판으로 올리지 않게) |
 | `install_linux.sh` | 이미 있는 node 가 `.node-version` 과 같을 때만 그대로 쓴다. 다르면 mise → fnm → nvm → brew → 공식 tarball 순으로 그 판을 준비한다 |
-| `apps/desktop-native/build.sh` | 앱에 넣을 node 가 `.node-version` 과 다르면 빌드 실패 |
 
 PM2 데몬은 처음 띄운 node 를 계속 쓴다 — node 를 바꾼 뒤 `pm2 restart` 만 하면 앱이 옛 node 로 뜬다. 데몬이 다르다고 나오면
 셸의 node 를 맞춘 뒤 `pm2 update`(지금 node 로 데몬을 다시 띄우고 저장된 앱을 되살린다)를 실행한다.
