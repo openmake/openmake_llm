@@ -1971,7 +1971,11 @@
     "connected": "연결됨",
     "keyPage": "API 키 발급 페이지",
     "signInPage": "인증 페이지",
-    "homepage": "홈페이지"
+    "homepage": "홈페이지",
+    "toggleOn": "{name} 키 켜기",
+    "toggleOff": "{name} 키 끄기",
+    "disabled": "꺼짐",
+    "toggleFailed": "켜기/끄기 실패: {error}"
   },
   "apiKeys": {
     "title": "API 키",
