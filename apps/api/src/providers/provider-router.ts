@@ -238,11 +238,19 @@ export class ProviderRouter {
         const keyRow = await this.deps.externalKeysRepo.getByUserAndProvider(
             ctx.userId,
             providerId,
+            { includeDisabled: true },
         );
         if (!keyRow) {
             throw new ProviderError(
                 'MISSING_API_KEY',
                 `사용자가 '${providerId}' API 키를 등록하지 않았습니다`,
+            );
+        }
+        // 꺼진 키는 삭제한 키와 같은 오류 코드 — 뒤쪽 폴백·표시는 그대로, 문구는 로그용 원인
+        if (!keyRow.enabled) {
+            throw new ProviderError(
+                'MISSING_API_KEY',
+                `'${providerId}' API 키가 꺼져 있습니다 — 설정에서 켜 주세요`,
             );
         }
 

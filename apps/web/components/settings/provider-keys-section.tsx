@@ -44,6 +44,8 @@ interface UserKey {
   last_validation_ok: boolean | null;
   last_used_at: string | null;
   created_at: string;
+  /** 사용자 켜기·끄기 — provider 수준 enabled(카탈로그 값)와 다르다. 꺼진 키는 삭제한 키처럼 쓰이지 않는다 */
+  enabled: boolean;
 }
 
 interface ProviderEntry {
@@ -121,9 +123,11 @@ export function ProviderKeysSection() {
   const [validateMsg, setValidateMsg] = useState<
     Record<string, { ok: boolean; text: string }>
   >({});
+  const [toggling, setToggling] = useState<Record<string, boolean>>({});
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  /** quiet: 표를 로딩 표시로 바꾸지 않고 목록만 갱신한다(토글 뒤 — 스위치 초점·aria-checked 유지). */
+  const load = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (!opts?.quiet) setLoading(true);
     setError(null);
     try {
       const res = await ApiClient.get<ApiSuccess<{ providers: ProviderEntry[] }>>(
@@ -135,7 +139,7 @@ export function ProviderKeysSection() {
       setError(e instanceof Error ? e.message : t("loadError"));
       setProviders([]);
     } finally {
-      setLoading(false);
+      if (!opts?.quiet) setLoading(false);
     }
     // 사용량 요약은 부가 정보 — 실패해도 키 목록 표시를 막지 않는다(fail-soft).
     try {
@@ -207,6 +211,24 @@ export function ProviderKeysSection() {
           error: e instanceof Error ? e.message : t("serverError"),
         }),
       );
+    }
+  }
+
+  async function handleToggle(providerId: string, enabled: boolean) {
+    setToggling((v) => ({ ...v, [providerId]: true }));
+    try {
+      await ApiClient.patch(`/api/external-keys/${providerId}`, { enabled });
+      await load({ quiet: true });
+      // 끄면 그 provider 모델이 목록에서 빠지고, 켜면 돌아온다 — 기본 모델 picker/컴포저 즉시 반영
+      void queryClient.invalidateQueries({ queryKey: ["models"] });
+    } catch (e) {
+      window.alert(
+        pt("toggleFailed", {
+          error: e instanceof Error ? e.message : t("serverError"),
+        }),
+      );
+    } finally {
+      setToggling((v) => ({ ...v, [providerId]: false }));
     }
   }
 
@@ -326,7 +348,10 @@ export function ProviderKeysSection() {
                               쪼개지던 것(1440px 실측). 모자라면 Table 의 가로 스크롤에 맡긴다 */}
                           <Td className="whitespace-nowrap">{formatDate(k.created_at, locale)}</Td>
                           <Td className="whitespace-nowrap">
-                            {ok === false ? (
+                            {/* 꺼진 키는 검증 상태 대신 "꺼짐" 하나 — 상태는 서버 값(user_key.enabled)만 본다 */}
+                            {!k.enabled ? (
+                              <Badge tone="neutral">{pt("disabled")}</Badge>
+                            ) : ok === false ? (
                               <Badge tone="danger">
                                 {t("status.validationFailed")}
                               </Badge>
@@ -340,10 +365,17 @@ export function ProviderKeysSection() {
                           </Td>
                           <Td className="whitespace-nowrap text-right">
                             <div className="flex flex-nowrap items-center justify-end gap-1">
+                              <KeyEnabledSwitch
+                                checked={k.enabled}
+                                disabled={!!toggling[p.provider_id]}
+                                label={pt("toggleLabel", { name: p.display_name })}
+                                title={pt(k.enabled ? "toggleOff" : "toggleOn", { name: p.display_name })}
+                                onChange={(next) => void handleToggle(p.provider_id, next)}
+                              />
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                disabled={validating[p.provider_id]}
+                                disabled={validating[p.provider_id] || !k.enabled}
                                 onClick={() => void handleValidate(p.provider_id)}
                               >
                                 {validating[p.provider_id] ? (
@@ -383,6 +415,46 @@ export function ProviderKeysSection() {
             </CardContent>
       </Card>
     </div>
+  );
+}
+
+/* ── 키 켜기·끄기 스위치 (설정 화면 스위치와 같은 모양) ───────── */
+function KeyEnabledSwitch({
+  checked,
+  disabled,
+  label,
+  title,
+  onChange,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  label: string;
+  title: string;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      title={title}
+      // disabled 대신 aria-disabled — 요청 중에도 초점이 남고, 눌러도 아래에서 무시한다
+      aria-disabled={disabled}
+      onClick={() => {
+        if (disabled) return;
+        onChange(!checked);
+      }}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-pill transition aria-disabled:opacity-50 ${
+        checked ? "bg-accent" : "bg-surface-3"
+      }`}
+    >
+      <span
+        className={`inline-block h-5 w-5 transform rounded-pill bg-white shadow-1 transition ${
+          checked ? "translate-x-5" : "translate-x-0.5"
+        }`}
+      />
+    </button>
   );
 }
 

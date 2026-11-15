@@ -62,7 +62,8 @@ async function syncAdminProviderKey(adminId: string | null, settingKey: string, 
             if (entry.sdkType !== 'openai-compatible') return;
             // 기존 행의 custom baseUrl 보존 — upsert 가 base_url = EXCLUDED.base_url 이라
             // 카탈로그 기본값을 넣으면 BYOK 화면에서 설정한 커스텀 endpoint 가 조용히 되돌아간다.
-            const existing = await repo.getByUserAndProvider(adminId, providerId);
+            // 꺼진 키도 읽는다 — upsert 가 다시 켜므로 꺼진 키의 base URL 도 보존돼야 한다.
+            const existing = await repo.getByUserAndProvider(adminId, providerId, { includeDisabled: true });
             await repo.upsert({
                 userId: adminId,
                 providerId,

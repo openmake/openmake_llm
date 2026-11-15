@@ -36,6 +36,21 @@ jest.mock('../../services/AuditService', () => ({
     getAuditService: () => ({ logAudit }),
 }));
 
+// 관리자 BYOK 연동 — 꺼진(enabled=false) 키는 기본 조회에서 빠지고 includeDisabled 로만 보인다(저장소 규칙 흉내)
+const disabledAdminKey = { providerId: 'openrouter', baseUrl: 'https://custom-gw.example.test/v1', enabled: false, keyPrefix: 'sk-or-v1' };
+const mockKeysRepo = {
+    getByUserAndProvider: jest.fn(async (_u: string, _p: string, opts?: { includeDisabled?: boolean }) =>
+        (opts?.includeDisabled ? disabledAdminKey : null)),
+    upsert: jest.fn(async () => ({})),
+    invalidateCachedModels: jest.fn(async () => undefined),
+    clearModelAvailability: jest.fn(async () => undefined),
+    deactivate: jest.fn(async () => true),
+};
+jest.mock('../../data/repositories/external-keys-repo', () => ({
+    ExternalKeysRepository: jest.fn().mockImplementation(() => mockKeysRepo),
+}));
+jest.mock('../../data/models/unified-database', () => ({ getPool: () => ({}) }));
+
 import { adminSystemSettingsRouter } from '../../routes/admin-system-settings.routes';
 
 describe('admin-system-settings.routes', () => {
@@ -87,6 +102,17 @@ describe('admin-system-settings.routes', () => {
         );
         const auditArg = JSON.stringify(logAudit.mock.calls[0][0]);
         expect(auditArg).not.toContain('my-cse-id');
+    });
+
+    test('PUT — 꺼진 관리자 BYOK 키를 다시 저장해도 사용자 지정 base URL 이 보존된다', async () => {
+        const r = await request(app)
+            .put('/api/admin/system-settings')
+            .send({ entries: { OPENROUTER_API_KEY: 'sk-or-v1-dummy-0000000000' } });
+        expect(r.status).toBe(200);
+        expect(mockKeysRepo.getByUserAndProvider).toHaveBeenCalledWith('test-admin', 'openrouter', { includeDisabled: true });
+        expect(mockKeysRepo.upsert).toHaveBeenCalledWith(expect.objectContaining({
+            userId: 'test-admin', providerId: 'openrouter', baseUrl: 'https://custom-gw.example.test/v1',
+        }));
     });
 
     test('PUT — 허용되지 않은 키 400', async () => {
