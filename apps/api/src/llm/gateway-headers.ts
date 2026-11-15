@@ -1,7 +1,9 @@
 /**
- * 게이트웨이(LiteLLM) 요청 공통 헤더 — 게이트웨이로 나가는 외부 provider 호출은 이 상수를 싣는다.
+ * 게이트웨이(LiteLLM) 요청 공통 헤더 — 게이트웨이로 나가는 호출(외부 provider·로컬 모델)은 이 상수를 싣는다.
  * 사용처: capability 호출(services/orchestrator/http-call — gateway transport), 외부 채팅·배정 probe
- * (providers/openai-compat-provider — 게이트웨이 경유 inference client). 새 게이트웨이 경로도 여기서 가져다 쓴다.
+ * (providers/openai-compat-provider — 게이트웨이 경유 inference client), 로컬 주소 호출(llm/client LLMClient 로컬 클라이언트,
+ * 임베딩 클라이언트 tools/web-search/semantic-reranker·services/agent-task/tool-selector-embedding,
+ * services/decision/jev-decision, config/local-models probe). 새 게이트웨이 경로도 여기서 가져다 쓴다.
  *
  * 왜 재시도를 끄나: LiteLLM 기본 재시도(2회)는 provider 가 거절한 요청(403 동시 요청 한도 등)과 앱이 타임아웃으로 끊은 요청을
  * upstream 에 다시 보낸다. 거절 뒤 반복 호출에 경고·차단을 누적하는 provider 에서는 호출 한 번이 경고 여러 개가 된다.

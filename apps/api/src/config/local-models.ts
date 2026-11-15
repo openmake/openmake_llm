@@ -36,6 +36,7 @@ import { createLogger } from '../utils/logger';
 import { MODEL_PROBE } from './model-defaults';
 import { fetchGatewayModelInfo, selectLocalEntriesFromModelInfo } from './local-models-discovery';
 import { resolveLocalModelId } from './local-model-alias';
+import { GATEWAY_NO_RETRY_HEADERS } from '../llm/gateway-headers';
 
 const logger = createLogger('LocalModels');
 
@@ -211,6 +212,11 @@ export function getLocalChatModels(opts: { includeUnavailable?: boolean } = {}):
  * 판정 불가(네트워크 오류·타임아웃·5xx)는 `undefined` — 호출부가 프리셋/기본값을 유지한다
  * (일시 오류로 능력을 잘못 낮추지 않는다).
  */
+/** 모델 호출 probe 요청 헤더 — 게이트웨이 Router 재시도를 끈다(probe 실패 한 번이 upstream 여러 번이 되지 않게). */
+function probeHeaders(apiKey: string | undefined): Record<string, string> {
+    return { 'Content-Type': 'application/json', ...GATEWAY_NO_RETRY_HEADERS, ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) };
+}
+
 /**
  * 컨텍스트 길이 실측 — 불가능한 max_tokens 를 요청해 백엔드가 돌려주는 상한을 읽는다.
  *
@@ -236,10 +242,7 @@ async function probeContextLength(
     try {
         const res = await fetch(baseUrl.replace(/\/$/, '') + '/v1/chat/completions', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-            },
+            headers: probeHeaders(apiKey),
             body: JSON.stringify({
                 model: modelId,
                 messages: [{ role: 'user', content: 'hi' }],
@@ -290,10 +293,7 @@ async function probeToolCalling(
     try {
         const res = await fetch(baseUrl.replace(/\/$/, '') + '/v1/chat/completions', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-            },
+            headers: probeHeaders(apiKey),
             body: JSON.stringify({
                 model: modelId,
                 messages: [{ role: 'user', content: 'hi' }],
@@ -327,10 +327,7 @@ async function pingChatModel(
     try {
         const res = await fetch(baseUrl.replace(/\/$/, '') + '/v1/chat/completions', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-            },
+            headers: probeHeaders(apiKey),
             body: JSON.stringify({
                 model: modelId,
                 messages: [{ role: 'user', content: 'hi' }],
@@ -367,10 +364,7 @@ async function pingEmbeddingModel(
     try {
         const res = await fetch(baseUrl.replace(/\/$/, '') + '/v1/embeddings', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-            },
+            headers: probeHeaders(apiKey),
             body: JSON.stringify({ model: modelId, input: 'hi' }),
             signal: controller.signal,
         });

@@ -1,6 +1,7 @@
 /** jev-decision — 프롬프트 형식·확률 변환·호출 파라미터·fail-open 고정 (실제 모델 호출 없음) */
 import { buildNoulPrompt, noulProbability, decideNoul } from '../jev-decision';
 import { DECISION } from '../../../config/decision';
+import { GATEWAY_NO_RETRY_HEADERS } from '../../../llm/gateway-headers';
 
 const okResponse = (top: Record<string, number>) => ({
     ok: true, status: 200,
@@ -45,6 +46,16 @@ describe('decideNoul', () => {
         });
         expect(r.pTrue as number).toBeGreaterThan(0.9);
         expect(r.error).toBeUndefined();
+    });
+
+    it('게이트웨이 Router 재시도를 끄는 헤더를 싣는다 — 실패 한 번이 upstream 여러 번이 되지 않게', async () => {
+        let headers: Record<string, string> = {};
+        const fetchFn = (async (_u: string, init: RequestInit) => {
+            headers = init.headers as Record<string, string>;
+            return okResponse({ true: -0.05, false: -3 });
+        }) as unknown as typeof fetch;
+        await decideNoul({ state: 's', question: 'q' }, { fetchFn, baseUrl: 'http://gw:1', apiKey: 'k' });
+        expect(headers).toMatchObject(GATEWAY_NO_RETRY_HEADERS);
     });
 
     it('HTTP 오류는 throw 하지 않고 사유만 돌려준다(fail-open)', async () => {
