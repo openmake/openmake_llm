@@ -32,9 +32,16 @@ function expectNoRetryClients(): void {
 
 describe('로컬 임베딩 클라이언트 — 재시도 층 없음', () => {
     it('웹검색 의미 리랭커', async () => {
-        const results = [1, 2, 3].map((i) => ({ title: `t${i}`, url: `https://e${i}.test`, snippet: 's' }));
-        await rerankBySemantics('q', results as never);
-        expectNoRetryClients();
+        // 리랭커는 기한 타이머(2.5초)를 Promise.race 로 걸고 치우지 않는다 — 가짜 타이머로 받아 테스트 끝에 버린다.
+        jest.useFakeTimers();
+        try {
+            const results = [1, 2, 3].map((i) => ({ title: `t${i}`, url: `https://e${i}.test`, snippet: 's' }));
+            await rerankBySemantics('q', results as never);
+            expectNoRetryClients();
+        } finally {
+            jest.clearAllTimers();
+            jest.useRealTimers();
+        }
     });
 
     it('에이전트 작업 도구 선별(임베딩 모드)', async () => {
