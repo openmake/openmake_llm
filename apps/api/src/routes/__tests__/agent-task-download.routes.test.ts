@@ -55,6 +55,14 @@ describe('GET /:taskId/files/download', () => {
         workspaceUnder('.openmake', 'staging', 'task-workspaces');
         expect((await download('.env')).status).toBe(404);
     });
+    it('send 오류는 상태 코드를 유지하고 파일용 헤더를 남기지 않는다 — 범위 밖 Range 는 416 JSON', async () => {
+        workspaceUnder('plain');
+        const res = await download('out/result.txt').set('Range', 'bytes=999-');
+        expect(res.status).toBe(416);
+        expect(res.headers['content-disposition']).toBeUndefined();
+        expect(res.headers['content-range']).toBeUndefined();
+        expect(res.headers['content-type']).toMatch(/json/);
+    });
     it('workspace 밖 경로는 400', async () => {
         workspaceUnder('plain');
         expect((await download('../../etc/passwd')).status).toBe(400);
