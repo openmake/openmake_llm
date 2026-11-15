@@ -74,6 +74,15 @@ export function resolveSessionListScope(
 }
 
 /**
+ * 세션 목록에 보일 모델 — 마지막 답변의 모델(대화가 지금 쓰는 모델), 없으면 첫 메시지의 모델, 없으면 기본 문구.
+ * 사용자 메시지는 provider 해석 전의 엔진 기본값으로 저장되므로 첫 메시지만 보면 외부 모델이 답한 대화가 기본 모델로 보인다.
+ */
+export function sessionDisplayModel(messages: ReadonlyArray<{ role: string; model?: string }> | undefined): string {
+    const lastAnswer = [...(messages ?? [])].reverse().find((m) => m.role === 'assistant' && m.model);
+    return lastAnswer?.model || messages?.[0]?.model || 'OpenMake LLM Auto';
+}
+
+/**
  * 대화 세션 관리 컨트롤러
  * 
  * @class SessionController
@@ -178,8 +187,8 @@ class SessionController {
                  folderId: s.folderId ?? null,
                  tags: s.tags ?? [],
                  messageCount: s.messages?.length || 0,
-                 // 🆕 첫 번째 메시지에서 모델 정보 추출 (모델명으로 표시)
-                 model: s.messages?.[0]?.model || 'OpenMake LLM Auto',
+                 // 마지막 답변의 모델(없으면 첫 메시지) — sessionDisplayModel
+                 model: sessionDisplayModel(s.messages),
                  // 본문 검색(?q=) 매칭 시 발췌 — 비검색 응답에는 항상 undefined (하위 호환)
                  ...(snippets[s.id] ? { snippet: snippets[s.id] } : {}),
              }));
