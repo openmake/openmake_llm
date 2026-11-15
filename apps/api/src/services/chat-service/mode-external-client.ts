@@ -82,7 +82,7 @@ export async function resolveModeExternalClient(
  * 실행 불가 사유가 명확하면 대응 ProviderError 를 throw(호출부가 로컬로 폴백하지 않게),
  * 인프라 오류(pool 미초기화 등)는 삼켜서 후단 resolveAssignedModelClient 의 fail-open 에 맡긴다.
  *
- * getByUserAndProvider 는 is_active=TRUE 만 반환하므로 미등록·비활성이 모두 null →
+ * getByUserAndProvider 기본 조회는 is_active=TRUE AND enabled=TRUE 만 반환하므로 미등록·삭제·꺼짐이 모두 null →
  * MISSING_API_KEY 로 통합한다(사용자 액션은 동일: 키 등록/재활성 또는 다른 모델 선택).
  */
 async function assertExternalModelUsable(providerId: string, userId: string): Promise<void> {

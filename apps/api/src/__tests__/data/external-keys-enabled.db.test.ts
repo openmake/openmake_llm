@@ -74,6 +74,32 @@ describeOrSkip('마이그레이션 199 — 외부 키 enabled (테스트 DB 실�
         expect(await repo.decryptKey(u, 'gemini')).toBe(DUMMY_KEY);
     });
 
+    it('켜진 키와 꺼진 키가 섞이면 기본 listByUser 는 켜진 것만, includeDisabled 는 둘 다 돌려준다', async () => {
+        const u = await user('mixed');
+        await key(u, 'gemini');
+        await key(u, 'openai');
+        await repo.setEnabled(u, 'openai', false);
+
+        expect((await repo.listByUser(u)).map((r) => [r.providerId, r.enabled])).toEqual([['gemini', true]]);
+        const all = await repo.listByUser(u, { includeDisabled: true });
+        expect(all.map((r) => [r.providerId, r.enabled])).toEqual([['gemini', true], ['openai', false]]);
+    });
+
+    it('꺼진 행에도 updateOAuthSession 이 반영되어 다시 켜면 갱신된 값이 복호화된다', async () => {
+        // 설계 §4.1 — updateOAuthSession 에 enabled 조건을 넣지 않는다(꺼 둔 OAuth 연결이 다시 켰을 때 깨지지 않게)
+        const u = await user('oauth-off');
+        const OLD = '{"access_token":"dummy-old"}';
+        const NEW = '{"access_token":"dummy-new"}';
+        await repo.upsert({ userId: u, providerId: 'gemini', sdkType: 'openai-compatible', displayName: 'Gemini', baseUrl: 'https://example.invalid/v1', apiKey: OLD, authMethod: 'oauth', oauthAccountId: 'acct-dummy', oauthExpiresAt: null });
+        await repo.setEnabled(u, 'gemini', false);
+
+        await repo.updateOAuthSession(u, 'gemini', { plaintextSession: NEW, oauthExpiresAt: null });
+        expect(await repo.decryptKey(u, 'gemini')).toBeNull();
+
+        await repo.setEnabled(u, 'gemini', true);
+        expect(await repo.decryptKey(u, 'gemini')).toBe(NEW);
+    });
+
     it('꺼진 키에 upsert(키 교체·재등록)하면 켜진다', async () => {
         const u = await user('upsert');
         await key(u);
