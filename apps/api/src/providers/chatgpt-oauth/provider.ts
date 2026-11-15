@@ -301,9 +301,10 @@ export class ChatGPTOAuthProvider implements IProvider {
                 ...(toResponsesReasoning(opts.thinking) ?? {}),
             };
 
+            // SDK 재시도 0 — 한 번 호출 = upstream 한 번(거절된 요청을 다시 보내지 않는다, openai-compat-provider 채팅과 같다).
             const stream = await this.client.responses.create(
                 requestParams as never,
-                opts.abortSignal ? { signal: opts.abortSignal } : undefined,
+                { maxRetries: 0, ...(opts.abortSignal ? { signal: opts.abortSignal } : {}) },
             );
 
             const collector = new ResponsesStreamCollector(codec);
