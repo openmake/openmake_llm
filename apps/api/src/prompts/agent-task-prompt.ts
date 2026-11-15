@@ -406,10 +406,18 @@ export function getToolLoopSameErrorBlockedResult(toolName: string, count: numbe
 
 /**
  * 반복 가드가 실행하지 않고 돌려준 결과인가 — getToolLoopBlockedResult(연속 실패·같은 결과), getToolLoopCycleBlockedResult(주기,
- * prompts/agent-task-turn-loop), getToolLoopSameErrorBlockedResult(같은 오류)의 공통 꼴 `Error: 이 호출(<도구>)은 … 실행하지 않았습니다`.
+ * prompts/agent-task-turn-loop), getToolLoopSameErrorBlockedResult(같은 오류) 네 문구의 **변하지 않는 구절**로만 알아본다.
+ * 꼴이 비슷한 무인 실행 승인 거절·서브에이전트 승인 불가 문구(`Error: 이 호출(<도구>)은 … 실행하지 않았습니다`)는 차단이 아니다.
  * 데이터 래퍼(<tool_output>)에 싸여 있어도 본다. 차단 문구를 바꾸면 tool-loop-guard.test 가 깨진다 — 그때 여기도 고친다.
  */
-const TOOL_LOOP_BLOCKED_RE = /^(?:<tool_output(?:\s[^>]*)?>\s*)?Error: 이 호출\([^)\n]*\)은 [^\n]*? 실행하지 않았습니다\./;
+const TOOL_LOOP_BLOCKED_RE = new RegExp('^(?:<tool_output(?:\\s[^>]*)?>\\s*)?Error: 이 호출\\([^)\\n]*\\)은 (?:'
+    + [
+        '같은 인자로 \\d+번 연속 실패해',
+        '같은 결과를 \\d+번 연속 돌려줘',
+        '서로 다른 호출 \\d+개가 같은 결과로 \\d+바퀴 되풀이된 주기를 이어가는 것이어서',
+        '인자를 바꿔도 같은 오류로 \\d+번 연속 실패해',
+    ].join('|')
+    + ') 실행하지 않았습니다\\.');
 export function isToolLoopBlockedResult(content: string): boolean {
     return TOOL_LOOP_BLOCKED_RE.test(content);
 }

@@ -211,7 +211,7 @@ function errorExcerpt(content: string, maxChars: number): string {
 /**
  * 같은 오류 반복 판정(repetitionVerdict 와 같은 두 단계, 인자 무관) — 지금 부르려는 도구와 이름이 같은 끝난 호출만 뒤에서부터 보고
  * (다른 도구 호출은 건너뛴다), 연속으로 `Error:` 이고 본문(반복 안내 줄 제외)이 글자까지 같은 횟수를 센다. 가드의 차단 결과
- * (isToolLoopBlockedResult)는 실행 결과가 아니라 건너뛴다. 성공이나 다른 오류가 나오면 거기서 멈춘다.
+ * (isToolLoopBlockedResult)는 실행 결과가 아니라 건너뛴다(승인 거절 문구는 차단이 아니어서 보통의 오류로 센다). 성공이나 다른 오류가 나오면 거기서 멈춘다.
  * block 이면 실행하지 않고 blockedResult 를 결과로 쓴다 — 단 이 도구의 직전 결과가 차단이면 한 번은 실행한다(탐침).
  * 인자가 다른 호출은 성공할 수 있어 도구를 영구히 막지 않는다. 오류 문구에 인자가 실리는 도구(rg 구문 오류 등)는 걸리지 않는다.
  * 아니면 실행한 뒤 noteFor(모델에 보일 결과)가 직전 오류와 같고 누적이 limits.warn 이상이면 안내를 돌려준다.
