@@ -17,7 +17,7 @@ import { OpenAICompatProvider } from '../openai-compat-provider';
 import { ProviderError } from '../provider-errors';
 
 const messages = [{ role: 'user' as const, content: '안녕' }];
-const direct = () => new OpenAICompatProvider({ providerId: 'groq', apiKey: 'user-key', baseUrl: 'https://api.direct.example.test/v1' });
+const direct = () => new OpenAICompatProvider({ providerId: 'compat-test', apiKey: 'user-key', baseUrl: 'https://api.direct.example.test/v1' });
 
 beforeEach(() => { calls.length = 0; });
 
