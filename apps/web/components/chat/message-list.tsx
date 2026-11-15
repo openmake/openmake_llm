@@ -15,6 +15,7 @@ import { appendAnonSessionId } from "@/lib/anon-session";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
 import { failureLabelKey, failureNextKey } from "@/lib/agent-task-failure";
+import { orchestratorFailureMessage, formatElapsed, hasRunningTask } from "@/lib/orchestrator-task-display";
 import { QUEUE_POSITION_POLL_MS, FAILURE_REASON_MAX_CHARS } from "@/lib/constants/ui-limits";
 import { isQuestionApproval, elicitationHint, structuredQuestions } from "@/lib/hitl-question";
 import { LiveSubagentPanel } from "@/components/agent-tasks/subagent-panel";
@@ -506,6 +507,14 @@ function OrchestratorProgressBanner() {
   const t = useTranslations("chat");
   const tCap = useTranslations("capabilityModels");
   const op = useAppStore((s) => s.orchestratorProgress);
+  // 실행 중 경과 시간 — 렌더 중 Date.now() 를 부르지 않고 1초 interval 이 갱신하는 now 로 계산. 실행 중 작업이 있을 때만 돈다
+  const [now, setNow] = useState(() => Date.now());
+  const running = hasRunningTask(op?.tasks ?? []);
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [running]);
   if (!op) return null;
   const capLabel = (capability: string) =>
     tCap.has(`capabilities.${capability.replace(/\./g, '_')}`) ? tCap(`capabilities.${capability.replace(/\./g, '_')}`) : capability;
@@ -537,12 +546,19 @@ function OrchestratorProgressBanner() {
         {op.detail && <p className="mb-1.5 text-xs text-muted">{op.detail}</p>}
         {op.tasks.length > 0 && (
           <ul className="space-y-1">
-            {op.tasks.map((task) => (
+            {op.tasks.map((task) => {
+              // 서버가 분류한 실패 코드 중 문구가 있는 것만 현지화 문구로(원문은 title), 그 밖은 summary 원문
+              const failure = task.status === "failed" ? orchestratorFailureMessage(task.reason, task.provider) : null;
+              return (
               <li key={task.id} className="flex min-w-0 items-center gap-2 text-xs">
                 {statusIcon(task.status)}
                 <span className="shrink-0 font-medium text-fg-2">{capLabel(task.capability)}</span>
                 <span className="sr-only">{t(`orchestrator.status.${task.status}`)}</span>
-                {task.summary ? (
+                {failure ? (
+                  <span className="truncate text-muted" title={task.summary}>
+                    {t(`orchestrator.failure.${failure.key}`, failure.provider ? { provider: failure.provider } : undefined)}
+                  </span>
+                ) : task.summary ? (
                   <span className="truncate text-muted">{task.summary}</span>
                 ) : task.instruction ? (
                   <span className="truncate text-faint">{task.instruction}</span>
@@ -551,8 +567,12 @@ function OrchestratorProgressBanner() {
                 {typeof task.ms === "number" && task.status !== "running" && task.status !== "pending" && (
                   <span className="ml-auto shrink-0 font-mono text-[11px] text-faint">{(task.ms / 1000).toFixed(1)}s</span>
                 )}
+                {task.status === "running" && typeof task.startedAt === "number" && (
+                  <span className="ml-auto shrink-0 font-mono text-[11px] text-faint" aria-hidden>{formatElapsed(now - task.startedAt)}</span>
+                )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </div>
