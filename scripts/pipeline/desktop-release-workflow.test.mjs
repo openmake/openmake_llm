@@ -62,3 +62,26 @@ test('every step after the gate runs only when the gate says publish', () => {
         assert.match(steps.get(name), /^ {8}if: steps\.gate\.outputs\.publish == 'true'$/m, name);
     }
 });
+
+test('push and pull_request path filters both cover the Rust helper, the app and the bridge core', () => {
+    for (const event of ['push', 'pull_request']) {
+        const block = workflow.match(new RegExp(`^ {2}${event}:\\n([\\s\\S]*?)(?=^ {2}\\S|^\\S)`, 'm'))?.[1] ?? '';
+        for (const path of ['apps/openmake-code/**', 'apps/desktop-native/**', 'packages/local-bridge-core/**']) {
+            assert.ok(block.includes(`- '${path}'`), `${event} filter has ${path}`);
+        }
+    }
+});
+
+test('the companion job installs the Rust toolchain before building omk-helper and runs the harness on that release binary', () => {
+    const companion = workflow.slice(workflow.search(/^ {2}companion:$/m), workflow.search(/^ {2}release:$/m));
+    // 줄 머리 기준 — 주석으로 죽인 줄(`# ...`)은 찾지 못한다.
+    const at = (re) => companion.search(re);
+    const toolchain = at(/^ +rustup toolchain install$/m);
+    const cargoBuild = at(/^ +\(cd apps\/openmake-code && cargo build --release --locked -p omk-helper\)$/m);
+    const harness = at(/^ +node apps\/desktop-native\/helper\/harness\.cjs --helper apps\/openmake-code\/target\/release\/omk-helper$/m);
+    const buildSh = at(/^ +run: bash apps\/desktop-native\/build\.sh$/m);
+    assert.ok(toolchain > 0, 'rustup toolchain install present');
+    assert.ok(cargoBuild > toolchain, 'toolchain before cargo build');
+    assert.ok(harness > cargoBuild, 'cargo build before harness');
+    assert.ok(buildSh > harness, 'harness before build.sh');
+});
