@@ -1,6 +1,6 @@
 #!/bin/bash
-# OpenMake Companion 빌드 — 헬퍼 번들 + Swift 빌드 + .app 조립 + ad-hoc 서명 + dmg.
-# 사전: npm run build:packages (local-bridge-core dist 필요)
+# OpenMake Companion 빌드 — 헬퍼 빌드(cargo) + 하네스 + Swift 빌드 + .app 조립 + ad-hoc 서명 + dmg.
+# 사전: npm ci (하네스의 ws 패키지) + Rust 툴체인 (판은 apps/openmake-code/rust-toolchain.toml)
 # 사용: bash apps/desktop-native/build.sh [버전]   (기본 버전: VERSION 파일)
 # 버전을 주지 않으면 VERSION 파일의 값을 쓴다 — 종전 기본값 0.1.0 은 서버에 게시된 버전(0.2.8)보다 낮아,
 # CI 가 만든 새 빌드가 게시본을 "새 버전"으로 보고 구버전으로 되돌아갔다(2026-10-05).
@@ -14,13 +14,15 @@ BUNDLE_ID="cc.openmake.companion"
 OUT="dist"
 APP="$OUT/$APP_NAME.app"
 
-# 1) 헬퍼 번들 (코어 재사용 — 보안 코드 재구현 금지 원칙)
-test -f "$ROOT/packages/local-bridge-core/dist/index.js" || { echo "core dist 없음 — npm run build:packages 먼저"; exit 1; }
-(cd "$ROOT" && npx esbuild apps/desktop-native/helper/src/helper.mjs --bundle --platform=node \
-  --target=node20 --format=cjs --outfile=apps/desktop-native/helper/dist/helper.cjs)
+# 1) 헬퍼 빌드 (Rust omk-helper 릴리스 빌드 — 앱에 넣는 바로 그 실행 파일)
+command -v cargo >/dev/null || { echo "Rust 툴체인이 없습니다 — rustup 설치 뒤 다시(판은 apps/openmake-code/rust-toolchain.toml)"; exit 1; }
+(cd "$ROOT/apps/openmake-code" && cargo build --release --locked -p omk-helper)
+HELPER_BIN="${CARGO_TARGET_DIR:-$ROOT/apps/openmake-code/target}/release/omk-helper"
+[[ -x "$HELPER_BIN" ]] || { echo "omk-helper 실행 파일이 없습니다: $HELPER_BIN"; exit 1; }
 
-# 2) 헬퍼 하네스 (회귀 게이트 — 실패 시 빌드 중단)
-(cd "$ROOT" && node apps/desktop-native/helper/harness.cjs)
+# 2) 헬퍼 하네스 (회귀 게이트 — 번들에 넣는 릴리스 실행 파일로, 실패 시 빌드 중단)
+test -d "$ROOT/node_modules/ws" || { echo "하네스의 ws 패키지 없음 — npm ci 먼저"; exit 1; }
+(cd "$ROOT" && node apps/desktop-native/helper/harness.cjs --helper "$HELPER_BIN")
 
 # 2-B) 다국어 표 게이트 (전 언어 키 집합·소스 사용 키 — 실패 시 빌드 중단)
 bash check-l10n.sh
@@ -32,29 +34,8 @@ bash check-l10n.sh
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp OpenMakeCompanion/.build/release/OpenMakeCompanion "$APP/Contents/MacOS/"
-cp helper/dist/helper.cjs "$APP/Contents/Resources/helper.cjs"
-# Node 런타임 동봉 — 시스템 node 미의존 (plan Step 0 결정)
-# 동봉할 node 는 저장소 .node-version 과 정확히 같아야 한다 — 다르면 빌드 실패.
-# shellcheck source=/dev/null
-. "$ROOT/scripts/lib/node-version.sh"
-require_node_version "$ROOT" || exit 1
-NODE_BIN="$(command -v node)"
-NODE_BIN="$(node -e 'console.log(process.execPath)')"
-NODE_PINNED="$(node_version_pinned "$ROOT")"
-# node_is_self_contained(otool -L 자기완결 검사)·fetch_official_node(공식 배포본 sha256 검증·캐시)
-# shellcheck source=lib/node-bundle.sh
-. lib/node-bundle.sh
-if ! node_is_self_contained "$NODE_BIN"; then
-  echo "PATH 의 node 가 동적 링크본입니다($NODE_BIN) — 공식 배포본 v$NODE_PINNED 을 씁니다."
-  NODE_BIN="$(fetch_official_node "$NODE_PINNED")" || { echo "공식 node 배포본을 준비하지 못했습니다."; exit 1; }
-fi
-cp "$NODE_BIN" "$APP/Contents/Resources/node"
-chmod +x "$APP/Contents/Resources/node"
-# 동봉본 재검사 — 캐시가 깨졌거나 판이 다르면 여기서 멈춘다.
-node_is_self_contained "$APP/Contents/Resources/node" \
-  || { echo "동봉한 node 가 자기완결형이 아닙니다 — 다른 Mac 에서 실행되지 않습니다."; otool -L "$APP/Contents/Resources/node"; exit 1; }
-[[ "$("$APP/Contents/Resources/node" --version)" == "v$NODE_PINNED" ]] \
-  || { echo "동봉한 node 버전이 .node-version($NODE_PINNED)과 다릅니다."; exit 1; }
+cp "$HELPER_BIN" "$APP/Contents/MacOS/omk-helper"
+chmod +x "$APP/Contents/MacOS/omk-helper"
 # 앱 아이콘 — 구 Electron 앱에서 이설한 자산 (2026-08-23, apps/desktop 제거)
 cp "$ROOT/apps/desktop-native/assets/icon.icns" "$APP/Contents/Resources/icon.icns"
 # 다국어 표 — ko(개발 언어)·en·ja·zh-Hans·de (웹 LOCALES 와 같은 언어)
@@ -82,6 +63,7 @@ PLIST
 
 # 5) ad-hoc 서명 (기존 Electron dmg 관행 — sha256 매니페스트로 무결성 검증)
 codesign --force --deep --sign - "$APP"
+codesign --verify --deep --strict "$APP"
 
 # 6) dmg (파일명은 서버 FILE_PATTERN ^OpenMake-[A-Za-z0-9.-]+\.dmg$ 준수)
 DMG="$OUT/OpenMake-Companion-$VERSION-arm64.dmg"
