@@ -276,10 +276,76 @@ describe('네이티브 백엔드(codeNav) 우선 — 로컬 브리지 승인 창
         expect(cmds.length).toBeGreaterThan(0);
     });
 
-    it('네이티브 truncated 는 잘림 안내로 노출된다', async () => {
+    it('네이티브 truncated(줄 수 상한 미달)는 한도 중단 안내로 노출된다', async () => {
         const { sandbox } = nativeSandbox(() => ({ matches: ['a.ts:1:foo'], truncated: true }));
         const grep = createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
-        expect(text(await grep.handler({ pattern: 'foo' }))).toContain('잘림');
+        const out = text(await grep.handler({ pattern: 'foo' }));
+        expect(out).toContain('a.ts:1:foo');
+        expect(out).toContain('한도(시간·파일 수·파일당 매치 수)에서 중단되어 결과가 일부입니다');
+        expect(out).not.toContain('줄에서 잘림');
+    });
+
+    it('줄 수가 max 에 닿은 잘림은 기존 "N줄에서 잘림" 안내다', async () => {
+        const { sandbox } = nativeSandbox(() => ({ matches: ['a.ts:1:foo', 'a.ts:2:foo'], truncated: true }));
+        const grep = createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
+        const out = text(await grep.handler({ pattern: 'foo', max_results: 2 }));
+        expect(out).toContain('2줄에서 잘림');
+        expect(out).not.toContain('결과가 일부입니다');
+    });
+
+    it('네이티브 무일치 + truncated 는 중단 안내를 붙이고 무일치 진단을 돌리지 않는다', async () => {
+        const { sandbox, specs, cmds } = nativeSandbox(() => ({ matches: [], truncated: true }));
+        const grep = createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
+        const r = await grep.handler({ pattern: '(a+)+$' });
+        expect(r.isError).toBeFalsy();
+        expect(text(r)).toContain('(일치 없음: (a+)+$');
+        expect(text(r)).toContain('검색이 한도(시간·파일 수)에서 중단되어 전체를 확인하지 못했습니다');
+        expect(specs).toHaveLength(1);
+        expect(cmds).toHaveLength(0);
+    });
+
+    it('grep_code: 요청 오류(error)는 문구 그대로 오류로 돌려주고 셸을 부르지 않는다', async () => {
+        const msg = '정규식 판정이 너무 깊어 중단했습니다 (역추적 한도 초과) — 패턴을 단순하게 바꾸세요';
+        const { sandbox, cmds } = nativeSandbox(() => ({ error: msg }));
+        const grep = createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
+        const r = await grep.handler({ pattern: '((a?){9999}){9999}' });
+        expect(r.isError).toBe(true);
+        expect(text(r)).toBe(msg);
+        expect(cmds).toHaveLength(0);
+        expect((sandbox as unknown as { exec: jest.Mock }).exec).not.toHaveBeenCalled();
+    });
+
+    it('repo_map: files 요청 오류는 오류로 끝내고 셸 find 로 내려가지 않는다', async () => {
+        const { sandbox, cmds, specs } = nativeSandbox(() => ({ error: '실행 폴더가 존재하지 않습니다: x' }));
+        const map = createCodeNavTools(sandbox).find((t) => t.tool.name === 'repo_map')!;
+        const r = await map.handler({});
+        expect(r.isError).toBe(true);
+        expect(text(r)).toBe('실행 폴더가 존재하지 않습니다: x');
+        expect(cmds).toHaveLength(0);
+        expect(specs.map((s) => s.op)).toEqual(['files']);
+    });
+
+    it('repo_map: 심볼 grep 만 요청 오류면 파일 절은 나오고 심볼 절만 빠진다(셸 없음)', async () => {
+        const { sandbox, cmds } = nativeSandbox((spec) => spec.op === 'files'
+            ? { files: [{ path: 'src/a.ts', lines: 12 }] }
+            : { error: 'code_nav 시간 초과 (5s) — 범위를 좁히세요' });
+        const map = createCodeNavTools(sandbox).find((t) => t.tool.name === 'repo_map')!;
+        const r = await map.handler({});
+        expect(r.isError).toBeFalsy();
+        expect(text(r)).toContain('src/a.ts (12)');
+        expect(text(r)).not.toContain('## 심볼 선언');
+        expect(cmds).toHaveLength(0);
+    });
+
+    it('repo_map: 심볼 grep 이 한도에서 멈춰 상한 미달이면 "N줄에서 잘림" 대신 한도 중단 안내', async () => {
+        const { sandbox } = nativeSandbox((spec) => spec.op === 'files'
+            ? { files: [{ path: 'src/a.ts', lines: 12 }] }
+            : { matches: ['src/a.ts:1:export function foo() {'], truncated: true });
+        const map = createCodeNavTools(sandbox).find((t) => t.tool.name === 'repo_map')!;
+        const out = text(await map.handler({}));
+        expect(out).toContain('src/a.ts:1:export function foo() {');
+        expect(out).not.toContain('줄에서 잘림');
+        expect(out).toContain('src/a.ts:1:export function foo() {\n… 검색이 한도(시간·파일 수·파일당 매치 수)에서 중단되어 결과가 일부입니다');
     });
 
     it('네이티브 무일치는 오류가 아니다', async () => {

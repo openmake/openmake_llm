@@ -19,3 +19,17 @@ export class LocalDeviceUnavailableError extends Error {
  *                      결과를 남기지 않고 넘겨받기 사유로 주차하고, 돌려받으면 같은 호출을 다시 실행한다.
  */
 export type DeviceLoss = 'rerunnable' | 'unknown' | 'browser_takeover';
+
+/**
+ * 디바이스가 모르는 kind 를 받았을 때 돌려주는 오류 문구의 접두(`지원하지 않는 kind: <kind>`).
+ * 출처: TS `packages/local-bridge-core/src/core.ts` 의 dispatch default 가지, Rust
+ * `apps/openmake-code/crates/omk-bridge-core/src/core.rs` 의 `unsupported()`, 적합성 fixture
+ * `packages/local-bridge-core/conformance/file-kinds.json`(device-errors.test 가 대조한다).
+ * 디바이스 코어와 짝인 프로토콜 문구라 env 로 바꾸지 않는다.
+ */
+export const BRIDGE_UNSUPPORTED_KIND_PREFIX = '지원하지 않는 kind';
+
+/** 구 디바이스의 "모르는 kind" 응답인가 — 아니면 디바이스가 요청을 받아 거절한 요청 오류다. */
+export function isUnsupportedKindError(error: string): boolean {
+    return error.startsWith(BRIDGE_UNSUPPORTED_KIND_PREFIX);
+}
