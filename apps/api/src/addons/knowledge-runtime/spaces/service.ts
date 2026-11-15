@@ -22,7 +22,7 @@ function canEditScope(actor: KnowledgeActor, scopeType: KnowledgeScopeType, scop
     return !!rule && rule.canWrite(actor) && rule.scopeIdFor(actor) === scopeId;
 }
 
-function toSummary(row: repo.SpaceSummaryRow, actor: KnowledgeActor, embedding: KnowledgeEmbeddingState): KnowledgeSpaceSummary {
+function toSummary(row: repo.SpaceSummaryRow, actor: KnowledgeActor, embedding: KnowledgeEmbeddingState, conversationCount: number): KnowledgeSpaceSummary {
     return {
         id: row.id,
         name: row.name,
@@ -32,7 +32,7 @@ function toSummary(row: repo.SpaceSummaryRow, actor: KnowledgeActor, embedding: 
         scopeType: row.scope_type,
         canEdit: canEditScope(actor, row.scope_type, row.scope_id),
         documentCount: parseInt(row.document_count, 10),
-        conversationCount: parseInt(row.conversation_count, 10),
+        conversationCount,
         processingCount: parseInt(row.processing_count, 10),
         failedCount: parseInt(row.failed_count, 10),
         lastUsedAt: row.last_used_at,
@@ -41,10 +41,13 @@ function toSummary(row: repo.SpaceSummaryRow, actor: KnowledgeActor, embedding: 
     };
 }
 
-/** 요약 행들 → DTO(임베딩 상태는 한 번에 계산 — 라이브 해석 1회, 공급자별 가용성 1회) */
+/** 요약 행들 → DTO(임베딩 상태는 한 번에 계산 — 라이브 해석 1회, 공급자별 가용성 1회. 대화 수도 한 번에 센다) */
 async function toSummaries(rows: repo.SpaceSummaryRow[], actor: KnowledgeActor): Promise<KnowledgeSpaceSummary[]> {
-    const embeddings = await describeSpaceEmbeddings(rows, actor.userId);
-    return rows.map((r) => toSummary(r, actor, embeddings.get(r.id)!));
+    const [embeddings, counts] = await Promise.all([
+        describeSpaceEmbeddings(rows, actor.userId),
+        repo.countConversationsBySpace(rows.map((r) => r.id)),
+    ]);
+    return rows.map((r) => toSummary(r, actor, embeddings.get(r.id)!, counts.get(r.id) ?? 0));
 }
 
 function toDocument(row: import('../documents/repository').DocumentDetailRow): KnowledgeDocument {
