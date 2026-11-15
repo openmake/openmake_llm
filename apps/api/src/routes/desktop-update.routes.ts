@@ -23,7 +23,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { DESKTOP_UPDATE, resolveDesktopPorts } from '../config/desktop-update';
 import { getConfig } from '../config/env';
-import { success, notFound, badRequest } from '../utils/api-response';
+import { success, notFound, badRequest, error } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('DesktopUpdate');
@@ -74,7 +74,18 @@ router.get('/download/:file', (req: Request, res: Response) => {
         return;
     }
     logger.info(`데스크톱 설치 파일 다운로드: ${file}`);
-    res.download(abs, file);
+    // 전역 setupSecurity 가 /api 응답에 JSON content-type 을 미리 박아 send 의 확장자 MIME 이 덮어쓰지 못한다 — 제거한다.
+    res.removeHeader('Content-Type');
+    // root 를 주고 파일명만 넘긴다 — root 없이 절대경로를 넘기면 send 가 경로의 모든 조각에서 점 파일을 찾아,
+    // 게시 폴더 조상(`~/.openmake/…`) 때문에 404 가 된다. 경로 탈출은 파일명 패턴이 막고 root 가 이중으로 막는다.
+    res.download(file, file, { root: DESKTOP_UPDATE.DIR }, (err: (Error & { status?: number }) | undefined) => {
+        if (!err || res.headersSent) return;
+        // send 가 먼저 넣은 파일용 헤더를 지워 JSON 오류 응답에 남지 않게 하고, 416·412 등 send 의 상태 코드는 유지한다.
+        for (const h of ['Content-Disposition', 'Content-Type', 'Content-Range']) res.removeHeader(h);
+        const status = err.status ?? 404;
+        if (status === 404) res.status(404).json(notFound('파일 없음'));
+        else res.status(status).json(error(`HTTP_${status}`, '파일을 내려보낼 수 없습니다'));
+    });
 });
 
 export default router;
