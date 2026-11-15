@@ -216,11 +216,11 @@
       "setup": [{"dir": "root"}],
       "root": "root",
       "steps": [
-        {"msg": {"kind": "exec", "taskId": "task-cmd"}, "confirm": "yes", "asked": true, "askedWith": {"command": "", "taskId": "task-cmd", "base": "{{TMP}}/root"}, "compare": "no-stderr", "expect": {"ok": true, "stdout": "", "exitCode": 127}, "autoApproved": 0},
-        {"msg": {"kind": "exec", "command": "", "taskId": "task-cmd"}, "confirm": "yes", "asked": true, "askedWith": {"command": "", "taskId": "task-cmd", "base": "{{TMP}}/root"}, "expect": {"ok": true, "stdout": "", "stderr": "", "exitCode": 0}, "autoApproved": 0},
-        {"msg": {"kind": "exec", "command": null}, "confirm": "yes", "asked": true, "askedWith": {"command": "", "taskId": null, "base": "{{TMP}}/root"}, "compare": "no-stderr", "expect": {"ok": true, "stdout": "", "exitCode": 127}, "autoApproved": 0},
-        {"msg": {"kind": "exec", "command": false}, "confirm": "yes", "asked": true, "askedWith": {"command": "", "taskId": null, "base": "{{TMP}}/root"}, "expect": {"ok": true, "stdout": "", "stderr": "", "exitCode": 1}, "autoApproved": 0},
-        {"msg": {"kind": "exec", "command": 0}, "confirm": "yes", "asked": true, "askedWith": {"command": "", "taskId": null, "base": "{{TMP}}/root"}, "compare": "no-stderr", "expect": {"ok": true, "stdout": "", "exitCode": 127}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "taskId": "task-cmd"}, "asked": false, "expect": {"ok": false, "error": "실행할 명령이 없습니다", "exitCode": 126}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "", "taskId": "task-cmd"}, "asked": false, "expect": {"ok": false, "error": "실행할 명령이 없습니다", "exitCode": 126}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": null}, "asked": false, "expect": {"ok": false, "error": "실행할 명령이 없습니다", "exitCode": 126}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": false}, "asked": false, "expect": {"ok": false, "error": "실행할 명령이 없습니다", "exitCode": 126}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": 0}, "asked": false, "expect": {"ok": false, "error": "실행할 명령이 없습니다", "exitCode": 126}, "autoApproved": 0},
         {"msg": {"kind": "exec", "command": ["ls"]}, "confirm": "yes", "asked": true, "askedWith": {"command": "ls", "taskId": null, "base": "{{TMP}}/root"}, "expect": {"ok": true, "stdout": "", "stderr": "", "exitCode": 0}, "divergence": "non-string-field", "rustExpect": {"ok": false, "error": "요청 필드 형식이 올바르지 않습니다: command"}, "autoApproved": 0},
         {"msg": {"kind": "exec", "command": 7}, "confirm": "yes", "asked": true, "askedWith": {"command": "7", "taskId": null, "base": "{{TMP}}/root"}, "compare": "no-stderr", "expect": {"ok": true, "stdout": "", "exitCode": 127}, "divergence": "non-string-field", "rustExpect": {"ok": false, "error": "요청 필드 형식이 올바르지 않습니다: command"}, "autoApproved": 0},
         {"msg": {"kind": "exec", "command": "echo -n t5", "taskId": 5}, "confirm": "yes", "asked": true, "askedWith": {"command": "echo -n t5", "taskId": 5, "base": "{{TMP}}/root"}, "expect": {"ok": true, "stdout": "t5", "stderr": "", "exitCode": 0}, "divergence": "non-string-field", "rustExpect": {"ok": false, "error": "요청 필드 형식이 올바르지 않습니다: taskId"}, "autoApproved": 0}

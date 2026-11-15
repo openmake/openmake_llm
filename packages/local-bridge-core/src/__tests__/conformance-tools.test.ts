@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { BridgeCore } from '../core';
-import { CODE_NAV_EXCLUDED_DIRS, CODE_NAV_EXCLUDED_FILES } from '../constants';
+import { CODE_NAV_EXCLUDED_DIRS, CODE_NAV_EXCLUDED_FILES, codeNavBudgetMs } from '../constants';
 import { globToRegExp, isSecretFile, walkFiles } from '../code-nav';
 import { collectDiagnostics } from '../diagnostics';
 import { detectTestRunner } from '../test-runner';
@@ -66,7 +66,7 @@ describe('fixture 모양 — 묶음 이름·키 허용 목록·빈 목록', () =
     });
     it('code-nav', () => {
         const doc = load<Record<string, unknown>>('code-nav');
-        shape(doc, ['suite', 'version', 'cases', 'walk', 'secretFiles', 'excludedFiles', 'excludedDirs'], [], 'code-nav');
+        shape(doc, ['suite', 'version', 'cases', 'walk', 'secretFiles', 'excludedFiles', 'excludedDirs', 'budget'], [], 'code-nav');
         shapeCoreCases(doc, 'code-nav');
         for (const c of nonEmpty(doc.walk, 'code-nav/walk')) {
             const at = `code-nav/walk/${String(c.id)}`;
@@ -79,6 +79,10 @@ describe('fixture 모양 — 묶음 이름·키 허용 목록·빈 목록', () =
         for (const c of nonEmpty(doc.secretFiles, 'code-nav/secretFiles')) shape(c, ['name', 'expect'], [], 'code-nav/secretFiles');
         nonEmpty((doc.excludedFiles as unknown[]).map((x) => ({ x })), 'code-nav/excludedFiles');
         nonEmpty((doc.excludedDirs as unknown[]).map((x) => ({ x })), 'code-nav/excludedDirs');
+        for (const c of nonEmpty(doc.budget, 'code-nav/budget')) {
+            shape(c, ['id', 'input', 'expect'], [], 'code-nav/budget');
+            shape(c.input, ['configured', 'gateMs'], [], `code-nav/budget/${String(c.id)}/input`);
+        }
     });
     it('diagnostics-parse', () => {
         const doc = load<Record<string, unknown>>('diagnostics-parse');
@@ -141,6 +145,7 @@ describe('code-nav', () => {
         secretFiles: { name: string; expect: boolean }[];
         excludedFiles: string[];
         excludedDirs: string[];
+        budget: { id: string; input: { configured: number; gateMs: number }; expect: number }[];
     }>('code-nav');
 
     it('excludedFiles 가 CODE_NAV_EXCLUDED_FILES(@openmake/config SENSITIVE_FILE_PATTERNS)와 순서까지 같다', () => {
@@ -148,6 +153,9 @@ describe('code-nav', () => {
     });
     it('excludedDirs 가 CODE_NAV_EXCLUDED_DIRS 와 순서까지 같다', () => {
         expect(doc.excludedDirs).toEqual([...CODE_NAV_EXCLUDED_DIRS]);
+    });
+    it.each(doc.budget.map((c) => [c.id, c] as const))('budget/%s', (_id, c) => {
+        expect(codeNavBudgetMs(c.input.configured, c.input.gateMs)).toBe(c.expect);
     });
     it('secretFiles', () => {
         for (const c of doc.secretFiles) expect({ name: c.name, secret: isSecretFile(c.name) }).toEqual({ name: c.name, secret: c.expect });

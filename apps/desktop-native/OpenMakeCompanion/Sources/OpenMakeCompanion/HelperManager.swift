@@ -1,13 +1,13 @@
-// HelperManager — Node 헬퍼(브리지 코어) 프로세스의 유일한 spawn 주체.
+// HelperManager — 브리지 헬퍼(`omk-helper`, Rust) 프로세스의 유일한 spawn 주체.
 //
 // 보안 설계 (plan §3·목표 원칙):
 //  - 로컬 실행 권한의 범위는 항상 "사용자가 NSOpenPanel 로 직접 지정한 폴더 + 하위" —
 //    경로 스코프 강제는 헬퍼(코어)의 realpath safe() 가 담당하고, 여기서는 발원만 담당한다.
 //  - exec 승인/거절의 선택 주체는 항상 사용자(네이티브 다이얼로그, 비우회). 'all'(일괄 승인)
 //    은 그 작업 한정이며 회수는 코어가 관리, 여기서는 카운트 표시·즉시 해제만 제공한다.
-//  - API key 는 argv 가 아니라 env 로 전달(ps 노출 방지), 저장은 Keychain.
+//  - API key 는 stdin 의 `auth` 명령으로 전달(인자·환경으로 넘기지 않는다), 저장은 Keychain.
 //  - 좀비 방지: 앱 종료 시 stdin 닫힘 → 헬퍼가 스스로 정리 종료(하네스 검증됨). 추가로
-//    terminate() 를 명시 호출한다.
+//    terminate() 를 명시 호출한다. 헬퍼는 종료 때 자기가 띄운 Chrome 을 정리한 뒤 끝난다(최악 약 9초).
 import AppKit
 import Foundation
 import UserNotifications
@@ -38,6 +38,10 @@ final class HelperManager: NSObject, ObservableObject {
 
     private var process: Process?
     private var stdinPipe: Pipe?
+    /** 끄는 중인(quit 을 보낸) 헬퍼들 — 재기동은 이것들이 모두 끝난 뒤에 새 헬퍼를 띄운다. */
+    private var retiring: [Process] = []
+    /** 재기동 세대 — 대기 중 재기동이 또 예약되면 마지막 것만 연결한다. */
+    private var restartGeneration = 0
     private var stdoutBuf = Data()
 
     // 서버 주소 — 사용자가 설정에 넣는 주소 하나. 브라우저에서 쓰는 주소(또는 API 주소)를 그대로 넣으면
@@ -110,12 +114,12 @@ final class HelperManager: NSObject, ObservableObject {
 
     // ── 헬퍼 프로세스 lifecycle ──
 
-    private func resourceURL(_ name: String) -> URL? {
-        // 번들 실행(정식) → Resources, 개발 실행(swift run) → env 훅으로 경로 주입.
-        if let env = ProcessInfo.processInfo.environment["OMK_COMPANION_\(name.uppercased())"] {
+    private func helperURL() -> URL? {
+        // 번들 실행(정식) → Contents/MacOS/omk-helper, 개발 실행(swift run) → env 훅으로 실행 파일 경로 주입.
+        if let env = ProcessInfo.processInfo.environment["OMK_COMPANION_HELPER"] {
             return URL(fileURLWithPath: env)
         }
-        return Bundle.main.resourceURL?.appendingPathComponent(name)
+        return Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("omk-helper")
     }
 
     private func ensureHelper() -> Bool {
@@ -127,14 +131,13 @@ final class HelperManager: NSObject, ObservableObject {
             statusText = L("status.apiKeyRequired")
             return false
         }
-        guard let nodeURL = resourceURL("node"), FileManager.default.isExecutableFile(atPath: nodeURL.path),
-              let helperURL = resourceURL("helper.cjs"), FileManager.default.fileExists(atPath: helperURL.path) else {
+        guard let helperURL = helperURL(), FileManager.default.isExecutableFile(atPath: helperURL.path) else {
             statusText = L("status.helperMissing")
             return false
         }
         let p = Process()
-        p.executableURL = nodeURL
-        p.arguments = [helperURL.path, "--server", serverAddress]
+        p.executableURL = helperURL
+        p.arguments = ["--server", serverAddress]
         var env = ProcessInfo.processInfo.environment
         // 키는 환경으로 넘기지 않는다 — 프로세스 시작 환경은 같은 사용자의 다른 프로세스가 읽을 수 있어,
         // 샌드박스 안의 승인된 명령이 헬퍼의 키를 읽어 낼 수 있었다. 기동 직후 stdin 으로 준다(아래 auth).
@@ -147,17 +150,20 @@ final class HelperManager: NSObject, ObservableObject {
         p.standardError = FileHandle.nullDevice
         outPipe.fileHandleForReading.readabilityHandler = { [weak self] h in
             let d = h.availableData
-            guard !d.isEmpty else { return }
+            // EOF — 헬퍼가 끝났다. 처리기를 풀어 빈 데이터로 계속 불리지 않게 한다.
+            guard !d.isEmpty else { h.readabilityHandler = nil; return }
             Task { @MainActor in self?.consume(d) }
         }
-        p.terminationHandler = { [weak self] _ in
+        p.terminationHandler = { [weak self] proc in
             Task { @MainActor in
-                self?.process = nil
-                self?.stdinPipe = nil
-                if !(self?.connectedFolders.isEmpty ?? true) { self?.statusText = L("status.helperExited") }
-                self?.connectedFolders = []
-                self?.rootStatus = [:]
-                self?.authClosedFolders = []
+                // 지금의 헬퍼가 끝났을 때만 정리한다 — 끄는 중이던 옛 헬퍼가 늦게 끝나도 새 헬퍼의 상태를 지우지 않게.
+                guard let self, self.process === proc else { return }
+                self.process = nil
+                self.stdinPipe = nil
+                if !self.connectedFolders.isEmpty { self.statusText = L("status.helperExited") }
+                self.connectedFolders = []
+                self.rootStatus = [:]
+                self.authClosedFolders = []
             }
         }
         do { try p.run() } catch {
@@ -173,6 +179,8 @@ final class HelperManager: NSObject, ObservableObject {
     func stopHelper() {
         send(["cmd": "quit"])
         let p = process
+        retiring.removeAll { !$0.isRunning }
+        if let p { retiring.append(p) }
         process = nil
         stdinPipe = nil
         connectedFolders = []
@@ -180,6 +188,34 @@ final class HelperManager: NSObject, ObservableObject {
         authClosedFolders = []
         // quit 처리(결과 flush 100ms) 뒤에도 살아 있으면 강제 종료 — 좀비 방지 2중선.
         DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) { if let p, p.isRunning { p.terminate() } }
+    }
+
+    /** 헬퍼 재기동 — 옛 헬퍼(와 그가 띄운 Chrome)가 실제로 끝난 뒤 새 헬퍼로 폴더를 다시 연결한다. */
+    private func restartHelper() {
+        let folders = connectedFolders.isEmpty ? lastFolders : connectedFolders
+        stopHelper()
+        restartGeneration += 1
+        let generation = restartGeneration
+        Task { @MainActor in
+            // 상한 12초 — 헬퍼 종료의 최악(Chrome 정리 포함 약 8.6초) + 여유. 넘으면 SIGKILL 뒤 1초 더 기다린다.
+            var deadline = Date().addingTimeInterval(12)
+            var killed = false
+            while true {
+                guard generation == self.restartGeneration else { return }
+                self.retiring.removeAll { !$0.isRunning }
+                if self.retiring.isEmpty { break }
+                if Date() >= deadline {
+                    if killed { break }
+                    for p in self.retiring where p.isRunning { kill(p.processIdentifier, SIGKILL) }
+                    killed = true
+                    deadline = Date().addingTimeInterval(1)
+                }
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+            self.retiring.removeAll { !$0.isRunning }
+            guard generation == self.restartGeneration else { return }
+            for f in folders { self.connect(folder: f) }
+        }
     }
 
     private func send(_ obj: [String: Any]) {
@@ -247,31 +283,19 @@ final class HelperManager: NSObject, ObservableObject {
         guard on != browserEnabled else { return }
         browserEnabled = on
         browserUserControl = false
-        let folders = connectedFolders.isEmpty ? lastFolders : connectedFolders
-        stopHelper()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            for f in folders { self.connect(folder: f) }
-        }
+        restartHelper()
     }
 
-    /** API key 변경 — 헬퍼 재기동(key 는 spawn env)으로 반영하고 연결을 되살린다. 키 폐기·만료로 멈춘 연결도 새 키로 다시 붙는다. */
+    /** API key 변경 — 헬퍼 재기동(키는 기동 직후 stdin)으로 반영하고 연결을 되살린다. 키 폐기·만료로 멈춘 연결도 새 키로 다시 붙는다. */
     func reloadApiKey() {
-        let folders = connectedFolders.isEmpty ? lastFolders : connectedFolders
-        stopHelper()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            for f in folders { self.connect(folder: f) }
-        }
+        restartHelper()
     }
 
     /** 서버 주소 변경 — 헬퍼 재기동(주소는 spawn 인자) 후 재연결. 웹 주소는 새 헬퍼가 다시 알려 준다. */
     func switchServer(_ address: String) {
         serverAddress = address
         resolvedWebUrl = nil
-        let folders = connectedFolders.isEmpty ? lastFolders : connectedFolders
-        stopHelper()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            for f in folders { self.connect(folder: f) }
-        }
+        restartHelper()
     }
 
     func openWeb() {
@@ -287,12 +311,12 @@ final class HelperManager: NSObject, ObservableObject {
         실패하면 넣은 주소를 그대로 쓴다. */
     func webUrl(for server: String) async -> String {
         if server == serverAddress, let known = resolvedWebUrl { return known }
-        guard let nodeURL = resourceURL("node"), let helperURL = resourceURL("helper.cjs") else { return server }
+        guard let helperURL = helperURL() else { return server }
         let resolved: String = await withCheckedContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
                 let p = Process()
-                p.executableURL = nodeURL
-                p.arguments = [helperURL.path, "--server", server, "--resolve"]
+                p.executableURL = helperURL
+                p.arguments = ["--server", server, "--resolve"]
                 let out = Pipe()
                 p.standardOutput = out
                 p.standardError = FileHandle.nullDevice
