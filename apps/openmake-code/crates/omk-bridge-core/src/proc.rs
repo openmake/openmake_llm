@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use std::future::{Future, poll_fn};
 use std::pin::{Pin, pin};
 use std::process::{ExitStatus, Stdio};
+use std::sync::{Mutex, PoisonError};
 use std::task::{Context, Poll};
 use std::time::Duration;
 
@@ -157,6 +158,17 @@ impl ProcEnd {
     }
 }
 
+/// "파이프 만들기 → 띄우기" 구간을 프로세스 전체에서 하나씩 지나게 한다. macOS 에는 `pipe2` 가 없어 표준 라이브러리가
+/// `pipe()` 뒤에 따로 `FD_CLOEXEC` 를 건다 — 그 사이 다른 스레드가 띄운 자식이 이 파이프의 쓰는 쪽을 물려받으면 짧은
+/// 명령이 끝나도 파이프가 그 자식이 끝날 때까지 닫히지 않는다(설계 2026-11-15 D-5, `tests/exec_spawn_race.rs`).
+/// 이 크레이트에서 자식을 띄우는 모든 자리(`run`·`kill_group`·Chrome)가 이것을 거친다. `spawn()` 호출 동안만 쥔다.
+static SPAWN_LOCK: Mutex<()> = Mutex::new(());
+
+pub(crate) fn spawn(cmd: &mut tokio::process::Command) -> std::io::Result<tokio::process::Child> {
+    let _held = SPAWN_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+    cmd.spawn()
+}
+
 pub async fn run(spec: ProcSpec) -> ProcOutput {
     let mut cmd = tokio::process::Command::new(&spec.file);
     cmd.args(&spec.args)
@@ -177,7 +189,7 @@ pub async fn run(spec: ProcSpec) -> ProcOutput {
     }
     #[cfg(unix)]
     cmd.process_group(0);
-    let mut child = match cmd.spawn() {
+    let mut child = match spawn(&mut cmd) {
         Ok(c) => c,
         Err(e) => {
             return ProcOutput {
@@ -252,7 +264,7 @@ async fn kill_group(pgid: u32) {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    if let Ok(mut k) = cmd.spawn() {
+    if let Ok(mut k) = spawn(&mut cmd) {
         let _ = tokio::time::timeout(REAP_WAIT, k.wait()).await;
     }
 }

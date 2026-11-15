@@ -110,15 +110,16 @@ pub async fn launch_chrome(profile_dir: &str, env: &BrowserEnv) -> Result<Launch
         }
         _ => {}
     }
-    let mut child = tokio::process::Command::new(&bin)
-        .args(launch_args(profile_dir, env.headless))
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .kill_on_drop(true)
-        .spawn()
-        // TS 는 spawn 오류를 'error' 이벤트로 받아 "시작 직후 종료" 로 끝낸다
-        .map_err(|_| CHROME_EXITED_ERROR)?;
+    let mut child = crate::proc::spawn(
+        tokio::process::Command::new(&bin)
+            .args(launch_args(profile_dir, env.headless))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .kill_on_drop(true),
+    )
+    // TS 는 spawn 오류를 'error' 이벤트로 받아 "시작 직후 종료" 로 끝낸다
+    .map_err(|_| CHROME_EXITED_ERROR)?;
     let deadline = Instant::now() + Duration::from_millis(BROWSER_LAUNCH_TIMEOUT_MS);
     while Instant::now() < deadline {
         if let Some(ws_url) = read_devtools_endpoint(profile_dir) {
