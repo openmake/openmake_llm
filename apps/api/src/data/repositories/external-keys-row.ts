@@ -41,6 +41,8 @@ export interface ExternalApiKeyRow {
     /** OAuth access token 만료 시각 (auth_method='oauth' 전용) */
     oauthExpiresAt: Date | null;
     isActive: boolean;
+    /** 사용자 켜기·끄기 (마이그레이션 199). isActive(소프트 삭제)와 별개 — 꺼진 키는 기본 조회에서 빠진다 */
+    enabled: boolean;
     lastValidatedAt: Date | null;
     lastValidationOk: boolean | null;
     lastValidationError: string | null;
@@ -78,6 +80,7 @@ export interface DbRow {
     oauth_account_id: string | null;
     oauth_expires_at: Date | null;
     is_active: boolean;
+    enabled?: boolean;
     last_validated_at: Date | null;
     last_validation_ok: boolean | null;
     last_validation_error: string | null;
@@ -107,6 +110,7 @@ export function toRow(row: DbRow): ExternalApiKeyRow {
         oauthAccountId: row.oauth_account_id ?? null,
         oauthExpiresAt: row.oauth_expires_at ?? null,
         isActive: row.is_active,
+        enabled: row.enabled ?? true,
         lastValidatedAt: row.last_validated_at,
         lastValidationOk: row.last_validation_ok,
         lastValidationError: row.last_validation_error,
