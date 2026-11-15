@@ -1979,7 +1979,12 @@
     "connected": "Connected",
     "keyPage": "API key page",
     "signInPage": "Sign-in page",
-    "homepage": "Homepage"
+    "homepage": "Homepage",
+    "toggleOn": "Turn on {name} key",
+    "toggleOff": "Turn off {name} key",
+    "toggleLabel": "Use {name} key",
+    "disabled": "Off",
+    "toggleFailed": "Could not switch the key: {error}"
   },
   "apiKeys": {
     "title": "API Keys",

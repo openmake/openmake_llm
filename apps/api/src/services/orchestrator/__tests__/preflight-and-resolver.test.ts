@@ -30,7 +30,7 @@ function deps(o: { user?: CapabilityModelRow[]; global?: CapabilityModelRow[]; u
     } as unknown as CapabilityModelsRepository;
     const userKeys = {
         decryptKey: jest.fn(async () => o.userKey ?? null),
-        getByUserAndProvider: jest.fn(async () => o.keyRow !== undefined ? o.keyRow : (o.userKey ? { isActive: true, authMethod: 'api_key', baseUrl: null } : null)),
+        getByUserAndProvider: jest.fn(async () => o.keyRow !== undefined ? o.keyRow : (o.userKey ? { isActive: true, enabled: true, authMethod: 'api_key', baseUrl: null } : null)),
     } as unknown as ExternalKeysRepository;
     const serverKeys = { decryptKey: jest.fn(async () => o.serverKey ?? null), get: jest.fn(async () => o.serverKey ? { isActive: true } : null) } as unknown as ServerExternalKeysRepository;
     return { models, userKeys, serverKeys };
@@ -55,7 +55,7 @@ describe('resolveCapabilityTarget', () => {
         const ok = await resolveCapabilityTarget('audio.speech', 'u1', deps({ user: [row('u1', 'audio.speech', 'hasa:melotts-ko')], userKey: 'byok' }));
         expect(ok).toMatchObject({ model: 'hasa/melotts-ko', transport: 'gateway', params: { voice: 'KR', format: 'wav' } });
         expect(ok.headers).toEqual({ Authorization: 'Bearer master', 'x-api-key': 'byok' });
-        await expect(resolveCapabilityTarget('audio.speech', 'u1', deps({ user: [row('u1', 'audio.speech', 'hasa:m')], userKey: 'k', keyRow: { isActive: true, authMethod: 'oauth' } }))).rejects.toMatchObject({ code: 'CAPABILITY_PROVIDER_NOT_GATEWAY' });
+        await expect(resolveCapabilityTarget('audio.speech', 'u1', deps({ user: [row('u1', 'audio.speech', 'hasa:m')], userKey: 'k', keyRow: { isActive: true, enabled: true, authMethod: 'oauth' } }))).rejects.toMatchObject({ code: 'CAPABILITY_PROVIDER_NOT_GATEWAY' });
         await expect(resolveCapabilityTarget('audio.speech', 'u1', deps({ user: [row('u1', 'audio.speech', 'hasa:m')], userKey: null, keyRow: null }))).rejects.toMatchObject({ code: 'CAPABILITY_KEY_MISSING' });
         await expect(resolveCapabilityTarget('audio.speech', 'u1', deps({ user: [row('u1', 'audio.speech', 'nvidia:m')], userKey: 'k' }))).rejects.toMatchObject({ code: 'CAPABILITY_PROVIDER_NOT_GATEWAY' });
     });
@@ -71,7 +71,7 @@ describe('resolveCapabilityTarget', () => {
     it('Lyria(gemini) 음악: 카탈로그의 네이티브 주소로 직결하고 키는 그 provider 의 헤더로 — 사용자가 등록한 base URL 은 쓰지 않는다', async () => {
         const t = await resolveCapabilityTarget('music.generate', 'u1', deps({
             user: [row('u1', 'music.generate', 'gemini:lyria-3.5')], userKey: 'AIza-byok',
-            keyRow: { isActive: true, authMethod: 'api_key', baseUrl: 'https://proxy.example/v1' },
+            keyRow: { isActive: true, enabled: true, authMethod: 'api_key', baseUrl: 'https://proxy.example/v1' },
         }));
         expect(t).toMatchObject({ transport: 'direct', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', endpoint: '/interactions', model: 'lyria-3.5', costOwner: 'user' });
         expect(t.headers).toEqual({ 'x-goog-api-key': 'AIza-byok' });
