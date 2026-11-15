@@ -137,7 +137,7 @@ export interface CapabilityTaskResultDTO<C extends string = string> {
 export type CapabilityProgressEventDTO<C extends string = string> =
     | { type: 'orchestrator_status'; phase: 'planning' | 'executing' | 'synthesizing' | 'done' | 'skipped'; detail?: string }
     | { type: 'orchestrator_plan'; complexity: 'simple' | 'multi'; tasks: Array<{ id: string; capability: C; instruction: string }> }
-    | { type: 'orchestrator_task'; id: string; capability: C; status: 'running' | 'ok' | 'pending' | 'failed'; summary?: string; ms?: number; model?: string };
+    | { type: 'orchestrator_task'; id: string; capability: C; status: 'running' | 'ok' | 'pending' | 'failed'; summary?: string; ms?: number; model?: string; reason?: string; provider?: string };
 
 /** capability handler 가 받는 실행 문맥 중 Base 포트를 뺀 부분(포트는 Base 가 더한다) */
 export interface CapabilityExecContextDTO<C extends string = string> {

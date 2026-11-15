@@ -476,7 +476,15 @@
         "failed": "Failed"
       },
       "tasksCount": "{count} tasks",
-      "taskModel": "Processed by: {model}"
+      "taskModel": "Processed by: {model}",
+      "failure": {
+        "timeoutExternal": "Stopped because the external service ({provider}) did not respond within the time limit",
+        "timeout": "Stopped because no response arrived within the time limit",
+        "unassigned": "No model is assigned to this task",
+        "unavailable": "This task is currently unavailable",
+        "skipped": "Skipped because an earlier task did not finish",
+        "deadline": "Not run because the overall time limit was exceeded"
+      }
     },
     "tool": {
       "running": "Running {tool}"

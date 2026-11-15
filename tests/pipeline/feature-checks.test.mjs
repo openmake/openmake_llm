@@ -246,6 +246,35 @@ test('selectRelatedTests maps deleted API source to its manifest regression test
   assert.throws(() => selectRelatedTests(['apps/api/src/chat/gone.ts'], { ...opts, deletedSources: { 'apps/api/src/chat/gone.ts': [] } }), /No related Jest tests/);
 });
 
+// packages/ source is outside the API Jest roots, so --findRelatedTests is empty: the manifest "fixedTests" names the API test that checks it.
+// Jest checks only its values (constants); the type-equivalence lines (`pin`) are checked by tsc in `npm run build`.
+test('selectRelatedTests uses manifest fixedTests when Jest finds no related test (existing test files only)', async t => {
+  const { mkdtempSync, mkdirSync, rmSync, writeFileSync } = await import('node:fs');
+  const { join, resolve } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const { selectRelatedTests } = await import('../../scripts/ci/feature-checks.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'omk-fixed-tests-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const source = 'packages/plugin-contracts/src/contributions.ts';
+  const other = 'packages/plugin-contracts/src/other.ts';
+  const compat = 'apps/api/src/__tests__/plugin-contracts-compat.test.ts';
+  mkdirSync(join(root, 'packages/plugin-contracts/src'), { recursive: true });
+  mkdirSync(join(root, 'apps/api/src/__tests__'), { recursive: true });
+  writeFileSync(join(root, source), 'export const a = 1;\n');
+  writeFileSync(join(root, other), 'export const b = 1;\n');
+  writeFileSync(join(root, compat), '');
+  const opts = { cwd: root, log: () => {}, listRelated: () => [], listImporters: () => [], listAll: () => [] };
+  const selected = selectRelatedTests([source], { ...opts, fixedTests: { [source]: [compat] } });
+  assert.deepEqual(selected.related.get(source), [resolve(root, compat)]);
+  assert.deepEqual([...selected.tests], [resolve(root, compat)]);
+  assert.throws(() => selectRelatedTests([source], { ...opts, fixedTests: { [source]: ['apps/api/src/__tests__/missing.test.ts'] } }), /Fixed mapping test does not exist: apps\/api\/src\/__tests__\/missing\.test\.ts/);
+  assert.throws(() => selectRelatedTests([other], { ...opts, fixedTests: { [source]: [compat] } }), /No related Jest tests for packages\/plugin-contracts\/src\/other\.ts/);
+  const found = '/repo/apps/api/src/__tests__/found.test.ts';
+  const jest = selectRelatedTests([source], { ...opts, listRelated: () => [found], fixedTests: { [source]: [compat] } });
+  assert.deepEqual(jest.related.get(source), [found]);
+  assert.equal(jest.tests.has(resolve(root, compat)), false);
+});
+
 // Type-only edges are in Jest's graph (apps/api/jest.dependency-extractor.mjs). Last resort: a type-only source with no related
 // test is excused only when nothing imports it (or it is a declaration file); importers that reach no test still fail.
 test('selectRelatedTests excuses only unimported type-only API sources and still requires tests for any runtime code', async t => {
