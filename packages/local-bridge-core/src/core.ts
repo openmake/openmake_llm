@@ -198,6 +198,7 @@ export class BridgeCore {
                     done({ ok: false, error: SANDBOX_PROFILE_MISSING_ERROR, exitCode: 126 });
                     return;
                 }
+                // 시간 초과·출력 상한 때 Node 는 직접 자식만 끝낸다(손자는 남는다). Rust 는 그룹째 끝낸다 — 결과는 같고 부수 효과만 다르다(conformance README).
                 if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot, this.toolSandbox());
                 const opts = {
                     cwd: base, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER, encoding: 'utf8' as const,
