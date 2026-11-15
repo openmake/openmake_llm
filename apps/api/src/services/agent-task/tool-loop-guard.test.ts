@@ -3,7 +3,9 @@ import {
     getLocalBridgeUnknownOutcomeNotice, getAgentTaskUnknownOutcomeDeclinedNotice,
     getToolLoopBlockedResult, getToolLoopSameErrorBlockedResult, getToolLoopSameErrorNote, isToolLoopBlockedResult,
 } from '../../prompts/agent-task-prompt';
-import { getDuplicateToolCallResult, getToolLoopCycleBlockedResult } from '../../prompts/agent-task-turn-loop';
+import { getDuplicateToolCallResult, getToolLoopCycleBlockedResult, getMalformedToolArgsResult } from '../../prompts/agent-task-turn-loop';
+import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
+import { getSubagentApprovalRequiredNotice } from '../../prompts/subagent-system';
 import type { ChatMessage } from '../../llm/types';
 
 let seq = 0;
@@ -326,6 +328,17 @@ describe('isToolLoopBlockedResult — 가드가 실행하지 않고 돌려준 �
         expect(isToolLoopBlockedResult('Error: 정규식이 올바르지 않습니다: Invalid group modifier')).toBe(false);
         expect(isToolLoopBlockedResult('Error: 이 호출은 실패했습니다')).toBe(false);
     });
+
+    it('꼴이 비슷한 승인 거절·깨진 인자 문구는 가드 차단이 아니다(래퍼에 싸여 있어도)', () => {
+        for (const r of [
+            getApprovalRejectedNotice('bash', 'unattended'),
+            getSubagentApprovalRequiredNotice('bash'),
+            getMalformedToolArgsResult('bash'),
+        ]) {
+            expect(isToolLoopBlockedResult(r)).toBe(false);
+            expect(isToolLoopBlockedResult(`<tool_output tool="x">\n${r}\n</tool_output>\n목표: g`)).toBe(false);
+        }
+    });
 });
 
 describe('sameErrorVerdict — 인자를 바꿔도 같은 오류로 연속 실패', () => {
@@ -402,6 +415,25 @@ describe('sameErrorVerdict — 인자를 바꿔도 같은 오류로 연속 실�
         round(conv, 'grep_code', { pattern: 'c' }, getToolLoopCycleBlockedResult('grep_code', 2, 3));
         failing(3, conv);
         expect(verdict(conv).block).toBe(true);
+    });
+
+    it('무인 실행 승인 거절은 보통의 오류 결과로 센다 — 같은 오류 사이에 끼면 연속이 끊긴다', () => {
+        const unattended = getApprovalRejectedNotice('grep_code', 'unattended');
+        const conv = failing(6);
+        round(conv, 'grep_code', { pattern: 'u' }, unattended);
+        const v = verdict(conv);
+        expect(v.block).toBe(false);
+        expect(v.noteFor(ERR)).toBe('');
+        expect(v.blockedResult).not.toContain('정규식이 올바르지 않습니다');
+    });
+
+    it('무인 실행 승인 거절만 여섯 번 이어지면 일곱 번째는 같은 오류 차단이다', () => {
+        const unattended = getApprovalRejectedNotice('grep_code', 'unattended');
+        expect(verdict(failing(5, base(), unattended)).block).toBe(false);
+        const v = verdict(failing(6, base(), unattended));
+        expect(v.block).toBe(true);
+        expect(v.blockedResult).toMatch(/^Error: 이 호출\(grep_code\)은 인자를 바꿔도 같은 오류로 6번 연속 실패해 실행하지 않았습니다/);
+        expect(v.blockedResult).toContain('(마지막 오류: 이 호출(grep_code)은 승인이 필요한데');
     });
 
     it('반복 안내 줄이 붙은 앞 결과도 같은 오류로 센다', () => {

@@ -467,6 +467,7 @@ describe('grep_code 정규식 방언 — 도구 설명과 구문 오류 힌트',
         expect(pattern).toContain('공통 문법');
         expect(pattern).toContain('ignore_case');
         expect(pattern).toContain('(?i)');
+        expect(pattern).not.toContain('\\d'); // GNU grep -E 는 \d 를 모른다(조용히 일치 없음)
     });
 
     it('네이티브 백엔드의 정규식 구문 오류에는 JavaScript 문법 힌트를 한 줄 덧붙인다(셸 없음)', async () => {

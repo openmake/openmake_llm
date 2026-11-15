@@ -56,7 +56,7 @@ export const GREP_MISS_HINTS = {
  * 한 엔진의 문법을 안내하지 않고 공통 부분집합만 안내한다. 정확한 방언은 구문 오류 때 GREP_REGEX_DIALECT_HINTS 로 알린다.
  */
 export const GREP_CODE_PATTERN_DESCRIPTION =
-    '정규식 — 환경마다 엔진(rg/JS)이 달라 공통 문법만: 클래스·수량자·그룹·|·^$·\\s \\d \\w \\b. '
+    '정규식 — 환경마다 엔진(rg/JS)이 달라 공통 문법만: 클래스·수량자·그룹·|·^$·[0-9] \\s \\w \\b. '
     + '인라인 플래그((?i) 등)·lookaround·역참조·[[:alpha:]] 불가, 대소문자 무시는 ignore_case. 예: "function\\s+render"';
 
 /** grep_code 정규식 구문 오류 — 실제로 돈 백엔드의 문법을 오류 문구 다음 줄에 한 줄로 알린다. */
