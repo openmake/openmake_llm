@@ -88,6 +88,18 @@
       ]
     },
     {
+      "id": "grep-regex-too-deep",
+      "setup": [
+        {"file":"root/evil.txt","content":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!\n"},
+        {"file":"root/hello.txt","content":"world\n"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"((a?){9999}){9999}"},"expect":{"ok":false,"error":"정규식 판정이 너무 깊어 중단했습니다 (역추적 한도 초과) — 패턴을 단순하게 바꾸세요"}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"world"},"expect":{"ok":true,"codeNav":{"matches":["hello.txt:1:world"],"truncated":false}}}
+      ]
+    },
+    {
       "id": "cap-max-results",
       "setup": [
         {"file":"root/m.txt","content":"x1\nx2\nx3\nx4\nx5\n"}
