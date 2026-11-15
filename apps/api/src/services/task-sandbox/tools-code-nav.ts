@@ -10,7 +10,8 @@
  *     exec 로 내보내면 읽기 전용인데도 confirmExec 승인 창이 매 호출 떠서 실사용이 불가능했다.
  *  ② 아니면 sandbox.exec 위의 얇은 셸 래퍼(docker 샌드박스) — 컨테이너(ripgrep 포함)와 rg 없는
  *     환경 양쪽에서 돌도록 rg → grep 폴백을 두고 GNU 전용 옵션(find -printf·xargs -d)은 안 쓴다.
- * ①이 실패하거나 구 디바이스라 미지원이면 null 이 와서 ②로 폴백한다(fail-open).
+ * ①이 전달 실패하거나 구 디바이스라 미지원이면 null 이 와서 ②로 폴백한다(fail-open).
+ * ①이 요청을 받아 거절한 요청 오류(정규식 오류·역추적 한도 등)는 `error` 로 와서 폴백하지 않고 그 문구를 그대로 돌려준다.
  *
  * @module services/task-sandbox/tools-code-nav
  */
@@ -22,6 +23,11 @@ import { diagnoseNoMatch } from './grep-miss-hint';
 
 const PATTERN_MAX_CHARS = 500;
 const EXIT_NOT_FOUND = 127;
+
+/** 실행기가 한도(시간·파일 수)에서 멈춰 매치 0건 — "없음" 으로 읽히지 않게 붙이는 안내. */
+const HALTED_NO_MATCH_NOTE = '검색이 한도(시간·파일 수)에서 중단되어 전체를 확인하지 못했습니다. path/glob 으로 범위를 좁히거나 pattern 을 단순하게 바꾸세요';
+/** 줄 수 상한에 닿지 않았는데 실행기가 한도에서 멈춘 경우의 말미 안내. */
+const HALTED_PARTIAL_NOTE = '\n… 검색이 한도(시간·파일 수·파일당 매치 수)에서 중단되어 결과가 일부입니다 — pattern/path/glob 으로 좁히세요.';
 
 /** 심볼 선언 줄 — TS/JS·Python·Go·Rust·Java/Kotlin 의 최상위 선언을 한 정규식으로. */
 const SYMBOL_REGEX = String.raw`^\s*(export\s+)?(default\s+)?(async\s+)?(function|class|interface|type|enum)\s+\w+|^\s*(def|class)\s+\w+|^\s*(pub(\(crate\))?\s+)?(fn|struct|enum|trait|impl)\s+\w+|^func\s+(\([^)]*\)\s*)?\w+|^\s*(public|private|protected)\s+(static\s+)?(class|interface|\w+\s+\w+\s*\()`;
@@ -109,7 +115,7 @@ async function execWithGrepFallback(sandbox: TaskExecutor, rgCmd: string, grepCm
     return { r: await sandbox.exec(grepCmd), via: 'grep' };
 }
 
-/** 실행기 네이티브 탐색 시도 — 미구현·미지원·오류는 전부 null(호출측이 셸로 폴백). */
+/** 실행기 네이티브 탐색 시도 — 미구현·미지원·전달 실패는 null(호출측이 셸로 폴백), 요청 오류는 `error` 그대로. */
 async function tryNative(sandbox: TaskExecutor, spec: CodeNavSpec): ReturnType<NonNullable<TaskExecutor['codeNav']>> {
     if (!sandbox.codeNav) return null;
     try { return await sandbox.codeNav(spec); } catch { return null; }
@@ -125,6 +131,8 @@ interface GrepOutcome {
     error?: string;
     /** 민감 파일 정책으로 건너뛴 수(네이티브는 순회에서, 셸은 sentinel find 로 셈). */
     skipped?: number;
+    /** 실행기가 한도(시간·파일 수·파일당 매치 수)에서 멈췄다 — 줄 수 상한(overflow)과 별개. */
+    truncated?: boolean;
 }
 
 /** grep 한 번 — 네이티브 우선, 아니면 셸(rg→grep). 캡·줄 절단은 이 함수가 단일 적용한다. */
@@ -137,9 +145,14 @@ async function runGrep(sandbox: TaskExecutor, o: {
         op: 'grep', path: o.rel, pattern: o.pattern, maxResults: o.max,
         ...(o.glob ? { glob: o.glob } : {}), ...(o.ignoreCase ? { ignoreCase: true } : {}),
     });
+    // 요청 오류 — 셸로 다시 돌리지 않는다(같은 패턴 재실행·승인 창·원래 안내 문구 유실).
+    if (native?.error) return { lines: [], overflow: false, via: 'native', error: native.error };
     if (native?.matches) {
         const { lines, overflow } = clipLines(native.matches.join('\n'), o.max, TASK_CODE_NAV.GREP_LINE_MAX_CHARS);
-        return { lines, overflow: overflow || native.truncated === true, via: 'native', ...(native.skipped ? { skipped: native.skipped } : {}) };
+        return {
+            lines, overflow: overflow || native.truncated === true, via: 'native',
+            ...(native.skipped ? { skipped: native.skipped } : {}), ...(native.truncated === true ? { truncated: true } : {}),
+        };
     }
     const head = `head -n ${o.max + 1}`;
     const ic = o.ignoreCase === true;
@@ -197,6 +210,8 @@ export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
             const out = await runGrep(sandbox, { pattern, rel, max, ...(glob ? { glob } : {}), ...(ic ? { ignoreCase: true } : {}) });
             if (out.error) return textResult(out.error, true);
             if (out.lines.length === 0) {
+                // 한도에서 멈춘 무일치는 끝까지 보지 못한 결과라 원인 진단(느린 패턴 재실행)을 돌리지 않는다.
+                if (out.truncated) return textResult(`(일치 없음: ${pattern} — ${HALTED_NO_MATCH_NOTE})${skippedNote(out.skipped)}`);
                 // 흔한 원인(대소문자·정규식 문자·숨김 파일)을 확인해 알린다(grep-miss-hint). 네이티브 탐색이 안 돼 셸로 떨어진
                 // 로컬 실행기에서는 하지 않는다 — 셸 명령마다 디바이스 승인 창이 뜬다.
                 const cause = GREP_MISS_HINT_ENABLED && (out.via === 'native' || !sandbox.codeNav)
@@ -205,7 +220,8 @@ export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
                     : '';
                 return textResult(`(일치 없음: ${pattern})${cause}${skippedNote(out.skipped)}`);
             }
-            const note = out.overflow ? `\n… ${max}줄에서 잘림 — pattern/path/glob 으로 좁히세요.` : '';
+            const note = out.overflow && out.lines.length >= max ? `\n… ${max}줄에서 잘림 — pattern/path/glob 으로 좁히세요.`
+                : out.truncated ? HALTED_PARTIAL_NOTE : '';
             return textResult(`${out.lines.join('\n')}${note}${skippedNote(out.skipped)}${out.via === 'grep' ? '\n(rg 미설치 — grep 사용)' : ''}`);
         },
     };
@@ -230,6 +246,7 @@ export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
             const withSymbols = args.symbols !== false;
             const maxFiles = TASK_CODE_NAV.MAP_MAX_FILES;
             const native = await tryNative(sandbox, { op: 'files', path: rel });
+            if (native?.error) return textResult(native.error, true);
             let rows: { lines: number; path: string }[];
             let nativeTruncated = false;
             let nativeSkipped = 0;
@@ -272,7 +289,8 @@ export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
                 const sym = await runGrep(sandbox, { pattern: SYMBOL_REGEX, rel, max: TASK_CODE_NAV.MAP_MAX_SYMBOLS });
                 if (!sym.error && sym.lines.length > 0) {
                     out.push('', '## 심볼 선언 (파일:줄)', ...sym.lines);
-                    if (sym.overflow) out.push(`… ${TASK_CODE_NAV.MAP_MAX_SYMBOLS}줄에서 잘림 — grep_code 로 좁히세요.`);
+                    if (sym.overflow && sym.lines.length >= TASK_CODE_NAV.MAP_MAX_SYMBOLS) out.push(`… ${TASK_CODE_NAV.MAP_MAX_SYMBOLS}줄에서 잘림 — grep_code 로 좁히세요.`);
+                    else if (sym.truncated) out.push(HALTED_PARTIAL_NOTE.replace(/^\n/, ''));
                 }
             }
             return textResult(`${out.join('\n')}${skippedNote(nativeSkipped)}`);

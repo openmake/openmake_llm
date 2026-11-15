@@ -98,6 +98,46 @@ describe('RemoteExecutor codeNav (읽기 전용 코드 탐색)', () => {
         jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue({ ok: true });
         expect(await new RemoteExecutor('task-1', 'user-1').codeNav({ op: 'grep', pattern: 'x' })).toBeNull();
     });
+
+    it('디바이스가 요청을 거절한 오류는 문구 그대로 error 로 돌려준다(셸 폴백 없음)', async () => {
+        const spy = jest.spyOn(getLocalBridgeRegistry(), 'request');
+        for (const error of [
+            '정규식 판정이 너무 깊어 중단했습니다 (역추적 한도 초과) — 패턴을 단순하게 바꾸세요',
+            '정규식이 올바르지 않습니다: unclosed group',
+            '지원하지 않는 code_nav op: x',
+        ]) {
+            spy.mockResolvedValue({ ok: false, error });
+            expect(await new RemoteExecutor('task-1', 'user-1').codeNav({ op: 'grep', pattern: '(' })).toEqual({ error });
+        }
+    });
+
+    it('전달 실패(transport)는 문구가 있어도 null — 지금처럼 셸 경로가 기기 유실을 처리한다', async () => {
+        const spy = jest.spyOn(getLocalBridgeRegistry(), 'request');
+        for (const transport of ['timeout', 'disconnected', 'no_device', 'send_failed'] as const) {
+            spy.mockResolvedValue({ ok: false, transport, error: `전달 실패 ${transport}` });
+            expect(await new RemoteExecutor('task-1', 'user-1').codeNav({ op: 'grep', pattern: 'x' })).toBeNull();
+        }
+    });
+
+    it('서버 능력 검사의 미지원(unsupported)은 null — 능력 목록에 code_nav 가 없는 기기는 셸로 폴백', async () => {
+        jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue({
+            ok: false, unsupported: true,
+            error: "이 디바이스는 'code_nav' 요청을 지원하지 않습니다 — Companion 또는 CLI 를 업데이트하세요.",
+        });
+        expect(await new RemoteExecutor('task-1', 'user-1').codeNav({ op: 'grep', pattern: 'x' })).toBeNull();
+    });
+
+    it('error 가 없거나 빈 실패 응답은 null', async () => {
+        const spy = jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue({ ok: false });
+        expect(await new RemoteExecutor('task-1', 'user-1').codeNav({ op: 'grep', pattern: 'x' })).toBeNull();
+        spy.mockResolvedValue({ ok: false, error: '' });
+        expect(await new RemoteExecutor('task-1', 'user-1').codeNav({ op: 'grep', pattern: 'x' })).toBeNull();
+    });
+
+    it('요청이 던지면 null', async () => {
+        jest.spyOn(getLocalBridgeRegistry(), 'request').mockRejectedValue(new Error('boom'));
+        expect(await new RemoteExecutor('task-1', 'user-1').codeNav({ op: 'grep', pattern: 'x' })).toBeNull();
+    });
 });
 
 describe('RemoteExecutor 브라우저 기본값', () => {
