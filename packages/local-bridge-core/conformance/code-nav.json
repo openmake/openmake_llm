@@ -515,5 +515,12 @@
     {"name":".Env.Prod","expect":true}
   ],
   "excludedFiles": [".env",".env.*","*.pem","*.key","*.p12","*.pfx","*.jks","*.keystore","id_rsa","id_rsa.*","id_ed25519","id_ed25519.*",".npmrc",".netrc",".pgpass",".htpasswd","credentials","credentials.*","service-account*.json","*.kdbx"],
-  "excludedDirs": ["node_modules",".git","dist","build",".next","__pycache__",".venv","venv","coverage",".openmake"]
+  "excludedDirs": ["node_modules",".git","dist","build",".next","__pycache__",".venv","venv","coverage",".openmake"],
+  "budget": [
+    {"id":"default","input":{"configured":15000,"gateMs":15000},"expect":12000},
+    {"id":"configured-shorter","input":{"configured":5000,"gateMs":15000},"expect":5000},
+    {"id":"gate-short","input":{"configured":15000,"gateMs":300},"expect":240},
+    {"id":"gate-zero","input":{"configured":15000,"gateMs":0},"expect":0},
+    {"id":"gate-long","input":{"configured":20000,"gateMs":60000},"expect":20000}
+  ]
 }

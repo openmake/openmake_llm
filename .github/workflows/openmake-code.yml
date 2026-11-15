@@ -5,7 +5,7 @@
 # 코어의 검증 대상(sandbox-exec·/private/tmp realpath 등)이 macOS 고유라 macOS 러너에서 돈다.
 # TS 러너(conformance.test.ts)는 ci.yml Gate 1(bridge 선정)이 맡고, 여기서는 Rust 쪽만 본다.
 # 툴체인은 apps/openmake-code/rust-toolchain.toml 로 고정한다(러너 이미지의 rustup 이 그 판을 받는다).
-# 헬퍼 하네스(apps/desktop-native/helper/harness.cjs)는 Node 헬퍼 쪽을 desktop-native.yml 이, omk-helper 쪽을 여기서 돈다.
+# 헬퍼 하네스(apps/desktop-native/helper/harness.cjs)는 debug omk-helper 를 여기서, 앱에 넣는 release 빌드와 Node 헬퍼(2.2 까지)는 desktop-native.yml 이 돈다.
 # ==============================================================
 
 name: openmake-code

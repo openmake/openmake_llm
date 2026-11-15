@@ -23,7 +23,8 @@ export function selectFeatures(files) {
     // Exact host setup files only — a new setup script stays unmapped until it is listed with fixture coverage.
     if (manifest.hostSetup.includes(file)) { result.hostSetup = true; continue; }
     // Exact non-API files with a fixed consumer suite (e.g. type-only shared contracts) — never a package prefix.
-    if (manifest.exactFiles[file]) { result[manifest.exactFiles[file]] = true; continue; }
+    // A value may name several suites (a fixture shared by more than one consumer).
+    if (manifest.exactFiles[file]) { for (const k of [].concat(manifest.exactFiles[file])) result[k] = true; continue; }
     if (/(?:^|\/)(?:specs|specifications)\//.test(file)) throw new Error(`Unmapped changed spec: ${file}; add a fixed manifest suite`);
     const match = Object.entries(manifest.prefixes).find(([prefix]) => file.startsWith(prefix));
     if (match) { result[match[1]] = true; continue; }

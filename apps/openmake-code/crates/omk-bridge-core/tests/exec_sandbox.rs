@@ -73,6 +73,16 @@ fn core(work: &Work, folder: &str, sandbox: bool, profile_dir: &str) -> BridgeCo
 }
 
 fn core_with_home(folder: &str, sandbox: bool, profile_dir: &str, home: &str) -> BridgeCore {
+    core_with_timeout(folder, sandbox, profile_dir, home, EXEC_TIMEOUT_MS)
+}
+
+fn core_with_timeout(
+    folder: &str,
+    sandbox: bool,
+    profile_dir: &str,
+    home: &str,
+    exec_timeout_ms: u64,
+) -> BridgeCore {
     let home = home.to_owned();
     let host = ExecHost {
         confirm: Box::new(|_| Box::pin(async { ConfirmAnswer::Yes })),
@@ -90,7 +100,7 @@ fn core_with_home(folder: &str, sandbox: bool, profile_dir: &str, home: &str) ->
         sandbox_profile_dir: profile_dir.to_owned(),
         auto_approve_all: false,
         on_auto_approve_change: None,
-        exec_timeout_ms: EXEC_TIMEOUT_MS,
+        exec_timeout_ms,
     };
     let opts = BridgeCoreOptions {
         folder: folder.to_owned(),
@@ -343,4 +353,44 @@ fn fail_closed_without_profile() {
     assert!(ran_ok(&exec(&c, "touch ran")));
     assert!(std::fs::metadata(w.join("A/ran")).is_ok());
     assert_eq!(std::fs::read_dir(&prof.path).unwrap().count(), 0);
+}
+
+/// 시간 초과로 끊긴 샌드박스 안 명령의 손자도 끝난다 — `sandbox-exec` 가 자식 자리에서 bash 가 되므로 그룹이 같다(설계 D-2).
+#[test]
+fn timed_out_command_leaves_no_grandchild() {
+    let w = Work::new();
+    let a = w.mkdir("A");
+    let prof = TmpDir::new();
+    let c = core_with_timeout(&a, true, &prof.path, &w.join("home"), 500);
+    runtime().block_on(c.prepare());
+    let r = exec(&c, "sleep 30 & echo $!; wait");
+    assert_eq!(
+        (r["ok"].clone(), r["exitCode"].clone()),
+        (json!(true), json!(1)),
+        "{r}"
+    );
+    let pid = r["stdout"].as_str().unwrap_or_default().trim().to_owned();
+    assert!(
+        !pid.is_empty() && pid.bytes().all(|b| b.is_ascii_digit()),
+        "{r}"
+    );
+    let alive = || {
+        std::process::Command::new("/bin/kill")
+            .args(["-0", &pid])
+            .stderr(std::process::Stdio::null())
+            .status()
+            .unwrap()
+            .success()
+    };
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while alive() && std::time::Instant::now() < until {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let left = alive();
+    if left {
+        let _ = std::process::Command::new("/bin/kill")
+            .args(["-KILL", &pid])
+            .status();
+    }
+    assert!(!left, "샌드박스 안 손자 {pid} 가 남았다");
 }
