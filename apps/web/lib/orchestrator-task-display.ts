@@ -15,7 +15,7 @@ const FAILURE_KEYS: Record<string, string> = {
 
 /** 실패 reason(·외부 provider) → 문구 키. 문구가 없는 코드·reason 없음(옛 서버)은 null */
 export function orchestratorFailureMessage(reason?: string, provider?: string): { key: string; provider?: string } | null {
-  const key = reason ? FAILURE_KEYS[reason] : undefined;
+  const key = reason && Object.hasOwn(FAILURE_KEYS, reason) ? FAILURE_KEYS[reason] : undefined;
   if (!key) return null;
   if (key === "timeout" && provider) return { key: "timeoutExternal", provider };
   return { key };

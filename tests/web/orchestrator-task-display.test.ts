@@ -21,7 +21,7 @@ test('분류가 뚜렷한 코드만 문구를 둔다', () => {
 });
 
 test('reason 없음(옛 서버)·cancelled·failed·그 밖의 코드는 null — summary 원문을 그대로 그린다', () => {
-  for (const r of [undefined, '', 'cancelled', 'failed', 'input', 'budget', 'quota', 'expired', 'no-such-code']) {
+  for (const r of [undefined, '', 'cancelled', 'failed', 'input', 'budget', 'quota', 'expired', 'no-such-code', 'constructor']) {
     assert.equal(orchestratorFailureMessage(r), null, String(r));
   }
 });

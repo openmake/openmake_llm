@@ -547,16 +547,17 @@ function OrchestratorProgressBanner() {
         {op.tasks.length > 0 && (
           <ul className="space-y-1">
             {op.tasks.map((task) => {
-              // 서버가 분류한 실패 코드 중 문구가 있는 것만 현지화 문구로(원문은 title), 그 밖은 summary 원문
+              // 서버가 분류한 실패 코드 중 문구가 있는 것만 현지화 문구로(title 은 문구 + 원문), 그 밖은 summary 원문
               const failure = task.status === "failed" ? orchestratorFailureMessage(task.reason, task.provider) : null;
+              const failureText = failure ? t(`orchestrator.failure.${failure.key}`, failure.provider ? { provider: failure.provider } : undefined) : "";
               return (
               <li key={task.id} className="flex min-w-0 items-center gap-2 text-xs">
                 {statusIcon(task.status)}
                 <span className="shrink-0 font-medium text-fg-2">{capLabel(task.capability)}</span>
                 <span className="sr-only">{t(`orchestrator.status.${task.status}`)}</span>
                 {failure ? (
-                  <span className="truncate text-muted" title={task.summary}>
-                    {t(`orchestrator.failure.${failure.key}`, failure.provider ? { provider: failure.provider } : undefined)}
+                  <span className="truncate text-muted" title={task.summary ? `${failureText}\n${task.summary}` : failureText}>
+                    {failureText}
                   </span>
                 ) : task.summary ? (
                   <span className="truncate text-muted">{task.summary}</span>
