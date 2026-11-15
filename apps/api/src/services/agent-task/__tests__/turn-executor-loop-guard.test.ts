@@ -23,7 +23,7 @@ jest.mock('../../../data/repositories/agent-task-repository', () => ({ AgentTask
 // 임계값·플래그는 .env 에 좌우되므로 고정한다.
 jest.mock('../../../config/runtime-limits', () => {
     const actual = jest.requireActual('../../../config/runtime-limits');
-    return { ...actual, AGENT_TASK_LIMITS: { ...actual.AGENT_TASK_LIMITS, TOOL_LOOP_GUARD_ENABLED: true, TOOL_LOOP_WARN_FAILURES: 2, TOOL_LOOP_BLOCK_FAILURES: 4, TOOL_LOOP_WARN_SAME_RESULT: 3, TOOL_LOOP_BLOCK_SAME_RESULT: 5, REENTRY_UNKNOWN_OUTCOME_ENABLED: false, MIDTURN_CHECKPOINT_ENABLED: false } };
+    return { ...actual, AGENT_TASK_LIMITS: { ...actual.AGENT_TASK_LIMITS, TOOL_LOOP_GUARD_ENABLED: true, TOOL_LOOP_WARN_FAILURES: 2, TOOL_LOOP_BLOCK_FAILURES: 4, TOOL_LOOP_WARN_SAME_RESULT: 3, TOOL_LOOP_BLOCK_SAME_RESULT: 5, TOOL_LOOP_WARN_SAME_ERROR: 3, TOOL_LOOP_BLOCK_SAME_ERROR: 6, REENTRY_UNKNOWN_OUTCOME_ENABLED: false, MIDTURN_CHECKPOINT_ENABLED: false } };
 });
 
 import { executeTurnToolCalls } from '../turn-executor';
@@ -143,5 +143,32 @@ describe('executeTurnToolCalls — 같은 구간 다시 읽기', () => {
         const out = await runAfter([{ ...view, result: 'line1\nline2' }, { ...view, result: second }], view);
         expect(out).toContain('3번 연속 같은 결과');
         expect(out).not.toContain('이미 읽은 구간');
+    });
+});
+
+describe('executeTurnToolCalls — 인자를 바꿔도 같은 오류', () => {
+    const ERR = 'Error: 정규식이 올바르지 않습니다: Invalid group modifier';
+    const failing = (n: number): Round[] => Array.from({ length: n }, (_, i) => ({ name: 'grep_code', args: { pattern: `(?-u:a${i})` }, result: ERR }));
+
+    it('세 번째 같은 오류에 안내가 붙고 스텝에도 남는다', async () => {
+        runTool.mockResolvedValueOnce(ERR);
+        const out = await runAfter(failing(2), { name: 'grep_code', args: { pattern: '(?-u:z)' } });
+        expect(out).toContain(ERR);
+        expect(out).toContain('인자를 바꿔도 같은 오류로 3번');
+        expect(steps[0].content).toContain('인자를 바꿔도 같은 오류로 3번');
+    });
+
+    it('여섯 번 이어진 뒤의 호출은 실행하지 않는다', async () => {
+        const out = await runAfter(failing(6), { name: 'grep_code', args: { pattern: '(?-u:z)' } });
+        expect(runTool).not.toHaveBeenCalled();
+        expect(out).toContain('인자를 바꿔도 같은 오류로 6번 연속 실패해 실행하지 않았습니다');
+    });
+
+    it('같은 인자의 연속 실패 안내가 붙는 결과에는 겹쳐 붙이지 않는다(기존 우선)', async () => {
+        runTool.mockResolvedValueOnce(ERR);
+        const args = { pattern: '(?-u:a)' };
+        const out = await runAfter([{ name: 'grep_code', args, result: ERR }, { name: 'grep_code', args, result: ERR }], { name: 'grep_code', args });
+        expect(out).toContain('같은 인자의 같은 호출이 3번 연속 실패');
+        expect(out).not.toContain('인자를 바꿔도');
     });
 });

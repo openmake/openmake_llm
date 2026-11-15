@@ -13,12 +13,17 @@
  * ①이 전달 실패하거나 구 디바이스라 미지원이면 null 이 와서 ②로 폴백한다(fail-open).
  * ①이 요청을 받아 거절한 요청 오류(정규식 오류·역추적 한도 등)는 `error` 로 와서 폴백하지 않고 그 문구를 그대로 돌려준다.
  *
+ * 백엔드마다 정규식 엔진이 다르다(① JavaScript, ② rg = Rust regex, rg 가 없으면 grep -E = POSIX ERE). 도구 설명은 공통 문법만
+ * 안내하고, 정규식 구문 오류가 나면 실제로 돈 백엔드(①·rg)의 문법 힌트를 오류 문구 다음 줄에 붙인다(GREP_DIALECT_HINT).
+ *
  * @module services/task-sandbox/tools-code-nav
  */
 import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
 import type { TaskExecutor, ExecResult, CodeNavSpec } from './executor';
 import { TASK_CODE_NAV } from '../../config/runtime-limits';
-import { GREP_MISS_HINT_ENABLED } from '../../config/agent-task-tools';
+import { GREP_MISS_HINT_ENABLED, GREP_DIALECT_HINT } from '../../config/agent-task-tools';
+import { GREP_CODE_PATTERN_DESCRIPTION, GREP_REGEX_DIALECT_HINTS } from '../../prompts/agent-task-tools';
+import { BRIDGE_INVALID_REGEX_PREFIX } from '../local-bridge/device-errors';
 import { diagnoseNoMatch } from './grep-miss-hint';
 
 const PATTERN_MAX_CHARS = 500;
@@ -115,6 +120,13 @@ async function execWithGrepFallback(sandbox: TaskExecutor, rgCmd: string, grepCm
     return { r: await sandbox.exec(grepCmd), via: 'grep' };
 }
 
+/** 정규식 구문 오류 뒤에 붙일 방언 힌트 줄(없으면 ''). 그 밖의 요청 오류(역추적 한도·길이 초과 등)는 자체 안내가 있어 그대로 둔다. */
+function dialectHint(via: 'native' | 'rg', error: string): string {
+    if (!GREP_DIALECT_HINT.ENABLED) return '';
+    if (via === 'native') return error.startsWith(BRIDGE_INVALID_REGEX_PREFIX) ? `\n${GREP_REGEX_DIALECT_HINTS.native}` : '';
+    return GREP_DIALECT_HINT.RG_REGEX_ERROR_RE.test(error) ? `\n${GREP_REGEX_DIALECT_HINTS.rg}` : '';
+}
+
 /** 실행기 네이티브 탐색 시도 — 미구현·미지원·전달 실패는 null(호출측이 셸로 폴백), 요청 오류는 `error` 그대로. */
 async function tryNative(sandbox: TaskExecutor, spec: CodeNavSpec): ReturnType<NonNullable<TaskExecutor['codeNav']>> {
     if (!sandbox.codeNav) return null;
@@ -146,7 +158,7 @@ async function runGrep(sandbox: TaskExecutor, o: {
         ...(o.glob ? { glob: o.glob } : {}), ...(o.ignoreCase ? { ignoreCase: true } : {}),
     });
     // 요청 오류 — 셸로 다시 돌리지 않는다(같은 패턴 재실행·승인 창·원래 안내 문구 유실).
-    if (native?.error) return { lines: [], overflow: false, via: 'native', error: native.error };
+    if (native?.error) return { lines: [], overflow: false, via: 'native', error: `${native.error}${dialectHint('native', native.error)}` };
     if (native?.matches) {
         const { lines, overflow } = clipLines(native.matches.join('\n'), o.max, TASK_CODE_NAV.GREP_LINE_MAX_CHARS);
         return {
@@ -168,7 +180,8 @@ async function runGrep(sandbox: TaskExecutor, o: {
     // 파이프 종료 코드는 head 의 것이라 rg/grep 의 1(무일치)·2(오류)를 못 본다 → 출력으로 판정.
     if (!body.trim()) {
         const err = r.stderr.trim();
-        return { lines: [], overflow: false, via, ...skippedField, ...(err ? { error: `검색 실패: ${err.slice(0, 500)}` } : {}) };
+        const hint = err && via === 'rg' ? dialectHint('rg', err) : '';
+        return { lines: [], overflow: false, via, ...skippedField, ...(err ? { error: `검색 실패: ${err.slice(0, 500)}${hint}` } : {}) };
     }
     const { lines, overflow } = clipLines(body, o.max, TASK_CODE_NAV.GREP_LINE_MAX_CHARS);
     return { lines, overflow, via, ...skippedField };
@@ -178,7 +191,7 @@ export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
     const grepCode: MCPToolDefinition = {
         tool: {
             name: 'grep_code',
-            description: 'workspace 코드를 정규식으로 검색해 "파일:줄번호:내용" 목록을 돌려줍니다(ripgrep, 읽기 전용, '
+            description: 'workspace 코드를 정규식으로 검색해 "파일:줄번호:내용" 목록을 돌려줍니다(읽기 전용, '
                 + `최대 ${TASK_CODE_NAV.GREP_MAX_RESULTS}줄). 심볼 정의·사용처·문자열을 찾을 때 bash grep 대신 쓰세요 — `
                 + '결과가 캡으로 잘려 컨텍스트를 아낍니다. node_modules/.git/dist 는 자동 제외되고, '
                 + '자격증명 파일(.env·*.pem·id_rsa 등)은 정책상 검색되지 않습니다 — 그 내용이 필요하면 '
@@ -186,7 +199,7 @@ export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
             inputSchema: {
                 type: 'object',
                 properties: {
-                    pattern: { type: 'string', description: '정규식(rg 문법). 예: "function\\s+render", "TODO"' },
+                    pattern: { type: 'string', description: GREP_CODE_PATTERN_DESCRIPTION },
                     path: { type: 'string', description: 'workspace 상대 경로(파일 또는 디렉토리, 기본 ".")' },
                     glob: { type: 'string', description: '파일 글롭 필터. 예: "*.ts", "src/**/*.py"' },
                     ignore_case: { type: 'boolean', description: '대소문자 무시(기본 false)' },

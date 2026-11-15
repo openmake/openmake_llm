@@ -16,6 +16,7 @@
  *    파일을 읽을지 보지 못한다. 건너뛴 수는 결과에 실어 "없음" 오판을 막는다(조용한 실패 방지).
  *  - ⚠️ 정규식은 모델이 만든 값이라 파국적 백트래킹이 가능하다. 파일 크기 상한과 파일 사이
  *    데드라인 검사로 피해를 한 파일로 묶는다(한 파일 안의 백트래킹은 중단할 수 없다).
+ *    깊은 판정의 스택 초과(RangeError)는 CODE_NAV_REGEX_TOO_DEEP_ERROR 문구의 요청 오류로 답한다.
  *
  * @module code-nav
  */
@@ -23,7 +24,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
     CODE_NAV_EXCLUDED_DIRS, CODE_NAV_EXCLUDED_FILES, CODE_NAV_LINE_MAX_CHARS, CODE_NAV_MAX_FILE_BYTES, CODE_NAV_MAX_FILES,
-    CODE_NAV_MAX_MATCHES, CODE_NAV_MAX_PER_FILE, CODE_NAV_PATTERN_MAX_CHARS, CODE_NAV_TIMEOUT_MS,
+    CODE_NAV_MAX_MATCHES, CODE_NAV_MAX_PER_FILE, CODE_NAV_PATTERN_MAX_CHARS, CODE_NAV_REGEX_TOO_DEEP_ERROR, CODE_NAV_TIMEOUT_MS,
 } from './constants';
 import type { BridgeCodeNav, BridgeMsg } from './types';
 
@@ -145,7 +146,13 @@ async function grep(baseAbs: string, startAbs: string, m: BridgeMsg, deadline: n
         for (let i = 0; i < lines.length; i++) {
             if (perFile >= CODE_NAV_MAX_PER_FILE) { truncated = true; break; }
             if (matches.length >= cap) { truncated = true; break; }
-            if (!re.test(lines[i])) continue;
+            let hit: boolean;
+            try { hit = re.test(lines[i]); } catch (e) {
+                // 깊은 판정은 V8 이 스택 초과(RangeError)로 끊는다 — 모델이 고칠 수 있는 문구로 바꾼다(Rust 와 같은 글자).
+                if (e instanceof RangeError) throw new Error(CODE_NAV_REGEX_TOO_DEEP_ERROR);
+                throw e;
+            }
+            if (!hit) continue;
             const text = lines[i].replace(/\r$/, '');
             matches.push(`${rel}:${i + 1}:${text.length > CODE_NAV_LINE_MAX_CHARS ? `${text.slice(0, CODE_NAV_LINE_MAX_CHARS)}…` : text}`);
             perFile++;

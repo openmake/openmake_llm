@@ -23,7 +23,7 @@ import { AgentTaskAbort, AgentTaskParked, AGENT_TASK_DEVICE_WAIT_REASON, AGENT_T
 import { isShutdownAbort } from './shutdown-drain';
 import { writeTurnCheckpoint, markToolCallInFlight } from './turn-reentry';
 import { hasSideEffects } from '../../config/tool-policy';
-import { priorRepetition, repetitionVerdict, cycleVerdict, rereadNote, retryAfterUnknownOutcome } from './tool-loop-guard';
+import { priorRepetition, repetitionVerdict, cycleVerdict, sameErrorVerdict, rereadNote, retryAfterUnknownOutcome } from './tool-loop-guard';
 import { needsReceipt, startReceipt, finishReceipt, receiptStatusOf } from './tool-receipt';
 import { runWithToolCallContext } from '../../utils/tool-call-context';
 import { runWithToolMediaSink, toolMediaSinkFor } from '../../utils/tool-media-sink';
@@ -249,6 +249,11 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             : undefined;
         // 주기 반복(A-B-A-B) — 서로 다른 호출이 같은 결과로 번갈아 되풀이되면 같은 두 단계로 다룬다.
         const cycle = loop ? cycleVerdict(conversation, name, args) : undefined;
+        // 같은 오류 반복 — 같은 도구가 인자만 바꾼 채 같은 오류 문구로 연속 실패하면 같은 두 단계로 다룬다(서명 무관).
+        const sameError = loop ? sameErrorVerdict(conversation, name, {
+            warn: AGENT_TASK_LIMITS.TOOL_LOOP_WARN_SAME_ERROR, block: AGENT_TASK_LIMITS.TOOL_LOOP_BLOCK_SAME_ERROR,
+            excerptMaxChars: AGENT_TASK_LIMITS.TOOL_LOOP_SAME_ERROR_EXCERPT_MAX_CHARS,
+        }) : undefined;
         touchProgress(taskId); // 도구 실행 직전 — 긴 도구 호출을 멈춤으로 오판하지 않게(191, R8)
         if (journaled !== undefined) {
             // 저널 재사용(124) — 결과는 이미 스텝에 있으므로 대화에만 싣고 스텝·체크포인트는 건너뛴다.
@@ -265,6 +270,8 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             toolResult = loop.blockedResult;
         } else if (cycle?.block) {
             toolResult = cycle.blockedResult;
+        } else if (sameError?.block) {
+            toolResult = sameError.blockedResult;
         } else if (pre !== undefined) {
             toolResult = pre;
         } else if (taskRuntime?.isTaskTool(name)) {
@@ -317,7 +324,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         // 서버 종료로 끊긴 호출의 결과(중단 오류·승인 자동 거절)는 저널에 남기지 않는다 — 남기면 재개가 그것을 실제 결과로 읽는다.
         // 비정상 종료와 같이 둔다: 재개 때 읽기 호출은 다시 실행하고, 부작용 호출은 실행 중 표식으로 결과 불명 처리된다.
         if (isShutdownAbort(signal)) throw new AgentTaskAbort('aborted');
-        if (loop && !loop.block && !cycle?.block) toolResult += loop.noteFor(forModel(name, args, toolResult)) || cycle!.noteFor(forModel(name, args, toolResult)) || rereadNote(conversation, name, args, toolResult);
+        if (loop && !loop.block && !cycle?.block && !sameError?.block) toolResult += loop.noteFor(forModel(name, args, toolResult)) || cycle!.noteFor(forModel(name, args, toolResult)) || sameError!.noteFor(forModel(name, args, toolResult)) || rereadNote(conversation, name, args, toolResult);
         conversation.push({
             role: 'tool',
             content: forModel(name, args, toolResult),
