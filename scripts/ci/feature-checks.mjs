@@ -96,6 +96,9 @@ export function selectRelatedTests(files, options = {}) {
   const deletedTests = options.deletedTests ?? manifest.deletedTests ?? {};
   // Deleted API source cannot be resolved by Jest: the manifest "deletedSources" maps it to existing regression tests that must run.
   const deletedSources = options.deletedSources ?? manifest.deletedSources ?? {};
+  // Source outside the API Jest roots (packages/) has no Jest graph edge: the manifest "fixedTests" names the API tests that check it.
+  // Jest checks only the values (constants) there; the type-equivalence lines (`pin`) are checked by tsc in `npm run build`.
+  const fixedTests = options.fixedTests ?? manifest.fixedTests ?? {};
   const listRelated = options.listRelated || (file => JSON.parse(execute(process.execPath, [resolve(root, 'node_modules/jest/bin/jest.js'), '--config', 'apps/api/jest.config.js', '--findRelatedTests', resolve(root, file), '--listTests', '--json', '--runInBand'], { cwd: root, env: options.env || process.env, encoding: 'utf8', stdio: 'pipe' }).stdout));
   // Every module (not only tests) that reaches the file through the same graph — its transitive importers.
   const listImporters = options.listImporters || (file => JSON.parse(execute(process.execPath, [resolve(root, 'node_modules/jest/bin/jest.js'), '--config', 'apps/api/jest.config.js', '--findRelatedTests', resolve(root, file), '--listTests', '--json', '--runInBand', '--testMatch', '<rootDir>/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'], { cwd: root, env: options.env || process.env, encoding: 'utf8', stdio: 'pipe' }).stdout).filter(path => path !== resolve(root, file)));
@@ -131,6 +134,14 @@ export function selectRelatedTests(files, options = {}) {
       if (importers.length) throw new Error(`No related Jest tests for ${file}; its importers reach no test (${importers.map(path => relative(root, path)).join(', ')}) — add coverage or a fixed mapping`);
       typeOnly.push(file);
       log(`Type-only ${declaration ? 'declaration file' : 'source with no importers'}, related Jest tests not required: ${file}`);
+      continue;
+    }
+    if (!listed.length && fixedTests[file]) {
+      const missing = fixedTests[file].filter(test => !existsSync(resolve(root, test)));
+      if (missing.length) throw new Error(`Fixed mapping test does not exist: ${missing.join(', ')} (for ${file}, scripts/ci/feature-checks.manifest.json "fixedTests")`);
+      const paths = requireRelated(file, fixedTests[file].map(test => resolve(root, test)));
+      related.set(file, paths);
+      for (const path of paths) tests.add(path);
       continue;
     }
     const paths = requireRelated(file, listed);

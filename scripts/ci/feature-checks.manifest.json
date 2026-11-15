@@ -43,6 +43,11 @@
       "apps/api/src/services/agent-task/context-fold.test.ts"
     ]
   },
+  "fixedTests": {
+    "packages/plugin-contracts/src/contributions.ts": [
+      "apps/api/src/__tests__/plugin-contracts-compat.test.ts"
+    ]
+  },
   "exactFiles": {
     "apps/desktop-native/build.sh": "desktopBuild",
     "apps/desktop-native/lib/node-bundle.sh": "desktopBuild",
