@@ -7,16 +7,16 @@ Plan: `docs/proposals/2026-08-22-desktop-native-companion-plan.md` (로컬 보�
 ## 구조
 
 ```
-helper/src/helper.mjs    # Node 헬퍼 — @openmake/local-bridge-core 의 stdio JSON-lines 어댑터
+helper/src/helper.mjs    # Node 헬퍼 — @openmake/local-bridge-core 의 stdio JSON-lines 어댑터 (앱은 0.4.0 부터 쓰지 않는다 — PR-2.2 에서 삭제)
 helper/harness.cjs       # 헬퍼 회귀 하네스 (build.sh 가 게이트로 실행). `--helper <실행 파일>` 로 omk-helper 등 다른 헬퍼를 같은 단언으로
 OpenMakeCompanion/       # SwiftPM 앱 (MenuBarExtra + 설정 + HelperManager + Updater)
 Localization/            # <lang>.lproj/Localizable.strings — ko(개발 언어)·en·ja·zh-Hans
 check-l10n.sh            # 다국어 표 게이트 (build.sh·CI 공용)
-build.sh                 # helper 번들(esbuild) → 하네스 → l10n 게이트 → swift build → .app 조립 → ad-hoc 서명 → dmg
+build.sh                 # omk-helper 릴리스 빌드(cargo) → 하네스(--helper) → l10n 게이트 → swift build → .app 조립 → ad-hoc 서명·검증 → dmg
 ```
 
-- 브리지 보안 코어(경로 스코프·exec 3단 방어·git 고정 조립·worktree)는 **`packages/local-bridge-core` 재사용** — Swift 재구현 금지(plan §6 게이트).
-- 앱↔헬퍼 stdio 계약은 `helper.mjs` 상단 주석 참고. confirm 응답은 항상 앱(사용자 다이얼로그)만 발원.
+- 브리지 보안 코어(경로 스코프·exec 3단 방어·git 고정 조립·worktree)는 Swift 로 재구현하지 않는다(plan §6 게이트). 앱에 넣는 배포본은 `apps/openmake-code` 의 Rust 코어(`omk-helper`, 0.4.0 부터)이고, 계약 원본·적합성 fixture 는 종전대로 `packages/local-bridge-core` 에 있다.
+- 앱↔헬퍼 stdio 계약은 `helper.mjs` 상단 주석 참고(`omk-helper` 도 같은 계약 — `apps/openmake-code/crates/omk-helper/README.md`). confirm 응답은 항상 앱(사용자 다이얼로그)만 발원.
 - **서버 주소(설정)**: 주소 하나를 자유 입력한다 — 브라우저에서 OpenMake 를 여는 주소(또는 API 주소). 헬퍼가 그 주소의 `GET /api/desktop/config` 로 서버의 API·웹 포트를 물어 연결 주소와 웹 주소를 정한다(`packages/local-bridge-core` 의 `endpoints`). 넣은 포트가 웹 포트면 연결은 API 포트로, API 포트면 웹은 웹 포트로, 둘 다 아니면(앞단 프록시) 넣은 주소 그대로. 조회 경로가 없는 구버전 서버는 넣은 주소를 그대로 쓴다. 종전의 선택지 2개(chat.example.com / localhost:52416)는 없앴고, "로컬"로 저장돼 있던 설정은 `http://localhost:52416` 으로 옮긴다.
 - 인증: API key(`omk_live_*`, bridge 스코프) → Keychain 저장, 헬퍼엔 기동 직후 stdin 의 `auth` 명령으로 전달(인자·환경으로 넘기지 않는다 — 아래 0.3.4). 키 발급은 웹의 **API 액세스 페이지(`/api-access`)** — 설정 화면의 "API 액세스 페이지 열기" 버튼이 연다.
 - **다중 루트(0.2.0)**: 메뉴 "작업 폴더 추가…" 로 여러 루트를 각각 연결 — 루트당 독립 브리지 연결(파생 deviceId = base id + 경로 해시)이라 **서버·프로토콜 무변경**, 웹엔 루트마다 별개 디바이스로 표시(기존 디바이스 선택기 사용). 유저당 총 디바이스 수는 서버 `LOCAL_BRIDGE_MAX_DEVICES`(기본 3)가 강제 — 초과는 해당 루트 상태에 서버 오류로 표면화. 스코프·샌드박스·일괄승인 회수는 루트별 독립(코어 인스턴스 분리).
@@ -24,6 +24,7 @@ build.sh                 # helper 번들(esbuild) → 하네스 → l10n 게이�
 - **다국어(0.2.6)**: 웹과 같은 언어(ko·en·ja·zh-Hans·de). 문자열은 `L("키")` → `Localization/<lang>.lproj`, 앱 번들 `Contents/Resources` 로 복사하고 `CFBundleDevelopmentRegion=ko`(웹 `DEFAULT_LOCALE`). 헬퍼·코어의 상태 문구는 한국어 원문 + 상태 코드(`code`·`arg`)로 오고 앱이 코드로 번역한다. 새 문구를 넣으면 모든 표에 추가 — `check-l10n.sh` 가 키 불일치·누락 키를 막는다.
 - **로컬 브라우저(0.3.0)**: 설정의 "에이전트의 브라우저 사용 허용"을 켜면 헬퍼를 `OMK_COMPANION_BROWSER=1` 로 띄우고, 코어가 전용 프로필(`~/Library/Application Support/OpenMakeCompanion/browser-profile`) Chrome 을 CDP 로 제어한다(평소 Chrome 프로필은 쓰지 않는다). 서버에는 능력 목록의 `browser` 로 알리며, 서버 쪽 게이트(`LOCAL_BRIDGE_BROWSER_ENABLED`)가 켜져 있어야 도구가 노출된다. 사이트 정책 판정·제어권·중지 로직은 전부 코어(`packages/local-bridge-core/src/browser`)에 있고, 앱은 메뉴("브라우저 넘겨받기/돌려주기", "브라우저 작업 중지")와 설정 토글만 담당한다(stdio 명령 `browserControl`·`browserStop`).
 - **넘겨받기 알림(0.3.1)**: "브라우저 넘겨받기"·"돌려주기"를 누르면 헬퍼가 서버에 `bridge_event { kind: 'browser_control', user }` 를 보낸다(단방향, 다시 연결될 때도 현재 상태를 한 번 더 보낸다). 서버가 `LOCAL_BRIDGE_TAKEOVER_PARK` 를 켰으면 넘겨받은 동안 작업을 주차해 실행 자리를 비우고, 돌려주면 같은 브라우저 호출부터 재개한다. 이 알림을 모르는 구버전 서버는 조용히 버린다.
+- **Rust 헬퍼(0.4.0)**: 기능은 0.3.9 와 같다. 앱이 Node 런타임 + `helper.cjs` 대신 `Contents/MacOS/omk-helper`(Rust, 같은 stdio 계약)를 띄워 node 런타임을 동봉하지 않는다. 헬퍼는 종료 때 자기가 띄운 Chrome 을 정리한 뒤 끝나고, 설정 변경으로 헬퍼를 다시 띄울 때 앱은 옛 헬퍼가 실제로 끝날 때까지 기다린 뒤 새 헬퍼로 폴더를 다시 연결한다.
 - **코어 동봉 갱신(0.3.9)**: 앱 코드 변경은 없고 동봉 코어만 바뀐다 — code_nav 의 깊은 정규식이 스택을 넘기면 "정규식 판정이 너무 깊어 중단했습니다 (역추적 한도 초과) — 패턴을 단순하게 바꾸세요" 로 답하고(#1791), 헬퍼 종료 때 띄우는 중인 로컬 브라우저 Chrome 을 끄고 이후 연결을 거부한다.
 - **게시 자동화 시험(0.3.8)**: 기능 0.3.7 과 같음 — 코드 변경 없이 버전만 올려 데스크톱 게시 자동화를 시험한다.
 - **재연결 hello 중복 방지·mise 위치 변수(0.3.7)**: 코어가 hello 를 자기가 연 소켓에만 보내고, 그 소켓이 끊기면 대기 중인 hello 를 취소한다 — 지연(300ms) 전에 끊긴 소켓의 타이머가 재연결로 열린 새 소켓에 hello 를 한 번 더 보냈다. 셸 경로 탐색에는 mise 의 설치본·설정 위치 변수를 넘겨, 위치를 기본값에서 옮긴 사용자의 PATH 도 잡는다(비밀값 변수는 계속 넘기지 않는다). 앱 코드 변경은 없고 동봉 코어만 바뀐다.
@@ -37,7 +38,7 @@ build.sh                 # helper 번들(esbuild) → 하네스 → l10n 게이�
 ## 빌드 / 게시
 
 ```bash
-npm run build:packages                      # local-bridge-core dist 선행
+npm ci                                      # 하네스의 ws 패키지 — Rust 툴체인도 필요(판은 apps/openmake-code/rust-toolchain.toml)
 bash apps/desktop-native/build.sh           # dist/OpenMake-Companion-<v>-arm64.dmg — 버전은 VERSION 파일(인자로 덮어쓸 수 있다)
 bash scripts/publish-desktop.sh apps/desktop-native/dist/OpenMake-Companion-<v>-arm64.dmg   # 로컬(localhost) 시험용 수동 게시
 # → latest.json 을 { native } 로 다시 쓴다 (컴패니언 dmg 가 아니면 거부)
@@ -55,6 +56,6 @@ bash scripts/publish-desktop.sh apps/desktop-native/dist/OpenMake-Companion-<v>-
 |---|---|
 | `OMK_COMPANION_API_KEY` | Keychain 대신 이 키 사용 (앱이 읽어 헬퍼에 stdin 으로 전달 — 헬퍼 환경에는 싣지 않는다) |
 | `OMK_COMPANION_FOLDER` | 기동 시 패널 없이 이 폴더 자동 연결 |
-| `OMK_COMPANION_NODE` / `OMK_COMPANION_HELPER.CJS` | 번들 Resources 대신 이 경로 사용 (swift run 개발 실행) |
+| `OMK_COMPANION_HELPER` | 번들 `Contents/MacOS/omk-helper` 대신 이 실행 파일 사용 (swift run 개발 실행) |
 | `OMK_COMPANION_AUTO_UPDATE=1` | 업데이트 다이얼로그 없이 즉시 진행 (업데이터 E2E) |
 | `OMK_BRIDGE_SANDBOX=0` / `OMK_BRIDGE_AUTO_APPROVE=1` | 코어 공통 훅 (CLI 와 동일) |

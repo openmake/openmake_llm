@@ -1,8 +1,8 @@
 # ==============================================================
 # Desktop Native Companion CI (plan §2 레포 배치)
 # ==============================================================
-# path-filter: apps/desktop-native 또는 브리지 코어(packages/local-bridge-core) 변경 시에만 실행.
-# 코어가 바뀌었는데 헬퍼 번들/하네스가 깨지는 커밋을 여기서 잡는다 (iOS ci 패턴 준용).
+# path-filter: apps/desktop-native, Rust 헬퍼(apps/openmake-code) 또는 브리지 코어(packages/local-bridge-core) 변경 시에만 실행.
+# 앱에 넣는 omk-helper 릴리스 빌드 + 하네스, Node 헬퍼 번들 + 하네스(PR-2.2 까지)가 깨지는 커밋을 여기서 잡는다 (iOS ci 패턴 준용).
 # CI 는 빌드 검증 뒤 ad-hoc 서명 dmg 를 만들어 실행 결과로 남긴다.
 # main push 중 apps/desktop-native/VERSION 이 바뀐 것만 release job 이 그 dmg 를 사전 릴리스 desktop-native-v<버전>
 # 자산으로 한 번 올린다 — 서버 파이프라인(omk env pipeline, OMK_DESKTOP_PUBLISH=1)이 계보·sha256 확인 뒤 게시한다.
@@ -15,12 +15,14 @@ on:
     branches: [main, dev]
     paths:
       - 'apps/desktop-native/**'
+      - 'apps/openmake-code/**'
       - 'packages/local-bridge-core/**'
       - '.github/workflows/desktop-native.yml'
   pull_request:
     branches: [main, dev]
     paths:
       - 'apps/desktop-native/**'
+      - 'apps/openmake-code/**'
       - 'packages/local-bridge-core/**'
       - '.github/workflows/desktop-native.yml'
 
@@ -33,9 +35,9 @@ concurrency:
 
 jobs:
   companion:
-    name: Companion (Helper harness → Swift build)
+    name: Companion (omk-helper → harness → Swift build → dmg)
     runs-on: macos-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -46,15 +48,29 @@ jobs:
         with:
           node-version-file: .node-version
 
+      # rust-toolchain.toml 의 판을 받는다(openmake-code.yml 과 같은 단계).
+      - name: Rust toolchain
+        working-directory: apps/openmake-code
+        run: |
+          rustup toolchain install
+          rustup show active-toolchain
+          cargo --version
+
       # ─── Gate 1: 헬퍼 번들 + 하네스 ───
       # local-bridge-core dist 빌드 → esbuild 번들 → stdio confirm 왕복 포함 회귀 하네스.
-      - name: "Gate 1: Helper bundle + harness"
+      - name: "Gate 1: Helper bundle + harness (Node 헬퍼 — PR-2.2 에서 삭제)"
         run: |
           npm ci --ignore-scripts
           npm run build:packages
           npx esbuild apps/desktop-native/helper/src/helper.mjs --bundle --platform=node \
             --target=node20 --format=cjs --outfile=apps/desktop-native/helper/dist/helper.cjs
           node apps/desktop-native/helper/harness.cjs
+
+      # ─── Gate 1-R: 앱에 넣는 omk-helper 릴리스 빌드 + 같은 하네스 ───
+      - name: "Gate 1-R: omk-helper release build + harness"
+        run: |
+          (cd apps/openmake-code && cargo build --release --locked -p omk-helper)
+          node apps/desktop-native/helper/harness.cjs --helper apps/openmake-code/target/release/omk-helper
 
       # ─── Gate 1-B: 다국어 표 (ko·en·ja·zh-Hans·de 키 집합 + 소스가 쓰는 L("키")) ───
       - name: "Gate 1-B: Localization tables"

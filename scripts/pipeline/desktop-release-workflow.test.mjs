@@ -62,3 +62,23 @@ test('every step after the gate runs only when the gate says publish', () => {
         assert.match(steps.get(name), /^ {8}if: steps\.gate\.outputs\.publish == 'true'$/m, name);
     }
 });
+
+test('push and pull_request path filters both cover the Rust helper, the app and the bridge core', () => {
+    for (const event of ['push', 'pull_request']) {
+        const block = workflow.match(new RegExp(`^ {2}${event}:\\n([\\s\\S]*?)(?=^ {2}\\S|^\\S)`, 'm'))?.[1] ?? '';
+        for (const path of ['apps/openmake-code/**', 'apps/desktop-native/**', 'packages/local-bridge-core/**']) {
+            assert.ok(block.includes(`- '${path}'`), `${event} filter has ${path}`);
+        }
+    }
+});
+
+test('the companion job installs the Rust toolchain before building omk-helper and runs the harness on that release binary', () => {
+    const companion = workflow.slice(workflow.search(/^ {2}companion:$/m), workflow.search(/^ {2}release:$/m));
+    const toolchain = companion.indexOf('rustup toolchain install');
+    const cargoBuild = companion.indexOf('cargo build --release --locked -p omk-helper');
+    const buildSh = companion.indexOf('bash apps/desktop-native/build.sh');
+    assert.ok(toolchain > 0, 'rustup toolchain install present');
+    assert.ok(cargoBuild > toolchain, 'toolchain before cargo build');
+    assert.ok(buildSh > toolchain, 'toolchain before build.sh');
+    assert.ok(companion.includes('node apps/desktop-native/helper/harness.cjs --helper apps/openmake-code/target/release/omk-helper'));
+});
