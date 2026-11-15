@@ -29,8 +29,11 @@ export interface ConversationSessionsPort {
     exists(actor: Actor, sessionId: string): Promise<boolean>;
     /** 세션 소유자 id(익명·없는 세션은 null) — 인가 없음 */
     ownerOf(sessionId: string): Promise<string | null>;
-    /** 세션 제목·갱신 시각(최근 갱신 순, 없는 id 는 빠짐) — 인가 없음 */
-    summaries(sessionIds: readonly string[]): Promise<ConversationSessionSummary[]>;
+    /**
+     * 세션 제목·갱신 시각(최근 갱신 순, 없는 id 는 빠짐) — 인가 없음.
+     * withMessagesOnly 면 메시지 0건 세션도 빠진다(일반 대화 목록과 같은 규칙).
+     */
+    summaries(sessionIds: readonly string[], opts?: { withMessagesOnly?: boolean }): Promise<ConversationSessionSummary[]>;
 }
 
 export interface MigrationRecordsPort {
@@ -67,9 +70,9 @@ export const baseDataPort: BaseDataPort = {
         async ownerOf(sessionId) {
             return (await getSessionOwnerId(sessionId)) ?? null;
         },
-        async summaries(sessionIds) {
+        async summaries(sessionIds, opts) {
             if (sessionIds.length === 0) return [];
-            const rows = await getSessionSummaries(sessionIds);
+            const rows = await getSessionSummaries(sessionIds, opts);
             return rows.map((row) => ({ id: row.id, title: row.title, updatedAt: row.updated_at?.toISOString() ?? null }));
         },
     },

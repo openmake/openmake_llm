@@ -30,7 +30,6 @@ export interface SpaceSummaryRow extends SpaceScopeRow {
     document_count: string;
     processing_count: string;
     failed_count: string;
-    conversation_count: string;
 }
 
 /** 요약 카운트 SELECT 목록 — 목록·상세가 공유. deleted/삭제 문서는 세지 않는다. */
@@ -38,8 +37,7 @@ const SUMMARY_COLUMNS = `
     s.id, s.name, s.description, s.icon, s.instructions, s.scope_type, s.scope_id, s.last_used_at, s.updated_at, s.config_profile_id, s.embedding_index_id,
     (SELECT COUNT(*) FROM knowledge_documents d WHERE d.space_id = s.id AND d.deleted_at IS NULL AND d.status <> 'deleted') AS document_count,
     (SELECT COUNT(*) FROM knowledge_documents d WHERE d.space_id = s.id AND d.deleted_at IS NULL AND d.status = 'processing') AS processing_count,
-    (SELECT COUNT(*) FROM knowledge_documents d WHERE d.space_id = s.id AND d.deleted_at IS NULL AND d.status = 'failed') AS failed_count,
-    (SELECT COUNT(*) FROM knowledge_conversation_bindings b WHERE b.space_id = s.id) AS conversation_count`;
+    (SELECT COUNT(*) FROM knowledge_documents d WHERE d.space_id = s.id AND d.deleted_at IS NULL AND d.status = 'failed') AS failed_count`;
 
 /** 접근 가능한 Space 요약 목록(최근 사용 순) */
 export async function listSpaceRows(actor: KnowledgeActor): Promise<SpaceSummaryRow[]> {
@@ -147,6 +145,7 @@ export interface SpaceConversationRow { session_id: string; title: string | null
 /**
  * Space 에 연결된 대화 목록(최근 갱신 순) — 인가는 호출부가 Space 로 이미 확인했다.
  * 바인딩은 Knowledge 표에서, 제목·갱신 시각은 Base 데이터 포트에서 받는다(삭제된 세션은 포트가 돌려주지 않아 빠진다).
+ * 메시지가 아직 없는 세션(방금 만든 "새 대화"·saveHistory:false)도 빠진다 — 일반 대화 목록과 같은 규칙.
  * 제목·갱신 시각이 없는 세션은 null 그대로 — 종전 JOIN 결과와 같다(화면은 제목 없음을 "제목 없는 대화"로 보인다).
  */
 export async function listConversationsForSpace(spaceId: string): Promise<SpaceConversationRow[]> {
@@ -154,6 +153,27 @@ export async function listConversationsForSpace(spaceId: string): Promise<SpaceC
         `SELECT session_id FROM knowledge_conversation_bindings WHERE space_id = $1`,
         [spaceId],
     );
-    const summaries = await baseDataPort.conversationSessions.summaries(r.rows.map((row) => row.session_id));
+    const summaries = await baseDataPort.conversationSessions.summaries(r.rows.map((row) => row.session_id), { withMessagesOnly: true });
     return summaries.map((s) => ({ session_id: s.id, title: s.title, updated_at: s.updatedAt }));
+}
+
+/**
+ * Space 별 대화 수 — 목록(listConversationsForSpace)과 같은 규칙: 메시지가 있고 삭제되지 않은 세션만 센다.
+ * 바인딩을 한 번 읽고 포트를 한 번 부른다. 인가는 호출부가 Space 로 이미 확인했다. 바인딩 없는 Space 는 0.
+ */
+export async function countConversationsBySpace(spaceIds: readonly string[]): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    if (spaceIds.length === 0) return counts;
+    const r = await kdb().query<{ space_id: string; session_id: string }>(
+        `SELECT space_id, session_id FROM knowledge_conversation_bindings WHERE space_id = ANY($1::text[])`,
+        [spaceIds],
+    );
+    const live = new Set(
+        (await baseDataPort.conversationSessions.summaries(r.rows.map((row) => row.session_id), { withMessagesOnly: true })).map((s) => s.id),
+    );
+    for (const id of spaceIds) counts.set(id, 0);
+    for (const row of r.rows) {
+        if (live.has(row.session_id)) counts.set(row.space_id, (counts.get(row.space_id) ?? 0) + 1);
+    }
+    return counts;
 }

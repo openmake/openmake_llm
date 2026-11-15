@@ -8,7 +8,7 @@ jest.mock('../../../runtime-ports/base-data-port', () => ({
 
 import * as db from '../db';
 import { baseDataPort } from '../../../runtime-ports/base-data-port';
-import { listConversationsForSpace } from '../spaces/repository';
+import { countConversationsBySpace, listConversationsForSpace } from '../spaces/repository';
 
 const query = jest.fn();
 const summaries = baseDataPort.conversationSessions.summaries as jest.Mock;
@@ -29,7 +29,7 @@ describe('listConversationsForSpace', () => {
             { session_id: 's2', title: '둘째', updated_at: '2026-10-16T02:00:00.000Z' },
             { session_id: 's1', title: '첫째', updated_at: '2026-10-16T01:00:00.000Z' },
         ]);
-        expect(summaries).toHaveBeenCalledWith(['s1', 's2']);
+        expect(summaries).toHaveBeenCalledWith(['s1', 's2'], { withMessagesOnly: true });
         expect(String(query.mock.calls[0][0])).not.toMatch(/conversation_sessions/);
         expect(query.mock.calls[0][1]).toEqual(['sp1']);
     });
@@ -50,6 +50,34 @@ describe('listConversationsForSpace', () => {
         query.mockResolvedValueOnce({ rows: [] });
         summaries.mockResolvedValueOnce([]);
         await expect(listConversationsForSpace('sp1')).resolves.toEqual([]);
-        expect(summaries).toHaveBeenCalledWith([]);
+        expect(summaries).toHaveBeenCalledWith([], { withMessagesOnly: true });
+    });
+});
+
+describe('countConversationsBySpace', () => {
+    it('바인딩을 한 번 읽고 포트(메시지 있는 세션만)로 걸러 Space 별로 센다 — 빈·삭제된 세션은 빠진다', async () => {
+        query.mockResolvedValueOnce({ rows: [
+            { space_id: 'sp1', session_id: 's1' },
+            { space_id: 'sp1', session_id: 'empty' },
+            { space_id: 'sp2', session_id: 's2' },
+            { space_id: 'sp2', session_id: 'gone' },
+        ] });
+        summaries.mockResolvedValueOnce([
+            { id: 's2', title: null, updatedAt: null },
+            { id: 's1', title: null, updatedAt: null },
+        ]);
+        const counts = await countConversationsBySpace(['sp1', 'sp2', 'sp3']);
+        expect(counts).toEqual(new Map([['sp1', 1], ['sp2', 1], ['sp3', 0]]));
+        expect(query).toHaveBeenCalledTimes(1);
+        expect(query.mock.calls[0][1]).toEqual([['sp1', 'sp2', 'sp3']]);
+        expect(String(query.mock.calls[0][0])).not.toMatch(/conversation_sessions|conversation_messages/);
+        expect(summaries).toHaveBeenCalledTimes(1);
+        expect(summaries).toHaveBeenCalledWith(['s1', 'empty', 's2', 'gone'], { withMessagesOnly: true });
+    });
+
+    it('빈 입력이면 조회하지 않고 빈 Map', async () => {
+        await expect(countConversationsBySpace([])).resolves.toEqual(new Map());
+        expect(query).not.toHaveBeenCalled();
+        expect(summaries).not.toHaveBeenCalled();
     });
 });

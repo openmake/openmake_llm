@@ -298,9 +298,10 @@ export default function HistoryPage() {
     return () => {
       cancelled = true;
     };
-    // locale/t 변경 시 라벨 재매핑 위해 재조회, viewAll 토글·폴더/태그 필터 변경 시 범위 재조회
+    // locale/t 변경 시 라벨 재매핑 위해 재조회, viewAll 토글·폴더/태그 필터 변경 시 범위 재조회,
+    // 사용자 전환(토큰 복구 전 게스트 → 로그인) 시 게스트 빈 목록이 굳지 않게 재조회
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, tChat, locale, viewAll, filter.folderId, filter.tag]);
+  }, [t, tChat, locale, viewAll, filter.folderId, filter.tag, myUserId]);
 
   // 본문 검색 — 서버 ?q= (제목+메시지 ILIKE). 제목 클라 필터에 매칭 세션 id 를 합류시키고,
   // 메인 목록(limit=100) 밖의 매칭 세션은 별도(searchExtras)로 목록에 병합한다.
