@@ -2,6 +2,7 @@
  * 모델 배정 구획 — 키를 켜고 끈 뒤 `["models"]` 무효화를 따라 목록·배정·effective 를 다시 읽는다(2026-11-16 라이브:
  * 새로고침 전까지 "(목록에 없음)"·"키가 꺼져 있습니다" 경고가 남았다). 다시 읽어도 사용자가 고친 params 초안은 남는다.
  */
+import './dom-before-react';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
@@ -22,7 +23,8 @@ const slots = [
 const local = { modelId: 'local-llm:fixture-chat', name: 'fixture-chat', provider: 'local-llm' };
 const ext = { modelId: 'hasa:ext-model', name: 'ext-model', provider: 'hasa' };
 
-async function mount(server: { keyOn: boolean }) {
+/** hold: 배정 GET 을 붙잡아 둘 약속, failGets: 배정 GET 을 실패시킨다, dims: 서버의 text.embed dimensions(PUT 이 바꾼다) */
+async function mount(server: { keyOn: boolean; dims?: string; hold?: Promise<void>; failGets?: boolean }) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/settings' });
   Object.assign(globalThis, { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true });
   const originalFetch = globalThis.fetch;
@@ -32,17 +34,23 @@ async function mount(server: { keyOn: boolean }) {
     if (url.pathname === '/api/models') return Response.json({ success: true, data: { defaultModel: '', models: server.keyOn ? [local, ext] : [local] } });
     if (url.pathname === '/api/users/me/model-assignments' && (!init?.method || init.method === 'GET')) {
       gets++;
+      if (server.hold) await server.hold;
+      if (server.failGets) return Response.json({ success: false, error: { message: 'boom' } }, { status: 500 });
       return Response.json({ success: true, data: {
         slots,
         assignments: [
           { slot: 'code', fullId: ext.modelId, params: {}, updatedAt: '2026-11-16T00:00:00.000Z' },
-          { slot: 'text.embed', fullId: 'local-llm:fixture-chat', params: { dimensions: '256' }, updatedAt: '2026-11-16T00:00:00.000Z' },
+          { slot: 'text.embed', fullId: 'local-llm:fixture-chat', params: { dimensions: server.dims ?? '256' }, updatedAt: '2026-11-16T00:00:00.000Z' },
         ],
         effective: [
           server.keyOn ? { slot: 'code', fullId: ext.modelId, source: 'user' } : { slot: 'code', fullId: null, source: 'none', error: KEY_OFF },
           { slot: 'text.embed', fullId: 'local-llm:fixture-chat', source: 'user' },
         ],
       } });
+    }
+    if (url.pathname === '/api/users/me/model-assignments/text.embed' && init?.method === 'PUT') {
+      server.dims = (JSON.parse(String(init.body)) as { params?: { dimensions?: string } }).params?.dimensions;
+      return Response.json({ success: true, data: {} });
     }
     return Response.json({ success: true, data: {} });
   };
@@ -110,6 +118,56 @@ test('다시 읽어도 사용자가 고친 params 초안은 남는다', async ()
 
     assert.ok(m.gets() > before);
     assert.equal(m.input(label).value, '512', '배경 다시 읽기가 입력을 날리지 않는다');
+  } finally {
+    await m.cleanup();
+  }
+});
+
+async function typeAndApply(m: Awaited<ReturnType<typeof mount>>, label: string, value: string) {
+  await act(async () => {
+    const el = m.input(label);
+    Object.getOwnPropertyDescriptor(m.dom.window.HTMLInputElement.prototype, 'value')!.set!.call(el, value);
+    el.dispatchEvent(new m.dom.window.Event('input', { bubbles: true }));
+  });
+  const apply = [...document.querySelectorAll('button')].find((b) => b.textContent?.includes(k.paramsApply)) as HTMLButtonElement;
+  assert.ok(apply, '고친 params 를 저장하는 버튼');
+  await act(async () => apply.dispatchEvent(new m.dom.window.MouseEvent('click', { bubbles: true })));
+}
+
+test('params 저장 뒤 다시 읽기가 끝나기 전에도 입력칸이 옛 서버 값으로 돌아가지 않는다', async () => {
+  const server: { keyOn: boolean; dims?: string; hold?: Promise<void> } = { keyOn: true };
+  const m = await mount(server);
+  let release: (() => void) | undefined;
+  try {
+    const label = `${k.slots.text_embed.title} dimensions`;
+    server.hold = new Promise<void>((r) => { release = r; });
+    await typeAndApply(m, label, '512');
+    await m.flush();
+    assert.equal(server.dims, '512', '저장은 됐다');
+    assert.equal(m.input(label).value, '512', '다시 읽기 중에도 고친 값');
+    release!();
+    server.hold = undefined;
+    await m.flush();
+    assert.equal(m.input(label).value, '512', '다시 읽은 서버 값');
+  } finally {
+    // 단언이 실패해도 붙잡은 요청을 풀어 테스트가 멈추지 않게
+    release?.();
+    server.hold = undefined;
+    await m.flush();
+    await m.cleanup();
+  }
+});
+
+test('params 저장 뒤 다시 읽기가 실패하면 고친 값을 그대로 보인다', async () => {
+  const server: { keyOn: boolean; dims?: string; failGets?: boolean } = { keyOn: true };
+  const m = await mount(server);
+  try {
+    const label = `${k.slots.text_embed.title} dimensions`;
+    server.failGets = true;
+    await typeAndApply(m, label, '512');
+    await m.flush();
+    assert.equal(server.dims, '512');
+    assert.equal(m.input(label).value, '512', '실패한 다시 읽기가 옛 서버 값(256)으로 되돌리지 않는다');
   } finally {
     await m.cleanup();
   }
