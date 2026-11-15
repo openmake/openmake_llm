@@ -10,7 +10,9 @@ enum Keychain {
     /** nil = 아직 조회 안 함, .some(nil) = 조회했으나 없음·실패. */
     private static var cached: String??
 
-    static func save(_ value: String) {
+    /** 저장 실패(`SecItemAdd` 실패)면 캐시를 "미조회"로 되돌려 다음 `load()` 가 실제 상태를 본다. */
+    @discardableResult
+    static func save(_ value: String) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -18,11 +20,20 @@ enum Keychain {
         ]
         SecItemDelete(query as CFDictionary)
         cached = .some(value.isEmpty ? nil : value)
-        guard !value.isEmpty else { return }
+        guard !value.isEmpty else { return true }
         var add = query
         add[kSecValueData as String] = Data(value.utf8)
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(add as CFDictionary, nil)
+        guard SecItemAdd(add as CFDictionary, nil) == errSecSuccess else {
+            cached = nil
+            return false
+        }
+        return true
+    }
+
+    /** 저장 없이 이번 실행의 캐시에만 둔다 — 넘겨받은 키의 저장이 실패했을 때만(KeyHandoff). */
+    static func remember(_ value: String) {
+        cached = .some(value)
     }
 
     static func load() -> String? {

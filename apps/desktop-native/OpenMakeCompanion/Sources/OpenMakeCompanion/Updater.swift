@@ -178,8 +178,8 @@ final class Updater: ObservableObject {
         rm -f "$DMG"
         # 키 넘겨주기: FIFO 는 디스크에 내용을 쓰지 않는다. 쓰는 쪽은 새 앱이 열 때까지 기다리고, 30초 뒤엔 끄고 지운다
         # (그 사이 못 받으면 종전처럼 키체인 창). 실패는 조용히 건너뛴다.
-        if [ -n "$OMK_KEY" ]; then
-          KH="\(KeyHandoff.path)"
+        KH="${OMK_KH:-}"
+        if [ -n "$OMK_KEY" ] && [ -n "$KH" ]; then
           if mkdir -p "$(dirname "$KH")" 2>/dev/null && rm -f "$KH" && mkfifo -m 600 "$KH" 2>/dev/null; then
             ( printf '%s' "$OMK_KEY" > "$KH" ) 2>/dev/null &
             KH_PID=$!
@@ -199,6 +199,7 @@ final class Updater: ObservableObject {
         p.arguments = [shPath]
         var env = ProcessInfo.processInfo.environment
         for (name, key) in Self.scriptMessages { env[name] = L(key) }
+        env["OMK_KH"] = KeyHandoff.path // 경로는 비밀이 아니다 — 본문에 끼워 넣지 않아 셸 해석을 피한다.
         p.environment = env
         p.standardOutput = FileHandle.nullDevice
         p.standardError = FileHandle.nullDevice
