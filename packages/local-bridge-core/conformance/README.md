@@ -84,7 +84,7 @@ Rust 는 차단 패턴을 ECMAScript 정규식 크레이트 `regress` 로 컴파
 서버는 `kind`·`path`·`folder`·`contentB64`·`command`·`op`·`taskId` 를 항상 문자열로 보낸다. TS 는 JSON 을 느슨하게 읽어 문자열이 아닌 값이 오면 Node 의 TypeError 문구가 나가거나(`path: 5`), 뜻밖에 통과한다(`contentB64: [1,2]` 는 바이트 2개를 쓴다).
 
 - JS 에서 거짓인 값(`null`·`false`·`0`·`""`·없음)은 두 구현 모두 "없음"으로 본다(일반 사례).
-- `command`·`op` 의 거짓 값은 TS 표기 그대로 옮긴다 — `command` 가 없으면 확인 창에는 빈 명령, 실행은 `String(m.command)`(`undefined`·`null`·`false`·`0`), 모르는 op 문구는 `${m.op}`.
+- `command` 의 거짓 값(없음·`null`·`false`·`0`·`""`)은 두 구현 모두 차단 검사·확인 창 앞에서 `{ok:false, error:"실행할 명령이 없습니다", exitCode:126}` 로 거절한다(확인 창 없음). 지난 뒤로는 차단·확인·실행이 같은 글자 하나를 쓴다. `op` 의 거짓 값은 TS 표기 그대로 옮긴다 — 모르는 op 문구는 `${m.op}`.
 - JS 에서 참인 비문자열(0 이 아닌 수·`true`·배열·객체)이 일곱 필드에 오면 Rust 는 처리하지 않고 `{ok:false, error:"요청 필드 형식이 올바르지 않습니다: <필드>"}` 를 낸다(더 엄격한 쪽). 이런 사례는 `"divergence": "non-string-field"` 와 `rustExpect` 를 함께 적는다.
 - TS 는 `command: ["ls"]` 를 `ls` 로 묻고 실행하며, `taskId: 5` 를 일괄 승인 집합의 키로 쓰고, worktree 의 `taskId: 12345678` 을 형식 검사에 통과시킨다. Rust 는 묻지도 실행하지도 않는다(exec-gate 러너는 알려진 차이 단계에서 물음이 없음을 본다).
 - 남용 방지: Rust 러너는 입력의 일곱 필드 중 하나가 참인 비문자열이고 `rustExpect.ok` 가 `false` 이며 `after` 가 없을 때만 받아들인다.
