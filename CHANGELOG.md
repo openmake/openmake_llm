@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.136.2](https://github.com/openmake/openmake_llm/compare/v1.136.1...v1.136.2) (2026-11-15)
+
+
+### 🔧 기타
+
+* **release:** 1.136.2 — 앱 게시 릴리스 유도(macOS 0.3.9·Windows 0.1.9) ([f0369bc](https://github.com/openmake/openmake_llm/commit/f0369bc0b699195b0ccec167b991d201aca4242b))
+
 ## [1.136.1](https://github.com/openmake/openmake_llm/compare/v1.136.0...v1.136.1) (2026-11-15)
 
 
