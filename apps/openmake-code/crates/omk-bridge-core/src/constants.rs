@@ -226,7 +226,14 @@ pub const CODE_NAV_EXCLUDED_DIRS: &[&str] = &[
 ];
 
 /// code_nav 시간 예산 기본값(ms) — TS 는 `OMK_BRIDGE_CODE_NAV_TIMEOUT_MS || 15000`. 호스트가 `with_tool_timeouts` 로 바꾼다.
+/// 실제 예산은 관문 제한의 4/5 이하다([`code_nav_budget_ms`]).
 pub const CODE_NAV_TIMEOUT_MS: u64 = 15_000;
+
+/// 실제로 쓰는 code_nav 예산 — 설정한 값은 상한이고, 감싼 관문 제한(`fs_timeout_ms`)의 4/5 이하로 묶는다. 예산이 관문보다
+/// 늦게 끝나면 잘린 결과 대신 관문 오류가 먼저 나간다(설계 2026-11-15 D-3, TS `codeNavBudgetMs`). 기본값은 12000ms.
+pub fn code_nav_budget_ms(configured: u64, gate_ms: u64) -> u64 {
+    configured.min(gate_ms.saturating_mul(4) / 5)
+}
 /// 1회 요청에서 훑을 최대 파일 수.
 pub const CODE_NAV_MAX_FILES: usize = 4000;
 /// 내용을 읽을 파일 크기 상한(bytes).

@@ -187,3 +187,117 @@ describe('실패 TaskResult.model — 실행을 시도한 배정 대상(task_res
         expect(by('r').model).toBeUndefined();
     });
 });
+
+describe('orchestrator_task 실패 이벤트 reason·provider — 화면이 실패 종류를 안다', () => {
+    type Ev = { type: string; id?: string; status?: string; reason?: string; provider?: string; summary?: string };
+    const target = (capability: string, providerId: string, fullId: string, model: string) => ({ capability, fullId, providerId, model } as never);
+    const failedOf = (events: Ev[], id: string) => events.filter((e) => e.type === 'orchestrator_task' && e.id === id && e.status === 'failed');
+    async function withEnv(env: Record<string, string>, fn: (run: typeof executePlan) => Promise<void>) {
+        const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
+        Object.assign(process.env, env);
+        try {
+            await jest.isolateModulesAsync(async () => { const { executePlan: run } = await import('../executor'); await fn(run); });
+        } finally {
+            for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+        }
+    }
+
+    it('handler throw 는 classify 의 kind, 외부 대상이면 provider 를 싣는다(로컬·대상 없음은 생략)', async () => {
+        const events: Ev[] = [];
+        behaviors.g = async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); };
+        behaviors.t = async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); };
+        behaviors.c = async () => { throw new DOMException('This operation was aborted', 'AbortError'); };
+        const p = plan({ complexity: 'multi', tasks: [
+            { id: 'g', capability: 'image.generate', input: { instruction: 'x' } }, { id: 't', capability: 'text.reason' }, { id: 'c', capability: 'web.search' },
+        ] });
+        const targets = new Map([['g', target('image.generate', 'ext', 'ext:img-1', 'img-1')], ['t', target('text.reason', 'local-llm', 'local-1', 'local-1')]]);
+        await executePlan(p, ctx({ targets, onProgress: (e) => events.push(e as Ev) }));
+        expect(failedOf(events, 'g').map((e) => [e.reason, e.provider])).toEqual([['timeout', 'ext']]);
+        expect(failedOf(events, 't').map((e) => [e.reason, 'provider' in e])).toEqual([['timeout', false]]);
+        expect(failedOf(events, 'c').map((e) => [e.reason, 'provider' in e])).toEqual([['cancelled', false]]);
+        // summary 는 원문 그대로(하위 호환)
+        expect(failedOf(events, 'g')[0].summary).toContain('The operation was aborted due to timeout');
+    });
+
+    it('handler 가 ok:false 를 반환하면 reason=failed', async () => {
+        const events: Ev[] = [];
+        behaviors.a = async () => ({ ok: false, text: 'no', media: [] });
+        const p = plan({ complexity: 'multi', tasks: [{ id: 'a', capability: 'web.search' }] });
+        await executePlan(p, ctx({ onProgress: (e) => events.push(e as Ev) }));
+        expect(failedOf(events, 'a').map((e) => e.reason)).toEqual(['failed']);
+    });
+
+    it('preflight 거절은 결과 text 맨 앞 [label], 형식이 아니면 failed', async () => {
+        const events: Ev[] = [];
+        const p = plan({ complexity: 'multi', tasks: [{ id: 'u', capability: 'image.generate', input: { instruction: 'x' } }, { id: 'v', capability: 'web.search' }] });
+        const c = ctx({ onProgress: (e) => events.push(e as Ev) });
+        c.results.set('u', { taskId: 'u', capability: 'image.generate', ok: false, status: 'failed', text: '[unassigned] 없음', media: [], ms: 0, error: 'unassigned' });
+        c.results.set('v', { taskId: 'v', capability: 'web.search', ok: false, status: 'failed', text: '형식 없음', media: [], ms: 0, error: 'x' });
+        await executePlan(p, c);
+        expect(failedOf(events, 'u').map((e) => [e.reason, e.summary])).toEqual([['unassigned', '[unassigned] 없음']]);
+        expect(failedOf(events, 'v').map((e) => e.reason)).toEqual(['failed']);
+    });
+
+    it('선행 작업 미완료는 reason=skipped', async () => {
+        const events: Ev[] = [];
+        behaviors.p = async () => { throw new Error('boom'); };
+        const p = plan({ complexity: 'multi', tasks: [{ id: 'p', capability: 'web.search' }, { id: 'child', capability: 'text.code', depends_on: ['p'] }] });
+        await executePlan(p, ctx({ onProgress: (e) => events.push(e as Ev) }));
+        expect(failedOf(events, 'p').map((e) => e.reason)).toEqual(['failed']);
+        expect(failedOf(events, 'child').map((e) => e.reason)).toEqual(['skipped']);
+    });
+
+    it('성공·running 이벤트에는 reason·provider 가 없다', async () => {
+        const events: Ev[] = [];
+        const p = plan({ complexity: 'multi', tasks: [{ id: 'g', capability: 'image.generate', input: { instruction: 'x' } }] });
+        const targets = new Map([['g', target('image.generate', 'ext', 'ext:img-1', 'img-1')]]);
+        await executePlan(p, ctx({ targets, onProgress: (e) => events.push(e as Ev) }));
+        const tasks = events.filter((e) => e.type === 'orchestrator_task');
+        expect(tasks.map((e) => e.status)).toEqual(['running', 'ok']);
+        expect(tasks.every((e) => !('reason' in e) && !('provider' in e))).toBe(true);
+    });
+
+    it('작업 시간 제한으로 끊긴 대기가 Error(취소됨) 을 던져도 timeout 으로 보정한다', async () => {
+        await withEnv({ ORCHESTRATOR_TASK_TIMEOUT_MS: '30' }, async (run) => {
+            const events: Ev[] = [];
+            behaviors.v = (signal) => new Promise((_, reject) => signal!.addEventListener('abort', () => reject(new Error('취소됨')), { once: true }));
+            const p = plan({ complexity: 'multi', tasks: [{ id: 'v', capability: 'web.search' }] });
+            const s = await run(p, ctx({ onProgress: (e) => events.push(e as Ev) }));
+            expect(s.results[0].text).toMatch(/^\[timeout\] /);
+            expect(s.results[0].text).not.toContain('취소됨');
+            expect(failedOf(events, 'v').map((e) => e.reason)).toEqual(['timeout']);
+            expect(failedOf(events, 'v')[0].summary).not.toContain('취소됨');
+        });
+    });
+
+    it('사용자 취소로 Error(취소됨) 이 나면 그대로 cancelled', async () => {
+        const events: Ev[] = [];
+        const ac = new AbortController();
+        behaviors.v = (signal) => new Promise((_, reject) => { signal!.addEventListener('abort', () => reject(new Error('취소됨')), { once: true }); setTimeout(() => ac.abort(), 10); });
+        const p = plan({ complexity: 'multi', tasks: [{ id: 'v', capability: 'web.search' }] });
+        const s = await executePlan(p, ctx({ signal: ac.signal, onProgress: (e) => events.push(e as Ev) }));
+        expect(s.results[0].text).toMatch(/^\[cancelled\] /);
+        expect(failedOf(events, 'v').map((e) => e.reason)).toEqual(['cancelled']);
+    });
+
+    it('턴 시간 초과로 시작 못 한 작업은 reason=deadline 실패 이벤트(summary=결과 text)', async () => {
+        await withEnv({ ORCHESTRATOR_TURN_DEADLINE_MS: '30' }, async (run) => {
+            const events: Ev[] = [];
+            behaviors.a = async () => { await new Promise((r) => setTimeout(r, 60)); return { ok: true, text: 'A', media: [] }; };
+            const p = plan({ complexity: 'multi', tasks: [{ id: 'a', capability: 'web.search' }, { id: 'n', capability: 'text.code', depends_on: ['a'] }] });
+            const s = await run(p, ctx({ onProgress: (e) => events.push(e as Ev) }));
+            expect(s.cancelled).toBe(false);
+            expect(calls).toEqual(['a']);
+            expect(failedOf(events, 'n').map((e) => [e.reason, e.summary])).toEqual([['deadline', '[skipped] 턴 시간 초과']]);
+        });
+    });
+
+    it('취소로 시작 못 한 작업은 이벤트를 내지 않는다', async () => {
+        const events: Ev[] = [];
+        const ac = new AbortController();
+        behaviors.slow = async () => { await new Promise((r) => setTimeout(r, 20)); ac.abort(); return { ok: true, text: 's', media: [] }; };
+        const p = plan({ complexity: 'multi', tasks: [{ id: 'slow', capability: 'web.search' }, { id: 'next', capability: 'text.code', depends_on: ['slow'] }] });
+        await executePlan(p, ctx({ signal: ac.signal, onProgress: (e) => events.push(e as Ev) }));
+        expect(events.filter((e) => e.type === 'orchestrator_task' && e.id === 'next')).toEqual([]);
+    });
+});

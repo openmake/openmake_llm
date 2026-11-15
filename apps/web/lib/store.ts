@@ -119,6 +119,12 @@ interface OrchestratorTaskInfo {
   ms?: number;
   /** 이 작업을 실제로 처리한 모델(서버가 실행 대상을 알 때만) */
   model?: string;
+  /** 실패 종류 코드(서버 판정, 실패일 때만) */
+  reason?: string;
+  /** 실패했고 실행 대상이 외부일 때 그 provider id(서버가 보낼 때만) */
+  provider?: string;
+  /** 웹 표시용 — running 으로 바뀐 시각(이미 running 이면 유지) */
+  startedAt?: number;
 }
 
 /**
@@ -554,10 +560,13 @@ export const useAppStore = create<AppState>()(
       const cur = s.orchestratorProgress;
       if (!cur) return {};
       const idx = cur.tasks.findIndex((t) => t.id === task.id);
+      // running 으로 바뀔 때만 시작 시각을 찍는다 — 같은 id 의 running 이 다시 와도 경과 시간이 0 으로 돌아가지 않게
+      const startedAt = (prev?: OrchestratorTaskInfo) =>
+        task.status === "running" && prev?.status !== "running" ? { startedAt: Date.now() } : {};
       const tasks =
         idx >= 0
-          ? cur.tasks.map((t, i) => (i === idx ? { ...t, ...task } : t))
-          : [...cur.tasks, task];
+          ? cur.tasks.map((t, i) => (i === idx ? { ...t, ...task, ...startedAt(t) } : t))
+          : [...cur.tasks, { ...task, ...startedAt() }];
       return { orchestratorProgress: { ...cur, tasks } };
     }),
   setActiveTool: (t) => set({ activeTool: t }),
