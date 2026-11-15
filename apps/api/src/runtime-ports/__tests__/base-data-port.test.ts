@@ -82,7 +82,13 @@ describe('conversationSessions.summaries', () => {
             { id: 's2', title: null, updatedAt: '2026-10-16T02:00:00.000Z' },
             { id: 's1', title: '첫 대화', updatedAt: '2026-10-16T01:00:00.000Z' },
         ]);
-        expect(getSessionSummaries).toHaveBeenCalledWith(['s1', 's2']);
+        expect(getSessionSummaries).toHaveBeenCalledWith(['s1', 's2'], undefined);
+    });
+
+    it('withMessagesOnly 옵션을 조회에 그대로 넘긴다', async () => {
+        getSessionSummaries.mockResolvedValueOnce([]);
+        await sessions.summaries(['s1'], { withMessagesOnly: true });
+        expect(getSessionSummaries).toHaveBeenCalledWith(['s1'], { withMessagesOnly: true });
     });
 
     it('updated_at 이 NULL 인 행(컬럼이 NOT NULL 이 아니다)은 예외 없이 updatedAt null', async () => {
