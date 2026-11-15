@@ -33,6 +33,8 @@ const FDS: &str = "ls /dev/fd | tr '\\n' ' '";
 fn concurrent_children_see_only_their_own_fds() {
     let base = runtime().block_on(run(spec(FDS, Stdin::HeldOpen, Stderr::Capture)));
     assert!(matches!(base.end, ProcEnd::Exited(0)), "{:?}", base.end);
+    // 종료 코드는 `tr` 의 것이라 `ls` 가 실패해도 0 이다. 기준이 비면 아무것도 보지 않으므로 막는다(사전순이라 `0 1 2 ` 는 아니다).
+    assert!(base.stdout.starts_with("0 1 "), "{:?}", base.stdout);
     let base = Arc::new(base.stdout);
     let workers: Vec<_> = (0..8)
         .map(|_| {
