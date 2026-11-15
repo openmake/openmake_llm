@@ -10,16 +10,20 @@ import {
     getLocalModels,
     EXPLICIT_DISABLED_REASON,
 } from '../config/local-models';
+import { GATEWAY_NO_RETRY_HEADERS } from '../llm/gateway-headers';
 
 type LocalModelEntry = ReturnType<typeof getLocalModels>[number];
 
 const originalFetch = global.fetch;
 let chatPingedModels: string[] = [];
+let calls: Array<{ url: string; headers: Record<string, string> }> = [];
 
 beforeEach(() => {
     chatPingedModels = [];
+    calls = [];
     global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
+        calls.push({ url, headers: (init?.headers ?? {}) as Record<string, string> });
         const body = init?.body ? JSON.parse(String(init.body)) : {};
         if (url.endsWith('/v1/models')) {
             return { ok: true, status: 200, json: async () => ({ data: getLocalModels().map(m => ({ id: m.id })) }) } as Response;
@@ -38,6 +42,19 @@ beforeEach(() => {
 
 afterEach(() => {
     global.fetch = originalFetch;
+});
+
+describe('probeLocalModelAvailability — 게이트웨이 Router 재시도 헤더', () => {
+    test('모델 호출 probe(가용·도구·문맥 chat, 임베딩)는 헤더를 싣고, /v1/models 조회는 싣지 않는다', async () => {
+        await probeLocalModelAvailability('http://test', 'sk-test', 1000);
+        const modelCalls = calls.filter(c => c.url.endsWith('/v1/chat/completions') || c.url.endsWith('/v1/embeddings'));
+        expect(modelCalls.length).toBeGreaterThan(0);
+        for (const c of modelCalls) {
+            expect(c.headers).toMatchObject({ ...GATEWAY_NO_RETRY_HEADERS, Authorization: 'Bearer sk-test' });
+        }
+        const list = calls.find(c => c.url.endsWith('/v1/models'));
+        expect(list?.headers).not.toHaveProperty('x-litellm-num-retries');
+    });
 });
 
 describe('probeLocalModelAvailability — demote 회복', () => {

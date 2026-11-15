@@ -12,6 +12,7 @@
  */
 import OpenAI from 'openai';
 import { getConfig } from '../../config/env';
+import { GATEWAY_NO_RETRY_HEADERS } from '../../llm/gateway-headers';
 import { createLogger } from '../../utils/logger';
 import { recordCost } from '../../services/cost/cost-ledger-service';
 import type { SearchResult } from './types';
@@ -26,7 +27,8 @@ const SHADOW_TEXT_CHARS = 512;
 const RERANK_TIMEOUT_MS = Number(process.env.SEARCH_RERANK_TIMEOUT_MS) || 2500;
 
 async function embedBatch(texts: string[], model: string, baseURL: string, apiKey: string): Promise<number[][]> {
-    const client = new OpenAI({ baseURL, apiKey });
+    // 기한(Promise.race) 뒤엔 결과를 버리는 호출이라 재시도 층을 두지 않는다(앱 SDK 0 + 게이트웨이 Router 0).
+    const client = new OpenAI({ baseURL, apiKey, maxRetries: 0, defaultHeaders: { ...GATEWAY_NO_RETRY_HEADERS } });
     const res = await client.embeddings.create({ model, input: texts });
     return res.data.map((d) => d.embedding as number[]);
 }

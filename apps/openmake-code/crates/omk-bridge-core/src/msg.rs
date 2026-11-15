@@ -85,10 +85,8 @@ pub struct BridgeMsg {
     /// 참인 비문자열이 온 첫 필드(`kind`·`path`·`folder`·`contentB64`·`command`·`op`·`taskId`·`pattern`·`glob`·`maxResults`·
     /// `paths` 순). 있으면 코어는 처리하지 않는다.
     pub invalid_field: Option<&'static str>,
-    /// exec 명령 — 참인 문자열일 때만 `Some`. 차단 검사·확인 창은 없으면 빈 문자열을 쓴다(TS `String(m.command || '')`).
+    /// exec 명령 — 참인 문자열일 때만 `Some`. 없으면(JS 거짓 값) exec 는 확인 창 앞에서 거절한다(TS `if (!m.command)`).
     pub command: Option<String>,
-    /// 실행에 쓰는 TS 의 `String(m.command)` 표기 — 없으면 `undefined`, `null` 이면 `null`(D-39, 그대로 옮긴다).
-    pub command_text: String,
     /// worktree 연산 — 참인 문자열일 때만 `Some`.
     pub op: Option<String>,
     /// 모르는 연산을 거절할 때 쓰는 TS 의 `${m.op}` 표기.
@@ -118,7 +116,7 @@ fn js_falsy(v: &Value) -> bool {
     }
 }
 
-/// 거짓 값의 JS `String(v)` 표기 — 모르는 종류·연산 문구와 exec 명령 표기에 쓴다.
+/// 거짓 값의 JS `String(v)` 표기 — 모르는 종류·연산 문구에 쓴다.
 fn js_falsy_text(v: &Value) -> String {
     match v {
         Value::Null => "null".to_owned(),
@@ -224,7 +222,6 @@ impl BridgeMsg {
                 .map(str::to_owned),
             expires_at: o.get("expiresAt").and_then(Value::as_f64),
             invalid_field: invalid,
-            command_text: js_text_of(o.get("command"), command.as_deref()),
             command,
             op_text: js_text_of(o.get("op"), op.as_deref()),
             op,
@@ -403,7 +400,7 @@ mod tests {
         );
     }
 
-    /// TS `String(m.command)`·`${m.op}` 표기 — 없음·거짓 값은 그 JS 글자(D-39).
+    /// TS `${m.op}` 표기 — 없음·거짓 값은 그 JS 글자(D-39). `command` 는 참인 문자열일 때만 `Some`.
     #[test]
     fn command_and_op_text_follow_js_string() {
         for (v, want) in [
@@ -415,11 +412,7 @@ mod tests {
             (json!({"command": "ls -a", "op": "ls -a"}), "ls -a"),
         ] {
             let m = BridgeMsg::from_json(&v);
-            assert_eq!(
-                (m.command_text.as_str(), m.op_text.as_str()),
-                (want, want),
-                "{v}"
-            );
+            assert_eq!(m.op_text.as_str(), want, "{v}");
             assert_eq!(m.command.is_some(), want == "ls -a");
             assert_eq!(m.invalid_field, None);
         }

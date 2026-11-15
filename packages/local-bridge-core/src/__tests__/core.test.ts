@@ -84,6 +84,14 @@ describe('BridgeCore', () => {
         expect(confirm).not.toHaveBeenCalled();
     });
 
+    it('exec: command 가 없으면 확인 창 없이 거절(exitCode 126)', async () => {
+        const confirm = jest.fn<ReturnType<ConfirmFn>, Parameters<ConfirmFn>>();
+        const core = makeCore(base, { confirm });
+        const r = await run(core, { kind: 'exec', taskId: 't-none' } as BridgeMsg);
+        expect(r).toEqual({ ok: false, error: '실행할 명령이 없습니다', exitCode: 126 });
+        expect(confirm).not.toHaveBeenCalled();
+    });
+
     it('exec: 사용자 거부 시 실행하지 않는다', async () => {
         const core = makeCore(base, { confirm: async () => 'no' });
         const r = await run(core, { kind: 'exec', command: 'touch should-not-exist' });

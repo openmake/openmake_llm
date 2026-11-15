@@ -24,7 +24,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
     CODE_NAV_EXCLUDED_DIRS, CODE_NAV_EXCLUDED_FILES, CODE_NAV_LINE_MAX_CHARS, CODE_NAV_MAX_FILE_BYTES, CODE_NAV_MAX_FILES,
-    CODE_NAV_MAX_MATCHES, CODE_NAV_MAX_PER_FILE, CODE_NAV_PATTERN_MAX_CHARS, CODE_NAV_REGEX_TOO_DEEP_ERROR, CODE_NAV_TIMEOUT_MS,
+    CODE_NAV_MAX_MATCHES, CODE_NAV_MAX_PER_FILE, CODE_NAV_PATTERN_MAX_CHARS, CODE_NAV_REGEX_TOO_DEEP_ERROR, CODE_NAV_TIMEOUT_MS, codeNavBudgetMs,
+    FS_OP_TIMEOUT_MS,
 } from './constants';
 import type { BridgeCodeNav, BridgeMsg } from './types';
 
@@ -185,7 +186,7 @@ async function files(baseAbs: string, startAbs: string, deadline: number): Promi
  * op 는 'grep' | 'files' 만 허용한다(그 외는 오류 — 임의 연산 금지).
  */
 export async function runCodeNav(baseAbs: string, startAbs: string, m: BridgeMsg): Promise<BridgeCodeNav> {
-    const deadline = Date.now() + CODE_NAV_TIMEOUT_MS;
+    const deadline = Date.now() + codeNavBudgetMs(CODE_NAV_TIMEOUT_MS, FS_OP_TIMEOUT_MS);
     if (m.op === 'grep') return grep(baseAbs, startAbs, m, deadline);
     if (m.op === 'files') return files(baseAbs, startAbs, deadline);
     throw new Error(`지원하지 않는 code_nav op: ${m.op}`);
