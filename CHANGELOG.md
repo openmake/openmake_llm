@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.135.0](https://github.com/openmake/openmake_llm/compare/v1.134.3...v1.135.0) (2026-11-14)
+
+
+### ✨ 기능
+
+* **providers:** Google 직접 provider 사고 요약 요청 조립·스트림 가르개 추가 ([cca620e](https://github.com/openmake/openmake_llm/commit/cca620e051081f4c6d955db17722ca4f37cbd069))
+
+
+### 🐛 버그 수정
+
+* **pipeline:** 데스크톱 게시 건너뜀 판정을 스크립트 경로·설치 커밋 VERSION 과 묶는다 ([be02a88](https://github.com/openmake/openmake_llm/commit/be02a88a055fe998effca94a3dd2e65cf14999de))
+* **pipeline:** 릴리스가 만들어지지 않는 데스크톱 버전은 대기 대신 건너뛴다 ([f3b37a9](https://github.com/openmake/openmake_llm/commit/f3b37a90f1d1a443b332a43945945bfe78041697))
+* **providers:** Google 직접 provider 에서 Thinking 을 켜면 사고 요약을 요청하고 생각 과정으로 가른다 ([dab6886](https://github.com/openmake/openmake_llm/commit/dab6886c05f85ba9696a07eee63330d7fad17c7b))
+
 ## [1.134.3](https://github.com/openmake/openmake_llm/compare/v1.134.2...v1.134.3) (2026-11-14)
 
 
