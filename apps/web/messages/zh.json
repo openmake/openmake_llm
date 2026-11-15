@@ -476,7 +476,15 @@
         "failed": "失败"
       },
       "tasksCount": "{count} 个任务",
-      "taskModel": "处理模型：{model}"
+      "taskModel": "处理模型：{model}",
+      "failure": {
+        "timeoutExternal": "外部服务（{provider}）未在时限内响应，已中止",
+        "timeout": "未在时限内收到响应，已中止",
+        "unassigned": "此任务未分配模型",
+        "unavailable": "此任务当前不可用",
+        "skipped": "前置任务未完成，已跳过",
+        "deadline": "超出总时限，未能执行"
+      }
     },
     "tool": {
       "running": "正在运行 {tool}"

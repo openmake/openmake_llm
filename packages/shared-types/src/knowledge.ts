@@ -45,6 +45,7 @@ export interface KnowledgeSpaceSummary {
   /** 현재 사용자가 이름·자료·삭제를 바꿀 수 있는가 (서버 판정) */
   canEdit: boolean;
   documentCount: number;
+  /** 메시지가 있는 대화 수(방금 만든 빈 대화는 세지 않는다 — 상세의 conversations 와 같은 규칙) */
   conversationCount: number;
   /** 처리 중(uploaded~verifying) 문서 수 */
   processingCount: number;

@@ -476,7 +476,15 @@
         "failed": "Fehlgeschlagen"
       },
       "tasksCount": "{count} Aufgaben",
-      "taskModel": "Verarbeitet von: {model}"
+      "taskModel": "Verarbeitet von: {model}",
+      "failure": {
+        "timeoutExternal": "Abgebrochen, weil der externe Dienst ({provider}) nicht innerhalb des Zeitlimits geantwortet hat",
+        "timeout": "Abgebrochen, weil innerhalb des Zeitlimits keine Antwort kam",
+        "unassigned": "Dieser Aufgabe ist kein Modell zugewiesen",
+        "unavailable": "Diese Aufgabe ist derzeit nicht verfügbar",
+        "skipped": "Übersprungen, weil eine vorherige Aufgabe nicht abgeschlossen wurde",
+        "deadline": "Nicht ausgeführt, weil das Gesamtzeitlimit überschritten wurde"
+      }
     },
     "tool": {
       "running": "{tool} wird ausgeführt"

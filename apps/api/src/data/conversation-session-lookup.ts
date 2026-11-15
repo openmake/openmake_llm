@@ -27,10 +27,19 @@ export async function getSessionOwnerId(sessionId: string): Promise<string | nul
     return r.rows[0] ? r.rows[0].user_id : undefined;
 }
 
-/** 주어진 세션들의 제목·갱신 시각(최근 갱신 순). 없는 id 는 빠진다 */
-export async function getSessionSummaries(sessionIds: readonly string[]): Promise<SessionSummaryRow[]> {
+/**
+ * 주어진 세션들의 제목·갱신 시각(최근 갱신 순). 없는 id 는 빠진다.
+ * withMessagesOnly 면 메시지 0건 세션도 뺀다 — 일반 대화 목록(getSessionsByUserId)과 같은 규칙.
+ */
+export async function getSessionSummaries(
+    sessionIds: readonly string[],
+    opts?: { withMessagesOnly?: boolean },
+): Promise<SessionSummaryRow[]> {
+    const withMessages = opts?.withMessagesOnly
+        ? ' AND EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = cs.id)'
+        : '';
     const r = await getPool().query<SessionSummaryRow>(
-        'SELECT id, title, updated_at FROM conversation_sessions WHERE id = ANY($1::text[]) ORDER BY updated_at DESC',
+        `SELECT cs.id, cs.title, cs.updated_at FROM conversation_sessions cs WHERE cs.id = ANY($1::text[])${withMessages} ORDER BY cs.updated_at DESC`,
         [sessionIds],
     );
     return r.rows;
