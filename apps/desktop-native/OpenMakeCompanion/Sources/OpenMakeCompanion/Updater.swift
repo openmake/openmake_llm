@@ -139,6 +139,8 @@ final class Updater: ObservableObject {
         #!/bin/bash
         exec >>"\(logPath)" 2>&1
         set -u
+        # 앱이 stdin 으로 넘긴 API key(없으면 빈 줄) — 새 버전에 넘겨준다(D-119). 로그에 찍지 않는다(set -x·echo 금지).
+        IFS= read -r -t 5 OMK_KEY || OMK_KEY=""
         APP="\(appPath)"
         DMG="\(dmgPath)"
 
@@ -174,6 +176,17 @@ final class Updater: ObservableObject {
 
         xattr -dr com.apple.quarantine "$APP" 2>/dev/null
         rm -f "$DMG"
+        # 키 넘겨주기: FIFO 는 디스크에 내용을 쓰지 않는다. 쓰는 쪽은 새 앱이 열 때까지 기다리고, 30초 뒤엔 끄고 지운다
+        # (그 사이 못 받으면 종전처럼 키체인 창). 실패는 조용히 건너뛴다.
+        if [ -n "$OMK_KEY" ]; then
+          KH="\(KeyHandoff.path)"
+          if mkdir -p "$(dirname "$KH")" 2>/dev/null && rm -f "$KH" && mkfifo -m 600 "$KH" 2>/dev/null; then
+            ( printf '%s' "$OMK_KEY" > "$KH" ) 2>/dev/null &
+            KH_PID=$!
+            ( sleep 30; kill "$KH_PID" 2>/dev/null; rm -f "$KH" ) >/dev/null 2>&1 &
+          fi
+        fi
+        OMK_KEY=""
         open -a "$APP" || fail "$OMK_UPD_REOPEN"
         echo "OK: updated $APP"
         rm -f "$0"
@@ -189,7 +202,14 @@ final class Updater: ObservableObject {
         p.environment = env
         p.standardOutput = FileHandle.nullDevice
         p.standardError = FileHandle.nullDevice
+        // 키는 인자·환경이 아니라 stdin 파이프로만 준다(다른 프로세스가 읽을 수 있다 — 0.3.4 와 같은 이유).
+        // 조회는 띄우기 전에 — 스크립트의 read 대기(5초)가 키체인 창 응답을 기다리지 않게.
+        let keyLine = Data(((Keychain.load() ?? "") + "\n").utf8)
+        let stdin = Pipe()
+        p.standardInput = stdin
         try p.run() // detached 성격 — 부모 종료 후에도 계속 실행됨(스크립트가 sleep 후 교체)
+        try? stdin.fileHandleForWriting.write(contentsOf: keyLine)
+        try? stdin.fileHandleForWriting.close()
     }
 
     private func info(_ title: String, _ body: String) {
