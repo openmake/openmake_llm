@@ -4,11 +4,11 @@
  * 사이드바 Knowledge 섹션 — 주요 메뉴와 최근 대화 사이. ChatGPT/Claude 의 "Projects" 처럼 Space 를 접고 펴며,
  * 펴면 그 Space 의 상세를 읽어 "새 대화" + 대화 목록을 보인다. 게스트에겐 숨긴다.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, Library, Plus, MessageSquarePlus } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { useAppStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -114,6 +114,19 @@ export function KnowledgeSidebarSection({ query, currentSessionId, openSession }
     enabled: !!user,
     retry: false,
   });
+
+  // 응답이 끝나면(isGenerating true→false) 프로젝트 대화 목록·대화 수를 다시 읽는다 — 서버는 메시지가 있는
+  // 대화만 보이므로, "새 대화"의 첫 메시지 뒤에야 그 대화가 목록에 나타난다. 마운트 안 된 질의는 stale 표시만 된다.
+  const queryClient = useQueryClient();
+  const isGenerating = useAppStore((s) => s.isGenerating);
+  const wasGenerating = useRef(isGenerating);
+  useEffect(() => {
+    if (wasGenerating.current && !isGenerating) {
+      void queryClient.invalidateQueries({ queryKey: ["knowledge", "space"] });
+      void queryClient.invalidateQueries({ queryKey: qk.spaces() });
+    }
+    wasGenerating.current = isGenerating;
+  }, [isGenerating, queryClient]);
 
   if (!user) return null;
 

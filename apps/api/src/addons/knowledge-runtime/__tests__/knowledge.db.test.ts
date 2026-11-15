@@ -207,8 +207,21 @@ describeOrSkip('Knowledge 실 DB (K01)', () => {
         const bound = await binding.resolveBoundSpace(userA, sessionId);
         expect(bound?.spaceId).toBe(space.id);
 
+        // 메시지가 아직 없는 새 대화는 목록·대화 수에 나오지 않는다(일반 대화 목록과 같은 규칙) — 바인딩은 그대로
+        const empty = await spaces.getSpaceDetail(userA, space.id);
+        expect(empty.conversations.map((c) => c.sessionId)).not.toContain(sessionId);
+        expect(empty.conversationCount).toBe(0);
+
+        // 첫 메시지가 저장되면 목록·상세 수·공간 목록 수 모두에 나타난다
+        await pool.query(
+            `INSERT INTO conversation_messages (session_id, role, content) VALUES ($1, 'user', '첫 질문')`,
+            [sessionId],
+        );
         const detail = await spaces.getSpaceDetail(userA, space.id);
         expect(detail.conversations.map((c) => c.sessionId)).toContain(sessionId);
+        expect(detail.conversationCount).toBe(1);
+        const listed = (await spaces.listSpaces(userA)).find((s) => s.id === space.id);
+        expect(listed?.conversationCount).toBe(1);
     });
 
     it('AppError 계층이 그대로 노출된다(스모크)', () => {
