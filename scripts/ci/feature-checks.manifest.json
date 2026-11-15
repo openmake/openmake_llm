@@ -49,6 +49,7 @@
     "apps/desktop-native/lib/node-bundle.test.mjs": "desktopBuild",
     "db/init/004-admin-user.sh": "infra",
     "ecosystem.config.js": "pipeline",
+    "infra/task-runtime/__fixtures__/browser-flow-cases.json": ["infra", "bridge"],
     "eslint.config.mjs": "pipeline",
     "install_linux.sh": "pipeline",
     "openmake_llm.sh": "pipeline",
