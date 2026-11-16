@@ -9,6 +9,13 @@
     "CACHE_SUBPATHS": [".npm", ".cache", "Library/Caches", ".cargo", ".gradle", ".m2", ".yarn", ".pnpm-store", "go/pkg"],
     "SECRET_SUBPATHS": [".ssh", ".aws", ".gnupg", ".kube", ".docker", ".config/gcloud", "Library/Keychains"],
     "TOOL_SECRET_SUBPATHS": [".npmrc", ".yarnrc.yml", ".netrc", ".git-credentials", ".config/git/credentials", ".config/gh", ".config/hub", ".config/glab-cli", ".pypirc", ".cargo/credentials", ".cargo/credentials.toml", ".gem/credentials", ".m2/settings.xml", ".gradle/gradle.properties", ".composer/auth.json", ".config/composer/auth.json", ".config/op", ".terraform.d", ".azure", ".vault-token", ".pgpass", ".my.cnf", ".boto", ".s3cfg"],
+    "TOOL_HOME_READ_SUBPATHS": [".gitconfig", ".config/git", ".config/mise", ".config/mise.toml", ".mise.toml", "mise.toml", ".mise.local.toml", "mise.local.toml", ".mise", "mise", ".tool-versions", ".nvmrc", ".node-version", ".python-version", ".local/share/mise", ".local/state/mise", ".cache/mise", "Library/Caches/mise", ".nvm", ".volta", ".fnm", ".local/share/fnm", "Library/Application Support/fnm", ".local/state/fnm_multishells", ".asdf", ".asdfrc", ".nodenv", "n", "Library/pnpm", ".pyenv", ".local/share/uv/python", ".rye", "miniconda3", "anaconda3", "miniforge3", "mambaforge", "micromamba", "opt/anaconda3", "opt/miniconda3", ".conda", "Library/Python", ".local/lib", ".local/bin"],
+    "HOME_PRIVACY_SUBPATHS": ["Desktop", "Documents", "Downloads", "Pictures", "Music", "Movies", "Library/Mobile Documents", "Library/CloudStorage", "Library/Photos", "Library/Containers", "Library/Group Containers", "Library/Daemon Containers", "Library/Application Support/AddressBook", "Library/Calendars", "Library/Reminders"],
+    "TOOL_ANCESTOR_READ_NAMES": ["mise.toml", ".mise.toml", "mise.local.toml", ".mise.local.toml", ".config/mise.toml", ".config/mise", ".mise", "mise", ".tool-versions", ".nvmrc", ".node-version", ".python-version"],
+    "TOOL_ANCESTOR_MAX": 16,
+    "LINK_HOP_MAX": 8,
+    "TOOL_READ_EXTRA_MAX": 64,
+    "GIT_CONFIG_READ_MAX": 32,
     "SANDBOX_BIN": "/usr/bin/sandbox-exec",
     "BRIDGE_KINDS": ["exec", "read", "write", "list", "listAll", "delete", "task_end", "worktree", "folders", "lsp_diagnostics", "code_nav", "test_runner"],
     "EXEC_TIMEOUT_MS": 120000,
@@ -40,7 +47,10 @@
     "DIAG_MAX_PER_FILE": 20,
     "DIAG_MAX_TOTAL": 60,
     "DIAG_MSG_MAX": 300,
-    "TEST_RUNNER_PROBE_TIMEOUT_MS": 5000
+    "TEST_RUNNER_PROBE_TIMEOUT_MS": 5000,
+    "PY_FATAL_MARKER": "Fatal Python error:",
+    "TSC_CONFIG_UNREADABLE": "error TS5083:",
+    "TSC_LINK_SCAN_MAX": 2000
   },
   "execStopNotice": [
     {"id": "timeout-default", "input": {"kind": "timeout", "timeoutMs": 120000}, "expect": "[명령이 시간 제한(120초)을 넘어 중단됐습니다 — 끝나지 않거나 오래 걸리는 명령은 범위를 줄이거나 나눠서 실행하세요]"},
