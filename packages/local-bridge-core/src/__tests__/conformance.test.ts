@@ -8,7 +8,8 @@ import * as path from 'path';
 import { EXEC_DENYLIST, matchDenylist, normalizeForDenylist } from '../denylist';
 import { buildExecEnv } from '../exec-env';
 import { bulkApprovalAllowed, folderNameOf, pathListSeparator, shellInvocation } from '../platform';
-import { buildSandboxProfile } from '../sandbox';
+import { miseEnvDirs, reachable, readGuard, sandboxProfileText } from '../sandbox';
+import { parseGitConfigReads } from '../git-trust';
 import { safeFrom, safeFromAsync } from '../scope';
 import { RequestGuard } from '../request-guard';
 import { BridgeCore } from '../core';
@@ -16,7 +17,7 @@ import type { BridgeMsg, BridgeResult } from '../types';
 import * as constants from '../constants';
 
 const DIR = path.join(__dirname, '..', '..', 'conformance');
-const KNOWN_SUITES = ['code-nav', 'constants', 'denylist', 'diagnostics-parse', 'exec-env', 'exec-gate', 'exec-path', 'file-kinds', 'glob', 'platform', 'request-guard', 'sandbox-profile', 'scope', 'test-runner', 'worktree'];
+const KNOWN_SUITES = ['code-nav', 'constants', 'denylist', 'diagnostics-parse', 'exec-env', 'exec-gate', 'exec-path', 'file-kinds', 'glob', 'home-read', 'platform', 'request-guard', 'sandbox-profile', 'scope', 'test-runner', 'worktree'];
 /** Rust 만 다른 판정을 내도 되는 차이 — conformance/README.md "알려진 차이". 자리(suite/묶음)마다 쓸 수 있는 이름이 하나다. */
 const KNOWN_DIVERGENCES: Record<string, string> = {
     'denylist/cases': 'regress-nonunicode-i-fold',
@@ -194,16 +195,43 @@ describe('platform', () => {
 });
 
 describe('sandbox-profile', () => {
-    type In = { root: string; gitDir: string | null; commonDir?: string; tool?: boolean; protect?: { gitDir: string; commonDir: string }[] };
+    type In = {
+        root: string; gitDir: string | null; commonDir?: string; tool?: boolean; protect?: { gitDir: string; commonDir: string }[];
+        top?: string; extra?: string[]; literals?: string[];
+    };
     const doc = load<{ cases: Case<In, { profile: string }>[] }>('sandbox-profile');
+    // `{{HOME}}` 자리에 넣는 임의 홈 — 실제 홈에 의존하지 않는다(Rust 러너와 같은 값, 입력 글자에도 넣는다).
+    const FAKE_HOME = '/synthetic/home';
+    const h = (s: string): string => s.split('{{HOME}}').join(FAKE_HOME);
 
     it.each(doc.cases.map((c) => [c.id, c] as const))('%s — 프로파일 전체 텍스트가 같다', (_id, c) => {
-        const { root, gitDir, commonDir, tool, protect } = c.input;
+        const { root, gitDir, commonDir, tool, protect, top, extra, literals } = c.input;
         // commonDir 를 적지 않으면 git dir 와 같다(일반 레포). 빈 gitDir 은 git 없음(종전 규칙). protect(목록)를 적지 않으면 [git].
-        const git = gitDir ? { gitDir, commonDir: commonDir ?? gitDir } : null;
-        const home = fs.realpathSync.native(os.homedir());
-        const got = buildSandboxProfile(root, git, tool === true, protect ?? (git ? [git] : []));
-        expect(got).toBe(c.expect.profile.split('{{HOME}}').join(home));
+        const git = gitDir ? { gitDir: h(gitDir), commonDir: h(commonDir ?? gitDir) } : null;
+        const read = { top: top === undefined ? null : h(top), extra: (extra ?? []).map(h), literals: (literals ?? []).map(h) };
+        const got = sandboxProfileText(h(root), git, FAKE_HOME, tool === true, protect ?? (git ? [git] : []), read);
+        expect(got).toBe(h(c.expect.profile));
+    });
+});
+
+describe('home-read', () => {
+    const doc = load<{
+        guard: Case<{ home: string; path: string; top?: boolean }, boolean>[];
+        gitConfig: Case<{ home: string; out: string }, string[]>[];
+        envDirs: Case<{ env: Record<string, string> }, string[]>[];
+        reach: Case<{ scope: { home: string; allow: string[]; literals: string[] }; path: string }, boolean>[];
+    }>('home-read');
+    it.each(doc.guard.map((c) => [c.id, c] as const))('guard/%s', (_id, c) => {
+        expect(readGuard(c.input.home, c.input.path, c.input.top === true)).toBe(c.expect);
+    });
+    it.each(doc.gitConfig.map((c) => [c.id, c] as const))('gitConfig/%s', (_id, c) => {
+        expect(parseGitConfigReads(c.input.out, c.input.home)).toEqual(c.expect);
+    });
+    it.each(doc.envDirs.map((c) => [c.id, c] as const))('envDirs/%s', (_id, c) => {
+        expect(miseEnvDirs(c.input.env)).toEqual(c.expect);
+    });
+    it.each(doc.reach.map((c) => [c.id, c] as const))('reach/%s', (_id, c) => {
+        expect(reachable(c.input.scope, c.input.path)).toBe(c.expect);
     });
 });
 

@@ -66,6 +66,12 @@ export const GIT_PROBE_TIMEOUT_MS = 5000;
 export const FALLBACK_CHILD_PATH = '/usr/bin:/bin';
 /** 테스트 러너 탐지에서 pytest 탐지 `python3 -I -c …` 한 번에 주는 시간. */
 export const TEST_RUNNER_PROBE_TIMEOUT_MS = 5000;
+/** py_compile 출력의 어떤 줄이 이것으로 시작하면 인터프리터가 못 뜬 것 — 그 파일은 "검사 못 함"(설계 D-21·§9 L1). */
+export const PY_FATAL_MARKER = 'Fatal Python error:';
+/** tsc 가 설정 파일을 못 읽음 — 샌드박스에서 이 출력이 나온 묶음의 진단은 버린다(설계 D-22). */
+export const TSC_CONFIG_UNREADABLE = 'error TS5083:';
+/** tsc 실행 전 `node_modules` 훑기에서 살펴볼 심링크 수 상한(설계 D-22·§9 N2). */
+export const TSC_LINK_SCAN_MAX = 2000;
 
 export const SANDBOX_BIN = '/usr/bin/sandbox-exec';
 /** sandbox-exec 는 macOS 전용 — 타 플랫폼은 게이트 자체가 꺼진다(데스크톱은 mac 전용 앱이라 등가). */
@@ -108,6 +114,36 @@ export const TOOL_SECRET_SUBPATHS = [
     '.composer/auth.json', '.config/composer/auth.json', '.config/op', '.terraform.d', '.azure', '.vault-token', '.pgpass', '.my.cnf',
     '.boto', '.s3cfg',
 ];
+/**
+ * 도구 프로파일이 홈에서 읽기를 여는 허용 목록(홈 기준) — git 설정·mise·버전 파일·node/python 런타임 관리자(설계 2026-11-16
+ * D-15·§9 L8). 나머지 홈은 읽기 거절(메타데이터만 허용). 새 관리자는 한 줄 더한다. `Library/Python` 은 pytest 탐지가 붙이는
+ * 사용자 site(`site.getusersitepackages()`)다.
+ */
+export const TOOL_HOME_READ_SUBPATHS = [
+    '.gitconfig', '.config/git', '.config/mise', '.config/mise.toml', '.mise.toml', 'mise.toml', '.mise.local.toml',
+    'mise.local.toml', '.mise', 'mise', '.tool-versions', '.nvmrc', '.node-version', '.python-version', '.local/share/mise',
+    '.local/state/mise', '.cache/mise', 'Library/Caches/mise', '.nvm', '.volta', '.fnm', '.local/share/fnm',
+    'Library/Application Support/fnm', '.local/state/fnm_multishells', '.asdf', '.asdfrc', '.nodenv', 'n', 'Library/pnpm',
+    '.pyenv', '.local/share/uv/python', '.rye', 'miniconda3', 'anaconda3', 'miniforge3', 'mambaforge', 'micromamba',
+    'opt/anaconda3', 'opt/miniconda3', '.conda', 'Library/Python', '.local/bin',
+];
+/** macOS 가 앱 이름으로 접근 권한 창을 띄우는 홈 위치 — 두 프로파일 모두 내용 읽기를 막고 메타데이터만 둔다(설계 D-16). */
+export const HOME_PRIVACY_SUBPATHS = [
+    'Desktop', 'Documents', 'Downloads', 'Pictures', 'Music', 'Movies', 'Library/Mobile Documents', 'Library/CloudStorage',
+    'Library/Photos', 'Library/Containers', 'Library/Group Containers', 'Library/Daemon Containers',
+    'Library/Application Support/AddressBook', 'Library/Calendars', 'Library/Reminders',
+];
+/** 연결 폴더와 홈 사이 조상 폴더마다 도구 프로파일이 읽기를 여는 이름 — mise·버전 파일의 조상 탐색(설계 §8 M2·§9 L8). */
+export const TOOL_ANCESTOR_READ_NAMES = [
+    'mise.toml', '.mise.toml', 'mise.local.toml', '.mise.local.toml', '.config/mise.toml', '.config/mise', '.mise', 'mise',
+    '.tool-versions', '.nvmrc', '.node-version', '.python-version',
+];
+/** 조상 이름 줄을 붙이는 조상 폴더 수 상한(연결 폴더에 가까운 것부터). */
+export const TOOL_ANCESTOR_MAX = 16;
+/** 추가 subpath(env 위치·심링크 realpath)·git 설정 literal 전체 상한(넘으면 앞에서부터, 조상 이름 줄은 세지 않는다). */
+export const TOOL_READ_EXTRA_MAX = 64;
+/** git 전역·로컬 설정이 가리키는 파일 literal 상한(설계 D-18). */
+export const GIT_CONFIG_READ_MAX = 32;
 
 /**
  * exec 자식 프로세스에 넘기는 env allowlist(2026-10-09 점검 ⑤) — 호스트 env 를 통째로 상속하면

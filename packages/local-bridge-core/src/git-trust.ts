@@ -15,7 +15,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { GIT_FIXED_ARGS, GIT_PATH_DENIED_PREFIX, GIT_PROBE_PROFILE, GITFILE_MAX_BYTES, GIT_PROBE_TIMEOUT_MS, SANDBOX_BIN, SANDBOX_ENABLED } from './constants';
+import { GIT_CONFIG_READ_MAX, GIT_FIXED_ARGS, GIT_PATH_DENIED_PREFIX, GIT_PROBE_PROFILE, GITFILE_MAX_BYTES, GIT_PROBE_TIMEOUT_MS, SANDBOX_BIN, SANDBOX_ENABLED } from './constants';
 import { buildExecEnv } from './exec-env';
 import { absPathEntries } from './exec-path';
 
@@ -91,13 +91,19 @@ function coreWorktree(gitDir: string, cwd: string): string | null {
  * 연결할 때 한 번 부른다. 결과는 코어가 보관해 프로파일·worktree 대조·파일 kind 가드에 쓴다.
  */
 export function detectGit(root: string): GitPaths | null {
+    return detectGitTop(root)?.git ?? null;
+}
+
+/** detectGit + 믿는 git 의 작업 트리 최상위(realpath, 배치 4 는 null) — GitPaths 와 따로 돌려준다(설계 2026-11-16 §8 L1·D-19). */
+export function detectGitTop(root: string): { git: GitPaths; top: string | null } | null {
     const out = probe(['rev-parse', '--absolute-git-dir', '--path-format=absolute', '--git-common-dir', '--show-toplevel'], root);
     const [gRaw, cRaw, topRaw] = (out ?? '').split('\n');
     if (!gRaw || !cRaw || !topRaw) return null;
     const [rootReal, gitDir, commonDir, top] = [real(root), real(gRaw), real(cRaw), real(topRaw)];
     if (!rootReal || !gitDir || !commonDir || !top) return null;
-    const found = { gitDir, commonDir };
-    if (within(gitDir, rootReal) && within(commonDir, rootReal)) return found; // 4
+    const git = { gitDir, commonDir };
+    const found = { git, top };
+    if (within(gitDir, rootReal) && within(commonDir, rootReal)) return { git, top: null }; // 4
     if (!within(rootReal, top)) return null;
     const dotGit = path.join(top, '.git');
     let st: fs.Stats;
@@ -106,6 +112,42 @@ export function detectGit(root: string): GitPaths | null {
     if (!st.isFile() || gitfileTarget(dotGit) !== gitDir) return null;
     if (path.dirname(gitDir) === path.join(commonDir, 'worktrees')) return backlink(gitDir) === real(dotGit) ? found : null; // 2
     return commonDir === gitDir && coreWorktree(gitDir, rootReal) === top ? found : null; // 3
+}
+
+/**
+ * `git config --includes --show-origin --list -z` 출력에서 도구 git 이 읽어야 하는 파일(설계 D-18·§8 M4) — realpath 전, 순서대로
+ * 중복 없이 GIT_CONFIG_READ_MAX 개까지. 항목은 `\0` 로 나뉘고 origin·본문이 번갈아 온다(짝이 없는 끝은 버린다). 본문은 첫 `\n`
+ * 앞이 키, 뒤가 값(없으면 값 없는 키). 모으는 것: ① `file:` origin 의 절대경로 ② `include.path`·`includeif.<…>.path` 값(`~/` 는 홈,
+ * 상대 경로는 그 origin 파일 폴더 기준 — origin 이 절대경로가 아니면 버림) ③ `core.excludesfile`·`core.attributesfile` 값(`~/` 는
+ * 홈, 상대 경로는 버림). 그 밖의 `~` 표기는 버린다.
+ */
+export function parseGitConfigReads(out: string, home: string): string[] {
+    const tokens = out.split('\0');
+    const found = new Set<string>();
+    for (let i = 0; i + 1 < tokens.length; i += 2) {
+        const o = tokens[i].startsWith('file:') ? tokens[i].slice('file:'.length) : '';
+        const origin = o.startsWith('/') ? path.resolve('/', o) : null;
+        if (origin !== null) found.add(origin);
+        const nl = tokens[i + 1].indexOf('\n');
+        if (nl < 0) continue;
+        const [key, value] = [tokens[i + 1].slice(0, nl), tokens[i + 1].slice(nl + 1)];
+        const include = key === 'include.path' || (key.startsWith('includeif.') && key.endsWith('.path'));
+        const file = key === 'core.excludesfile' || key === 'core.attributesfile';
+        if (!value || !(include || file)) continue;
+        let p: string | null = null;
+        if (value.startsWith('~/')) p = path.resolve(home, value.slice(2));
+        else if (value.startsWith('~')) p = null;
+        else if (value.startsWith('/')) p = path.resolve('/', value);
+        else if (include && origin !== null) p = path.resolve(path.dirname(origin), value);
+        if (p !== null) found.add(p);
+    }
+    return [...found].slice(0, GIT_CONFIG_READ_MAX);
+}
+
+/** 연결 때 git 설정이 가리키는 파일 — 탐지 git 을 한 번 더 띄운다(cwd=연결 폴더, 실패·시간 초과는 빈 목록). 믿는 git 이 있을 때만 부른다. */
+export function gitConfigReads(root: string, home: string): string[] {
+    const out = probe(['config', '--includes', '--show-origin', '--list', '-z'], root);
+    return out === null ? [] : parseGitConfigReads(out, home);
 }
 
 /**

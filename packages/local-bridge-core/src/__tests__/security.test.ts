@@ -134,15 +134,26 @@ describe('buildSandboxProfile — SBPL 규칙(텍스트, 파일로 쓰지 않는
         expect(allowIdx).toBeLessThan(l.length - 1);
     });
 
-    it('도구 프로파일 = exec 프로파일 + 자격 파일 읽기 금지(D-7) + (deny network*), git 금지 줄은 여전히 맨 끝', () => {
+    it('도구 프로파일 = exec 프로파일 + 홈 읽기 허용 목록(D-15) + 자격 파일 읽기 금지(D-7) + 비밀 stat 금지(D-17) + (deny network*), git 금지 줄은 여전히 맨 끝', () => {
         const git = { gitDir: path.join(dir, 'repo', '.git'), commonDir: path.join(dir, 'repo', '.git') };
         const e = lines(buildSandboxProfile(path.join(dir, 'repo'), git, false));
         const t = lines(buildSandboxProfile(path.join(dir, 'repo'), git, true));
         const home = fs.realpathSync.native(os.homedir());
         expect(e).not.toContain('(deny network*)');
-        // 새 줄은 SECRET_SUBPATHS 줄 바로 뒤 — exec 프로파일에는 없다(승인된 npm·gh 가 쓴다).
+        // 자격 파일·비밀 stat 금지는 SECRET_SUBPATHS 줄 바로 뒤 — exec 프로파일에는 없다(승인된 npm·gh 가 쓴다).
         expect(e[e.length - 2]).toBe(`(deny file-read* ${sbSub(home, SECRET_SUBPATHS)})`);
-        expect(t).toEqual([...e.slice(0, -1), `(deny file-read* ${sbSub(home, TOOL_SECRET_SUBPATHS)})`, '(deny network*)', e[e.length - 1]]);
+        // 홈 읽기 세 줄은 연결 폴더 재허용 줄(D-19) 바로 앞(설계 2026-11-16 줄 순서).
+        expect(e[e.length - 3]).toBe(`(allow file-read* (subpath "${path.join(dir, 'repo')}") (subpath "${git.gitDir}"))`);
+        const homeRead = t.slice(e.length - 3, e.length);
+        expect(homeRead[0]).toBe(`(deny file-read* (subpath "${home}"))`);
+        expect(homeRead[1]).toBe(`(allow file-read-metadata (subpath "${home}"))`);
+        expect(homeRead[2].startsWith(`(allow file-read* (subpath "${path.join(home, '.gitconfig')}")`)).toBe(true);
+        expect(t).toEqual([
+            ...e.slice(0, -3), ...homeRead, ...e.slice(-3, -1),
+            `(deny file-read* ${sbSub(home, TOOL_SECRET_SUBPATHS)})`,
+            `(deny file-read-metadata ${sbSub(home, SECRET_SUBPATHS)} ${sbSub(home, TOOL_SECRET_SUBPATHS)})`,
+            '(deny network*)', e[e.length - 1],
+        ]);
     });
 
     it('linked worktree: common dir 쓰기를 열고, 금지는 common 의 hooks·config·자신·commondir·config.worktree + worktrees·git dir 자신·commondir·config.worktree', () => {

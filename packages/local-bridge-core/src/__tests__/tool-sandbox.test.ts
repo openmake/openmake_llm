@@ -274,7 +274,10 @@ sbDescribe('도구 자식 샌드박스 — 모듈 단위(가짜 python3 로 인�
         fs.mkdirSync(path.join(base, 'node_modules', '.bin'), { recursive: true });
         fs.symlinkSync(repoTsc, path.join(base, 'node_modules', '.bin', 'tsc'));
         const plain = await collectDiagnostics(base, [f]);
-        const boxed = await collectDiagnostics(base, [f], undefined, profile());
+        // 이 워크스페이스의 tsc 는 실제 홈 아래에 있다 — 도구 프로파일은 홈을 허용 목록만 읽으므로(설계 2026-11-16 D-15) 홈 자리에
+        // 임시 홈을 넣은 프로파일로 감싼다. 실제 배치(폴더의 node_modules 안 tsc)는 연결 폴더 재허용(D-19)으로 읽힌다.
+        const fakeHome = path.join(fs.realpathSync(prof), 'home');
+        const boxed = await collectDiagnostics(base, [f], undefined, sandboxProfileText(base, null, fakeHome, true));
         expect(boxed.serverKind).toBe('tsc');
         expect(boxed.diagnostics.length).toBeGreaterThan(0);
         expect(boxed).toEqual(plain);
