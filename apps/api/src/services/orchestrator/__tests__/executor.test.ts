@@ -339,6 +339,17 @@ describe('작업 실패 사유 세분 — 연결 실패·서비스 오류·대�
     });
     /** 작업 신호가 중단될 때까지 붙잡는 handler */
     const holdUntilAbort = (signal?: AbortSignal) => new Promise<never>((_, reject) => signal!.addEventListener('abort', () => reject(signal!.reason), { once: true }));
+    /** heldTimeouts 가 만든 모든 신호 — afterEach 에서 남은 것을 끊는다 */
+    const liveTimeouts: AbortController[] = [];
+    /**
+     * 한 테스트가 jest 시간 초과로 finally 에 닿지 못해도 뒤 테스트로 새지 않게 한다.
+     * 남은 대역 신호를 끊어 멈춘 본문을 끝내고(isolateModulesAsync 가 닫혀야 다음 격리가 열린다·env 도 그때 복원) spy 를 복원한다(spyOn 만).
+     */
+    afterEach(async () => {
+        for (const ac of liveTimeouts.splice(0)) if (!ac.signal.aborted) ac.abort(new DOMException('test cleanup', 'TimeoutError'));
+        await ticks(5);
+        jest.restoreAllMocks();
+    });
     /**
      * AbortSignal.timeout 대역 — 실제 타이머 대신 테스트가 끊는 신호(만료 순서를 테스트가 정한다).
      * 만든 순서대로 쌓고, expire(ms, n) 은 그 ms 로 n 번째 만든 신호를 시간 초과 사유로 끊는다. 끝나면 restore.
@@ -348,6 +359,7 @@ describe('작업 실패 사유 세분 — 연결 실패·서비스 오류·대�
         const spy = jest.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
             const ac = new AbortController();
             made.push({ ms, ac });
+            liveTimeouts.push(ac);
             return ac.signal;
         });
         const expire = (ms: number, nth = 0) => {
