@@ -1,6 +1,7 @@
 /** 작업 결과를 본 모델에 싣는 블록 — 내부 이름이 사용자 답으로 새지 않게 하는 지시를 고정한다 */
 import { buildResultBlock, orchestratorStreamFields } from '../orchestrate';
 import { RESULT_BLOCK_LABELS } from '../../../config/orchestrator-result-block';
+import { CAPABILITIES } from '../../../config/capabilities';
 
 const results = [
     { taskId: 't1', capability: 'web.search', ok: true, status: 'completed', text: 'Query: x\n1. title', media: [] },
@@ -8,13 +9,18 @@ const results = [
 ] as never;
 
 describe('buildResultBlock', () => {
-    it('내부 이름(작업 번호·오케스트레이터)을 사용자에게 말하지 말라고 싣는다 — 실측(2026-10-13): 답에 "오케스트레이터 초기 분석(t2)에서…"가 그대로 나왔다', () => {
+    it('블록이 어떻게 만들어졌는지 설명하지 말라고 싣는다 — 실측(2026-10-13) 답에 "오케스트레이터 초기 분석(t2)에서…"가 나온 사례는 아래 내부 이름 계약 테스트가 이어받는다', () => {
         const ko = buildResultBlock(results, 'ko').block;
-        expect(ko).toMatch(/작업 번호.*말하지 마세요/);
-        expect(ko).toMatch(/오케스트레이터/);
+        expect(ko).toMatch(/어떻게 만들어졌는지.*설명하지 말고/);
         const en = buildResultBlock(results, 'en').block;
-        expect(en).toMatch(/never mention/i);
+        expect(en).toMatch(/do not describe how this block was produced/i);
         expect(/\p{Script=Hangul}/u.test(en)).toBe(false);
+    });
+
+    it('머리줄은 사람 라벨과 상태만 — 작업 번호·식별자 없음', () => {
+        expect(buildResultBlock(results, 'ko').block).toContain('### 웹 검색 — 완료\nQuery: x');
+        expect(buildResultBlock(results, 'en').block).toContain('### Web search — done\nQuery: x');
+        expect(buildResultBlock(results, 'en').block).toContain('### Text reasoning and analysis — done\ndraft text');
     });
 
     it('텍스트 작업의 결과는 초안이라 검색 결과와 다르면 검색 결과를 따르라고 싣는다', () => {
@@ -64,6 +70,30 @@ describe('buildResultBlock — 검색 작업 출처를 턴 번호표에 싣는�
         const en = buildResultBlock([search('t1', src('a', 1))] as never, 'en').block;
         expect(en.startsWith(`[${RESULT_BLOCK_LABELS.en} — `)).toBe(true);
         expect(en).toMatch(/\[Source 3\]/);
+    });
+});
+
+describe('buildResultBlock — 내부 이름 계약(생각 패널로 새지 않게 모델 입력에 싣지 않는다)', () => {
+    const FORBIDDEN = /orchestrat|오케스트레이터|하위 작업|sub-?task/i;
+    const statuses = ['completed', 'pending', 'skipped', 'failed'] as const;
+
+    it.each(['ko', 'en'])('모든 capability × 모든 상태(%s) 블록에 내부 이름·작업 번호·식별자가 없다', (lang) => {
+        const all = CAPABILITIES.flatMap((capability, i) => statuses.map((status, j) =>
+            ({ taskId: `t${i * statuses.length + j + 1}`, capability, ok: status === 'completed', status, text: 'neutral body', media: [] })));
+        const { block } = buildResultBlock(all as never, lang);
+        expect(block).not.toMatch(FORBIDDEN);
+        expect(block).not.toMatch(/\bt\d+\b/);
+        for (const c of CAPABILITIES) expect(block).not.toContain(c);
+    });
+
+    it.each([['ko', '웹 검색'], ['en', 'Web search']])('완료가 아닌 작업 본문의 자기 식별자는 라벨로 바뀌고(%s), 완료 작업 본문은 그대로', (lang, label) => {
+        const { block } = buildResultBlock([
+            { taskId: 't1', capability: 'web.search', ok: false, status: 'failed', text: 'web.search: 검색어가 없습니다 (web.search)', media: [] },
+            { taskId: 't2', capability: 'text.reason', ok: true, status: 'completed', text: 'web.search 는 그대로', media: [] },
+        ] as never, lang);
+        expect(block).toContain(`${label}: 검색어가 없습니다 (${label})`);
+        expect(block).toContain('web.search 는 그대로');
+        expect(block.replace('web.search 는 그대로', '')).not.toContain('web.search');
     });
 });
 

@@ -11,6 +11,7 @@ jest.mock('../executors', () => ({
 }));
 
 import { executePlan } from '../executor';
+import { buildResultBlock } from '../orchestrate';
 import { validatePlan } from '../plan-schema';
 import type { ExecContext } from '../types';
 import { registerMediaStubForTest } from './helpers/media-stub';
@@ -55,6 +56,17 @@ it('실패한 부모의 자식은 skipped(호출 없음), 독립 작업은 계�
     expect(calls).toEqual(expect.arrayContaining(['p', 'x'])); expect(calls).not.toContain('child');
     const child = s.results.find((r) => r.taskId === 'child')!;
     expect(child.status).toBe('skipped'); expect(s.skipped).toBe(1); expect(s.failed).toBe(1); expect(s.ok).toBe(1);
+});
+
+it('선행 미완료 skipped 문구에 작업 번호가 없어 결과 블록에도 실리지 않는다(번호는 error 기록에만)', async () => {
+    behaviors.t1 = async () => { throw new Error('boom'); };
+    const s = await executePlan(plan({ complexity: 'multi', tasks: [
+        { id: 't1', capability: 'web.search' }, { id: 't2', capability: 'text.code', depends_on: ['t1'] },
+    ] }), ctx());
+    const child = s.results.find((r) => r.taskId === 't2')!;
+    expect(child.text).toBe('[skipped] 선행 작업 미완료(failed)');
+    expect(child.error).toBe('skipped: t1');
+    expect(buildResultBlock(s.results, 'ko').block).not.toMatch(/\bt\d+\b/);
 });
 
 it('preflight 가 미리 거절한 작업은 호출 없이 실패, 그 자식도 skipped', async () => {

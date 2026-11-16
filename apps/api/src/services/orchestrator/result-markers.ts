@@ -8,12 +8,12 @@
  * 블록 이름 없이 작업 번호만 옮긴 꼴(`[t1 · web.search]`·`[t1 결과 6]`)도 같은 규칙 — 호출부는 블록이 주입된 턴에만 부른다.
  */
 import { CAPABILITIES } from '../../config/capabilities';
-import { RESULT_BLOCK_LABELS } from '../../config/orchestrator-result-block';
+import { RESULT_BLOCK_LABELS, RESULT_BLOCK_LEGACY_LABELS } from '../../config/orchestrator-result-block';
 import { WEB_SEARCH_TEMPLATES } from '../../sockets/ws-chat-locales';
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const BLOCK_NAME_RE = new RegExp(Object.values(RESULT_BLOCK_LABELS).map(esc).join('|'), 'giu');
+const BLOCK_NAME_RE = new RegExp([...Object.values(RESULT_BLOCK_LABELS), ...RESULT_BLOCK_LEGACY_LABELS].map(esc).join('|'), 'giu');
 const TASK_ID_RE = /\bt\d+\b/i;
 const TASK_HINT_RE = new RegExp(`${CAPABILITIES.map(esc).join('|')}|결과|results?`, 'i');
 /** 인용 꼴 — 라벨 뒤 숫자와 그 뒤로 쉼표로 이어진 숫자(`결과 6, 8`·`출처 16, 18`·`Source 3`). 숫자 뒤에 글자가 붙으면(`2건`) 아니다. */
