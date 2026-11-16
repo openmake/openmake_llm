@@ -1,0 +1,22 @@
+/**
+ * 데스크톱 Companion 설치 파일 게시 정보 계약 — GET /api/desktop/latest (공개 라우트).
+ * 응답은 공통 `{ success, data }` 봉투 안의 data 모양이다. 게시본이 없거나 매니페스트가 올바르지 않으면 404.
+ */
+
+/** OS 하나의 게시본. `url` 은 서버가 만든 받기 주소(`/api/desktop/download/<file>`) — 소비자는 조립하지 않는다. */
+export interface DesktopReleaseBlock {
+  version: string;
+  file: string;
+  /** 매니페스트에 해시가 없으면 null. */
+  sha256: string | null;
+  url: string;
+}
+
+/**
+ * data — `native`(macOS)·`windows` 블록은 게시된 OS 만 실린다.
+ * 최상위 값은 native 의 복제(구 업데이터 호환) — 웹은 `native`·`windows` 블록만 읽는다.
+ */
+export type DesktopLatestPayload = Partial<DesktopReleaseBlock> & {
+  native?: DesktopReleaseBlock;
+  windows?: DesktopReleaseBlock;
+};
