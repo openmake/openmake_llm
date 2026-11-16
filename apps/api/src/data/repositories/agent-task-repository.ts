@@ -17,6 +17,7 @@ import { allowedSources, AgentTaskTransitionError } from '../../services/agent-t
 import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
 import { chainCreateColumns, CLAIM_CONTINUATION_SQL, type AgentTaskChainCreateParams } from './agent-task-chain-repository';
 import { AgentTaskLifecycleRepository } from './agent-task-lifecycle-repository';
+import type { AgentTaskIsolation } from '@openmake/shared-types';
 
 // 이벤트·주차·복구 claim·실패 큐 뷰는 agent-task-lifecycle-repository.ts (max-lines 가드로 분리, 상속)
 export { parkedTaskCondition } from './agent-task-lifecycle-repository';
@@ -161,6 +162,8 @@ export class AgentTaskRepository extends AgentTaskLifecycleRepository {
         sandboxContainerId?: string;
         workspacePath?: string;
         plan?: unknown;
+        /** worktree 격리 상태(200) — null = SQL NULL(새 실행에 실행기 값이 없음). undefined = 변경 없음. */
+        isolation?: AgentTaskIsolation | null;
         totalTokens?: number;
         /** 캐시 적중 입력 토큰 누적(182) — 모델 서버가 값을 준 적이 없으면 넘기지 않는다(칸은 NULL 로 남는다) */
         cachedPromptTokens?: number;
@@ -228,6 +231,11 @@ export class AgentTaskRepository extends AgentTaskLifecycleRepository {
             sets.push(`plan = $${paramIdx++}`);
             params.push(JSON.stringify(updates.plan));
             sets.push('plan_version = plan_version + 1'); // 139 — 모든 plan 갱신에서 +1 (UI stale 감지)
+        }
+        if (updates.isolation !== undefined) {
+            sets.push(`isolation = $${paramIdx++}`);
+            // null 은 SQL NULL(checkpoint 와 같은 방식) — 'null'::jsonb 가 아니다.
+            params.push(updates.isolation === null ? null : JSON.stringify(updates.isolation));
         }
         if (updates.totalTokens !== undefined) {
             sets.push(`total_tokens = $${paramIdx++}`);

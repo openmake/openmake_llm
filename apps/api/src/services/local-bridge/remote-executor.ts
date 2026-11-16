@@ -16,7 +16,8 @@ import type { TaskExecutor, ExecResult, CodeNavSpec, CodeNavData } from '../task
 import { stripWorkspacePrefix } from '../task-sandbox/workspace-path';
 import { getLocalBridgeRegistry, type BridgeKind, type BridgeResult, type BridgeRequestPayload } from './registry';
 import { getLocalBridgeUnknownOutcomeNotice } from '../../prompts/agent-task-prompt';
-import { LocalDeviceUnavailableError, isUnsupportedKindError, type DeviceLoss } from './device-errors';
+import { LocalDeviceUnavailableError, isUnsupportedKindError, isNotARepoError, type DeviceLoss } from './device-errors';
+import type { AgentTaskIsolation } from '@openmake/shared-types';
 import { classifyBrowserAction, planBrowserActions, type BrowserSitePlan, type BrowserUploadApproval } from '@openmake/config';
 import { resolveEffectivePolicy } from '../org/effective-policy';
 import { auditBrowserPolicyBlock } from './browser-policy-audit';
@@ -82,6 +83,7 @@ export class RemoteExecutor implements TaskExecutor {
     private worktreeRel: string | null = null;
     /** worktree 작업 브랜치명 — 사용자 안내·결과 보고용. */
     private worktreeBranch: string | null = null;
+    private isolationState: AgentTaskIsolation | null = null;
     private deviceLoss: DeviceLoss | null = null;
 
     /**
@@ -114,20 +116,31 @@ export class RemoteExecutor implements TaskExecutor {
         // 한다(DB folder_rel 조회 없이 사고 분석·감사가 되도록).
         logger.info(`[${this.taskId}] 로컬 실행기 준비 (device=${dev.deviceId}, folder="${dev.folderName}"${this.folderRel ? `/${this.folderRel}` : ''})`);
 
-        if (!LOCAL_BRIDGE.WORKTREE_ENABLED) return;
+        if (!LOCAL_BRIDGE.WORKTREE_ENABLED) { this.isolationState = { state: 'direct', reason: 'disabled' }; return; }
         const r = await this.req({ kind: 'worktree', op: 'add', taskId: this.taskId });
         if (r.ok && r.worktreeRel) {
             this.worktreeRel = r.worktreeRel;
             this.worktreeBranch = r.branch ?? null;
+            // 브랜치 없는 ok(현 기기에는 없다)는 격리는 걸린 채 화면용 상태를 남기지 않는다.
+            // 기기 응답은 런타임 검증이 없으므로 문자열이 아닌 값도 같은 경로(null)로 본다.
+            this.isolationState = typeof r.branch === 'string' && r.branch && typeof r.worktreeRel === 'string'
+                ? { state: 'worktree', branch: r.branch, worktreeRel: r.worktreeRel } : null;
             logger.info(`[${this.taskId}] worktree 격리 활성 (${r.worktreeRel}, branch=${r.branch})`);
         } else {
-            // git 레포가 아니거나 생성 실패 — 격리 없이 진행한다(기존 동작 유지).
-            logger.info(`[${this.taskId}] worktree 격리 미적용: ${r.error ?? 'worktreeRel 없음'}`);
+            // git 레포가 아니거나 생성 실패 — 격리 없이 진행한다(기존 동작 유지). 전송 실패·능력 미지원은 문구를 보지 않는다.
+            const notRepo = !r.transport && !r.unsupported && isNotARepoError(r.error ?? '');
+            this.isolationState = { state: 'direct', reason: notRepo ? 'not_repo' : 'unavailable' };
+            const msg = `[${this.taskId}] worktree 격리 미적용: ${r.error ?? 'worktreeRel 없음'}`;
+            if (notRepo) logger.info(msg); else logger.warn(msg);
         }
     }
 
-    private async req(payload: BridgeRequestPayload, timeoutMs?: number): Promise<BridgeResult> {
-        const withFolder = this.folderRel ? { ...payload, folder: this.folderRel } : payload;
+    /** worktree 격리 상태(200) — create 가 정하고 cleanup 이 종료 결과(outcome)를 채운다. create 전·브랜치 없는 격리는 null. */
+    get isolation(): AgentTaskIsolation | null { return this.isolationState; }
+
+    /** folder 는 요청별 실행 폴더(연결 루트 기준) — 기본은 폴더 선택(folderRel), browser 만 browserFolder() 를 넘긴다. */
+    private async req(payload: BridgeRequestPayload, timeoutMs?: number, folder = this.folderRel): Promise<BridgeResult> {
+        const withFolder = folder ? { ...payload, folder } : payload;
         const r = await getLocalBridgeRegistry().request(this.userId, withFolder, timeoutMs, this.deviceId);
         this.noteDeviceLoss(isUnknownOutcomeRequest(payload), r);
         // 쓰기·실행 요청을 보낸 뒤 응답을 못 받았다 — 기기에서 실행됐을 수 있다. 일반 오류로 돌려주면 모델이 같은 호출을
@@ -292,6 +305,16 @@ export class RemoteExecutor implements TaskExecutor {
         return planBrowserActions(actions, this.lastBrowserUrl, browserSite);
     }
 
+    /**
+     * browser 요청의 실행 폴더 — 기기는 이 폴더를 다운로드·스크린샷 저장·업로드 파일 해석의 기준으로 쓴다.
+     * 격리 중이면 에이전트가 보는 /workspace(worktree)와 맞춘다. worktreeRel 은 기기의 base(folderRel 적용 뒤)
+     * 기준이라 루트 기준으로는 folderRel/worktreeRel 이다. exec·파일 도구는 경로 쪽(cd·scoped)으로 옮기므로 그대로 둔다.
+     */
+    private browserFolder(): string | undefined {
+        if (!this.worktreeRel) return this.folderRel;
+        return this.folderRel ? `${this.folderRel}/${this.worktreeRel}` : this.worktreeRel;
+    }
+
     async runBrowserSpec(spec: { actions: unknown[]; approvedHosts: string[]; approvedUploads?: BrowserUploadApproval[] }): Promise<ExecResult> {
         const { browserSite } = await resolveEffectivePolicy(this.userId);
         const r = await this.req(
@@ -300,6 +323,7 @@ export class RemoteExecutor implements TaskExecutor {
                 ...(spec.approvedUploads?.length ? { approvedUploads: spec.approvedUploads } : {}),
             },
             LOCAL_BRIDGE.BROWSER_TIMEOUT_MS,
+            this.browserFolder(),
         );
         // 사용자가 브라우저를 넘겨받아 거절됐다 — 턴 실행기가 이 신호를 보고 작업을 주차한다(결과 불명 신호가 우선).
         if (LOCAL_BRIDGE.TAKEOVER_PARK_ENABLED && r.userControl === true && this.deviceLoss !== 'unknown') this.deviceLoss = 'browser_takeover';
@@ -372,6 +396,8 @@ export class RemoteExecutor implements TaskExecutor {
                 .catch(() => ({ ok: false } as BridgeResult));
             if (r.ok) {
                 logger.info(`[${this.taskId}] worktree ${r.kept ? `보존 (branch=${this.worktreeBranch})` : '정리 완료'}`);
+                // 정리 결과(200) — 실패·무응답이면 모르므로 채우지 않는다.
+                if (this.isolationState?.state === 'worktree') this.isolationState = { ...this.isolationState, outcome: r.kept ? 'kept' : 'removed' };
             }
         }
         // taskId 포함 — 디바이스가 이 작업의 일괄 승인을 즉시 회수한다.

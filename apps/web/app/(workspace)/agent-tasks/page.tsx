@@ -38,7 +38,9 @@ import {
 } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/lib/store";
-import type { ApiSuccess } from "@openmake/shared-types";
+import type { AgentTaskIsolation, ApiSuccess } from "@openmake/shared-types";
+import { isolationLabel } from "@/lib/agent-task-isolation";
+import { IsolationBadge } from "@/components/agent-tasks/isolation-badge";
 import { ApiClient } from "@/lib/api-client";
 import { AGENT_TASK_DETAIL_POLL_MS, AGENT_TASK_REFRESH_DELAY_MS } from "@/lib/constants/ui-limits";
 import { SteeringInput } from "@/components/chat/steering-input";
@@ -141,6 +143,8 @@ interface ApiAgentTask {
   executor?: "sandbox" | "local";
   /** 폴더 선택(102) — 연결 루트 기준 실행 폴더 (folder_rel 컬럼) */
   folder_rel?: string | null;
+  /** 로컬 실행 worktree 격리 상태(200) — NULL 은 해당 없음 */
+  isolation?: AgentTaskIsolation | null;
   /** 대기열 순번(1 부터) — 대기 중일 때만 */
   queuePosition?: number;
   /** 멈춘 작업이 기다리는 것 — device_wait(로컬 기기 연결) · hitl_parked(사용자 답) · model_wait(모델 서버 응답). 상세 응답에만 온다 */
@@ -751,6 +755,7 @@ function TaskDetailModal({
                 {t("localBadge")}{detail.task.folder_rel ? ` · ${detail.task.folder_rel}` : ""}
               </span>
             )}
+            <IsolationBadge label={isolationLabel(detail.task.isolation)} />
             <div className="mt-2 flex items-center gap-3 text-xs text-faint">
               <span className="flex items-center gap-1">
                 {t("stateLabel")} {(() => { const k = taskStatusLabelKey(detail.task.status); return k ? t(k) : detail.task.status; })()}

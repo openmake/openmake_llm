@@ -125,5 +125,7 @@ export function sequenceAgentTaskProgress(ev: AgentTaskProgressEvent, log: Agent
         ...(ev.reason ? { reason: ev.reason } : {}),
         // 멈춘 작업이 기다리는 것(기기 연결 등) — 채팅 카드가 "승인 대기"와 구분해 보인다.
         ...(ev.waitReason ? { waitReason: ev.waitReason } : {}),
+        // 로컬 실행의 worktree 격리 상태(200) — 채팅 카드의 격리 표시.
+        ...(ev.isolation ? { isolation: ev.isolation } : {}),
     });
 }

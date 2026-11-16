@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage, type StateStorage } from "zustand/middleware";
 import type {
+  AgentTaskIsolation,
   ChatMessage as SharedChatMessage,
   ChatRole,
   SearchSourceRef,
@@ -80,6 +81,8 @@ export interface AgentTaskState {
   waitReason?: string;
   /** 방금 실행된 스텝 요약(4-5 실시간 스트림) — "현재 단계" 라인 표시. */
   lastStep?: { stepType: string; toolName?: string; preview?: string };
+  /** 로컬 실행 worktree 격리 상태(200) — 서버 값(진행 이벤트·작업 조회)을 그대로. 없으면 표시 없음. */
+  isolation?: AgentTaskIsolation;
 }
 
 /** 에이전트 작업 도구 호출 승인 대기 (백엔드 approval-gate PendingApproval 대응). */
