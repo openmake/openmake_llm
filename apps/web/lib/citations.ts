@@ -13,8 +13,10 @@ export const CITE_HREF_PREFIX = "#cite-";
 
 const CODE_SPLIT_RE = /(```[\s\S]*?(?:```|$)|`[^`\n]*`)/g;
 const CITE_RE = /\[(\d{1,2})\](?!\()/g;
-const CITE_LABELS = ["출처", "Source", "出典", "来源", "Fuente", "Quelle"];
-const LABELED_CITE_RE = new RegExp(`\\[\\s*(?:${CITE_LABELS.join("|")})\\s*(\\d{1,2}(?:\\s*[,·、]\\s*\\d{1,2})*)\\s*\\](?!\\()`, "gi");
+export const CITE_LABELS = ["출처", "Source", "出典", "来源", "Fuente", "Quelle"];
+const CITE_LABEL_ALT = CITE_LABELS.join("|");
+/** `[출처 3, 8]`·`[출처 11, 출처 16]`(번호마다 라벨) — 서버 `CITATION_MARKER_SRC`(tools/web-search/citation-markers.ts)와 짝 */
+const LABELED_CITE_RE = new RegExp(`\\[\\s*(?:${CITE_LABEL_ALT})\\s*(\\d{1,2}(?:\\s*[,·、]\\s*(?:(?:${CITE_LABEL_ALT})\\s*)?\\d{1,2})*)\\s*\\](?!\\()`, "gi");
 
 function transformLabeled(text: string, max: number): string {
   return text.replace(LABELED_CITE_RE, (match, list: string) => {
