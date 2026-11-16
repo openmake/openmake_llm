@@ -5,7 +5,7 @@
  * (`GET /api/agent-tasks/:id` 의 `task.isolation`)과 진행 이벤트(`agent_task_progress.isolation`)로 내려준다.
  * 화면은 값 → 문구 대응만 한다. NULL·없음 = 해당 없음(샌드박스 실행, 옛 행).
  *
- *   worktree : 연결 폴더 안 작업 폴더(`worktreeRel`, 연결 폴더 기준 상대경로)·브랜치에서 격리 실행.
+ *   worktree : 작업 폴더(`worktreeRel`, 실행 폴더(연결 폴더 + folder_rel) 기준 상대경로)·브랜치에서 격리 실행.
  *              outcome 은 작업이 끝난 뒤(종료 상태에서만) 정리 결과 — kept = 변경이 남아 보존, removed = 변경 없어 정리.
  *   direct   : 격리 없이 연결 폴더에서 직접 작업. reason —
  *              not_repo = git 저장소가 아님, disabled = 서버 설정으로 꺼짐, unavailable = 격리를 시도했으나 실패.

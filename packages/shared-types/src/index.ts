@@ -421,8 +421,7 @@ export type WsServerEvent =
       step?: { stepType: string; toolName?: string; preview?: string };
       /** 승인 이관·에스컬레이션·철회 대상 승인 id(HITL 2단계) — 계획 편집 알림엔 없다 */
       approvalId?: string;
-      /** 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다 */
-      /** "isolation" 은 종료 뒤 worktree 정리 결과(isolation.outcome)를 알린다 — 받은 쪽은 격리 표시만 갱신한다 */
+      /** 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다. "isolation" 은 종료 뒤 worktree 정리 결과(isolation.outcome)를 알린다 — 받은 쪽은 격리 표시만 갱신한다 */
       reason?: "assigned" | "escalated" | "revoked" | "plan_edited" | "isolation";
       /** 로컬 실행의 worktree 격리 상태(200) — 시작 때 한 번, 종료 정리 뒤(reason "isolation") 한 번 실린다 */
       isolation?: AgentTaskIsolation;
