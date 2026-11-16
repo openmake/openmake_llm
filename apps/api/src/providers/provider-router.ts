@@ -246,10 +246,10 @@ export class ProviderRouter {
                 `사용자가 '${providerId}' API 키를 등록하지 않았습니다`,
             );
         }
-        // 꺼진 키는 삭제한 키와 같은 오류 코드 — 뒤쪽 폴백·표시는 그대로, 문구는 로그용 원인
+        // 꺼진 키는 미등록(MISSING_API_KEY)과 다른 코드 — 사용자 조치가 "켜기" 다. 복호화 전에 거절한다.
         if (!keyRow.enabled) {
             throw new ProviderError(
-                'MISSING_API_KEY',
+                'API_KEY_DISABLED',
                 `'${providerId}' API 키가 꺼져 있습니다 — 설정에서 켜 주세요`,
             );
         }
