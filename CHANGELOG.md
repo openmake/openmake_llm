@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.139.2](https://github.com/openmake/openmake_llm/compare/v1.139.1...v1.139.2) (2026-11-16)
+
+
+### 🔧 기타
+
+* **release:** 1.139.2 — 앱 게시 릴리스 유도(macOS 0.4.3) ([6118d1c](https://github.com/openmake/openmake_llm/commit/6118d1c7d254e4e2742211ca951272b01d90814d))
+
 ## [1.139.1](https://github.com/openmake/openmake_llm/compare/v1.139.0...v1.139.1) (2026-11-16)
 
 
