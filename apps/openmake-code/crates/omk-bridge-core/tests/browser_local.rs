@@ -17,7 +17,9 @@ use omk_bridge_core::browser::result::{Json, Obj};
 use omk_bridge_core::browser::run::BrowserSpec;
 use serde_json::{Value, json};
 use support::browser::{Out, Sent, browser_replies, paused};
-use support::browser_lab::{Lab, env, lab_replies, opts, tick, wait_spec};
+use support::browser_lab::{
+    Lab, env, holding_ax_tree, lab_replies, opts, release_ax, tick, until_ax_held, wait_spec,
+};
 
 fn spec(actions: Value) -> BrowserSpec {
     BrowserSpec {
@@ -270,26 +272,27 @@ fn user_control_refuses_without_attaching_then_hand_back() {
     });
 }
 
-/// 실행 중에 넘겨받으면 다음 액션부터 멈추고 표식을 남긴다.
+/// 실행 중에 넘겨받으면 다음 액션부터 멈추고 표식을 남긴다(끊지 않는 명령 도중 — "액션 사이 중지").
 #[test]
 fn take_over_mid_run_stops_next_action() {
     paused().block_on(async {
-        let lab = Lab::new(false);
-        lab.gates.hold("session-target-1");
-        let (o, s) = (opts("A", None), spec(json!([{"type": "wait"}, {"type": "press", "key": "a"}])));
+        let lab = holding_ax_tree();
+        let (o, s) = (opts("A", None), spec(json!([{"type": "snapshot"}, {"type": "press", "key": "a"}])));
+        *lab.gates.url.lock().unwrap() = Some("http://a.test/".into());
         let run = lab.browser.run(&s, &o);
         let hook = async {
-            lab.gates.until_held("session-target-1").await;
+            until_ax_held(&lab, "session-target-1", 1).await;
             lab.browser.set_user_control(true);
-            lab.gates.release(&lab.server(), "session-target-1");
+            release_ax(&lab, "session-target-1");
         };
         let (r, ()) = futures_util::future::join(run, hook).await;
         assert_eq!(
             r.to_json_string(),
             format!(
-                r#"{{"ok":false,"finalUrl":"about:blank","results":[{{"i":0,"type":"wait","ok":true}},{{"i":1,"type":"press","ok":false,"error":"{BROWSER_USER_CONTROL_ERROR}"}}],"policyBlock":{{"kind":"user_control","host":null,"action":"press"}}}}"#
+                r#"{{"ok":false,"finalUrl":"http://a.test/","results":[{{"i":0,"type":"snapshot","ok":true,"elements":[]}},{{"i":1,"type":"press","ok":false,"error":"{BROWSER_USER_CONTROL_ERROR}"}}],"policyBlock":{{"kind":"user_control","host":null,"action":"press"}}}}"#
             )
         );
+        assert!(lab.server().log.params_of("Page.stopLoading").is_empty(), "액션 사이 중지는 이동을 멈추지 않는다");
         lab.browser.dispose().await;
     });
 }
@@ -297,27 +300,29 @@ fn take_over_mid_run_stops_next_action() {
 #[test]
 fn request_stop_per_task_and_all() {
     paused().block_on(async {
-        let lab = Lab::new(false);
-        let two = spec(json!([{"type": "wait", "ms": 0}, {"type": "wait", "ms": 0}]));
-        for all in [false, true] {
-            for s in ["session-target-1", "session-target-2"] {
-                lab.gates.hold(s);
-            }
+        let lab = holding_ax_tree();
+        *lab.gates.url.lock().unwrap() = Some("http://a.test/".into());
+        let two = spec(json!([{"type": "snapshot"}, {"type": "wait", "ms": 0}]));
+        for (round, all) in [false, true].into_iter().enumerate() {
             let (oa, ob) = (opts("A", None), opts("B", None));
             let runs =
                 futures_util::future::join(lab.browser.run(&two, &oa), lab.browser.run(&two, &ob));
             let hook = async {
-                lab.gates.until_held("session-target-1").await;
-                lab.gates.until_held("session-target-2").await;
+                until_ax_held(&lab, "session-target-1", round + 1).await;
+                until_ax_held(&lab, "session-target-2", round + 1).await;
                 lab.browser.request_stop(if all { None } else { Some("A") });
-                lab.gates.release(&lab.server(), "session-target-1");
-                lab.gates.release(&lab.server(), "session-target-2");
+                release_ax(&lab, "session-target-1");
+                release_ax(&lab, "session-target-2");
             };
             let ((ra, rb), ()) = futures_util::future::join(runs, hook).await;
             assert!(!ra.truthy("ok"));
             assert_eq!(error_of(&ra, 1), STOPPED_ERROR);
             assert_eq!(rb.truthy("ok"), !all, "all={all}");
         }
+        assert!(
+            lab.server().log.params_of("Page.stopLoading").is_empty(),
+            "액션 사이 중지는 이동을 멈추지 않는다"
+        );
         lab.browser.dispose().await;
     });
 }

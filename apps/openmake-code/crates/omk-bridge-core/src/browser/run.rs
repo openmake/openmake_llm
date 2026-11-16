@@ -1,10 +1,15 @@
 //! LocalBrowser 의 요청 1건 실행 흐름(TS `local-browser.ts` `run`·`runNow`) — 제어권 → 액션 자르기 → 흐름 형태 검사 → 연결·탭·
 //! 다운로드 설정 → 흐름 해석(단순 액션마다 중지 → 실제 탭 주소 → 사이트 정책 → 빈 페이지 → 업로드 검사 → 실행) → 다운로드 보고.
+//! 액션 도중에 온 중지·넘겨받기는 부작용 없는 대기(`Ctx::stoppable`)를 바로 끊고 그 탭의 이동을 멈춘다(`Page.stopLoading`).
 //! 결과는 TS 객체 리터럴의 키 순서로 만든다(D-76).
 
+use std::future::Future;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use serde_json::Value;
+use futures_util::future::{Either, select};
+
+use serde_json::{Value, json};
 
 use super::actions::{self, Upload, current_url, evaluate};
 use super::cdp::CdpClient;
@@ -92,6 +97,8 @@ pub(super) struct Ctx<'a> {
     approved_uploads: Vec<UploadApproval>,
     stopped: StopCheck,
     policy_block: Mutex<Option<PolicyBlock>>,
+    /// 이번 액션이 대기 도중 중지로 끊겼다
+    cut: AtomicBool,
 }
 
 impl Ctx<'_> {
@@ -105,6 +112,26 @@ impl Ctx<'_> {
         } else {
             STOPPED_ERROR
         }
+    }
+
+    /// 부작용 없는 대기 하나를 중지와 겨룬다 — 중지가 이기면 대기를 버리고 중지 문구로 실패한다(끊김 표식을 세운다).
+    /// 짝을 이루는 명령 묶음(마우스·키 입력, 새 창 따라가기, 저장·업로드)은 감싸지 않는다 — 반쪽만 남지 않게.
+    pub(super) async fn stoppable<T>(&self, fut: impl Future<Output = T>) -> Result<T, String> {
+        let stop = std::pin::pin!(self.stopped.wait());
+        let fut = std::pin::pin!(fut);
+        // 중지를 먼저 본다 — 이미 중지면 대기를 시작하지 않는다
+        match select(stop, fut).await {
+            Either::Left(_) => {
+                self.cut.store(true, Ordering::SeqCst);
+                Err(self.stop_error().to_owned())
+            }
+            Either::Right((v, _)) => Ok(v),
+        }
+    }
+
+    /// 이번 액션이 대기 도중 중지로 끊겼는가.
+    pub(super) fn was_cut(&self) -> bool {
+        self.cut.load(Ordering::SeqCst)
     }
 
     fn block(&self, b: PolicyBlock) {
@@ -122,7 +149,9 @@ impl Ctx<'_> {
             }
             return Err(self.stop_error().to_owned());
         }
-        let url = current_url(self.cdp, &self.session()).await;
+        let url = self
+            .stoppable(current_url(self.cdp, &self.session()))
+            .await?;
         // 사이트 정책 — 실제 탭의 주소로 판정한다. 통과하지 못하면 실행하지 않는다.
         let host = host_of(url.as_ref());
         if let Some(denied) = check_action(
@@ -164,7 +193,16 @@ impl Ctx<'_> {
     /// 단순 액션 하나 — 실패도 `{i, type, ok:false, error}` 결과로. 그 액션 동안 뜬 확인창을 싣는다.
     async fn run_simple(&self, a: Value, i: usize, step: Option<String>) -> Obj {
         lock_tab(self.tab).dialogs.clear();
-        let mut r = match self.checked(&a, i, step.as_deref()).await {
+        let done = self.checked(&a, i, step.as_deref()).await;
+        // 대기 도중 끊겼으면 에이전트가 건 이동이 뒤늦게 페이지를 바꾸지 않게 멈춘다(답은 기다리지 않는다). 넘겨받기면 표식은 첫머리와 같다.
+        if self.cut.swap(false, Ordering::SeqCst) {
+            self.cdp
+                .send_detached("Page.stopLoading", json!({}), Some(&self.session()));
+            if self.browser.is_user_control() {
+                self.block(user_control_block(Some(&a)));
+            }
+        }
+        let mut r = match done {
             Ok(r) => r,
             Err(e) => {
                 let mut r = head(&a, i);
@@ -185,8 +223,16 @@ impl Ctx<'_> {
         if self.stopped.stopped() {
             return Err(self.stop_error().to_owned());
         }
-        let v = evaluate(self.cdp, &self.session(), &flow::cond_expression(&c)).await?;
-        Ok(js_truthy(v.as_ref()))
+        let v = self
+            .stoppable(evaluate(
+                self.cdp,
+                &self.session(),
+                &flow::cond_expression(&c),
+            ))
+            .await;
+        // 조건 평가에서 끊기면 표식·`Page.stopLoading` 없이 중지 문구만(액션이 아니다)
+        self.cut.store(false, Ordering::SeqCst);
+        Ok(js_truthy(v??.as_ref()))
     }
 }
 
@@ -251,6 +297,7 @@ impl LocalBrowser {
             approved_uploads: parse_approved_uploads(spec.approved_uploads.as_ref()),
             stopped,
             policy_block: Mutex::new(None),
+            cut: AtomicBool::new(false),
         };
         let c = &ctx;
         let mut hooks = FlowHooks {
@@ -272,7 +319,13 @@ impl LocalBrowser {
         if let Some(b) = block {
             r.set("policyBlock", policy_block_obj(&b));
         }
-        let downloads = self.downloads.report(key, self.env.download_wait_ms).await;
+        // 중지된 요청은 진행 중 다운로드를 기다리지 않는다 — 진행 중으로 싣고 끝난 결과는 다음 요청에 실린다
+        let wait_ms = if ctx.stopped.stopped() {
+            0
+        } else {
+            self.env.download_wait_ms
+        };
+        let downloads = self.downloads.report(key, wait_ms).await;
         if !downloads.is_empty() {
             r.set("downloads", downloads);
         }

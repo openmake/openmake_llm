@@ -257,3 +257,46 @@ pub fn progress(guid: &str, state: &str) -> Value {
 pub async fn tick() {
     tokio::time::sleep(Duration::from_millis(10)).await;
 }
+
+/// 접근성 트리 요청(`snapshot`)의 답을 붙드는 실험대 — 끊지 않는 명령이라 붙든 동안의 중지는 "액션 사이 중지"가 된다.
+pub fn holding_ax_tree() -> Lab {
+    Lab::with_responder(false, |g, f| {
+        let inner = lab_replies(json!({"loaderId": "l1"}), g.clone(), f.clone());
+        Arc::new(move |s: &Sent| {
+            if s.method == "Accessibility.getFullAXTree" {
+                return vec![];
+            }
+            inner(s)
+        })
+    })
+}
+
+fn is_ax(s: &Sent, session: &str) -> bool {
+    s.method == "Accessibility.getFullAXTree" && s.session.as_deref() == Some(session)
+}
+
+/// 그 세션의 접근성 트리 요청이 `n` 번째까지 닿을 때까지.
+pub async fn until_ax_held(lab: &Lab, session: &str, n: usize) {
+    while lab.host.servers.lock().unwrap().is_empty() {
+        tick().await;
+    }
+    lab.server()
+        .log
+        .until("getFullAXTree", |all| {
+            all.iter().filter(|s| is_ax(s, session)).count() >= n
+        })
+        .await;
+}
+
+/// 그 세션의 마지막(붙든) 접근성 트리 요청에 빈 트리로 답한다.
+pub fn release_ax(lab: &Lab, session: &str) {
+    let held = lab
+        .server()
+        .log
+        .sent()
+        .into_iter()
+        .rfind(|s| is_ax(s, session))
+        .expect("붙든 요청 없음");
+    lab.server()
+        .raw(&json!({"id": held.id, "result": {"nodes": []}, "sessionId": session}).to_string());
+}
