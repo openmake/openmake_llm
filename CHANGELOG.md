@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.139.0](https://github.com/openmake/openmake_llm/compare/v1.138.3...v1.139.0) (2026-11-16)
+
+
+### ✨ 기능
+
+* **agent-task:** 로컬 실행의 worktree 격리 상태를 작업에 기록한다 ([67c847a](https://github.com/openmake/openmake_llm/commit/67c847a0d2b9f012b3348dd1517914169b447029))
+* **web:** Companion 앱 다운로드 화면을 추가한다 ([7b1a460](https://github.com/openmake/openmake_llm/commit/7b1a4609019e95c61afb6eb03e4a9b1d6a4372a7))
+* **web:** Companion 앱 다운로드 화면을 추가한다 ([9d75c77](https://github.com/openmake/openmake_llm/commit/9d75c776dcea9ee31d55c85130b9733f0094a554))
+* **web:** 작업 카드·상세에 격리 상태를 보인다 ([d862eb7](https://github.com/openmake/openmake_llm/commit/d862eb793d7a17b4da7fce48bc73b2bdd087d588))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 기기가 준 branch·worktreeRel 이 문자열일 때만 격리 상태로 남긴다 ([c0aa495](https://github.com/openmake/openmake_llm/commit/c0aa4954fd7517e82b6e1c0df571de84013e5c86))
+* **bridge:** 브라우저 작업 중지·넘겨받기가 진행 중인 이동·대기를 바로 끊는다 ([b9a68a3](https://github.com/openmake/openmake_llm/commit/b9a68a37d57ef384dd15c232c65af5a4c5ba983e))
+* **bridge:** 브라우저 작업 중지·넘겨받기가 진행 중인 이동·대기를 바로 끊는다 (앱 0.4.2) ([ad296f4](https://github.com/openmake/openmake_llm/commit/ad296f40a875abc2b6d5d342e9b8412835aebd8d))
+* **bridge:** 사이트 정책 호스트 패턴을 정규식 없이 선형으로 판정한다 ([3f9fe49](https://github.com/openmake/openmake_llm/commit/3f9fe49adc6d711bb0868db28193c052af67f68b))
+* **bridge:** 사이트 정책 호스트 패턴을 정규식 없이 선형으로 판정한다 ([e226e0f](https://github.com/openmake/openmake_llm/commit/e226e0ff45fd1a9da25ee90407e15cacc76458b8))
+* **chat:** 꺼진 외부 키와 작업 실패 사유를 구분해 알린다 ([5ff0fa8](https://github.com/openmake/openmake_llm/commit/5ff0fa800abd43f0dfd39b5b4ba501215586d982))
+* **ci:** agent-task-isolation 타입 파일을 feature-checks 웹 검사에 대응한다 ([6cacd58](https://github.com/openmake/openmake_llm/commit/6cacd589e04cabf7ffa840290193441755b59087))
+* **ci:** desktop-update 타입 파일을 feature-checks 웹 검사에 대응한다 ([254b27e](https://github.com/openmake/openmake_llm/commit/254b27e06dcaaff0c9faa06ec47fccdb8352801a))
+* **contracts:** reason 설명을 한 블록으로 합치고 worktreeRel 기준을 실행 폴더로 고친다 ([9953e2a](https://github.com/openmake/openmake_llm/commit/9953e2a735d1691cc488a54210d7f3decc199823))
+* **contracts:** 격리 상태 enum 에 고유 이름을 붙여 iOS 앱의 SwiftUI State 와 겹치지 않게 한다 ([e1354c7](https://github.com/openmake/openmake_llm/commit/e1354c72d157a577dfd3d39d18385bdca0df4f14))
+* **local-bridge:** 격리 중인 작업의 브라우저 다운로드·스크린샷·업로드를 작업 폴더 기준으로 한다 ([393f43d](https://github.com/openmake/openmake_llm/commit/393f43d266efaa5aa2efe185dff9d63888e7a9c4))
+* **local-bridge:** 격리 중인 작업의 브라우저 다운로드·스크린샷·업로드를 작업 폴더 기준으로 한다 ([8e036a9](https://github.com/openmake/openmake_llm/commit/8e036a94ac535316165ab4926aacd799b41988a5))
+* **web:** 앱 다운로드 화면의 재조회 실패·복사 라벨·좁은 폭 배치를 다듬는다 ([198e2a5](https://github.com/openmake/openmake_llm/commit/198e2a58bdd06278096e6f2d97f66bc8bd880f3d))
+* **web:** 종료 재조회가 겹치면 나중에 시작한 조회만 병합하고 격리 뱃지 줄바꿈을 고친다 ([9c1e510](https://github.com/openmake/openmake_llm/commit/9c1e5100811d15f2f1b6aa823d89883fa380d066))
+
 ## [1.138.3](https://github.com/openmake/openmake_llm/compare/v1.138.2...v1.138.3) (2026-11-16)
 
 
