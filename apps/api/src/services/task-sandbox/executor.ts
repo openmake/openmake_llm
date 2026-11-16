@@ -17,6 +17,7 @@
  *
  * @module services/task-sandbox/executor
  */
+import type { AgentTaskIsolation } from '@openmake/shared-types';
 
 /** 도구 실행 결과 — 출력 캡/timeout 메타 포함 (기존 sandbox.ts 에서 이동, 재노출 유지). */
 export interface ExecResult {
@@ -96,6 +97,9 @@ export interface TaskExecutor {
      * 캡처(code-diff)로 폴백한다. 변경 없음·불가는 null.
      */
     captureDiff?(): Promise<string | null>;
+
+    /** worktree 격리 상태(200, 로컬 브리지만) — create 가 정하고 cleanup 이 정리 결과를 채운다. 미구현·해당 없음은 undefined·null. */
+    readonly isolation?: AgentTaskIsolation | null;
 
     /** 셸 명령 실행 — bash 도구의 실행 백엔드. pipeStatus 는 파이프라인 단계별 종료 코드 요청(지원하는 실행기만 따른다). */
     exec(command: string, opts?: { pipeStatus?: boolean }): Promise<ExecResult>;

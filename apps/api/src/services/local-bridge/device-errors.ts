@@ -40,3 +40,16 @@ export const BRIDGE_INVALID_REGEX_PREFIX = '정규식이 올바르지 않습니�
 export function isUnsupportedKindError(error: string): boolean {
     return error.startsWith(BRIDGE_UNSUPPORTED_KIND_PREFIX);
 }
+
+/**
+ * 디바이스가 worktree add 를 git 저장소가 아니어서 거절할 때 돌려주는 오류 문구(완전 일치).
+ * 출처: TS `packages/local-bridge-core/src/worktree.ts` 의 NOT_A_REPO, Rust `omk-bridge-core/src/worktree.rs`, 적합성 fixture
+ * `packages/local-bridge-core/conformance/worktree.json` 의 `add-not-a-repo`(device-errors.test 가 대조한다).
+ * 문구가 바뀌면 격리 상태가 not_repo 대신 unavailable(경고)로 떨어진다 — 과잉 경고 쪽이라 안전하다. env 로 바꾸지 않는다.
+ */
+export const BRIDGE_NOT_A_REPO_ERROR = 'git 레포가 아닙니다';
+
+/** worktree add 가 "git 저장소 아님" 으로 거절됐는가 — 아니면 격리를 시도했으나 실패한 것이다. */
+export function isNotARepoError(error: string): boolean {
+    return error === BRIDGE_NOT_A_REPO_ERROR;
+}

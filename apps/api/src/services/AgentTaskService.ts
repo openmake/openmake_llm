@@ -46,6 +46,7 @@ import { finalizeTask, finalizeMaxTurnsExhausted, type VerifyHold } from './agen
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
 import { loadChainContext, gateTurnWithContinuation, prepareSegmentWorkspace, effectiveSegmentTimeoutMs } from './agent-task/continuation-hook';
 import { cleanupTaskRun } from './agent-task/run-cleanup';
+import { recordIsolationStart } from './agent-task/isolation-state';
 import { beginTaskLease } from './agent-task/task-lease';
 import { trackAgentTaskRun, isShutdownAbort, recordShutdownInterrupt } from './agent-task/shutdown-drain';
 import { withSpan } from '../observability/otel';
@@ -301,6 +302,8 @@ export class AgentTaskService {
                     taskRuntime = null; stepNumber = await handleSandboxUnavailable(e, { taskId, signal, stepNumber, emitStep, conversation, remote: !!remoteExecutor });
                 }
             }
+            // 로컬 실행 worktree 격리 상태(200)를 작업 행·진행 이벤트에 싣는다(새 실행에 값이 없으면 비움) — agent-task/isolation-state.
+            await recordIsolationStart({ taskId, userId, status: curStatus, progress: curProgress, currentTurn: curTurn, local: !!remoteExecutor, resume: !!input.resume, isolation: taskRuntime?.isolation ?? null });
             // 입력 첨부 주입(파일·이미지) — 상세는 agent-task/task-inputs.
             await injectTaskInputs(input, conversation, taskRuntime);
             // 코드 작업 diff 캡처(openmake_code v1) — 첨부까지 기록된 시점을 git baseline 스냅샷(멱등·fail-open).
@@ -521,7 +524,7 @@ export class AgentTaskService {
             if (AgentTaskService.running.get(taskId) === this) AgentTaskService.running.delete(taskId); // 내 등록일 때만 — 다른 인스턴스 것을 지우지 않는다
             await lease.end(); clearProgress(taskId); // 끝난 실행의 쓰지 않은 진행은 버린다(R8)
             // 승인(주차면 질문 승인 유지)·steering·샌드박스(완료·주차는 workspace 보존) 정리 — agent-task/run-cleanup. 소유권을 잃었으면 새 소유자가 쓰고 있어 건너뛴다.
-            if (!leaseLost) await cleanupTaskRun({ taskId, taskRuntime, status: curStatus, parked, stepNumber, interrupted, keepWorkspace: continuedToSuccessor });
+            if (!leaseLost) await cleanupTaskRun({ taskId, userId, taskRuntime, status: curStatus, parked, stepNumber, progress: curProgress, currentTurn: curTurn, interrupted, keepWorkspace: continuedToSuccessor });
             if (!leaseLost) void getToolRuntime().releaseUserToolsForTask(userId, taskId).catch(() => { /* noop */ }); // 작업이 잡은 사용자 MCP 풀 참조 해제(R6)
         }
     }

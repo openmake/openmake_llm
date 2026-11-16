@@ -20,6 +20,7 @@ jest.mock('./registry', () => ({
 }));
 
 import { RemoteExecutor } from './remote-executor';
+import { LOCAL_BRIDGE } from '../../config/local-bridge';
 
 const WT_REL = '.openmake/worktrees/task-abcdef12';
 const BRANCH = 'omk-task/task-abc';
@@ -130,5 +131,84 @@ describe('worktree 격리 실패 시 폴백', () => {
         }));
         const { RemoteExecutor: R } = require('./remote-executor');
         await expect(new R('task-abcdef12', 'user-1').create()).rejects.toThrow('연결된 로컬 디바이스가 없습니다');
+    });
+});
+
+describe('worktree 격리 상태(isolation, 200)', () => {
+    async function created(): Promise<RemoteExecutor> {
+        const ex = new RemoteExecutor('task-abcdef12', 'user-1');
+        await ex.create();
+        return ex;
+    }
+
+    it('create 전에는 null', () => {
+        expect(new RemoteExecutor('task-abcdef12', 'user-1').isolation).toBeNull();
+    });
+
+    it('격리 성공 → worktree + 기기가 준 branch·worktreeRel', async () => {
+        expect((await created()).isolation).toEqual({ state: 'worktree', branch: BRANCH, worktreeRel: WT_REL });
+    });
+
+    it('ok·worktreeRel 은 있는데 branch 가 없으면 null(격리는 걸린다)', async () => {
+        respond = (p) => (p.kind === 'worktree' ? { ok: true, worktreeRel: WT_REL } : okResponder(p));
+        const ex = await created();
+        expect(ex.isolation).toBeNull();
+        await ex.writeFile('a.txt', 'x');
+        expect(requests[requests.length - 1].path).toBe(`${WT_REL}/a.txt`);
+    });
+
+    it('기기가 준 branch·worktreeRel 이 문자열이 아니면 null(branch 없음과 같은 경로)', async () => {
+        respond = (p) => (p.kind === 'worktree' ? { ok: true, worktreeRel: WT_REL, branch: { x: 1 } } as never : okResponder(p));
+        expect((await created()).isolation).toBeNull();
+        respond = (p) => (p.kind === 'worktree' ? { ok: true, worktreeRel: 42, branch: BRANCH } as never : okResponder(p));
+        expect((await created()).isolation).toBeNull();
+    });
+
+    it('"git 레포가 아닙니다" → direct/not_repo', async () => {
+        respond = (p) => (p.kind === 'worktree' ? { ok: false, error: 'git 레포가 아닙니다' } : okResponder(p));
+        expect((await created()).isolation).toEqual({ state: 'direct', reason: 'not_repo' });
+    });
+
+    it('그 밖의 기기 오류 → direct/unavailable', async () => {
+        respond = (p) => (p.kind === 'worktree' ? { ok: false, error: 'worktree add 실패' } : okResponder(p));
+        expect((await created()).isolation).toEqual({ state: 'direct', reason: 'unavailable' });
+    });
+
+    it('전송 실패·능력 미지원은 문구와 무관하게 direct/unavailable', async () => {
+        respond = (p) => (p.kind === 'worktree' ? { ok: false, transport: 'timeout', error: 'git 레포가 아닙니다' } : okResponder(p));
+        expect((await created()).isolation).toEqual({ state: 'direct', reason: 'unavailable' });
+        respond = (p) => (p.kind === 'worktree' ? { ok: false, unsupported: true, error: 'git 레포가 아닙니다' } : okResponder(p));
+        expect((await created()).isolation).toEqual({ state: 'direct', reason: 'unavailable' });
+    });
+
+    it('WORKTREE_ENABLED=false → direct/disabled (worktree 요청 없음)', async () => {
+        const restore = jest.replaceProperty(LOCAL_BRIDGE, 'WORKTREE_ENABLED', false);
+        try {
+            const ex = await created();
+            expect(ex.isolation).toEqual({ state: 'direct', reason: 'disabled' });
+            expect(requests.some((r) => r.kind === 'worktree')).toBe(false);
+        } finally { restore.restore(); }
+    });
+
+    it('cleanup: kept:true → outcome kept, kept:false → removed', async () => {
+        respond = (p) => (p.kind === 'worktree' && p.op === 'remove' ? { ok: true, kept: true } : okResponder(p));
+        const kept = await created();
+        await kept.cleanup();
+        expect(kept.isolation).toEqual({ state: 'worktree', branch: BRANCH, worktreeRel: WT_REL, outcome: 'kept' });
+        respond = okResponder;
+        const removed = await created();
+        await removed.cleanup();
+        expect(removed.isolation).toMatchObject({ state: 'worktree', outcome: 'removed' });
+    });
+
+    it('cleanup: remove 실패·예외면 outcome 을 채우지 않는다', async () => {
+        respond = (p) => (p.kind === 'worktree' && p.op === 'remove' ? { ok: false, error: 'x' } : okResponder(p));
+        const failed = await created();
+        await failed.cleanup();
+        expect(failed.isolation).toEqual({ state: 'worktree', branch: BRANCH, worktreeRel: WT_REL });
+        respond = (p) => { if (p.kind === 'worktree' && p.op === 'remove') throw new Error('boom'); return okResponder(p); };
+        const thrown = await created();
+        await thrown.cleanup();
+        expect(thrown.isolation).not.toHaveProperty('outcome');
     });
 });
