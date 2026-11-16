@@ -89,3 +89,7 @@
 15. `Preferences` 다시 쓰기 — TS 는 JS 수 표기(2^53 넘는 정수 반올림)·키 삽입 순서, Rust 는 정수 그대로·키 정렬(Chrome 은 둘 다 읽는다). `serde_json` 이 못 읽는 꼴(128단 넘게 겹친 값·범위 밖 수 `1e999`)은 깨진 파일로 본다 — TS `JSON.parse` 는 읽어 다른 키를 보존하고, Rust 는 두 키만 든 새 파일로 바꾼다(실제 Chrome `Preferences` 는 얕고 그런 수를 쓰지 않는다).
 16. CDP 응답 모양이 Chrome 과 다를 때(가짜 서버·고장난 Chrome 에서만) — `nodes`·`targetInfos` 가 문자열(JS 는 글자로 돌거나 `… is not a function`), `DOM.getBoxModel` 의 `content` 원소가 문자열(JS `+` 는 이어 붙인다), `Page.captureScreenshot` 의 `data` 가 문자열이 아님. Rust 는 값이 없거나 `null` 일 때의 V8 `TypeError` 문구만 같게 내고(`browser-run` 의 `snapshot-no-nodes`·`snapshot-null-node`·`smartClick-no-model`·`smartFill-no-object` 가 고정), 그 밖의 꼴은 실패 문구·`null` 좌표가 다르다(더 엄격 — 실패로 끝난다).
 17. 액션 결과의 `dialogs` — TS 는 탭의 배열을 그대로 달아(`r.dialogs = tab.dialogs`) 액션이 끝난 뒤(다음 액션의 초기화 전·마지막 액션이면 `finalUrl` 읽기 중) 뜬 확인창도 그 결과에 덧붙고, Rust 는 결과를 만들 때 꺼내(`mem::take`) 뒤에 뜬 것은 기록에서 빠진다(확인창 처리는 같다 — 시간에 달린 좁은 경우).
+
+## 알려진 동작 (코드로 막지 않음)
+
+- 전용 프로필 Chrome 은 기동 뒤 Chrome 자체의 구성 요소와 모델(피싱 탐지·언어 감지 등)을 Google 에서 받는다. 끄는 것으로 확인한 인자(Chrome 157 기준, `--disable-features=OptimizationHints`)는 피싱 탐지 모델까지 꺼서 넣지 않는다(2026-11-16 결정). 구성 요소 갱신(인증서 폐기 목록 등)을 끄는 `--disable-component-update` 도 같은 이유로 넣지 않는다 — 이 프로필에서 Chrome 이 외부로 아무것도 받지 않는다는 보장은 없다.
