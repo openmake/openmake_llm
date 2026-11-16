@@ -5,6 +5,30 @@ pub const EXEC_TIMEOUT_MS: u64 = 120_000;
 /// exec 출력 버퍼 상한(bytes).
 pub const MAX_BUFFER: u64 = 1024 * 1024;
 
+/// exec 를 코어가 끊은 사유 — 결과 stderr 끝에 붙일 문구의 종류(설계 2026-11-16 D1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecStop {
+    /// 시간 제한을 넘어 직접 자식을 끊었다.
+    TimedOut,
+    /// 출력이 [`MAX_BUFFER`] 를 넘어 끊었다.
+    Overflow,
+}
+
+/// 중단 사유 문구 — TS `execStopNotice` 와 같은 글자(fixture `constants.json` `execStopNotice`). 초는 쓰인 시간 제한을
+/// 1000 으로 나눠 올림한 값(최소 1), 상한은 [`MAX_BUFFER`] 의 MB.
+pub fn exec_stop_notice(kind: ExecStop, timeout_ms: u64) -> String {
+    match kind {
+        ExecStop::TimedOut => format!(
+            "[명령이 시간 제한({}초)을 넘어 중단됐습니다 — 끝나지 않거나 오래 걸리는 명령은 범위를 줄이거나 나눠서 실행하세요]",
+            timeout_ms.div_ceil(1000).max(1)
+        ),
+        ExecStop::Overflow => format!(
+            "[출력이 상한({}MB)을 넘어 중단됐습니다 — head·grep 등으로 출력을 줄여 다시 실행하세요]",
+            MAX_BUFFER / (1024 * 1024)
+        ),
+    }
+}
+
 pub const SANDBOX_BIN: &str = "/usr/bin/sandbox-exec";
 
 /// 워크스페이스 밖이지만 쓰기를 열어야 하는 툴 캐시 — 없으면 npm/pip/cargo 계열이 깨진다.

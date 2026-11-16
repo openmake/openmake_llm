@@ -156,8 +156,10 @@ export interface BridgeResult {
     branch?: string;
     /** worktree remove 결과 — 변경분이 남아 보존했으면 true. */
     kept?: boolean;
-    /** folders 결과 — 열거 상한 초과로 목록이 절단됐으면 true. */
+    /** folders 결과 — 열거 상한 초과로 목록이 절단됐으면 true. exec 결과 — 기기가 출력 상한으로 자식을 끊었으면 true. */
     truncated?: boolean;
+    /** exec 결과 — 기기가 시간 제한으로 자식을 끊었으면 true(옛 기기는 싣지 않는다). */
+    timedOut?: boolean;
     /** lsp_diagnostics 결과 — 빈 배열은 "검사했고 문제 없음". */
     diagnostics?: BridgeDiagnostic[];
     /** 어떤 검사기가 돌았는지 — 'none' 이면 지원 도구가 없어 검사하지 않음(진단 0건과 구분). */
