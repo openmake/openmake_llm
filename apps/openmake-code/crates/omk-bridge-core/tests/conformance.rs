@@ -424,6 +424,29 @@ fn constants() {
     );
 }
 
+/// exec 중단 사유 문구 — 종류·시간 제한(ms) → 글자(설계 2026-11-16 §8 F4-3). TS 러너가 같은 표를 본다.
+#[test]
+fn constants_exec_stop_notice() {
+    use omk_bridge_core::constants::{ExecStop, exec_stop_notice};
+    let doc = load("constants");
+    let cases = doc["execStopNotice"].as_array().unwrap();
+    assert!(!cases.is_empty(), "constants/execStopNotice: 사례 0개");
+    for c in cases {
+        let ctx = format!("constants/execStopNotice/{}", c["id"]);
+        let kind = match c["input"]["kind"].as_str() {
+            Some("timeout") => ExecStop::TimedOut,
+            Some("overflow") => ExecStop::Overflow,
+            k => panic!("{ctx}: 모르는 kind {k:?}"),
+        };
+        let ms = c["input"]["timeoutMs"].as_u64().unwrap();
+        assert_eq!(
+            exec_stop_notice(kind, ms),
+            c["expect"].as_str().unwrap(),
+            "{ctx}"
+        );
+    }
+}
+
 fn platform_of(v: &Value, ctx: &str) -> Platform {
     match v.as_str() {
         Some("darwin") => Platform::Darwin,

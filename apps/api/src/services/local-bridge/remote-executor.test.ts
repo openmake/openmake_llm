@@ -153,6 +153,37 @@ describe('RemoteExecutor 브라우저 기본값', () => {
     });
 });
 
+describe('RemoteExecutor exec — 기기 중단 표식(설계 2026-11-16 §8 F2·§9 N1)', () => {
+    afterEach(() => jest.restoreAllMocks());
+    const reply = (r: Record<string, unknown>) => jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue({ ok: true, stdout: '', stderr: '', exitCode: 1, ...r });
+
+    it('timedOut 표식을 ExecResult.timedOut 으로 옮긴다', async () => {
+        reply({ timedOut: true, stderr: '[명령이 시간 제한(120초)을 넘어 중단됐습니다 — …]' });
+        const r = await new RemoteExecutor('task-1', 'user-1').exec('sleep 130');
+        expect(r).toMatchObject({ exitCode: 1, timedOut: true, truncated: false });
+        expect(r.outputCapped).toBeUndefined();
+        expect(r.stderr).toContain('시간 제한');
+    });
+
+    it('stdout 이 짧아도 기기 truncated 표식이면 truncated·outputCapped', async () => {
+        reply({ truncated: true, stdout: 'short' });
+        const r = await new RemoteExecutor('task-1', 'user-1').exec('yes');
+        expect(r).toMatchObject({ exitCode: 1, timedOut: false, truncated: true, outputCapped: true });
+    });
+
+    it('표식이 없는 결과(옛 기기)는 지금과 같다 — 서버 상한 초과만 truncated, outputCapped 없음', async () => {
+        reply({ stdout: 'x'.repeat(LOCAL_BRIDGE.OUTPUT_CAP + 1) });
+        const long = await new RemoteExecutor('task-1', 'user-1').exec('cat big');
+        expect(long).toMatchObject({ timedOut: false, truncated: true });
+        expect(long.outputCapped).toBeUndefined();
+        jest.restoreAllMocks();
+        reply({ stdout: 'ok', exitCode: 0 });
+        const plain = await new RemoteExecutor('task-1', 'user-1').exec('echo ok');
+        expect(plain).toMatchObject({ timedOut: false, truncated: false });
+        expect(plain.outputCapped).toBeUndefined();
+    });
+});
+
 describe('RemoteExecutor 결과 불명 — 보낸 뒤 응답을 못 받은 쓰기·실행', () => {
     afterEach(() => jest.restoreAllMocks());
     const lost = (transport: 'timeout' | 'disconnected') => ({ ok: false, error: '원래 오류 문구', transport });

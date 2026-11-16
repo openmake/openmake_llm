@@ -34,7 +34,7 @@
 
 | 파일 | 대상 |
 |---|---|
-| `constants.json` | 환경변수 허용 목록·캐시/비밀 경로·요청 종류 등 상수 값 |
+| `constants.json` | `values`(환경변수 허용 목록·캐시/비밀 경로·요청 종류 등 상수 값) · `execStopNotice`(exec 중단 사유 문구 — 종류·시간 제한 ms → 글자) |
 | `denylist.json` | `rules`(규칙 표) · `normalize`(차단 전 정리) · `cases`(판정) |
 | `exec-env.json` | exec 자식 환경 조립. 결과는 순서 없는 맵으로 비교한다 |
 | `platform.json` | 셸 호출·PATH 구분자·폴더 이름·일괄 승인 가능 여부 |
@@ -100,6 +100,7 @@ Rust 는 차단 패턴을 ECMAScript 정규식 크레이트 `regress` 로 컴파
 - exec 출력 상한의 단위: 둘 다 바이트로 세지만 TS 는 마지막 조각을 "남은 바이트 수만큼의 글자"로 잘라 여러 바이트 글자가 섞이면 길이가 파이프 조각 크기에 따라 달라진다. Rust 는 1,048,576 바이트 이하의 가장 긴 UTF-8 글자 경계까지 남긴다(D-32). ASCII 는 같아 fixture 는 ASCII 만 담는다.
 - 환경·홈·플랫폼: TS 는 실행할 때마다 `process.env`·`os.homedir()` 를 읽고, Rust 는 호스트가 코어를 만들 때 준 사본을 쓴다(D-33). 헬퍼는 실행 중에 자기 환경을 바꾸지 않아 관찰되지 않는다.
 - `prepare`·PATH 탐지·git 탐지(신뢰 판정 포함): TS 는 동기(`execFileSync`·`fs.*Sync`)라 최대 5초씩 프로세스 전체가 멈춘다. Rust 는 판정의 FS 를 관문 안에서 보고(막히면 git 없음), `core.worktree` 조회 git 을 언제나 한 번 더 띄운다(TS 는 서브모듈 배치를 볼 때만 — 결과는 같다). Rust 는 비동기라 그 연결만 기다린다. 로그인 셸·mise 의 stderr 는 두 구현 모두 버린다(D-35, TS 는 설계 2026-11-14 D-6 보완). 연결의 `prepare` 는 접속 단계의 맨 앞(핸드셰이크 시간 제한 밖, 소켓을 만들기 전)에서 돌아 그동안에도 해제·채널 닫힘을 바로 처리하고, 헤더 실패·잘못된 주소처럼 소켓을 만들지 않는 연결에서는 돌지 않는다(TS 는 `connect()` 첫 줄에서 언제나 부른다 — 소켓이 없어 서버가 볼 수 없는 차이).
+- exec 중단 사유(설계 2026-11-16 D1·§8 F2): 코어가 끊은 결과는 stderr 끝에 사유 한 줄(`constants.json` `execStopNotice` — 두 러너가 같은 표를 본다)과 표식(시간 초과 `timedOut: true`, 출력 상한 `truncated: true`)을 싣는다. 직접 자식의 종료 코드가 있는 시간 초과·신호·띄우기 실패는 붙이지 않는다. TS 판정 순서는 상한 먼저(상한도 `killed`). 차이: 직접 자식이 SIGTERM 을 잡고 코드로 끝나면 TS 는 그 코드·문구 없음, Rust 는 1·문구 있음(SIGKILL — 위 줄의 TERM 차이와 같은 뿌리). Windows/TS 는 직접 자식만 끝내 손자가 남을 수 있다 — 문구는 "중단됐습니다"(끝냈다고 하지 않는다). 시간에 기대 TS 는 `exec-stop-notice.test.ts`(시간 제한을 줄인 실제 자식, posix 전용 — cmd.exe 에 `sleep`·`head` 가 없다), Rust 는 `tests/exec_core.rs` 가 본다. stdout 상한 사례는 `exec-gate/results` 에서 두 러너가 함께 본다.
 - worktree 의 파일 작업이 막힌 볼륨에서 멈출 때: TS 는 동기 호출이라 응답하지 못하고, Rust 는 `worktree 시간 초과 (15s) — …` 로 끝난다(D-36).
 - git 출력의 오류 꼬리(`worktree 생성 실패: `·`diff 실패: `)를 UTF-16 단위로 자를 때 대리 쌍 한가운데면 TS 는 짝 없는 반쪽을 남기고 Rust 는 그 글자를 뺀다.
 - 샌드박스 프로파일은 파일로 쓰지 않는다 — 코어마다 텍스트를 들고 `sandbox-exec -p` 로 넘긴다(두 구현 같다, 리뷰 F1). 호스트가 주는 프로파일 폴더 옵션은 남아 있지만 쓰지 않는다.

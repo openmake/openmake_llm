@@ -82,6 +82,10 @@ describe('편집 후 문법 검사', () => {
         expect(await checkEditSyntax(fakeExecutor({ 'a.js': 'x' }, () => ({ ...res(1, 'x'), timedOut: true })).sandbox, 'a.js')).toBeNull();
     });
 
+    it('기기가 출력 상한으로 끊은 결과(outputCapped)의 종료 코드 1 은 문법 오류로 보지 않는다', async () => {
+        expect(await checkEditSyntax(fakeExecutor({ 'a.js': 'x' }, () => ({ ...res(1, 'x'), truncated: true, outputCapped: true })).sandbox, 'a.js')).toBeNull();
+    });
+
     it('검사가 던져도 null 이다(fail-open)', async () => {
         const { sandbox } = fakeExecutor({ 'a.js': 'x' }, () => { throw new Error('docker down'); });
         expect(await checkEditSyntax(sandbox, 'a.js')).toBeNull();

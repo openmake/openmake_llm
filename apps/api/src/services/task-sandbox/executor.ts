@@ -25,6 +25,11 @@ export interface ExecResult {
     exitCode: number;
     truncated: boolean;
     timedOut: boolean;
+    /**
+     * 기기가 출력 상한으로 자식을 끊었다(로컬 브리지) — 이때 종료 코드 1 은 명령의 코드가 아니다(설계 2026-11-16 §9 N1).
+     * 샌드박스 실행기의 `truncated`(출력만 자르고 코드는 진짜)와 다르다.
+     */
+    outputCapped?: boolean;
     durationMs: number;
     /** 마지막 파이프라인의 앞 단계별 종료 코드 — 실행기가 받아 왔을 때만 있다(Docker 샌드박스, pipe-status). */
     pipeStages?: Array<{ index: number; command: string; exitCode: number }>;

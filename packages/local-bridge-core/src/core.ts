@@ -16,7 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import {
-    BRIDGE_KINDS, BROWSER_KIND, BROWSER_UPLOAD_CAPABILITY, DIAG_MAX_TOTAL, EXEC_TIMEOUT_MS, FOLDERS_MAX_ENTRIES, FS_OP_TIMEOUT_MS, LIST_ALL_MAX, MAX_BUFFER,
+    BRIDGE_KINDS, BROWSER_KIND, BROWSER_UPLOAD_CAPABILITY, DIAG_MAX_TOTAL, EXEC_TIMEOUT_MS, execStopNotice, FOLDERS_MAX_ENTRIES, FS_OP_TIMEOUT_MS, LIST_ALL_MAX, MAX_BUFFER,
     EXEC_NO_COMMAND_ERROR, SANDBOX_BIN, SANDBOX_ENABLED, SANDBOX_PROFILE_MISSING_ERROR,
 } from './constants';
 import { collectDiagnostics } from './diagnostics';
@@ -206,7 +206,21 @@ export class BridgeCore {
                     env: buildExecEnv(process.env, this.execPathCache),
                 };
                 const cb = (err: import('child_process').ExecFileException | null, stdout: string, stderr: string): void => {
-                    done({ ok: true, stdout: String(stdout), stderr: String(stderr), exitCode: err ? (typeof err.code === 'number' ? err.code : 1) : 0 });
+                    const exitCode = err ? (typeof err.code === 'number' ? err.code : 1) : 0;
+                    // 코어가 끊었으면 사유를 stderr 끝에 붙이고 표식을 싣는다(설계 2026-11-16 D1·§8 F2) — 상한을 먼저 본다(상한도 killed).
+                    // 직접 자식이 코드로 끝난 시간 초과는 붙이지 않는다(Rust `TimedOut{exited:Some}` 과 같다). stderr 는 상한 + 문구 길이까지
+                    // 커질 수 있다. 서버가 stderr 를 앞에서 자르면 문구는 잘려도 표식(`TIMEOUT`·`TRUNCATED`)은 남는다.
+                    const stop = (err?.code as unknown) === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' ? 'overflow' as const
+                        : err?.killed === true && typeof err.code !== 'number' ? 'timeout' as const : null;
+                    let errText = String(stderr);
+                    if (stop) {
+                        if (errText !== '' && !errText.endsWith('\n')) errText += '\n';
+                        errText += execStopNotice(stop, EXEC_TIMEOUT_MS);
+                    }
+                    done({
+                        ok: true, stdout: String(stdout), stderr: errText, exitCode,
+                        ...(stop === 'timeout' ? { timedOut: true } : {}), ...(stop === 'overflow' ? { truncated: true } : {}),
+                    });
                 };
                 if (SANDBOX_ENABLED && this.sandboxProfile) {
                     execFile(SANDBOX_BIN, ['-p', this.sandboxProfile, '/bin/bash', '-c', command], opts, cb);

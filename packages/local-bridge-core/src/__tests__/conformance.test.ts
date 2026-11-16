@@ -129,6 +129,11 @@ describe('constants', () => {
     it.each(Object.entries(doc.values))('%s 가 TS export 와 같다', (name, value) => {
         expect((constants as Record<string, unknown>)[name]).toEqual(value);
     });
+    // exec 중단 사유 문구 — 종류·시간 제한(ms) → 글자(설계 2026-11-16 §8 F4-3). Rust 러너가 같은 표를 본다.
+    const notices = (doc as unknown as { execStopNotice: Case<{ kind: 'timeout' | 'overflow'; timeoutMs: number }, string>[] }).execStopNotice;
+    it.each(notices.map((c) => [c.id, c] as const))('execStopNotice/%s', (_id, c) => {
+        expect(constants.execStopNotice(c.input.kind, c.input.timeoutMs)).toBe(c.expect);
+    });
 });
 
 describe('denylist', () => {
