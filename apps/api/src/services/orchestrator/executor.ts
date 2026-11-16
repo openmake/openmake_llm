@@ -52,6 +52,7 @@ class Gate {
     /**
      * 대기열에서도 취소된다(항목 제거 + reject). 깨어나면 이벤트 루프를 한 번 양보한 뒤 aborted 재검사 —
      * 같은 시각에 만료되는 대기자가 앞 작업이 놓은 자리로 handler 를 시작했다 곧바로 끊기지 않게.
+     * 만료 시각이 ms 단위로 어긋나면 handler 를 시작한 뒤 끊길 수 있다(그때 사유는 `timeout`).
      * 깨어난 대기자가 중단으로 빠지면 받은 차례를 다음 대기자에게 넘긴다(뒤 대기자가 자기 시간 제한까지 묶이지 않게).
      */
     async acquire(signal?: AbortSignal): Promise<() => void> {

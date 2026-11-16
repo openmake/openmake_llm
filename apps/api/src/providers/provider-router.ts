@@ -191,6 +191,7 @@ export class ProviderRouter {
      * @throws {ProviderError} INVALID_MODEL_ID — 형식 오류('provider:model' 미준수)
      * @throws {ProviderError} GUEST_NOT_ALLOWED — 외부 모델 요청 + 비인증 사용자
      * @throws {ProviderError} MISSING_API_KEY — 사용자가 해당 provider 키 미등록
+     * @throws {ProviderError} API_KEY_DISABLED — 키가 꺼져 있음
      * @throws {ProviderError} NOT_SUPPORTED — externalKeysRepo 미주입 또는 Phase 4 미활성
      */
     async resolve(
