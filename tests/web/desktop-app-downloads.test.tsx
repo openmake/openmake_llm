@@ -156,7 +156,7 @@ test('404: 게시본 없음 문구만, 받기 링크·설치 안내·다시 시�
 });
 
 // TanStack v5 는 데이터 없이 재요청하면 상태를 pending 으로 되돌린다 — 재요청 중엔 다시 시도 대신 로딩이 보인다
-test('500: 오류 문구와 다시 시도 — 재요청 중엔 로딩만 보이고(연타해도 요청 2회), 응답이 오면 목록이 보인다', async () => {
+test('500: 오류 문구와 다시 시도 — 재요청 중엔 로딩만 보이고(다시 시도 버튼 없음, 요청 2회), 응답이 오면 목록이 보인다', async () => {
   let release!: () => void;
   const pending = new Promise<void>((r) => { release = r; });
   await withPage([fail(500), () => pending.then(ok(both))], async ({ text, downloads, button, click, requests }) => {
@@ -167,8 +167,6 @@ test('500: 오류 문구와 다시 시도 — 재요청 중엔 로딩만 보이�
     await click(retry);
     assert.ok(text().includes(messages.desktopApp.loading));
     assert.equal(button(messages.desktopApp.retry), undefined);
-    await click(retry);
-    await click(retry);
     assert.equal(requests(), 2);
     await act(async () => { release(); });
     for (let i = 0; i < 5; i += 1) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
@@ -192,6 +190,17 @@ test('목록을 본 뒤 재조회가 500 이면 오류 화면으로 바꾸지 �
     assert.equal(requests(), 2);
     assert.equal(downloads().length, 2);
     assert.ok(!text().includes(messages.desktopApp.loadFailed));
+  });
+});
+
+test('목록을 본 뒤 재조회가 404 면 받기 링크를 지우고 게시본 없음 문구만 보인다', async () => {
+  await withPage([ok(both), fail(404)], async ({ text, downloads, refetchAll, requests }) => {
+    assert.equal(downloads().length, 2);
+    await refetchAll();
+    assert.equal(requests(), 2);
+    assert.equal(downloads().length, 0);
+    assert.ok(text().includes(messages.desktopApp.notPublished));
+    assert.ok(!text().includes(messages.desktopApp.install.title));
   });
 });
 

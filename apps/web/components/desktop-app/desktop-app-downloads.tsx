@@ -21,7 +21,7 @@ type OsKey = (typeof OS_KEYS)[number];
 export function DesktopAppDownloads() {
   const t = useTranslations("desktopApp");
   const [copied, setCopied] = useState<OsKey | null>(null);
-  const { data, error, isPending, refetch, isFetching } = useQuery({
+  const { data, error, isPending, refetch } = useQuery({
     queryKey: ["desktop-app", "latest"],
     queryFn: () => ApiClient.get<ApiSuccess<DesktopLatestPayload>>("/api/desktop/latest").then((r) => r.data),
     retry: false,
@@ -55,7 +55,7 @@ export function DesktopAppDownloads() {
       <div className="flex flex-wrap items-center gap-2 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
         <AlertTriangle className="h-4 w-4 shrink-0" />
         <span>{t("loadFailed")}</span>
-        <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>
+        <Button variant="outline" size="sm" onClick={() => void refetch()}>
           <RotateCw className="h-3.5 w-3.5" />
           {t("retry")}
         </Button>
