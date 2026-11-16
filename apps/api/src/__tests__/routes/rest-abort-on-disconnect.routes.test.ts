@@ -36,10 +36,17 @@ const lastHandler = (path: string) => {
     return layer.route.stack[layer.route.stack.length - 1].handle;
 };
 
+// 실소켓 왕복이 부하(전체 검사 중 swap)로 늦어질 수 있다 — 조건 대기(8초) 두 번을 덮도록 전역(10초)보다 길게.
+jest.setTimeout(30000);
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const until = async (cond: () => boolean, ms = 1000) => {
+// 시간이 지나면 던진다 — 조용히 돌아오면 뒤의 단언이 엉뚱한 이유로 실패해 원인이 가려진다.
+const until = async (cond: () => boolean, ms = 8000) => {
     const end = Date.now() + ms;
-    while (!cond() && Date.now() < end) await sleep(10);
+    while (!cond()) {
+        if (Date.now() >= end) throw new Error('until: 조건 대기 시간 초과');
+        await sleep(10);
+    }
 };
 
 describe('REST 채팅 — 클라이언트 끊김 시 processChat abortSignal', () => {
@@ -98,13 +105,17 @@ describe('REST 채팅 — 클라이언트 끊김 시 processChat abortSignal', (
     /** processChat 이 불릴 때까지 기다렸다가 클라이언트를 끊고, 신호가 abort 될 때까지 기다린다. */
     const disconnectMidway = async (path: string, body: Record<string, unknown>) => {
         const req = post(path, body);
-        await until(() => received !== undefined);
-        expect(received).toBeDefined();
-        await sleep(50); // 본문 소비 직후의 req 'close' 가 지나갈 시간
-        expect(received?.abortSignal?.aborted).toBe(false);
-        req.destroy();
-        await until(() => received?.abortSignal?.aborted === true);
-        await sleep(30); // 라우트의 catch 가 돌 시간
+        try {
+            await until(() => received !== undefined);
+            expect(received).toBeDefined();
+            await sleep(50); // 본문 소비 직후의 req 'close' 가 지나갈 시간
+            expect(received?.abortSignal?.aborted).toBe(false);
+            req.destroy();
+            await until(() => received?.abortSignal?.aborted === true);
+            await sleep(30); // 라우트의 catch 가 돌 시간
+        } finally {
+            req.destroy(); // until 이 시간 초과로 던져도 요청을 닫는다 (중복 호출은 무해)
+        }
     };
 
     it('POST /api/chat/stream — 끊기면 aborted', async () => {

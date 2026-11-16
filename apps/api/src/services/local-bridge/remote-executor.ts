@@ -138,8 +138,9 @@ export class RemoteExecutor implements TaskExecutor {
     /** worktree 격리 상태(200) — create 가 정하고 cleanup 이 종료 결과(outcome)를 채운다. create 전·브랜치 없는 격리는 null. */
     get isolation(): AgentTaskIsolation | null { return this.isolationState; }
 
-    private async req(payload: BridgeRequestPayload, timeoutMs?: number): Promise<BridgeResult> {
-        const withFolder = this.folderRel ? { ...payload, folder: this.folderRel } : payload;
+    /** folder 는 요청별 실행 폴더(연결 루트 기준) — 기본은 폴더 선택(folderRel), browser 만 browserFolder() 를 넘긴다. */
+    private async req(payload: BridgeRequestPayload, timeoutMs?: number, folder = this.folderRel): Promise<BridgeResult> {
+        const withFolder = folder ? { ...payload, folder } : payload;
         const r = await getLocalBridgeRegistry().request(this.userId, withFolder, timeoutMs, this.deviceId);
         this.noteDeviceLoss(isUnknownOutcomeRequest(payload), r);
         // 쓰기·실행 요청을 보낸 뒤 응답을 못 받았다 — 기기에서 실행됐을 수 있다. 일반 오류로 돌려주면 모델이 같은 호출을
@@ -304,6 +305,16 @@ export class RemoteExecutor implements TaskExecutor {
         return planBrowserActions(actions, this.lastBrowserUrl, browserSite);
     }
 
+    /**
+     * browser 요청의 실행 폴더 — 기기는 이 폴더를 다운로드·스크린샷 저장·업로드 파일 해석의 기준으로 쓴다.
+     * 격리 중이면 에이전트가 보는 /workspace(worktree)와 맞춘다. worktreeRel 은 기기의 base(folderRel 적용 뒤)
+     * 기준이라 루트 기준으로는 folderRel/worktreeRel 이다. exec·파일 도구는 경로 쪽(cd·scoped)으로 옮기므로 그대로 둔다.
+     */
+    private browserFolder(): string | undefined {
+        if (!this.worktreeRel) return this.folderRel;
+        return this.folderRel ? `${this.folderRel}/${this.worktreeRel}` : this.worktreeRel;
+    }
+
     async runBrowserSpec(spec: { actions: unknown[]; approvedHosts: string[]; approvedUploads?: BrowserUploadApproval[] }): Promise<ExecResult> {
         const { browserSite } = await resolveEffectivePolicy(this.userId);
         const r = await this.req(
@@ -312,6 +323,7 @@ export class RemoteExecutor implements TaskExecutor {
                 ...(spec.approvedUploads?.length ? { approvedUploads: spec.approvedUploads } : {}),
             },
             LOCAL_BRIDGE.BROWSER_TIMEOUT_MS,
+            this.browserFolder(),
         );
         // 사용자가 브라우저를 넘겨받아 거절됐다 — 턴 실행기가 이 신호를 보고 작업을 주차한다(결과 불명 신호가 우선).
         if (LOCAL_BRIDGE.TAKEOVER_PARK_ENABLED && r.userControl === true && this.deviceLoss !== 'unknown') this.deviceLoss = 'browser_takeover';
