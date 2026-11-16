@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ChevronRight, Clock, CircleCheck, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ThinkingMarkdown, splitThinkingParagraphs } from "@/components/chat/thinking-markdown";
 
 /**
  * 생각 과정 타임라인 (클로드 웹식) — 접힌 상태는 요약 헤드라인 한 줄,
@@ -41,10 +42,7 @@ export function ThinkingTimeline({
     }
   }, [reasoning, thinkingActive, open]);
 
-  const paragraphs = reasoning
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean);
+  const paragraphs = splitThinkingParagraphs(reasoning);
 
   const headline = summary ?? (thinkingActive ? t("thinking") : t("fallbackLabel"));
 
@@ -94,7 +92,7 @@ export function ThinkingTimeline({
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                     : <Clock className="h-3.5 w-3.5" aria-hidden />}
                 </span>
-                <p className="min-w-0 whitespace-pre-wrap leading-relaxed text-muted">{p}</p>
+                <ThinkingMarkdown text={p} />
               </div>
             );
           })}

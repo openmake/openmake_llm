@@ -39,6 +39,13 @@ it('같은 레벨은 병렬, 다음 레벨은 앞 결과를 본다', async () =>
     expect(s.ok).toBe(3); expect(s.failed).toBe(0);
 });
 
+it('실행기가 돌려준 구조화 출처(sources)는 계획 실행 뒤 TaskResult 에 남는다', async () => {
+    const sources = [{ title: 't', url: 'https://e.x', snippet: 's' }];
+    behaviors.a = async () => ({ ok: true, text: 'A', media: [], sources });
+    const s = await executePlan(plan({ complexity: 'multi', tasks: [{ id: 'a', capability: 'web.search' }] }), ctx());
+    expect(s.results[0].sources).toEqual(sources);
+});
+
 it('실패한 부모의 자식은 skipped(호출 없음), 독립 작업은 계속', async () => {
     behaviors.p = async () => { throw new Error('boom'); };
     const p = plan({ complexity: 'multi', tasks: [
