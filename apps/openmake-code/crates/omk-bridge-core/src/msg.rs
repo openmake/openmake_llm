@@ -254,7 +254,10 @@ pub struct BridgeResult {
     pub content: Option<String>,
     pub entries: Option<Vec<String>>,
     pub error: Option<String>,
+    /// folders·lsp_diagnostics: 상한에서 잘랐다. exec: 출력 상한으로 자식을 끊었다(종료 코드 1 은 명령의 코드가 아니다).
     pub truncated: Option<bool>,
+    /// exec — 시간 제한으로 직접 자식을 끊었다(`"timedOut"`). 아니면 키가 없다.
+    pub timed_out: Option<bool>,
     pub rejected: Option<Rejected>,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
@@ -300,6 +303,9 @@ impl BridgeResult {
         }
         if let Some(t) = self.truncated {
             o.insert("truncated".to_owned(), Value::Bool(t));
+        }
+        if let Some(t) = self.timed_out {
+            o.insert("timedOut".to_owned(), Value::Bool(t));
         }
         if let Some(r) = self.rejected {
             let text = match r {

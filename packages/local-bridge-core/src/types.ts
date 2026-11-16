@@ -79,7 +79,10 @@ export interface BridgeResult {
     worktreeRel?: string;
     branch?: string;
     kept?: boolean;
+    /** folders·lsp_diagnostics: 상한에서 잘랐다. exec: 출력 상한으로 자식을 끊었다(종료 코드 1 은 명령의 코드가 아니다). */
     truncated?: boolean;
+    /** exec — 시간 제한으로 직접 자식을 끊었다. 아니면 키가 없다(설계 2026-11-16 §8 F2). */
+    timedOut?: boolean;
     /** lsp_diagnostics 결과. 빈 배열 = 진단 없음(도구가 돌았고 문제가 없었다). */
     diagnostics?: BridgeDiagnostic[];
     /** 어떤 검사기가 돌았는지 — 'none' 이면 지원 도구가 없어 검사하지 않았다(진단 없음과 구분). */

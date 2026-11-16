@@ -7,7 +7,7 @@ mod support;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 
-use omk_bridge_core::constants::EXEC_TIMEOUT_MS;
+use omk_bridge_core::constants::{EXEC_TIMEOUT_MS, ExecStop, exec_stop_notice};
 use omk_bridge_core::core::{BridgeCore, BridgeCoreOptions, TaskEndHook};
 use omk_bridge_core::exec::{ConfirmAnswer, ConfirmFn, ExecHost};
 use omk_bridge_core::msg::BridgeMsg;
@@ -436,27 +436,100 @@ fn post_checkout_hook_does_not_run() {
 /// 시간 초과 때 직접 자식이 이미 끝났으면(뒤에 남긴 프로세스가 파이프를 쥠) 그 종료 코드와 그때까지의 출력 — Node
 /// `execFile` 실측(24.22.2, timeout 400ms): `sleep 3 & echo fg` → 0·`fg\n`, `…; exit 3` → 3, `…; kill -9 $$` → 1.
 /// 직접 자식이 살아 있는 시간 초과는 1.
+/// 중단 사유(설계 2026-11-16 D1·§8 F4): 직접 자식의 종료 코드가 있으면(1·2줄) 문구·`timedOut` 없음, 없으면(3·4줄 —
+/// 신호로 끝났거나 아직 살아 있음) stderr 끝에 시간 제한 문구와 `timedOut: true`.
 #[test]
 fn exec_timeout_after_child_exited_keeps_exit_code() {
     let tmp = TmpDir::new();
     let mut h = host(&tmp, answer(ConfirmAnswer::Yes));
     h.exec_timeout_ms = 400;
     let c = bare(&tmp.path, None).with_exec_host(h);
-    for (cmd, stdout, code) in [
-        ("sleep 3 & echo fg", "fg\n", 0),
-        ("sleep 3 & echo fg; exit 3", "fg\n", 3),
-        ("sleep 3 & echo fg; kill -9 $$", "fg\n", 1),
-        ("echo p; sleep 3", "p\n", 1),
+    let notice = exec_stop_notice(ExecStop::TimedOut, 400);
+    for (cmd, stdout, code, stopped) in [
+        ("sleep 3 & echo fg", "fg\n", 0, false),
+        ("sleep 3 & echo fg; exit 3", "fg\n", 3, false),
+        ("sleep 3 & echo fg; kill -9 $$", "fg\n", 1, true),
+        ("echo p; sleep 3", "p\n", 1, true),
     ] {
         let t = std::time::Instant::now();
         let r = send(&c, json!({"kind": "exec", "command": cmd}));
-        assert_eq!(
-            r,
-            json!({"ok": true, "stdout": stdout, "stderr": "", "exitCode": code}),
-            "{cmd}"
-        );
+        let want = if stopped {
+            json!({"ok": true, "stdout": stdout, "stderr": notice, "exitCode": code, "timedOut": true})
+        } else {
+            json!({"ok": true, "stdout": stdout, "stderr": "", "exitCode": code})
+        };
+        assert_eq!(r, want, "{cmd}");
         assert!(t.elapsed() < std::time::Duration::from_secs(2), "{cmd}");
     }
+}
+
+/// 시간 초과 문구는 기존 stderr 뒤에 — 줄바꿈 없이 끝났으면 줄바꿈 하나를 먼저 넣는다(줄바꿈으로 끝났으면 그대로 잇는다).
+#[test]
+fn exec_timeout_notice_follows_stderr() {
+    let tmp = TmpDir::new();
+    let mut h = host(&tmp, answer(ConfirmAnswer::Yes));
+    h.exec_timeout_ms = 400;
+    let c = bare(&tmp.path, None).with_exec_host(h);
+    let notice = exec_stop_notice(ExecStop::TimedOut, 400);
+    for (cmd, stderr) in [
+        ("echo -n err >&2; sleep 3", format!("err\n{notice}")),
+        ("echo err >&2; sleep 3", format!("err\n{notice}")),
+    ] {
+        let r = send(&c, json!({"kind": "exec", "command": cmd}));
+        assert_eq!(
+            r,
+            json!({"ok": true, "stdout": "", "stderr": stderr, "exitCode": 1, "timedOut": true}),
+            "{cmd}"
+        );
+    }
+}
+
+/// 출력 상한 초과 — 자른 뒤 stderr 끝에 상한 문구, `truncated: true`, 종료 코드 1. 정상·0 아닌 종료·차단·거부에는 없다.
+#[test]
+fn exec_overflow_notice_and_plain_results() {
+    let tmp = TmpDir::new();
+    let c = bare(&tmp.path, None).with_exec_host(host(&tmp, answer(ConfirmAnswer::Yes)));
+    let r = send(
+        &c,
+        json!({"kind": "exec", "command": "head -c 1048577 /dev/zero | tr '\\0' a"}),
+    );
+    assert_eq!(r["stdout"].as_str().map(str::len), Some(1_048_576));
+    assert_eq!(
+        (
+            &r["ok"],
+            &r["stderr"],
+            &r["exitCode"],
+            &r["truncated"],
+            r.get("timedOut")
+        ),
+        (
+            &json!(true),
+            &json!(exec_stop_notice(ExecStop::Overflow, EXEC_TIMEOUT_MS)),
+            &json!(1),
+            &json!(true),
+            None
+        ),
+        "{r}"
+    );
+    assert_eq!(
+        send(&c, json!({"kind": "exec", "command": "echo ok"})),
+        json!({"ok": true, "stdout": "ok\n", "stderr": "", "exitCode": 0})
+    );
+    assert_eq!(
+        send(&c, json!({"kind": "exec", "command": "echo e >&2; exit 2"})),
+        json!({"ok": true, "stdout": "", "stderr": "e\n", "exitCode": 2})
+    );
+    let r = send(&c, json!({"kind": "exec", "command": "sudo ls"}));
+    assert_eq!(
+        (r.get("timedOut"), r.get("truncated"), r.get("stderr")),
+        (None, None, None),
+        "{r}"
+    );
+    let no = bare(&tmp.path, None).with_exec_host(host(&tmp, answer(ConfirmAnswer::No)));
+    assert_eq!(
+        send(&no, json!({"kind": "exec", "command": "echo x"})),
+        json!({"ok": false, "error": REJECTED, "exitCode": 126})
+    );
 }
 
 /// worktree 의 git 도 `execFile` — git 이 파이프를 쥔 데몬을 남겨 시간 초과가 되어도 git 이 0 으로 끝났으면 성공(TS 그대로).
