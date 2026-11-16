@@ -368,6 +368,14 @@ export const ORCHESTRATOR = {
     SHADOW_ENABLED: process.env.ORCHESTRATOR_SHADOW_ENABLED !== 'false',
 } as const;
 
+/**
+ * 작업 실패 사유 `unreachable`(연결 자체 실패)로 보는 오류 코드 — fetch 오류의 `cause.code`(또는 자체 `code`).
+ * 요청을 보내기 전 연결 단계 코드만 둔다. ECONNRESET·UND_ERR_SOCKET 은 응답 도중에도 나므로 넣지 않는다.
+ */
+export const ORCHESTRATOR_CONNECT_FAILURE_CODES: ReadonlySet<string> = new Set([
+    'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT',
+]);
+
 /** /generated 미디어 보존 스윕 (사용자 결정: /generated 유지 + TTL 정리, reports/ 제외) */
 export const GENERATED_MEDIA_RETENTION = {
     TTL_MS: parseInt(process.env.GENERATED_MEDIA_TTL_MS || String(30 * 24 * 60 * 60 * 1000), 10),

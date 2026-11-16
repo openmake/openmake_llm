@@ -27,7 +27,7 @@ jest.mock('../../../config/external-providers', () => ({
 }));
 
 // ── BYOK 키 저장소 mock ──
-let keyRowResult: unknown = { isActive: true };
+let keyRowResult: unknown = { isActive: true, enabled: true };
 const getByUserAndProvider = jest.fn(async (..._a: unknown[]) => keyRowResult);
 jest.mock('../../../data/repositories/external-keys-repo', () => ({
     ExternalKeysRepository: class {
@@ -49,7 +49,7 @@ const localClientSentinel = { __local: true };
 
 beforeEach(() => {
     jest.clearAllMocks();
-    keyRowResult = { isActive: true };
+    keyRowResult = { isActive: true, enabled: true };
     resolveRoleClientForUser.mockResolvedValue({ providerId: 'local-llm', fullId: 'local-llm:x', source: 'default' });
     resolveAssignedModelClient.mockResolvedValue({ client: externalClientSentinel, fullId: 'bai:qwen3.8-flash' });
 });
@@ -96,12 +96,20 @@ describe('resolveModeExternalClient — 해석 우선순위', () => {
 });
 
 describe('resolveModeExternalClient — 오류 계약 (명시 외부 선택)', () => {
-    it('BYOK 키 미등록/비활성 → ProviderError(MISSING_API_KEY), 로컬 폴백 금지', async () => {
+    it('BYOK 키 미등록 → ProviderError(MISSING_API_KEY), 로컬 폴백 금지', async () => {
         keyRowResult = null;
         await expect(resolveModeExternalClient(makeResolved('bai', 'qwen3.8-flash'), 'u1', { label: 'Discussion' }))
             .rejects.toBeInstanceOf(ProviderError);
         await expect(resolveModeExternalClient(makeResolved('bai', 'qwen3.8-flash'), 'u1', { label: 'Discussion' }))
             .rejects.toMatchObject({ code: 'MISSING_API_KEY' });
+        expect(resolveAssignedModelClient).not.toHaveBeenCalled();
+    });
+
+    it('BYOK 키가 꺼져 있음 → ProviderError(API_KEY_DISABLED), 꺼진 키까지 조회한다', async () => {
+        keyRowResult = { isActive: true, enabled: false };
+        await expect(resolveModeExternalClient(makeResolved('bai', 'qwen3.8-flash'), 'u1', { label: 'Discussion' }))
+            .rejects.toMatchObject({ code: 'API_KEY_DISABLED' });
+        expect(getByUserAndProvider).toHaveBeenCalledWith('u1', 'bai', { includeDisabled: true });
         expect(resolveAssignedModelClient).not.toHaveBeenCalled();
     });
 
