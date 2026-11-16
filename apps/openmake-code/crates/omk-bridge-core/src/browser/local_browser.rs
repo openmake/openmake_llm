@@ -183,7 +183,7 @@ impl LocalBrowser {
         self.lock().user_control
     }
 
-    /// 제어권 전환. 넘겨받을 때는 실행 중인 요청도 멈춘다(다음 액션부터).
+    /// 제어권 전환. 넘겨받을 때는 실행 중인 요청도 멈춘다(진행 중인 대기를 끊고, 다음 액션부터 실행하지 않는다).
     pub fn set_user_control(&self, on: bool) {
         self.lock().user_control = on;
         if on {
@@ -196,7 +196,7 @@ impl LocalBrowser {
         self.env.upload_max_file_bytes
     }
 
-    /// 실행 중인 요청을 멈춘다(다음 액션부터 실행하지 않는다). 작업을 주면 그 작업만, 없으면 모두.
+    /// 실행 중인 요청을 멈춘다(진행 중인 대기를 끊고, 다음 액션부터 실행하지 않는다). 작업을 주면 그 작업만, 없으면 모두.
     pub fn request_stop(&self, task: Option<&str>) {
         self.scheduler.request_stop(task);
     }
