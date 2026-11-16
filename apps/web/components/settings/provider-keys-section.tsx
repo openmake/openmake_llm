@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
@@ -125,27 +125,36 @@ export function ProviderKeysSection() {
   >({});
   const [toggling, setToggling] = useState<Record<string, boolean>>({});
 
+  // 요청 순번 — 늦게 온 옛 응답이 새 응답을 덮지 않게 마지막 요청의 응답만 반영한다
+  const loadSeq = useRef(0);
+
   /** quiet: 표를 로딩 표시로 바꾸지 않고 목록만 갱신한다(토글 뒤 — 스위치 초점·aria-checked 유지). */
   const load = useCallback(async (opts?: { quiet?: boolean }) => {
+    const seq = ++loadSeq.current;
     if (!opts?.quiet) setLoading(true);
     setError(null);
     try {
       const res = await ApiClient.get<ApiSuccess<{ providers: ProviderEntry[] }>>(
         "/api/external-keys",
       );
+      if (seq !== loadSeq.current) return;
       setProviders(res?.data?.providers ?? []);
     } catch (e) {
-      // 비로그인/오류 — 목업 주입 금지(가짜 '활성' 키가 실제 등록으로 오인됨). 빈 목록 + 에러 표시.
+      if (seq !== loadSeq.current) return;
       setError(e instanceof Error ? e.message : t("loadError"));
-      setProviders([]);
+      // 비로그인/오류 — 목업 주입 금지(가짜 '활성' 키가 실제 등록으로 오인됨). 빈 목록 + 에러 표시.
+      // 조용한 다시 읽기(토글 뒤)의 실패는 목록을 유지한다 — 바뀐 행은 PATCH 응답으로 이미 갱신했다.
+      if (!opts?.quiet) setProviders([]);
     } finally {
-      if (!opts?.quiet) setLoading(false);
+      // 마지막 요청이 로딩 표시를 끝낸다(옛 요청이 늦게 끝나도 새 요청의 로딩을 끄지 않게)
+      if (seq === loadSeq.current) setLoading(false);
     }
     // 사용량 요약은 부가 정보 — 실패해도 키 목록 표시를 막지 않는다(fail-soft).
     try {
       const u = await ApiClient.get<ApiSuccess<UsageSummaryData>>(
         "/api/external-keys/usage/summary",
       );
+      if (seq !== loadSeq.current) return;
       const map: Record<string, ProviderUsage> = {};
       for (const row of u?.data?.totals_by_provider ?? []) {
         map[row.provider_id] = {
@@ -156,7 +165,7 @@ export function ProviderKeysSection() {
       setUsage(map);
       if (u?.data?.days) setUsageDays(u.data.days);
     } catch {
-      setUsage({});
+      if (seq === loadSeq.current) setUsage({});
     }
     // locale 변경(t) 시 목업 폴백 라벨 재생성
   }, [t]);
@@ -217,7 +226,17 @@ export function ProviderKeysSection() {
   async function handleToggle(providerId: string, enabled: boolean) {
     setToggling((v) => ({ ...v, [providerId]: true }));
     try {
-      await ApiClient.patch(`/api/external-keys/${providerId}`, { enabled });
+      const res = await ApiClient.patch<ApiSuccess<{ provider_id: string; enabled: boolean }>>(
+        `/api/external-keys/${providerId}`,
+        { enabled },
+      );
+      // PATCH 응답으로 그 행만 먼저 갱신 — 뒤의 조용한 다시 읽기가 실패해도 스위치가 서버 값을 보인다
+      const row = res?.data;
+      if (row) {
+        setProviders((ps) => ps.map((p) => (p.provider_id === row.provider_id && p.user_key
+          ? { ...p, user_key: { ...p.user_key, enabled: row.enabled } }
+          : p)));
+      }
       await load({ quiet: true });
       // 끄면 그 provider 모델이 목록에서 빠지고, 켜면 돌아온다 — 기본 모델 picker/컴포저 즉시 반영
       void queryClient.invalidateQueries({ queryKey: ["models"] });

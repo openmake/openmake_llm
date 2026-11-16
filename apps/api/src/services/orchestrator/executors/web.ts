@@ -19,7 +19,9 @@ export const webSearchExecutor: CapabilityExecutor = async (task, ctx) => {
     if (results.length === 0) {
         return { ok: true, text: ctx.lang === 'ko' ? `"${query}" 검색 결과 없음` : `No results for "${query}"`, media: [] };
     }
-    const lines = results.slice(0, MAX_RESULTS).map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${(r.snippet || '').replace(/\s+/g, ' ').slice(0, 300)}`);
+    const sources = results.slice(0, MAX_RESULTS).map((r) => ({ title: r.title, url: r.url, snippet: (r.snippet || '').replace(/\s+/g, ' ').slice(0, 300), ...(r.source ? { source: r.source } : {}) }));
+    const lines = sources.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`);
     const text = `${ctx.lang === 'ko' ? '검색어' : 'Query'}: ${query}\n${lines.join('\n')}`;
-    return { ok: true, text: text.slice(0, ORCHESTRATOR.RESULT_MAX_CHARS), media: [] };
+    // sources — 종합 블록이 턴 출처 번호를 매겨 싣는다(번호표 등록). text 는 다음 작업의 refs 입력이라 형식을 그대로 둔다
+    return { ok: true, text: text.slice(0, ORCHESTRATOR.RESULT_MAX_CHARS), media: [], sources };
 };

@@ -47,6 +47,15 @@ export interface TaskResult {
     error?: string;
     /** provider 가 돌려준 사용량 — 없으면 undefined(0 으로 간주하지 않는다). 비용은 provider 가 주지 않으면 unknown */
     usage?: TaskUsage;
+    /** web.search 의 구조화 출처(번호 없음) — 종합 블록을 만들 때 턴 출처 번호를 매긴다(buildResultBlock) */
+    sources?: TaskSource[];
+}
+
+export interface TaskSource {
+    title: string;
+    url: string;
+    snippet: string;
+    source?: string;
 }
 
 export interface TaskUsage {

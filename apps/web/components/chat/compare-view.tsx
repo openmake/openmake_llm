@@ -13,6 +13,7 @@ import { useTranslations } from "next-intl";
 import { Brain, RotateCcw, Send, Square } from "lucide-react";
 import { ModelPicker, type PickerModel } from "@/components/model-picker";
 import { Markdown } from "@/components/chat/markdown";
+import { ThinkingMarkdown } from "@/components/chat/thinking-markdown";
 import { fetchModels } from "@/lib/models-api";
 import { useAppStore } from "@/lib/store";
 import { useCompareLane, type CompareLane, type CompareMessage } from "@/lib/use-compare-lane";
@@ -98,8 +99,8 @@ function CompareBubble({ message }: { message: CompareMessage }) {
       {message.thinking && (
         <details className="mb-2 rounded-md border border-border bg-surface-2 px-2.5 py-1.5">
           <summary className="cursor-pointer text-xs text-muted">{t("thinking")}</summary>
-          <div className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-muted">
-            {message.thinking}
+          <div className="mt-1.5 text-xs">
+            <ThinkingMarkdown text={message.thinking} />
           </div>
         </details>
       )}

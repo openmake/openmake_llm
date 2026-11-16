@@ -453,10 +453,11 @@ export async function runMessagePipeline(svc: ChatService,
     // 성공 미디어 결정적 첨부, fallback 이면 "미디어 미실행" 노트, cancelled 면 여기서 끝.
     let orchestratedMessage = finalEnhancedMessage;
     let orchestratorMedia: string[] | undefined;
+    let orchestratorFields: Partial<import('./external-provider').StreamFromExternalContext> = {};
     if (ORCHESTRATOR.ENABLED) {
-        const { runOrchestrator } = await import('../orchestrator/orchestrate');
+        const { runOrchestrator, orchestratorStreamFields } = await import('../orchestrator/orchestrate');
         const outcome = await runOrchestrator({
-            req, lang: extLang, userId, signal: req.abortSignal,
+            req, lang: extLang, userId, signal: req.abortSignal, sourceNumberBase: reqCtx.userContext.sourceNumberBase,
             onProgress: (event) => _onSystemEvent?.({ type: event.type, message: '', metadata: event as unknown as Record<string, unknown> }),
         });
         if (outcome.mode === 'cancelled') throw new Error('ABORTED');
@@ -464,6 +465,8 @@ export async function runMessagePipeline(svc: ChatService,
             orchestratedMessage = `${finalEnhancedMessage || message || ''}\n\n${outcome.contextBlock}`;
         }
         if (outcome.mode === 'executed') orchestratorMedia = outcome.mediaMarkdowns;
+        // 검색 작업 출처 → 턴 번호표(번호 기준을 민다), 블록 주입 표시 → 최종 본문 내부 표식 정리
+        orchestratorFields = orchestratorStreamFields(outcome, reqCtx.userContext);
         logger.info(`[Orchestrator] mode=${outcome.mode} planner=${outcome.plannerMs}ms${outcome.execMs !== undefined ? ` exec=${outcome.execMs}ms` : ''} media=${outcome.mediaMarkdowns.length}`);
     }
 
@@ -472,6 +475,9 @@ export async function runMessagePipeline(svc: ChatService,
         agentSystemMessage: agentSysMsgForExternal,
         enhancedMessage: orchestratedMessage,
         ...(orchestratorMedia ? { orchestratorMedia } : {}),
+        ...orchestratorFields,
+        // 출처 번호표 원문 — 오케스트레이터 블록을 붙이기 전 문자열(블록의 검색 출처는 orchestratorSources 로만 든다)
+        sourceContextText: finalEnhancedMessage ?? '',
         resolvedLanguage: languagePolicy?.resolvedLanguage,
         memoryBlock: extMemoryBlock,
         customInstructionsBlock: extCustomInstructionsBlock,
