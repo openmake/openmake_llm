@@ -46,6 +46,19 @@ export function readGuard(home: string, p: string, top = false): boolean {
     return !items.some((i) => within(i, p) || within(p, i));
 }
 
+/** 홈 밖에서 샌드박스 자식이 쓸 수 있는 임시 자리 — 프로파일이 쓰기를 여는 두 곳과 그 `/tmp`·`/var/folders` 표기. */
+const TMP_WRITE_DIRS = ['/private/tmp', '/private/var/folders', '/tmp', '/var/folders'];
+
+/**
+ * 연결 때 층이 이 경로의 심링크를 따라가도 되는가(설계 D-15 보완, 코드 검증 R1 A1) — realpath **전** 경로가 샌드박스 자식이
+ * 쓸 수 있는 자리 안이면 거짓이다(자식이 그 자리를 홈의 다른 폴더를 가리키는 심링크로 바꿔 다음 연결의 읽기를 넓히는 길).
+ * 홈 안이면 홈의 `CACHE_SUBPATHS`·연결 폴더로, 홈 밖이면 연결 폴더·임시 자리로 본다(홈이 임시 폴더 아래인 테스트에서도 같은 판정).
+ */
+export function linkFollowable(home: string, root: string, p: string): boolean {
+    const places = within(p, home) ? CACHE_SUBPATHS.map((d) => path.join(home, d)) : TMP_WRITE_DIRS;
+    return !within(p, root) && !places.some((d) => within(p, d));
+}
+
 /** 도구 프로파일 읽기 범위 안인가(설계 D-22·§9 N2) — 홈 밖은 닿는다. 홈 안은 허용 subpath·literal 안이어야 하고 비밀 목록 밖이어야 한다. */
 export function reachable(scope: ReadScope, p: string): boolean {
     if (!within(p, scope.home)) return true;
@@ -166,6 +179,7 @@ function gitDenyLine(p: GitPaths): string[] {
  * 연결 때 만든 프로파일 텍스트(실패 시 null — 호출측이 fail-closed). 파일로 쓰지 않는다 — `sandbox-exec -p <텍스트>` 로 넘긴다.
  * 파일이면 샌드박스 안의 자식이 고칠 수 있는 자리(CLI 는 `os.tmpdir()` — 프로파일이 쓰기를 연 `/private/var/folders`)에
  * 놓일 때 확인 없는 자식이 `(allow default)` 로 덮어써 다음 실행이 샌드박스 밖에서 돌았다(리뷰 F1). 호스트가 어디를 주든 같다.
+ * 테스트 전용(제품은 `buildSandboxProfiles` 를 쓴다).
  */
 export function buildSandboxProfile(root: string, git: GitPaths | null, tool: boolean, protect: GitPaths[] = git ? [git] : []): string | null {
     try {
@@ -201,11 +215,15 @@ function realOrNull(p: string): string | null {
     try { return fs.realpathSync.native(p); } catch { return null; }
 }
 
-/** 입력을 realpath 로 — env 위치(없으면 버림), 허용 항목 가운데 realpath 가 다른 것(심링크 dotfiles), git 설정 파일. 가드는 순수 함수가 건다. */
-function toolRead(home: string, inputs: ReadInputs): ToolRead {
-    const extra = (inputs.envDirs ?? []).map(realOrNull).filter((p): p is string => p !== null);
+/**
+ * 입력을 realpath 로 — env 위치(없으면 버림), 허용 항목 가운데 realpath 가 다른 것(심링크 dotfiles), git 설정 파일. 가드는 순수 함수가 건다.
+ * env 위치·허용 항목은 샌드박스 자식이 쓸 수 있는 자리 안이면 따라가지 않는다(`linkFollowable`, 코드 검증 R1 A1).
+ */
+function toolRead(home: string, root: string, inputs: ReadInputs): ToolRead {
+    const extra = (inputs.envDirs ?? []).filter((p) => linkFollowable(home, root, p)).map(realOrNull).filter((p): p is string => p !== null);
     for (const d of TOOL_HOME_READ_SUBPATHS) {
         const p = path.join(home, d);
+        if (!linkFollowable(home, root, p)) continue;
         try { fs.lstatSync(p); } catch { continue; }
         const r = realOrNull(p);
         if (r !== null && r !== p) extra.push(r);
@@ -218,7 +236,7 @@ function toolRead(home: string, inputs: ReadInputs): ToolRead {
 export function buildSandboxProfiles(root: string, git: GitPaths | null, protect: GitPaths[], inputs: ReadInputs, homeDir = os.homedir()): Profiles | null {
     const home = realOrNull(homeDir);
     if (home === null) return null;
-    const read = toolRead(home, inputs);
+    const read = toolRead(home, root, inputs);
     return {
         exec: sandboxProfileText(root, git, home, false, protect, read),
         tool: sandboxProfileText(root, git, home, true, protect, read),

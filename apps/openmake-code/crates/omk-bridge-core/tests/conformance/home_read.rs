@@ -2,7 +2,7 @@
 
 use omk_bridge_core::git_trust::parse_git_config_reads;
 use omk_bridge_core::sandbox::mise_env_dirs;
-use omk_bridge_core::sandbox_profile::{ReadScope, reachable, read_guard};
+use omk_bridge_core::sandbox_profile::{ReadScope, link_followable, reachable, read_guard};
 use serde_json::Value;
 
 use super::{each_case, load};
@@ -83,6 +83,19 @@ fn env_dirs() {
             .map(|(k, v)| (k.clone(), v.as_str().unwrap().to_owned()))
             .collect();
         assert_eq!(mise_env_dirs(&env), strs(e), "{ctx}");
+    });
+}
+
+#[test]
+fn follow() {
+    let doc = load("home-read");
+    each_case(&doc, "home-read", "follow", |ctx, i, e| {
+        let got = link_followable(
+            i["home"].as_str().unwrap(),
+            i["root"].as_str().unwrap(),
+            i["path"].as_str().unwrap(),
+        );
+        assert_eq!(Value::Bool(got), *e, "{ctx}");
     });
 }
 

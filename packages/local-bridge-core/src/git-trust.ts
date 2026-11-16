@@ -89,6 +89,7 @@ function coreWorktree(gitDir: string, cwd: string): string | null {
 /**
  * 연결 폴더의 git 디렉터리를 구해 믿을 때만 돌려준다(레포가 아니거나 믿지 않으면 null — git 없음).
  * 연결할 때 한 번 부른다. 결과는 코어가 보관해 프로파일·worktree 대조·파일 kind 가드에 쓴다.
+ * 테스트 전용(제품은 `detectGitTop` 을 쓴다).
  */
 export function detectGit(root: string): GitPaths | null {
     return detectGitTop(root)?.git ?? null;

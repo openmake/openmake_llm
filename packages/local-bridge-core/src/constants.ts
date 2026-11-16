@@ -116,8 +116,8 @@ export const TOOL_SECRET_SUBPATHS = [
 ];
 /**
  * 도구 프로파일이 홈에서 읽기를 여는 허용 목록(홈 기준) — git 설정·mise·버전 파일·node/python 런타임 관리자(설계 2026-11-16
- * D-15·§9 L8). 나머지 홈은 읽기 거절(메타데이터만 허용). 새 관리자는 한 줄 더한다. `Library/Python` 은 pytest 탐지가 붙이는
- * 사용자 site(`site.getusersitepackages()`)다.
+ * D-15·§9 L8). 나머지 홈은 읽기 거절(메타데이터만 허용). 새 관리자는 한 줄 더한다. `Library/Python`(framework 빌드)·`.local/lib`
+ * (mise·pyenv·uv 등)은 pytest 탐지가 붙이는 사용자 site(`site.getusersitepackages()`)다.
  */
 export const TOOL_HOME_READ_SUBPATHS = [
     '.gitconfig', '.config/git', '.config/mise', '.config/mise.toml', '.mise.toml', 'mise.toml', '.mise.local.toml',
@@ -125,7 +125,7 @@ export const TOOL_HOME_READ_SUBPATHS = [
     '.local/state/mise', '.cache/mise', 'Library/Caches/mise', '.nvm', '.volta', '.fnm', '.local/share/fnm',
     'Library/Application Support/fnm', '.local/state/fnm_multishells', '.asdf', '.asdfrc', '.nodenv', 'n', 'Library/pnpm',
     '.pyenv', '.local/share/uv/python', '.rye', 'miniconda3', 'anaconda3', 'miniforge3', 'mambaforge', 'micromamba',
-    'opt/anaconda3', 'opt/miniconda3', '.conda', 'Library/Python', '.local/bin',
+    'opt/anaconda3', 'opt/miniconda3', '.conda', 'Library/Python', '.local/lib', '.local/bin',
 ];
 /** macOS 가 앱 이름으로 접근 권한 창을 띄우는 홈 위치 — 두 프로파일 모두 내용 읽기를 막고 메타데이터만 둔다(설계 D-16). */
 export const HOME_PRIVACY_SUBPATHS = [

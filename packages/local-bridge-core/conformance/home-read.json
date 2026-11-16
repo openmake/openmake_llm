@@ -41,6 +41,28 @@
     {"id": "shared-install-dirs", "input": {"env": {"MISE_SHARED_INSTALL_DIRS": "/h/a::rel:/h/b"}}, "expect": ["/h/a", "/h/b"]},
     {"id": "relative-dropped", "input": {"env": {"XDG_CACHE_HOME": "cache", "MISE_CACHE_DIR": "", "MISE_STATE_DIR": "./s"}}, "expect": []}
   ],
+  "follow": [
+    {"id": "home-plain", "input": {"home": "/h", "root": "/h/work/proj", "path": "/h/.config/mise"}, "expect": true},
+    {"id": "home-cache-entry", "input": {"home": "/h", "root": "/h/work/proj", "path": "/h/.cache/mise"}, "expect": false},
+    {"id": "home-library-caches-entry", "input": {"home": "/h", "root": "/h/work/proj", "path": "/h/Library/Caches/mise"}, "expect": false},
+    {"id": "home-cache-item-itself", "input": {"home": "/h", "root": "/h/work/proj", "path": "/h/.npm"}, "expect": false},
+    {"id": "home-cache-sibling-prefix", "input": {"home": "/h", "root": "/h/work/proj", "path": "/h/.cache2/mise"}, "expect": true},
+    {"id": "home-go-pkg", "input": {"home": "/h", "root": "/h/work/proj", "path": "/h/go/pkg/mise"}, "expect": false},
+    {"id": "home-go-other", "input": {"home": "/h", "root": "/h/work/proj", "path": "/h/go/bin"}, "expect": true},
+    {"id": "inside-root", "input": {"home": "/h", "root": "/h/work/proj", "path": "/h/work/proj/.mise"}, "expect": false},
+    {"id": "root-itself", "input": {"home": "/h", "root": "/h/work/proj", "path": "/h/work/proj"}, "expect": false},
+    {"id": "root-is-home", "input": {"home": "/h", "root": "/h", "path": "/h/.config/mise"}, "expect": false},
+    {"id": "outside-root-outside-home", "input": {"home": "/h", "root": "/work/proj", "path": "/work/proj/mise"}, "expect": false},
+    {"id": "private-tmp", "input": {"home": "/h", "root": "/work/proj", "path": "/private/tmp/mise"}, "expect": false},
+    {"id": "tmp-spelling", "input": {"home": "/h", "root": "/work/proj", "path": "/tmp/mise"}, "expect": false},
+    {"id": "private-var-folders", "input": {"home": "/h", "root": "/work/proj", "path": "/private/var/folders/x/T/mise"}, "expect": false},
+    {"id": "var-folders-spelling", "input": {"home": "/h", "root": "/work/proj", "path": "/var/folders/x/T/mise"}, "expect": false},
+    {"id": "tmp-sibling-prefix", "input": {"home": "/h", "root": "/work/proj", "path": "/tmpx/mise"}, "expect": true},
+    {"id": "outside-other", "input": {"home": "/h", "root": "/work/proj", "path": "/opt/mise"}, "expect": true},
+    {"id": "home-under-tmp-plain", "input": {"home": "/private/var/folders/x/T/t/fakehome", "root": "/private/var/folders/x/T/t/root", "path": "/private/var/folders/x/T/t/fakehome/.config/mise"}, "expect": true},
+    {"id": "home-under-tmp-cache", "input": {"home": "/private/var/folders/x/T/t/fakehome", "root": "/private/var/folders/x/T/t/root", "path": "/private/var/folders/x/T/t/fakehome/.cache/mise"}, "expect": false},
+    {"id": "unnormalized", "input": {"home": "/h", "root": "/h/work/proj", "path": "/h/x/../.cache//mise/"}, "expect": false}
+  ],
   "reach": [
     {"id": "outside-home", "input": {"scope": {"home": "/h", "allow": ["/h/work/repo", "/h/.nvm", "/opt/x"], "literals": ["/h/.gitconfig.local"]}, "path": "/elsewhere/x"}, "expect": true},
     {"id": "in-allow", "input": {"scope": {"home": "/h", "allow": ["/h/work/repo", "/h/.nvm", "/opt/x"], "literals": ["/h/.gitconfig.local"]}, "path": "/h/work/repo/node_modules/x"}, "expect": true},

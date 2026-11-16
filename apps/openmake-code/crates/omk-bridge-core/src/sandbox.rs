@@ -7,7 +7,8 @@ use crate::git_trust::GitPaths;
 use crate::node_path;
 use crate::platform::Platform;
 use crate::sandbox_profile::{
-    ReadScope, ToolRead, build_sandbox_profile, build_sandbox_profile_with, tool_read_scope,
+    ReadScope, ToolRead, build_sandbox_profile, build_sandbox_profile_with, link_followable,
+    tool_read_scope,
 };
 
 /// macOS 에서만, `OMK_BRIDGE_SANDBOX` 가 정확히 `"0"` 일 때만 끈다. 코어는 환경을 읽지 않는다 — 호스트가 이것으로 채운다.
@@ -25,6 +26,7 @@ pub fn profile_file_name(kind: &str, pid: u32, seq: usize) -> String {
 /// 샌드박스 안의 자식이 고칠 수 있는 자리(CLI 는 임시 폴더 — 프로파일이 쓰기를 연 `/private/var/folders`)에 놓일 때 확인 없는
 /// 자식이 `(allow default)` 로 덮어써 다음 실행이 샌드박스 밖에서 돌았다(리뷰 F1). 호스트가 어디를 주든 같다.
 /// 블록될 수 있는 FS 호출(홈 realpath)이라 부르는 쪽이 `FsGate` 안에서 부른다.
+/// 테스트 전용(제품은 [`sandbox_profiles`] 를 쓴다).
 pub fn sandbox_profile(
     root: &str,
     git: Option<&GitPaths>,
@@ -89,11 +91,17 @@ fn real(p: &str) -> Option<String> {
 }
 
 /// 입력을 realpath 로 — env 위치(없으면 버림), 허용 항목 가운데 realpath 가 다른 것(심링크 dotfiles), git 설정 파일. 가드는 순수 함수가 건다.
-fn tool_read(home: &str, inputs: &ReadInputs) -> ToolRead {
-    let mut extra: Vec<String> = inputs.env_dirs.iter().filter_map(|p| real(p)).collect();
+/// env 위치·허용 항목은 샌드박스 자식이 쓸 수 있는 자리 안이면 따라가지 않는다([`link_followable`], 코드 검증 R1 A1).
+fn tool_read(home: &str, root: &str, inputs: &ReadInputs) -> ToolRead {
+    let mut extra: Vec<String> = inputs
+        .env_dirs
+        .iter()
+        .filter(|p| link_followable(home, root, p))
+        .filter_map(|p| real(p))
+        .collect();
     for d in TOOL_HOME_READ_SUBPATHS {
         let p = node_path::join(&[home, d]);
-        if std::fs::symlink_metadata(&p).is_err() {
+        if !link_followable(home, root, &p) || std::fs::symlink_metadata(&p).is_err() {
             continue;
         }
         if let Some(r) = real(&p).filter(|r| *r != p) {
@@ -116,7 +124,7 @@ pub fn sandbox_profiles(
     inputs: &ReadInputs,
 ) -> Option<Profiles> {
     let home = real(home)?;
-    let read = tool_read(&home, inputs);
+    let read = tool_read(&home, root, inputs);
     let text = |tool| build_sandbox_profile_with(root, git, protect, &home, tool, &read);
     Some(Profiles {
         exec: text(false),

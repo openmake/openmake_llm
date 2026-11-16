@@ -7,7 +7,7 @@ use serde_json::Value;
 use super::{each_case, load};
 
 /// `{{HOME}}` 자리에 넣는 임의 홈 — 실제 홈에 의존하지 않는다(입력 글자에도 같은 값을 넣는다).
-const FAKE_HOME: &str = "/synthetic/home";
+const FAKE_HOME: &str = "/synthetic/fakehome";
 
 fn home(s: &str) -> String {
     s.replace("{{HOME}}", FAKE_HOME)
