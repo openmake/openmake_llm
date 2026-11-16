@@ -19,6 +19,7 @@
  * @module routes/desktop-update
  */
 import { Router, Request, Response } from 'express';
+import type { DesktopLatestPayload, DesktopReleaseBlock } from '@openmake/shared-types';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DESKTOP_UPDATE, resolveDesktopPorts } from '../config/desktop-update';
@@ -32,7 +33,7 @@ const router = Router();
 interface ManifestBlock { version?: string; file?: string; sha256?: string }
 
 /** PURE: 매니페스트 블록 → 응답 블록. 버전·파일명이 없거나 파일명이 그 OS 의 패턴에 맞지 않으면 null. */
-function toBlock(b: ManifestBlock | undefined, pattern: RegExp): { version: string; file: string; sha256: string | null; url: string } | null {
+function toBlock(b: ManifestBlock | undefined, pattern: RegExp): DesktopReleaseBlock | null {
     if (!b?.version || !b.file || !pattern.test(b.file)) return null;
     return { version: b.version, file: b.file, sha256: b.sha256 ?? null, url: `/api/desktop/download/${b.file}` };
 }
@@ -51,7 +52,8 @@ router.get('/latest', (_req: Request, res: Response) => {
             res.status(404).json(notFound('업데이트 매니페스트가 올바르지 않습니다'));
             return;
         }
-        res.json(success({ ...(native ? { ...native, native } : {}), ...(windows ? { windows } : {}) }));
+        const payload: DesktopLatestPayload = { ...(native ? { ...native, native } : {}), ...(windows ? { windows } : {}) };
+        res.json(success(payload));
     } catch {
         res.status(404).json(notFound('배포된 데스크톱 업데이트가 없습니다'));
     }

@@ -357,6 +357,7 @@
       "off": "Run in server sandbox",
       "on": "Run in local folder: {folder}",
       "disconnected": "Desktop app not connected",
+      "getApp": "Get the app",
       "folderPick": "Change folder",
       "folderUp": "Up",
       "folderSelectHere": "Run in this folder",
@@ -2391,7 +2392,31 @@
     "docs": "Docs",
     "dashboard": "Dashboard",
     "history": "Chat history",
-    "research": "Deep research"
+    "research": "Deep research",
+    "desktopApp": "Desktop app"
+  },
+  "desktopApp": {
+    "title": "Desktop app",
+    "subtitle": "OpenMake Companion — an app that runs agent tasks in folders on your own PC.",
+    "loading": "Loading…",
+    "filesTitle": "Installers",
+    "os": {
+      "native": "macOS",
+      "windows": "Windows"
+    },
+    "version": "Version {version}",
+    "download": "Download",
+    "sha256": "SHA-256",
+    "copyFor": "Copy {os} SHA-256",
+    "notPublished": "No installers are published on this server. Please contact your administrator.",
+    "loadFailed": "Could not load installer information.",
+    "retry": "Retry",
+    "install": {
+      "title": "Installation",
+      "native": "macOS: Open the dmg and move the app to the Applications folder. If a warning appears on first launch, go to System Settings → Privacy & Security → Open Anyway.",
+      "windows": "Windows: Run the installer. If the \"Windows protected your PC\" screen appears, click More info → Run anyway.",
+      "apiKey": "After installing, enter the server address (the address of this site) and an API key in the app settings — create a connection key for Companion and the CLI in <link>API Access</link>."
+    }
   },
   "notFound": {
     "title": "Page not found",

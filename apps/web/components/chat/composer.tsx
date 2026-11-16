@@ -15,6 +15,7 @@ import {
   Lock,
   Plus,
   FolderOpen, ShieldCheck, ListPlus } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { AttachedFileUI } from "@/lib/use-chat-socket";
@@ -692,7 +693,7 @@ export function Composer() {
 
         {/* Cowork D2 — 로컬 실행: 데스크톱 앱이 연결한 폴더에서 작업 실행. */}
         {agentTaskMode && (
-          <div className="flex items-center gap-2 px-3 pt-2 text-xs">
+          <div className={cn("flex items-center gap-2 px-3 pt-2 text-xs", !bridgeConnected && "flex-wrap")}>
             <span className="shrink-0 text-muted">{t("localExec.label")}</span>
             <button
               type="button"
@@ -712,6 +713,11 @@ export function Composer() {
                   ? t("localExec.on", { folder: agentLocalFolderRel ? `${bridgeFolder}/${agentLocalFolderRel}` : bridgeFolder })
                   : t("localExec.off")}
             </button>
+            {!bridgeConnected && (
+              <Link href="/desktop-app" className="shrink-0 whitespace-nowrap text-muted underline hover:text-fg">
+                {t("localExec.getApp")}
+              </Link>
+            )}
             {/* 폴더 선택(102): 연결 루트 하위 폴더 탐색·선택 — CLI 재시작 없이 실행 폴더 변경 */}
             {agentLocalExecutor && bridgeConnected && (
               <button
