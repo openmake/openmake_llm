@@ -157,6 +157,13 @@ describe('worktree 격리 상태(isolation, 200)', () => {
         expect(requests[requests.length - 1].path).toBe(`${WT_REL}/a.txt`);
     });
 
+    it('기기가 준 branch·worktreeRel 이 문자열이 아니면 null(branch 없음과 같은 경로)', async () => {
+        respond = (p) => (p.kind === 'worktree' ? { ok: true, worktreeRel: WT_REL, branch: { x: 1 } } as never : okResponder(p));
+        expect((await created()).isolation).toBeNull();
+        respond = (p) => (p.kind === 'worktree' ? { ok: true, worktreeRel: 42, branch: BRANCH } as never : okResponder(p));
+        expect((await created()).isolation).toBeNull();
+    });
+
     it('"git 레포가 아닙니다" → direct/not_repo', async () => {
         respond = (p) => (p.kind === 'worktree' ? { ok: false, error: 'git 레포가 아닙니다' } : okResponder(p));
         expect((await created()).isolation).toEqual({ state: 'direct', reason: 'not_repo' });
