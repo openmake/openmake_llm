@@ -11,5 +11,16 @@
  *              not_repo = git 저장소가 아님, disabled = 서버 설정으로 꺼짐, unavailable = 격리를 시도했으나 실패.
  */
 export type AgentTaskIsolation =
-  | { state: "worktree"; branch: string; worktreeRel: string; outcome?: "kept" | "removed" }
-  | { state: "direct"; reason: "not_repo" | "disabled" | "unavailable" };
+  | { state: AgentTaskIsolationWorktreeState; branch: string; worktreeRel: string; outcome?: AgentTaskIsolationOutcome }
+  | { state: AgentTaskIsolationDirectState; reason: AgentTaskIsolationDirectReason };
+
+// 아래 별칭은 계약 스키마에 정의 이름을 남겨 iOS 생성물(quicktype)이 `State`·`Outcome`·`Reason` 같은
+// 일반 이름(SwiftUI `@State` 와 충돌) 대신 고유 이름의 enum 을 만들게 한다.
+/** 격리 실행 상태 값. */
+export type AgentTaskIsolationWorktreeState = "worktree";
+/** 격리 없이 직접 실행한 상태 값. */
+export type AgentTaskIsolationDirectState = "direct";
+/** worktree 정리 결과 — kept = 변경이 남아 보존, removed = 변경 없어 정리. */
+export type AgentTaskIsolationOutcome = "kept" | "removed";
+/** 직접 실행 사유 — not_repo = git 저장소 아님, disabled = 서버 설정으로 꺼짐, unavailable = 격리 시도 실패. */
+export type AgentTaskIsolationDirectReason = "not_repo" | "disabled" | "unavailable";

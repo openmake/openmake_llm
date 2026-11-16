@@ -646,10 +646,10 @@ public enum ExpiresAt: Codable {
 // MARK: - AgentTaskIsolation
 public struct AgentTaskIsolation: Codable {
     public let branch: String?
-    public let outcome: Outcome?
-    public let state: State
+    public let outcome: AgentTaskIsolationOutcome?
+    public let state: AgentTaskIsolationState
     public let worktreeRel: String?
-    public let reason: Reason?
+    public let reason: AgentTaskIsolationDirectReason?
 
     public enum CodingKeys: String, CodingKey {
         case branch = "branch"
@@ -659,7 +659,7 @@ public struct AgentTaskIsolation: Codable {
         case reason = "reason"
     }
 
-    public init(branch: String?, outcome: Outcome?, state: State, worktreeRel: String?, reason: Reason?) {
+    public init(branch: String?, outcome: AgentTaskIsolationOutcome?, state: AgentTaskIsolationState, worktreeRel: String?, reason: AgentTaskIsolationDirectReason?) {
         self.branch = branch
         self.outcome = outcome
         self.state = state
@@ -688,10 +688,10 @@ public extension AgentTaskIsolation {
 
     func with(
         branch: String?? = nil,
-        outcome: Outcome?? = nil,
-        state: State? = nil,
+        outcome: AgentTaskIsolationOutcome?? = nil,
+        state: AgentTaskIsolationState? = nil,
         worktreeRel: String?? = nil,
-        reason: Reason?? = nil
+        reason: AgentTaskIsolationDirectReason?? = nil
     ) -> AgentTaskIsolation {
         return AgentTaskIsolation(
             branch: branch ?? self.branch,
@@ -711,18 +711,23 @@ public extension AgentTaskIsolation {
     }
 }
 
-public enum Outcome: String, Codable {
+/// worktree 정리 결과 — kept = 변경이 남아 보존, removed = 변경 없어 정리.
+public enum AgentTaskIsolationOutcome: String, Codable {
     case kept = "kept"
     case removed = "removed"
 }
 
-public enum Reason: String, Codable {
+/// 직접 실행 사유 — not_repo = git 저장소 아님, disabled = 서버 설정으로 꺼짐, unavailable = 격리 시도 실패.
+public enum AgentTaskIsolationDirectReason: String, Codable {
     case disabled = "disabled"
     case notRepo = "not_repo"
     case unavailable = "unavailable"
 }
 
-public enum State: String, Codable {
+/// 격리 실행 상태 값.
+///
+/// 격리 없이 직접 실행한 상태 값.
+public enum AgentTaskIsolationState: String, Codable {
     case direct = "direct"
     case worktree = "worktree"
 }
