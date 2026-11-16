@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use omk_bridge_core::diagnostics::{self, Collected};
 use omk_bridge_core::platform::Platform;
+use omk_bridge_core::sandbox_profile::ReadScope;
 use omk_bridge_core::timed_fs::FsGate;
 use omk_bridge_core::tool_env::{ToolEnv, ToolSandbox};
 use serde_json::{Value, json};
@@ -52,7 +53,29 @@ fn diagnostics_direct() {
         let tool = direct_tool_env(&tmp, input["execPath"].as_str().unwrap());
         let gate = FsGate::new(15_000);
         let base = input["base"].as_str().unwrap();
-        let got = rt.block_on(diagnostics::collect(base, &paths, &tool, 15_000, &gate));
+        // reach(생략 가능) — 도구 프로파일의 읽기 범위(설계 2026-11-16 D-22). 있으면 샌드박스가 켜진 코어처럼 거른다.
+        let reach = input.get("reach").map(|r| {
+            let l = |k: &str| -> Vec<String> {
+                r[k].as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|x| x.as_str().unwrap().to_owned())
+                    .collect()
+            };
+            ReadScope {
+                home: r["home"].as_str().unwrap().to_owned(),
+                allow: l("allow"),
+                literals: l("literals"),
+            }
+        });
+        let got = rt.block_on(diagnostics::collect_with(
+            base,
+            &paths,
+            &tool,
+            15_000,
+            &gate,
+            reach.as_ref(),
+        ));
         let got = got.unwrap_or_else(|e| panic!("{ctx}: {e}"));
         assert_eq!(collected_json(&got), fill(&c["expect"], &tmp.path), "{ctx}");
         if let Some(tc) = c.get("toolCalls") {

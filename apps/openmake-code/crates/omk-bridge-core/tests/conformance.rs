@@ -13,6 +13,8 @@ mod exec_path;
 mod exec_shape;
 #[path = "conformance/file_kinds.rs"]
 mod file_kinds;
+#[path = "conformance/home_read.rs"]
+mod home_read;
 #[path = "conformance/request_guard.rs"]
 mod request_guard;
 #[path = "conformance/sandbox_profile.rs"]
@@ -34,7 +36,7 @@ const FIXTURE_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../../../packages/local-bridge-core/conformance"
 );
-const KNOWN_SUITES: [&str; 15] = [
+const KNOWN_SUITES: [&str; 16] = [
     "code-nav",
     "constants",
     "denylist",
@@ -44,6 +46,7 @@ const KNOWN_SUITES: [&str; 15] = [
     "exec-path",
     "file-kinds",
     "glob",
+    "home-read",
     "platform",
     "request-guard",
     "sandbox-profile",
@@ -415,6 +418,7 @@ fn constants() {
         assert_eq!(values[name], ours, "constants/{name}");
         seen.push(name);
     }
+    seen.extend(home_read::constants(values)); // 홈 읽기 좁히기(설계 2026-11-16 §8·§9)
     let mut fixture_keys: Vec<&str> = values.keys().map(String::as_str).collect();
     fixture_keys.sort_unstable();
     seen.sort_unstable();

@@ -16,7 +16,7 @@ import { execFileSync } from 'child_process';
 import { SANDBOX_ENABLED } from '../constants';
 import { BridgeCore } from '../core';
 import { collectDiagnostics } from '../diagnostics';
-import { buildSandboxProfile, sandboxProfileText } from '../sandbox';
+import { buildSandboxProfile, buildSandboxProfiles, sandboxProfileText } from '../sandbox';
 import { detectTestRunner } from '../test-runner';
 import type { BridgeMsg, BridgeResult } from '../types';
 
@@ -196,8 +196,9 @@ sbDescribe('도구 자식 샌드박스 — sandbox-exec 자체가 실패하면 "
         const f = write('a.py', 'def f(:\n');
         write('conftest.py', '');
         expect(await detectTestRunner(base, '/nonexistent-omk-path', p)).toBe('none');
+        // 검사하지 못한 py_compile 은 serverKind 에서 빠진다(설계 2026-11-16 §9 N1·A1).
         expect(await collectDiagnostics(base, [f], '/nonexistent-omk-path', p))
-            .toEqual({ diagnostics: [], truncated: false, serverKind: 'py_compile' });
+            .toEqual({ diagnostics: [], truncated: false, serverKind: 'none' });
     }, 30000);
 });
 
@@ -269,12 +270,19 @@ sbDescribe('도구 자식 샌드박스 — 모듈 단위(가짜 python3 로 인�
     }, 30000);
 
     (fs.existsSync(repoTsc) ? it : it.skip)('실제 tsc: 샌드박스 안에서도 타입 오류를 그대로 낸다', async () => {
-        write('tsconfig.json', JSON.stringify({ compilerOptions: { strict: true, noEmit: true, skipLibCheck: true }, include: ['*.ts'] }));
-        const f = write('a.ts', 'const n: number = "x";\n');
-        fs.mkdirSync(path.join(base, 'node_modules', '.bin'), { recursive: true });
-        fs.symlinkSync(repoTsc, path.join(base, 'node_modules', '.bin', 'tsc'));
-        const plain = await collectDiagnostics(base, [f]);
-        const boxed = await collectDiagnostics(base, [f], undefined, profile());
+        // 연결 폴더를 임시 홈 **안**(`<임시 홈>/work/proj`)에 둔다 — 홈 금지·홈 메타데이터(설계 §8 M1, node 의 조상 lstat)·연결
+        // 폴더 재허용(D-19) 줄을 실제 node 로 본다. 이 워크스페이스의 tsc 는 임시 홈 밖이라 읽힌다(제품과 같은 buildSandboxProfiles).
+        const fakeHome = path.join(fs.realpathSync(prof), 'home');
+        const proj = path.join(fakeHome, 'work', 'proj');
+        fs.mkdirSync(path.join(proj, 'node_modules', '.bin'), { recursive: true });
+        fs.writeFileSync(path.join(proj, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true, noEmit: true, skipLibCheck: true }, include: ['*.ts'] }));
+        const f = path.join(proj, 'a.ts');
+        fs.writeFileSync(f, 'const n: number = "x";\n');
+        fs.symlinkSync(repoTsc, path.join(proj, 'node_modules', '.bin', 'tsc'));
+        const plain = await collectDiagnostics(proj, [f]);
+        const built = buildSandboxProfiles(proj, null, [], {}, fakeHome);
+        if (!built) throw new Error('프로파일 없음');
+        const boxed = await collectDiagnostics(proj, [f], undefined, built.tool, built.scope);
         expect(boxed.serverKind).toBe('tsc');
         expect(boxed.diagnostics.length).toBeGreaterThan(0);
         expect(boxed).toEqual(plain);

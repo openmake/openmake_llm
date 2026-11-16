@@ -86,6 +86,14 @@ describe('collectDiagnostics — 공통', () => {
         }
     }, 30000);
 
+    // 설계 2026-11-16 §9 N1·A1 — 검사하지 못한 py_compile(python3 를 PATH 에서 못 찾음)은 serverKind 에서 빠진다.
+    test('python3 가 없으면 serverKind 에 py_compile 이 없다', async () => {
+        fs.writeFileSync(path.join(base, 'bad.py'), 'def f(:\n');
+        fs.mkdirSync(path.join(base, 'empty-bin'));
+        const r = await collectDiagnostics(base, [path.join(base, 'bad.py')], path.join(base, 'empty-bin'));
+        expect(r).toEqual({ diagnostics: [], truncated: false, serverKind: 'none' });
+    });
+
     test('전체 상한 상수가 캡 계약과 일치한다', () => {
         expect(DIAG_MAX_TOTAL).toBeGreaterThan(0);
     });
