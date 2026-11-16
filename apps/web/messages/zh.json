@@ -357,6 +357,7 @@
       "off": "在服务器沙箱中运行",
       "on": "在本地文件夹运行: {folder}",
       "disconnected": "未连接桌面应用",
+      "getApp": "获取应用",
       "folderPick": "更改文件夹",
       "folderUp": "上级",
       "folderSelectHere": "在此文件夹中运行",
@@ -2391,7 +2392,31 @@
     "docs": "文档",
     "dashboard": "仪表盘",
     "history": "对话历史",
-    "research": "深度研究"
+    "research": "深度研究",
+    "desktopApp": "桌面应用"
+  },
+  "desktopApp": {
+    "title": "桌面应用",
+    "subtitle": "OpenMake Companion — 让代理任务在你自己电脑的文件夹中运行的应用。",
+    "loading": "加载中…",
+    "filesTitle": "安装文件",
+    "os": {
+      "native": "macOS",
+      "windows": "Windows"
+    },
+    "version": "版本 {version}",
+    "download": "下载",
+    "sha256": "SHA-256",
+    "copy": "复制",
+    "notPublished": "此服务器上没有发布的安装文件。请联系管理员。",
+    "loadFailed": "无法加载安装文件信息。",
+    "retry": "重试",
+    "install": {
+      "title": "安装说明",
+      "native": "macOS：打开 dmg，将应用移到“应用程序”文件夹。首次运行出现警告时，前往 系统设置 → 隐私与安全性 → 仍要打开。",
+      "windows": "Windows：运行安装文件。出现“Windows 已保护你的电脑”画面时，点击 更多信息 → 仍要运行。",
+      "apiKey": "安装后，在应用设置中填入服务器地址（本网页的地址）和 API key — 在<link>API 访问</link>中签发 Companion·CLI 连接用密钥。"
+    }
   },
   "notFound": {
     "title": "找不到页面",

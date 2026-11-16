@@ -357,6 +357,7 @@
       "off": "サーバーサンドボックスで実行",
       "on": "ローカルフォルダで実行: {folder}",
       "disconnected": "デスクトップアプリ未接続",
+      "getApp": "アプリを入手",
       "folderPick": "フォルダ変更",
       "folderUp": "上へ",
       "folderSelectHere": "このフォルダで実行",
@@ -2391,7 +2392,31 @@
     "docs": "ドキュメント",
     "dashboard": "ダッシュボード",
     "history": "チャット履歴",
-    "research": "ディープリサーチ"
+    "research": "ディープリサーチ",
+    "desktopApp": "デスクトップアプリ"
+  },
+  "desktopApp": {
+    "title": "デスクトップアプリ",
+    "subtitle": "OpenMake Companion — 自分の PC のフォルダーでエージェント作業を実行できるアプリです。",
+    "loading": "読み込み中…",
+    "filesTitle": "インストールファイル",
+    "os": {
+      "native": "macOS",
+      "windows": "Windows"
+    },
+    "version": "バージョン {version}",
+    "download": "ダウンロード",
+    "sha256": "SHA-256",
+    "copy": "コピー",
+    "notPublished": "このサーバーに公開されたインストールファイルはありません。管理者にお問い合わせください。",
+    "loadFailed": "インストールファイルの情報を読み込めませんでした。",
+    "retry": "再試行",
+    "install": {
+      "title": "インストール手順",
+      "native": "macOS: dmg を開き、アプリをアプリケーションフォルダーに移動します。初回起動時に警告が出たら、システム設定 → プライバシーとセキュリティ → このまま開く を押します。",
+      "windows": "Windows: インストールファイルを実行します。「Windows によって PC が保護されました」画面が出たら、詳細情報 → 実行 を押します。",
+      "apiKey": "インストール後、アプリの設定にサーバーアドレス(この Web のアドレス)と API key を入力します — <link>API アクセス</link>で Companion・CLI 接続用のキーを発行してください。"
+    }
   },
   "notFound": {
     "title": "ページが見つかりません",

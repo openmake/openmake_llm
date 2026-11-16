@@ -357,6 +357,7 @@
       "off": "서버 샌드박스에서 실행",
       "on": "로컬 폴더에서 실행: {folder}",
       "disconnected": "데스크톱 앱 미연결",
+      "getApp": "앱 받기",
       "folderPick": "폴더 변경",
       "folderUp": "상위",
       "folderSelectHere": "이 폴더에서 실행",
@@ -2391,7 +2392,31 @@
     "docs": "문서",
     "dashboard": "대시보드",
     "history": "대화 히스토리",
-    "research": "딥 리서치"
+    "research": "딥 리서치",
+    "desktopApp": "데스크톱 앱"
+  },
+  "desktopApp": {
+    "title": "데스크톱 앱",
+    "subtitle": "OpenMake Companion — 내 PC 의 폴더에서 에이전트 작업을 실행하게 해 주는 앱입니다.",
+    "loading": "불러오는 중…",
+    "filesTitle": "설치 파일",
+    "os": {
+      "native": "macOS",
+      "windows": "Windows"
+    },
+    "version": "버전 {version}",
+    "download": "내려받기",
+    "sha256": "SHA-256",
+    "copy": "복사",
+    "notPublished": "이 서버에 게시된 설치 파일이 없습니다. 관리자에게 문의하세요.",
+    "loadFailed": "설치 파일 정보를 불러오지 못했습니다.",
+    "retry": "다시 시도",
+    "install": {
+      "title": "설치 안내",
+      "native": "macOS: dmg 를 열어 앱을 응용 프로그램 폴더로 옮깁니다. 처음 실행 때 경고가 나오면 시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기를 누릅니다.",
+      "windows": "Windows: 설치 파일을 실행합니다. \"Windows의 PC 보호\" 화면이 나오면 추가 정보 → 실행을 누릅니다.",
+      "apiKey": "설치 뒤 앱 설정에 서버 주소(이 웹의 주소)와 API key 를 넣습니다 — <link>API 액세스</link>에서 Companion·CLI 연결용 키를 발급하세요."
+    }
   },
   "notFound": {
     "title": "페이지를 찾을 수 없습니다",

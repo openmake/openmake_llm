@@ -357,6 +357,7 @@
       "off": "In Server-Sandbox ausführen",
       "on": "Im lokalen Ordner ausführen: {folder}",
       "disconnected": "Desktop-App nicht verbunden",
+      "getApp": "App holen",
       "folderPick": "Ordner ändern",
       "folderUp": "Nach oben",
       "folderSelectHere": "In diesem Ordner ausführen",
@@ -2391,7 +2392,31 @@
     "docs": "Dokumentation",
     "dashboard": "Dashboard",
     "history": "Chat-Verlauf",
-    "research": "Deep Research"
+    "research": "Deep Research",
+    "desktopApp": "Desktop-App"
+  },
+  "desktopApp": {
+    "title": "Desktop-App",
+    "subtitle": "OpenMake Companion — eine App, die Agentenaufgaben in Ordnern auf deinem eigenen PC ausführt.",
+    "loading": "Wird geladen…",
+    "filesTitle": "Installationsdateien",
+    "os": {
+      "native": "macOS",
+      "windows": "Windows"
+    },
+    "version": "Version {version}",
+    "download": "Herunterladen",
+    "sha256": "SHA-256",
+    "copy": "Kopieren",
+    "notPublished": "Auf diesem Server sind keine Installationsdateien veröffentlicht. Bitte wende dich an deinen Administrator.",
+    "loadFailed": "Informationen zu den Installationsdateien konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "install": {
+      "title": "Installationsanleitung",
+      "native": "macOS: Öffne die dmg und verschiebe die App in den Ordner „Programme“. Erscheint beim ersten Start eine Warnung, wähle Systemeinstellungen → Datenschutz & Sicherheit → Dennoch öffnen.",
+      "windows": "Windows: Führe die Installationsdatei aus. Erscheint der Bildschirm „Der Computer wurde durch Windows geschützt“, klicke auf Weitere Informationen → Trotzdem ausführen.",
+      "apiKey": "Trage nach der Installation in den App-Einstellungen die Serveradresse (die Adresse dieser Website) und einen API key ein — einen Companion·CLI-Verbindungsschlüssel stellst du unter <link>API-Zugriff</link> aus."
+    }
   },
   "notFound": {
     "title": "Seite nicht gefunden",
