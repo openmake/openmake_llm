@@ -322,6 +322,68 @@ describe('RemoteExecutor 로컬 브라우저 (Companion P2)', () => {
         expect(ex.consumeDeviceLoss()).toBe('rerunnable');
     });
 
+    describe('실행 폴더(folder) — 격리 중이면 browser 만 worktree 기준', () => {
+        const okBrowser = { ok: true, exitCode: 0, stdout: JSON.stringify({ ok: true, results: [] }) };
+        /** worktree add 에 worktreeRel 을 돌려주는(또는 격리 실패) 기기를 흉내 내고 create() 까지 마친 실행기. */
+        const setup = async (worktreeRel: string | null, folderRel?: string) => {
+            jest.replaceProperty(LOCAL_BRIDGE, 'WORKTREE_ENABLED', true);
+            jest.spyOn(getLocalBridgeRegistry(), 'getDevice').mockReturnValue({
+                userId: 'user-1', deviceId: 'dev-1', label: 'mac · repo', folderName: 'repo', ws: {} as WebSocket, connectedAt: 0,
+            });
+            const spy = jest.spyOn(getLocalBridgeRegistry(), 'request').mockImplementation(async (_userId, payload) => {
+                if (payload.kind === 'worktree' && payload.op === 'add') {
+                    return worktreeRel ? { ok: true, worktreeRel, branch: 'omk-task/task-1' } : { ok: false, error: 'git 레포가 아닙니다' };
+                }
+                if (payload.kind === 'worktree') return { ok: true, kept: false };
+                return payload.kind === 'browser' ? okBrowser : { ok: true, content: 'x', stdout: '', exitCode: 0 };
+            });
+            const ex = new RemoteExecutor('task-1', 'user-1', undefined, folderRel);
+            await ex.create();
+            return { ex, spy };
+        };
+        const folderOf = (spy: jest.SpyInstance, kind: string, op?: string): unknown[] => spy.mock.calls
+            .map(([, p]) => p as { kind: string; op?: string; folder?: string })
+            .filter((p) => p.kind === kind && (op === undefined || p.op === op))
+            .map((p) => p.folder);
+
+        it('격리 중이면 browser 요청의 folder 가 worktree 다', async () => {
+            const { ex, spy } = await setup('.openmake/worktrees/task-1');
+            await ex.runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] });
+            expect(folderOf(spy, 'browser')).toEqual(['.openmake/worktrees/task-1']);
+        });
+
+        it('폴더 선택 + 격리면 folderRel/worktreeRel 로 합성한다(레포 하위 폴더의 접미도 그대로)', async () => {
+            const a = await setup('.openmake/worktrees/task-1', 'sub');
+            await a.ex.runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] });
+            expect(folderOf(a.spy, 'browser')).toEqual(['sub/.openmake/worktrees/task-1']);
+            jest.restoreAllMocks();
+            const b = await setup('.openmake/worktrees/task-1/pkg', 'pkg');
+            await b.ex.runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] });
+            expect(folderOf(b.spy, 'browser')).toEqual(['pkg/.openmake/worktrees/task-1/pkg']);
+        });
+
+        it('격리가 없으면 지금과 같다 — 루트면 folder 없음, 폴더 선택이면 folderRel', async () => {
+            const a = await setup(null);
+            await a.ex.runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] });
+            expect(folderOf(a.spy, 'browser')).toEqual([undefined]);
+            jest.restoreAllMocks();
+            const b = await setup(null, 'sub');
+            await b.ex.runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] });
+            expect(folderOf(b.spy, 'browser')).toEqual(['sub']);
+        });
+
+        it.each([undefined, 'sub'])('격리 중에도 exec·read·worktree(diff·remove)·task_end 의 folder 는 그대로다 (folderRel=%s)', async (folderRel) => {
+            const { ex, spy } = await setup('.openmake/worktrees/task-1', folderRel);
+            await ex.exec('ls');
+            await ex.readFile('a.txt');
+            await ex.captureDiff();
+            await ex.cleanup();
+            for (const [kind, op] of [['exec'], ['read'], ['worktree', 'add'], ['worktree', 'diff'], ['worktree', 'remove'], ['task_end']] as const) {
+                expect(folderOf(spy, kind, op)).toEqual([folderRel]);
+            }
+        });
+    });
+
     it('컨테이너용 runBrowser 경로로는 브리지 요청을 내보내지 않는다', async () => {
         const spy = jest.spyOn(getLocalBridgeRegistry(), 'request');
         const r = await new RemoteExecutor('task-1', 'user-1').runBrowser('.browser-actions.json');
