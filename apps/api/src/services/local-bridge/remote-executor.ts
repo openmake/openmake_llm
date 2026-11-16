@@ -122,7 +122,9 @@ export class RemoteExecutor implements TaskExecutor {
             this.worktreeRel = r.worktreeRel;
             this.worktreeBranch = r.branch ?? null;
             // 브랜치 없는 ok(현 기기에는 없다)는 격리는 걸린 채 화면용 상태를 남기지 않는다.
-            this.isolationState = r.branch ? { state: 'worktree', branch: r.branch, worktreeRel: r.worktreeRel } : null;
+            // 기기 응답은 런타임 검증이 없으므로 문자열이 아닌 값도 같은 경로(null)로 본다.
+            this.isolationState = typeof r.branch === 'string' && r.branch && typeof r.worktreeRel === 'string'
+                ? { state: 'worktree', branch: r.branch, worktreeRel: r.worktreeRel } : null;
             logger.info(`[${this.taskId}] worktree 격리 활성 (${r.worktreeRel}, branch=${r.branch})`);
         } else {
             // git 레포가 아니거나 생성 실패 — 격리 없이 진행한다(기존 동작 유지). 전송 실패·능력 미지원은 문구를 보지 않는다.
