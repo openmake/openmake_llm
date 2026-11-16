@@ -161,7 +161,30 @@
     {"id":"kelvin","input":{"host":"K.example.com","pattern":"k.example.com"},"expect":true},
     {"id":"dz-digraph","input":{"host":"ǅ","pattern":"ǆ"},"expect":true},
     {"id":"dot-pattern","input":{"host":"x","pattern":"."},"expect":false},
-    {"id":"host-has-star","input":{"host":"a*b","pattern":"a*b"},"expect":true}
+    {"id":"host-has-star","input":{"host":"a*b","pattern":"a*b"},"expect":true},
+    {"id":"stars-many-hit","input":{"host":"axbyc","pattern":"a*b*c"},"expect":true},
+    {"id":"stars-many-empty","input":{"host":"abc","pattern":"a*b*c"},"expect":true},
+    {"id":"stars-many-miss","input":{"host":"axbyd","pattern":"a*b*c"},"expect":false},
+    {"id":"stars-many-order","input":{"host":"acb","pattern":"a*b*c"},"expect":false},
+    {"id":"lf-literal","input":{"host":"a\nb","pattern":"a\nb"},"expect":true},
+    {"id":"lf-literal-crosses-star-not","input":{"host":"axx\nbyyc","pattern":"a*\nb*c"},"expect":true},
+    {"id":"lf-star-cannot-cross","input":{"host":"a\nx\nbc","pattern":"a*\nb*c"},"expect":false},
+    {"id":"star-end-before-lf","input":{"host":"a\n","pattern":"a*"},"expect":false},
+    {"id":"stars-inner-double","input":{"host":"axyb","pattern":"a**b"},"expect":true},
+    {"id":"cr-literal","input":{"host":"a\rb","pattern":"a\rb"},"expect":true},
+    {"id":"cr-literal-after-star","input":{"host":"ax\rb","pattern":"a*\rb"},"expect":true},
+    {"id":"ls-literal","input":{"host":"a b","pattern":"a b"},"expect":true},
+    {"id":"ls-literal-after-star","input":{"host":"ax b","pattern":"a* b"},"expect":true},
+    {"id":"ps-literal","input":{"host":"a b","pattern":"a b"},"expect":true},
+    {"id":"ps-literal-after-star","input":{"host":"ax b","pattern":"a* b"},"expect":true},
+    {"id":"supplementary-star","input":{"host":"😀","pattern":"*"},"expect":true},
+    {"id":"supplementary-star-front","input":{"host":"x😀","pattern":"*😀"},"expect":true},
+    {"id":"supplementary-star-back","input":{"host":"😀😀","pattern":"😀*"},"expect":true},
+    {"id":"dash-miss","input":{"host":"ab","pattern":"a-b"},"expect":false},
+    {"id":"slash-miss","input":{"host":"ab","pattern":"a/b"},"expect":false},
+    {"id":"comma-literal","input":{"host":"a,b","pattern":"a,b"},"expect":true},
+    {"id":"comma-miss","input":{"host":"ab","pattern":"a,b"},"expect":false},
+    {"id":"runaway-many-stars","input":{"host":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","pattern":"*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*a*b"},"expect":false}
   ],
   "allowed": [
     {"id":"ts-sub-allowed","input":{"host":"hr.intra.example.com","policy":"P"},"expect":true},
