@@ -310,3 +310,96 @@ fn stopped_request_does_not_wait_for_downloads() {
         lab.browser.dispose().await;
     });
 }
+
+/// 정책 판정 앞의 주소 확인(`location.href`)을 기다리는 도중 넘겨받기 — 그 액션으로 표식을 남기고 이동을 멈추며, 키 입력은 보내지 않는다.
+#[test]
+fn take_over_cuts_policy_url_check() {
+    support::browser::paused().block_on(async {
+        let lab = Lab::new(false);
+        lab.gates.hold("session-target-1");
+        let s = spec(json!([{"type": "press", "key": "a"}]));
+        let take = async {
+            while lab.host.servers.lock().unwrap().is_empty() {
+                tick().await;
+            }
+            lab.gates.until_held("session-target-1").await;
+            lab.browser.set_user_control(true);
+            Instant::now()
+        };
+        let ((r, end), at) = futures_util::future::join(timed(&lab, &s, "A"), take).await;
+        assert_eq!(
+            r.to_json_string(),
+            format!(
+                r#"{{"ok":false,"finalUrl":"about:blank","results":[{{"i":0,"type":"press","ok":false,"error":"{BROWSER_USER_CONTROL_ERROR}"}}],"policyBlock":{{"kind":"user_control","host":null,"action":"press"}}}}"#
+            )
+        );
+        assert!(end - at < SOON, "넘겨받은 뒤 {:?}", end - at);
+        assert_eq!(stop_loading_sessions(&lab).len(), 1);
+        assert!(
+            lab.server().log.params_of("Input.dispatchKeyEvent").is_empty(),
+            "키 입력을 보내지 않는다"
+        );
+        lab.browser.set_user_control(false);
+        lab.browser.dispose().await;
+    });
+}
+
+fn is_cond(s: &Sent) -> bool {
+    s.method == "Runtime.evaluate"
+        && s.params["expression"]
+            .as_str()
+            .is_some_and(|e| e.contains("#x"))
+}
+
+/// 조건 평가를 기다리는 도중 넘겨받기 — 바로 끝나지만 액션이 아니라 표식도 `Page.stopLoading` 도 없다.
+#[test]
+fn take_over_cuts_condition_wait() {
+    support::browser::paused().block_on(async {
+        let lab = scripted(|s| is_cond(s).then(Vec::new));
+        let s = spec(json!([{"type": "if", "cond": {"exists": "#x"}, "then": []}]));
+        let take = async {
+            until_sent(&lab, "cond", is_cond).await;
+            lab.browser.set_user_control(true);
+            Instant::now()
+        };
+        let ((r, end), at) = futures_util::future::join(timed(&lab, &s, "A"), take).await;
+        let got = r.to_json_string();
+        assert!(
+            !r.truthy("ok") && got.contains(BROWSER_USER_CONTROL_ERROR),
+            "{got}"
+        );
+        assert!(!got.contains("policyBlock"), "{got}");
+        assert!(end - at < SOON, "넘겨받은 뒤 {:?}", end - at);
+        assert!(stop_loading_sessions(&lab).is_empty());
+        lab.browser.set_user_control(false);
+        lab.browser.dispose().await;
+    });
+}
+
+/// selector 없는 `extractText` 의 문서 대기 도중 중지 — 시간 초과(거짓 → `loading` 성공)가 아니라 중지 실패.
+#[test]
+fn stop_cuts_document_ready_wait() {
+    support::browser::paused().block_on(async {
+        let is_ready = |s: &Sent| s.method == "Runtime.evaluate" && s.params["expression"] == "document.readyState";
+        let lab = scripted(move |s| {
+            is_ready(s).then(|| vec![Out::Reply(json!({"result": {"type": "string", "value": "loading"}}))])
+        });
+        *lab.gates.url.lock().unwrap() = Some("http://a.test/".into());
+        let s = spec(json!([{"type": "extractText"}]));
+        let stop = async {
+            until_sent(&lab, "readyState", is_ready).await;
+            tick().await;
+            lab.browser.request_stop(None);
+            Instant::now()
+        };
+        let ((r, end), at) = futures_util::future::join(timed(&lab, &s, "A"), stop).await;
+        assert_eq!(
+            r.to_json_string(),
+            format!(
+                r#"{{"ok":false,"finalUrl":"http://a.test/","results":[{{"i":0,"type":"extractText","ok":false,"error":"{STOPPED_ERROR}"}}]}}"#
+            )
+        );
+        assert!(end - at < SOON, "중지 뒤 {:?}", end - at);
+        lab.browser.dispose().await;
+    });
+}

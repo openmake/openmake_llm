@@ -17,7 +17,9 @@ use omk_bridge_core::browser::result::{Json, Obj};
 use omk_bridge_core::browser::run::BrowserSpec;
 use serde_json::{Value, json};
 use support::browser::{Out, Sent, browser_replies, paused};
-use support::browser_lab::{Lab, env, lab_replies, opts, tick, wait_spec};
+use support::browser_lab::{
+    Lab, env, holding_ax_tree, lab_replies, opts, release_ax, tick, until_ax_held, wait_spec,
+};
 
 fn spec(actions: Value) -> BrowserSpec {
     BrowserSpec {
@@ -38,49 +40,6 @@ fn error_of(r: &Obj, n: usize) -> String {
         Some(Json::Value(Value::String(s))) => s.clone(),
         other => panic!("error: {other:?}"),
     }
-}
-
-/// 접근성 트리 요청(`snapshot`)의 답을 붙드는 실험대 — 끊지 않는 명령이라 붙든 동안의 중지는 "액션 사이 중지"가 된다.
-fn holding_ax_tree() -> Lab {
-    Lab::with_responder(false, |g, f| {
-        let inner = lab_replies(json!({"loaderId": "l1"}), g.clone(), f.clone());
-        Arc::new(move |s: &Sent| {
-            if s.method == "Accessibility.getFullAXTree" {
-                return vec![];
-            }
-            inner(s)
-        })
-    })
-}
-
-fn is_ax(s: &Sent, session: &str) -> bool {
-    s.method == "Accessibility.getFullAXTree" && s.session.as_deref() == Some(session)
-}
-
-/// 그 세션의 접근성 트리 요청이 `n` 번째까지 닿을 때까지.
-async fn until_ax_held(lab: &Lab, session: &str, n: usize) {
-    while lab.host.servers.lock().unwrap().is_empty() {
-        tick().await;
-    }
-    lab.server()
-        .log
-        .until("getFullAXTree", |all| {
-            all.iter().filter(|s| is_ax(s, session)).count() >= n
-        })
-        .await;
-}
-
-/// 그 세션의 마지막(붙든) 접근성 트리 요청에 빈 트리로 답한다.
-fn release_ax(lab: &Lab, session: &str) {
-    let held = lab
-        .server()
-        .log
-        .sent()
-        .into_iter()
-        .rfind(|s| is_ax(s, session))
-        .expect("붙든 요청 없음");
-    lab.server()
-        .raw(&json!({"id": held.id, "result": {"nodes": []}, "sessionId": session}).to_string());
 }
 
 fn created(lab: &Lab) -> Vec<Value> {
@@ -333,6 +292,7 @@ fn take_over_mid_run_stops_next_action() {
                 r#"{{"ok":false,"finalUrl":"http://a.test/","results":[{{"i":0,"type":"snapshot","ok":true,"elements":[]}},{{"i":1,"type":"press","ok":false,"error":"{BROWSER_USER_CONTROL_ERROR}"}}],"policyBlock":{{"kind":"user_control","host":null,"action":"press"}}}}"#
             )
         );
+        assert!(lab.server().log.params_of("Page.stopLoading").is_empty(), "액션 사이 중지는 이동을 멈추지 않는다");
         lab.browser.dispose().await;
     });
 }
@@ -359,6 +319,10 @@ fn request_stop_per_task_and_all() {
             assert_eq!(error_of(&ra, 1), STOPPED_ERROR);
             assert_eq!(rb.truthy("ok"), !all, "all={all}");
         }
+        assert!(
+            lab.server().log.params_of("Page.stopLoading").is_empty(),
+            "액션 사이 중지는 이동을 멈추지 않는다"
+        );
         lab.browser.dispose().await;
     });
 }
