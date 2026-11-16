@@ -32,3 +32,18 @@ describe('webSearchExecutor — 검색어', () => {
         expect(performWebSearch.mock.calls[0][0]).toBe('벤처기업확인기관에 대해서');
     });
 });
+
+describe('webSearchExecutor — 구조화 출처', () => {
+    it('검색 결과를 번호 없는 출처로 함께 돌려준다(text 는 그대로)', async () => {
+        performWebSearch.mockResolvedValue([{ title: '날씨', url: 'https://w.x/1', snippet: '맑음\n  5도', source: 'w.x' }]);
+        const r = await run('서울 날씨');
+        expect(r.sources).toEqual([{ title: '날씨', url: 'https://w.x/1', snippet: '맑음 5도', source: 'w.x' }]);
+        expect(r.text).toContain('1. 날씨');
+    });
+
+    it('결과 0건이면 출처가 없다', async () => {
+        performWebSearch.mockResolvedValue([]);
+        const r = await run('서울 날씨');
+        expect(r.sources).toBeUndefined();
+    });
+});
