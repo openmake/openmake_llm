@@ -40,6 +40,49 @@ fn error_of(r: &Obj, n: usize) -> String {
     }
 }
 
+/// 접근성 트리 요청(`snapshot`)의 답을 붙드는 실험대 — 끊지 않는 명령이라 붙든 동안의 중지는 "액션 사이 중지"가 된다.
+fn holding_ax_tree() -> Lab {
+    Lab::with_responder(false, |g, f| {
+        let inner = lab_replies(json!({"loaderId": "l1"}), g.clone(), f.clone());
+        Arc::new(move |s: &Sent| {
+            if s.method == "Accessibility.getFullAXTree" {
+                return vec![];
+            }
+            inner(s)
+        })
+    })
+}
+
+fn is_ax(s: &Sent, session: &str) -> bool {
+    s.method == "Accessibility.getFullAXTree" && s.session.as_deref() == Some(session)
+}
+
+/// 그 세션의 접근성 트리 요청이 `n` 번째까지 닿을 때까지.
+async fn until_ax_held(lab: &Lab, session: &str, n: usize) {
+    while lab.host.servers.lock().unwrap().is_empty() {
+        tick().await;
+    }
+    lab.server()
+        .log
+        .until("getFullAXTree", |all| {
+            all.iter().filter(|s| is_ax(s, session)).count() >= n
+        })
+        .await;
+}
+
+/// 그 세션의 마지막(붙든) 접근성 트리 요청에 빈 트리로 답한다.
+fn release_ax(lab: &Lab, session: &str) {
+    let held = lab
+        .server()
+        .log
+        .sent()
+        .into_iter()
+        .rfind(|s| is_ax(s, session))
+        .expect("붙든 요청 없음");
+    lab.server()
+        .raw(&json!({"id": held.id, "result": {"nodes": []}, "sessionId": session}).to_string());
+}
+
 fn created(lab: &Lab) -> Vec<Value> {
     lab.server().log.params_of("Target.createTarget")
 }
@@ -270,24 +313,24 @@ fn user_control_refuses_without_attaching_then_hand_back() {
     });
 }
 
-/// 실행 중에 넘겨받으면 다음 액션부터 멈추고 표식을 남긴다.
+/// 실행 중에 넘겨받으면 다음 액션부터 멈추고 표식을 남긴다(끊지 않는 명령 도중 — "액션 사이 중지").
 #[test]
 fn take_over_mid_run_stops_next_action() {
     paused().block_on(async {
-        let lab = Lab::new(false);
-        lab.gates.hold("session-target-1");
-        let (o, s) = (opts("A", None), spec(json!([{"type": "wait"}, {"type": "press", "key": "a"}])));
+        let lab = holding_ax_tree();
+        let (o, s) = (opts("A", None), spec(json!([{"type": "snapshot"}, {"type": "press", "key": "a"}])));
+        *lab.gates.url.lock().unwrap() = Some("http://a.test/".into());
         let run = lab.browser.run(&s, &o);
         let hook = async {
-            lab.gates.until_held("session-target-1").await;
+            until_ax_held(&lab, "session-target-1", 1).await;
             lab.browser.set_user_control(true);
-            lab.gates.release(&lab.server(), "session-target-1");
+            release_ax(&lab, "session-target-1");
         };
         let (r, ()) = futures_util::future::join(run, hook).await;
         assert_eq!(
             r.to_json_string(),
             format!(
-                r#"{{"ok":false,"finalUrl":"about:blank","results":[{{"i":0,"type":"wait","ok":true}},{{"i":1,"type":"press","ok":false,"error":"{BROWSER_USER_CONTROL_ERROR}"}}],"policyBlock":{{"kind":"user_control","host":null,"action":"press"}}}}"#
+                r#"{{"ok":false,"finalUrl":"http://a.test/","results":[{{"i":0,"type":"snapshot","ok":true,"elements":[]}},{{"i":1,"type":"press","ok":false,"error":"{BROWSER_USER_CONTROL_ERROR}"}}],"policyBlock":{{"kind":"user_control","host":null,"action":"press"}}}}"#
             )
         );
         lab.browser.dispose().await;
@@ -297,21 +340,19 @@ fn take_over_mid_run_stops_next_action() {
 #[test]
 fn request_stop_per_task_and_all() {
     paused().block_on(async {
-        let lab = Lab::new(false);
-        let two = spec(json!([{"type": "wait", "ms": 0}, {"type": "wait", "ms": 0}]));
-        for all in [false, true] {
-            for s in ["session-target-1", "session-target-2"] {
-                lab.gates.hold(s);
-            }
+        let lab = holding_ax_tree();
+        *lab.gates.url.lock().unwrap() = Some("http://a.test/".into());
+        let two = spec(json!([{"type": "snapshot"}, {"type": "wait", "ms": 0}]));
+        for (round, all) in [false, true].into_iter().enumerate() {
             let (oa, ob) = (opts("A", None), opts("B", None));
             let runs =
                 futures_util::future::join(lab.browser.run(&two, &oa), lab.browser.run(&two, &ob));
             let hook = async {
-                lab.gates.until_held("session-target-1").await;
-                lab.gates.until_held("session-target-2").await;
+                until_ax_held(&lab, "session-target-1", round + 1).await;
+                until_ax_held(&lab, "session-target-2", round + 1).await;
                 lab.browser.request_stop(if all { None } else { Some("A") });
-                lab.gates.release(&lab.server(), "session-target-1");
-                lab.gates.release(&lab.server(), "session-target-2");
+                release_ax(&lab, "session-target-1");
+                release_ax(&lab, "session-target-2");
             };
             let ((ra, rb), ()) = futures_util::future::join(runs, hook).await;
             assert!(!ra.truthy("ok"));

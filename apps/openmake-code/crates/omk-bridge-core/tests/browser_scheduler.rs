@@ -189,6 +189,53 @@ fn stop_generations() {
     assert!(!s.stop_check("C").stopped());
 }
 
+/// 중지 기다리기 — 이미 중지면 바로, 아니면 그 요청에 닿는 중지(전체·같은 작업)나 `forget_task` 에 깨어난다.
+#[test]
+fn stop_wait_wakes_on_its_stop() {
+    paused().block_on(async {
+        let s = Arc::new(BrowserScheduler::default());
+        let limit = Duration::from_secs(1);
+        let a = s.stop_check("A");
+        s.request_stop(None);
+        tokio::time::timeout(limit, a.wait())
+            .await
+            .expect("이미 중지면 바로");
+
+        let a = s.stop_check("A");
+        let mut w = std::pin::pin!(a.wait());
+        assert!(
+            tokio::time::timeout(limit, &mut w).await.is_err(),
+            "중지 전에는 기다린다"
+        );
+        s.request_stop(None);
+        tokio::time::timeout(limit, w)
+            .await
+            .expect("전체 중지로 깨어난다");
+
+        let a = s.stop_check("A");
+        let mut w = std::pin::pin!(a.wait());
+        assert!(tokio::time::timeout(limit, &mut w).await.is_err());
+        s.request_stop(Some("B"));
+        assert!(
+            tokio::time::timeout(limit, &mut w).await.is_err(),
+            "다른 작업의 중지로는 깨지 않는다"
+        );
+        s.request_stop(Some("A"));
+        tokio::time::timeout(limit, w)
+            .await
+            .expect("같은 작업 중지로 깨어난다");
+
+        // forget 은 기록을 지운다 — 기록이 있던 때 시작한 요청은 깨어나 다시 보고 멈춘 것으로 본다(`stopped` 와 같은 판정)
+        let a = s.stop_check("A");
+        let mut w = std::pin::pin!(a.wait());
+        assert!(tokio::time::timeout(limit, &mut w).await.is_err());
+        s.forget_task("A");
+        tokio::time::timeout(limit, w)
+            .await
+            .expect("forget 뒤 깨어난다");
+    });
+}
+
 /// 실행 중인 future 를 버려도(호출부 취소) 실행 자리와 줄의 차례가 돌아온다. 기다리던 차례표를 버려도 줄이 이어진다.
 #[test]
 fn dropped_futures_return_their_place() {
