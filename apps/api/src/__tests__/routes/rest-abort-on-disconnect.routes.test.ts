@@ -105,13 +105,17 @@ describe('REST 채팅 — 클라이언트 끊김 시 processChat abortSignal', (
     /** processChat 이 불릴 때까지 기다렸다가 클라이언트를 끊고, 신호가 abort 될 때까지 기다린다. */
     const disconnectMidway = async (path: string, body: Record<string, unknown>) => {
         const req = post(path, body);
-        await until(() => received !== undefined);
-        expect(received).toBeDefined();
-        await sleep(50); // 본문 소비 직후의 req 'close' 가 지나갈 시간
-        expect(received?.abortSignal?.aborted).toBe(false);
-        req.destroy();
-        await until(() => received?.abortSignal?.aborted === true);
-        await sleep(30); // 라우트의 catch 가 돌 시간
+        try {
+            await until(() => received !== undefined);
+            expect(received).toBeDefined();
+            await sleep(50); // 본문 소비 직후의 req 'close' 가 지나갈 시간
+            expect(received?.abortSignal?.aborted).toBe(false);
+            req.destroy();
+            await until(() => received?.abortSignal?.aborted === true);
+            await sleep(30); // 라우트의 catch 가 돌 시간
+        } finally {
+            req.destroy(); // until 이 시간 초과로 던져도 요청을 닫는다 (중복 호출은 무해)
+        }
     };
 
     it('POST /api/chat/stream — 끊기면 aborted', async () => {

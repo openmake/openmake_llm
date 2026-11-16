@@ -372,13 +372,16 @@ describe('RemoteExecutor 로컬 브라우저 (Companion P2)', () => {
             expect(folderOf(b.spy, 'browser')).toEqual(['sub']);
         });
 
-        it.each([undefined, 'sub'])('격리 중에도 exec·read·worktree(diff·remove)·task_end 의 folder 는 그대로다 (folderRel=%s)', async (folderRel) => {
+        it.each([undefined, 'sub'])('격리 중에도 exec·read·write·list·delete·worktree(diff·remove)·task_end 의 folder 는 그대로다 (folderRel=%s)', async (folderRel) => {
             const { ex, spy } = await setup('.openmake/worktrees/task-1', folderRel);
             await ex.exec('ls');
             await ex.readFile('a.txt');
+            await ex.writeFile('b.txt', 'y');
+            await ex.listDir('.');
+            await ex.deleteFile('b.txt');
             await ex.captureDiff();
             await ex.cleanup();
-            for (const [kind, op] of [['exec'], ['read'], ['worktree', 'add'], ['worktree', 'diff'], ['worktree', 'remove'], ['task_end']] as const) {
+            for (const [kind, op] of [['exec'], ['read'], ['write'], ['list'], ['delete'], ['worktree', 'add'], ['worktree', 'diff'], ['worktree', 'remove'], ['task_end']] as const) {
                 expect(folderOf(spy, kind, op)).toEqual([folderRel]);
             }
         });
