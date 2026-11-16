@@ -324,7 +324,10 @@ impl BridgeCore {
                     .await?;
                 let tool = st.tool_env(&self.folder_root).await;
                 let ms = self.timeouts.diag_ms;
-                let r = match diagnostics::collect(&base, &abs, &tool, ms, &self.gate).await {
+                let reach = st.tool_reach();
+                let collected =
+                    diagnostics::collect_with(&base, &abs, &tool, ms, &self.gate, reach.as_ref());
+                let r = match collected.await {
                     Ok(r) => r,
                     Err(e) => return Ok(tool_failure(e)),
                 };

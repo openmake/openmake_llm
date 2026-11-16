@@ -27,7 +27,7 @@ import { matchDenylist } from './denylist';
 import { resolveExecPath } from './exec-path';
 import { buildExecEnv } from './exec-env';
 import { assertGitPathAllowed, detectGitTop, gitConfigReads, protectedGitDirs, type GitGuard, type GitPaths } from './git-trust';
-import { buildSandboxProfiles, miseEnvDirs, SandboxProfileMissingError, SandboxSpawnError } from './sandbox';
+import { buildSandboxProfiles, miseEnvDirs, SandboxProfileMissingError, SandboxSpawnError, type ReadScope } from './sandbox';
 import { safeFromAsync } from './scope';
 import { handleWorktree } from './worktree';
 import { findChrome } from './browser/chrome';
@@ -48,6 +48,8 @@ export class BridgeCore {
     private sandboxProfile: string | null = null;
     /** 확인 없이 뜨는 자식(worktree git·tsc·py_compile·pytest 탐지)용 도구 프로파일 텍스트 — exec 프로파일 + 네트워크 차단(설계 D-1). */
     private toolProfile: string | null = null;
+    /** 도구 프로파일이 홈에서 읽기를 여는 범위 — 프로파일을 만들 때 쓴 값(진단 실행 전 훑기, 설계 2026-11-16 D-22). */
+    private toolReach: ReadScope | null = null;
     /** 연결 때 믿기로 한 git 디렉터리(git-trust.ts) — 없으면 git 없음(쓰기 허용 줄 없음, worktree 거절). */
     private git: GitPaths | null = null;
     /** 금지 줄·파일 kind 가드를 걸 git 디렉터리 — 믿는 git 과 연결 폴더의 `.git`(디렉터리, 또는 폴더 안을 가리키는 gitfile·심링크의 대상)(리뷰 F2·N2). */
@@ -93,6 +95,7 @@ export class BridgeCore {
         }) : null;
         this.sandboxProfile = built?.exec ?? null;
         this.toolProfile = built?.tool ?? null;
+        this.toolReach = built?.scope ?? null;
     }
 
     /** 파일 kind 가드 — 연결 폴더 루트의 `.git` 은 준비 전에도·없어도 이름으로 지킨다(리뷰 N1). */
@@ -294,7 +297,7 @@ export class BridgeCore {
                 const abs: string[] = [];
                 for (const p of rel) abs.push(await safeFromAsync(base, p));
                 if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot, this.toolSandbox());
-                const r = await this.toolSandboxed(done, () => collectDiagnostics(base, abs, this.execPathCache!, this.toolSandbox()));
+                const r = await this.toolSandboxed(done, () => collectDiagnostics(base, abs, this.execPathCache!, this.toolSandbox(), SANDBOX_ENABLED ? this.toolReach : null));
                 if (r) done({ ok: true, ...r });
                 return;
             }

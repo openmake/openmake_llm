@@ -9,10 +9,15 @@ use std::sync::LazyLock;
 
 use serde_json::{Value, json};
 
-use crate::constants::{DIAG_MAX_PER_FILE, DIAG_MAX_TOTAL, DIAG_MSG_MAX};
+use crate::constants::{
+    DIAG_MAX_PER_FILE, DIAG_MAX_TOTAL, DIAG_MSG_MAX, PY_FATAL_MARKER, TSC_CONFIG_UNREADABLE,
+    TSC_LINK_SCAN_MAX,
+};
 use crate::js_regex::{self, JsRegex};
 use crate::js_text::{js_trim, utf16_prefix};
 use crate::node_path;
+use crate::proc::ProcEnd;
+use crate::sandbox_profile::{ReadScope, reachable};
 use crate::timed_fs::FsGate;
 use crate::tool_env::{ToolEnv, exists};
 
@@ -203,16 +208,60 @@ fn cap(all: Vec<Diagnostic>) -> (Vec<Diagnostic>, bool) {
     (kept, truncated)
 }
 
-/// 끝난 이유와 무관하게 `stdout + "\n" + stderr`(띄우지 못하면 빈 출력). sandbox-exec 자체 실패는 거절(`ToolEnv::run`).
+/// 끝난 이유와 무관하게 `stdout + "\n" + stderr`(띄우지 못하면 빈 출력)와 정상 종료(코드 0) 여부. sandbox-exec 자체 실패는
+/// 거절(`ToolEnv::run`).
 async fn run_tool(
     tool: &ToolEnv,
     file: &str,
     args: &[&str],
     cwd: &str,
     ms: u64,
-) -> Result<String, String> {
+) -> Result<(String, bool), String> {
     let out = tool.run(file, args, cwd, ms).await?;
-    Ok(format!("{}\n{}", out.stdout, out.stderr))
+    let ok = matches!(out.end, ProcEnd::Exited(0));
+    Ok((format!("{}\n{}", out.stdout, out.stderr), ok))
+}
+
+/// py_compile 이 그 파일을 검사하지 못했나(설계 D-21·§9 L1·A1) — 어떤 줄이 `PY_FATAL_MARKER` 로 시작하거나(인터프리터가 못 뜸),
+/// 정상 종료(코드 0)가 아닌데(띄우지 못함·python3 없음·시간 초과·신호·0 아닌 코드) 출력에 `Error`·`error` 가 없다.
+fn py_unchecked(out: &str, ok: bool) -> bool {
+    out.split('\n').any(|l| l.starts_with(PY_FATAL_MARKER))
+        || (!ok && !(out.contains("Error") || out.contains("error")))
+}
+
+/// tsc 를 찾은 `node_modules` 의 1단계 항목과 `@scope` 아래 1단계 가운데, 도구 프로파일이 읽지 못하는 곳을 가리키는 심링크가
+/// 있나(설계 D-22·§9 N2) — 첫 발견에서 멈춘다. 살펴본 심링크가 `TSC_LINK_SCAN_MAX` 개면 "없음". 끊어진 링크는 세지만 닿지 않는
+/// 것으로 보지 않는다. 폴더를 읽지 못하면 "없음"(종전 동작 쪽). FS 를 보므로 관문 안에서 부른다.
+fn unreachable_link(tsc: &str, scope: &ReadScope) -> bool {
+    let modules = node_path::dirname(&node_path::dirname(tsc));
+    let mut seen = 0usize;
+    let mut stack = vec![(modules, true)];
+    while let Some((dir, top)) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        let mut scoped = Vec::new();
+        for e in entries.flatten() {
+            // UTF-8 이 아닌 이름은 APFS 에서 생기지 않는다.
+            let name = e.file_name().to_string_lossy().into_owned();
+            let p = node_path::join(&[&dir, &name]);
+            let Ok(t) = e.file_type() else { continue };
+            if t.is_symlink() {
+                if seen == TSC_LINK_SCAN_MAX {
+                    return false;
+                }
+                seen += 1;
+                let real = std::fs::canonicalize(&p).ok();
+                if real.is_some_and(|r| !reachable(scope, &r.to_string_lossy())) {
+                    return true;
+                }
+            } else if top && t.is_dir() && name.starts_with('@') {
+                scoped.push((p, false));
+            }
+        }
+        stack.extend(scoped.into_iter().rev());
+    }
+    false
 }
 
 /// 지정한 파일들(스코프 확인을 마친 절대경로)의 진단. 실행할 도구가 없으면 빈 결과 + `serverKind: "none"`.
@@ -224,15 +273,44 @@ pub async fn collect(
     timeout_ms: u64,
     gate: &FsGate,
 ) -> Result<Collected, String> {
+    collect_with(base, abs_paths, tool, timeout_ms, gate, None).await
+}
+
+/// [`collect`] + 도구 프로파일 읽기 범위(`reach` — 샌드박스가 켜졌을 때 코어가 준다, 설계 D-22). 있으면 닿지 않는 의존이 보이는
+/// tsconfig 묶음은 tsc 를 띄우지 않고, 출력에 `TSC_CONFIG_UNREADABLE` 이 있는 묶음의 진단은 버린다. 검사하지 못한 도구는
+/// `serverKind` 에서 뺀다(§9 N1 — py_compile 은 모든 파일이 "검사 못 함"일 때).
+pub async fn collect_with(
+    base: &str,
+    abs_paths: &[String],
+    tool: &ToolEnv,
+    timeout_ms: u64,
+    gate: &FsGate,
+    reach: Option<&ReadScope>,
+) -> Result<Collected, String> {
     let (b, paths) = (base.to_owned(), abs_paths.to_vec());
     let plan = gate.run(LABEL, move || Ok(plan(&b, &paths))).await?;
     let mut all = Vec::new();
+    let mut tsc_ran = 0usize;
     for (cfg, tsc) in &plan.projects {
+        if let Some(scope) = reach {
+            let (t, s) = (tsc.clone(), scope.clone());
+            if gate
+                .run(LABEL, move || Ok(unreachable_link(&t, &s)))
+                .await?
+            {
+                continue;
+            }
+        }
         let cwd = node_path::dirname(cfg);
         let args = ["--noEmit", "--pretty", "false", "-p", cfg.as_str()];
-        let out = run_tool(tool, tsc, &args, &cwd, timeout_ms).await?;
+        let (out, _) = run_tool(tool, tsc, &args, &cwd, timeout_ms).await?;
+        if reach.is_some() && out.contains(TSC_CONFIG_UNREADABLE) {
+            continue;
+        }
         all.extend(parse_tsc(&out, base, &cwd));
+        tsc_ran += 1;
     }
+    let mut py_checked = 0usize;
     if !plan.py.is_empty() {
         tool.ensure_profile()?;
         // python3 는 감싸기 전에 PATH 에서 직접 찾는다 — 없으면 띄우지 않는다(sandbox-exec 의 실패 문구가 해석에 섞이지 않게).
@@ -241,24 +319,28 @@ pub async fn collect(
             .run(LABEL, move || Ok(finder.find_on_path("python3")))
             .await?;
         for f in &plan.py {
-            let out = match &python {
+            let (out, ok) = match &python {
                 Some(py) => {
                     let args = ["-I", "-m", "py_compile", f.as_str()];
                     run_tool(tool, py, &args, base, timeout_ms).await?
                 }
-                None => "\n".to_owned(),
+                None => ("\n".to_owned(), false),
             };
+            if py_unchecked(&out, ok) {
+                continue;
+            }
+            py_checked += 1;
             if out.contains("Error") || out.contains("error") {
                 all.extend(parse_py_compile(&out, base, f));
             }
         }
     }
     let (diagnostics, truncated) = cap(all);
-    let server_kind = match (plan.projects.is_empty(), plan.py.is_empty()) {
-        (false, false) => "tsc+py_compile",
-        (false, true) => "tsc",
-        (true, false) => "py_compile",
-        (true, true) => "none",
+    let server_kind = match (tsc_ran > 0, py_checked > 0) {
+        (true, true) => "tsc+py_compile",
+        (true, false) => "tsc",
+        (false, true) => "py_compile",
+        (false, false) => "none",
     };
     Ok(Collected {
         diagnostics,
