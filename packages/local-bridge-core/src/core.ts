@@ -13,6 +13,7 @@
  *  - worktree 는 서버 op 만 받아 git 인자를 디바이스가 고정 조립 (worktree.ts)
  */
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import {
@@ -25,8 +26,8 @@ import { detectTestRunner } from './test-runner';
 import { matchDenylist } from './denylist';
 import { resolveExecPath } from './exec-path';
 import { buildExecEnv } from './exec-env';
-import { assertGitPathAllowed, detectGit, protectedGitDirs, type GitGuard, type GitPaths } from './git-trust';
-import { buildSandboxProfile, SandboxProfileMissingError, SandboxSpawnError } from './sandbox';
+import { assertGitPathAllowed, detectGitTop, gitConfigReads, protectedGitDirs, type GitGuard, type GitPaths } from './git-trust';
+import { buildSandboxProfiles, miseEnvDirs, SandboxProfileMissingError, SandboxSpawnError } from './sandbox';
 import { safeFromAsync } from './scope';
 import { handleWorktree } from './worktree';
 import { findChrome } from './browser/chrome';
@@ -81,10 +82,17 @@ export class BridgeCore {
      */
     prepare(): void {
         this.execPathCache = null;
-        this.git = detectGit(this.folderRoot);
+        const found = detectGitTop(this.folderRoot);
+        this.git = found?.git ?? null;
         this.protect = protectedGitDirs(this.git, this.folderRoot);
-        this.sandboxProfile = SANDBOX_ENABLED ? buildSandboxProfile(this.folderRoot, this.git, false, this.protect) : null;
-        this.toolProfile = SANDBOX_ENABLED ? buildSandboxProfile(this.folderRoot, this.git, true, this.protect) : null;
+        // 도구 프로파일 홈 읽기 입력(설계 2026-11-16 D-18·D-19·§8 M2) — git 설정 탐지는 믿는 git 이 있을 때만.
+        const built = SANDBOX_ENABLED ? buildSandboxProfiles(this.folderRoot, this.git, this.protect, {
+            top: found?.top ?? null,
+            envDirs: miseEnvDirs(process.env),
+            gitConfig: this.git ? gitConfigReads(this.folderRoot, os.homedir()) : [],
+        }) : null;
+        this.sandboxProfile = built?.exec ?? null;
+        this.toolProfile = built?.tool ?? null;
     }
 
     /** 파일 kind 가드 — 연결 폴더 루트의 `.git` 은 준비 전에도·없어도 이름으로 지킨다(리뷰 N1). */
