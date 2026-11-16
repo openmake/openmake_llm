@@ -165,6 +165,8 @@ pub const TOOL_ANCESTOR_READ_NAMES: &[&str] = &[
 ];
 /// 조상 이름 줄을 붙이는 조상 폴더 수 상한(연결 폴더에 가까운 것부터).
 pub const TOOL_ANCESTOR_MAX: usize = 16;
+/// 허용 항목·env 위치의 심링크를 hop 단위로 풀 때 따라가는 심링크 수 상한(설계 D-15 보완 2, 넘으면 버린다).
+pub const LINK_HOP_MAX: usize = 8;
 /// 추가 subpath(env 위치·심링크 realpath)·git 설정 literal 전체 상한(넘으면 앞에서부터, 조상 이름 줄은 세지 않는다).
 pub const TOOL_READ_EXTRA_MAX: usize = 64;
 /// git 전역·로컬 설정이 가리키는 파일 literal 상한(설계 D-18).

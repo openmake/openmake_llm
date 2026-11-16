@@ -86,10 +86,11 @@ const TMP_WRITE_DIRS: &[&str] = &[
     "/var/folders",
 ];
 
-/// 연결 때 층이 이 경로의 심링크를 따라가도 되는가(설계 D-15 보완, 코드 검증 R1 A1) — realpath **전** 경로가 샌드박스 자식이
-/// 쓸 수 있는 자리 안이면 거짓이다(자식이 그 자리를 홈의 다른 폴더를 가리키는 심링크로 바꿔 다음 연결의 읽기를 넓히는 길).
-/// 홈 안이면 홈의 `CACHE_SUBPATHS`·연결 폴더로, 홈 밖이면 연결 폴더·임시 자리로 본다(홈이 임시 폴더 아래인 테스트에서도 같은 판정).
-pub fn link_followable(home: &str, root: &str, p: &str) -> bool {
+/// 연결 때 층이 이 심링크(사슬의 hop 하나)를 따라가도 되는가(설계 D-15 보완·보완 2, 코드 검증 R1 A1·R2 A1-R2) — 심링크의 자리가
+/// 샌드박스 자식이 쓸 수 있는 자리 안이면 거짓이다(자식이 그 고리를 홈의 다른 폴더를 가리키게 바꿔 다음 연결의 읽기를 넓히는 길).
+/// 연결 폴더·쓰기 허용된 git dir·common dir(`git_dirs`)은 늘 보고, 홈 안이면 홈의 `CACHE_SUBPATHS` 를, 홈 밖이면 임시 자리를
+/// 더 본다(홈이 임시 폴더 아래인 테스트에서도 같은 판정).
+pub fn link_followable(home: &str, root: &str, git_dirs: &[String], p: &str) -> bool {
     let places: Vec<String> = if within(p, home) {
         CACHE_SUBPATHS
             .iter()
@@ -98,7 +99,9 @@ pub fn link_followable(home: &str, root: &str, p: &str) -> bool {
     } else {
         TMP_WRITE_DIRS.iter().map(|d| (*d).to_owned()).collect()
     };
-    !within(p, root) && !places.iter().any(|d| within(p, d))
+    !within(p, root)
+        && !git_dirs.iter().any(|g| within(p, g))
+        && !places.iter().any(|d| within(p, d))
 }
 
 /// 도구 프로파일 읽기 범위 안인가(설계 D-22·§9 N2) — 홈 밖은 닿는다. 홈 안은 허용 subpath·literal 안이어야 하고 비밀 목록 밖이어야 한다.

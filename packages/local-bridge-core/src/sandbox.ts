@@ -10,7 +10,7 @@ import * as os from 'os';
 import * as path from 'path';
 import {
     CACHE_SUBPATHS, GIT_CONFIG_READ_MAX, HOME_PRIVACY_SUBPATHS, PATH_PROBE_ENV_EXTRA_POSIX, SANDBOX_BIN, SANDBOX_PROFILE_MISSING_ERROR,
-    SANDBOX_SPAWN_ERROR_PREFIX, SECRET_SUBPATHS, sbq, sbSub, TOOL_ANCESTOR_MAX, TOOL_ANCESTOR_READ_NAMES, TOOL_HOME_READ_SUBPATHS,
+    LINK_HOP_MAX, SANDBOX_SPAWN_ERROR_PREFIX, SECRET_SUBPATHS, sbq, sbSub, TOOL_ANCESTOR_MAX, TOOL_ANCESTOR_READ_NAMES, TOOL_HOME_READ_SUBPATHS,
     TOOL_READ_EXTRA_MAX, TOOL_SECRET_SUBPATHS,
 } from './constants';
 import type { GitPaths } from './git-trust';
@@ -50,13 +50,14 @@ export function readGuard(home: string, p: string, top = false): boolean {
 const TMP_WRITE_DIRS = ['/private/tmp', '/private/var/folders', '/tmp', '/var/folders'];
 
 /**
- * 연결 때 층이 이 경로의 심링크를 따라가도 되는가(설계 D-15 보완, 코드 검증 R1 A1) — realpath **전** 경로가 샌드박스 자식이
- * 쓸 수 있는 자리 안이면 거짓이다(자식이 그 자리를 홈의 다른 폴더를 가리키는 심링크로 바꿔 다음 연결의 읽기를 넓히는 길).
- * 홈 안이면 홈의 `CACHE_SUBPATHS`·연결 폴더로, 홈 밖이면 연결 폴더·임시 자리로 본다(홈이 임시 폴더 아래인 테스트에서도 같은 판정).
+ * 연결 때 층이 이 심링크(사슬의 hop 하나)를 따라가도 되는가(설계 D-15 보완·보완 2, 코드 검증 R1 A1·R2 A1-R2) — 심링크의 자리가
+ * 샌드박스 자식이 쓸 수 있는 자리 안이면 거짓이다(자식이 그 고리를 홈의 다른 폴더를 가리키게 바꿔 다음 연결의 읽기를 넓히는 길).
+ * 연결 폴더·쓰기 허용된 git dir·common dir(`gitDirs`)은 늘 보고, 홈 안이면 홈의 `CACHE_SUBPATHS` 를, 홈 밖이면 임시 자리를
+ * 더 본다(홈이 임시 폴더 아래인 테스트에서도 같은 판정).
  */
-export function linkFollowable(home: string, root: string, p: string): boolean {
+export function linkFollowable(home: string, root: string, gitDirs: string[], p: string): boolean {
     const places = within(p, home) ? CACHE_SUBPATHS.map((d) => path.join(home, d)) : TMP_WRITE_DIRS;
-    return !within(p, root) && !places.some((d) => within(p, d));
+    return !within(p, root) && !gitDirs.some((g) => within(p, g)) && !places.some((d) => within(p, d));
 }
 
 /** 도구 프로파일 읽기 범위 안인가(설계 D-22·§9 N2) — 홈 밖은 닿는다. 홈 안은 허용 subpath·literal 안이어야 하고 비밀 목록 밖이어야 한다. */
@@ -216,16 +217,43 @@ function realOrNull(p: string): string | null {
 }
 
 /**
- * 입력을 realpath 로 — env 위치(없으면 버림), 허용 항목 가운데 realpath 가 다른 것(심링크 dotfiles), git 설정 파일. 가드는 순수 함수가 건다.
- * env 위치·허용 항목은 샌드박스 자식이 쓸 수 있는 자리 안이면 따라가지 않는다(`linkFollowable`, 코드 검증 R1 A1).
+ * 심링크를 hop 단위로 푼다(설계 D-15 보완 2, 코드 검증 R2 A1-R2) — 끝 대상(심링크가 아닌 것)의 경로, 아니면 null.
+ * 버리는 것: 없는 경로·끊긴 링크, dirname 이 심링크를 거침(중간 구성 요소), 거치는 심링크 하나라도 쓸 수 있는 자리 안
+ * (`linkFollowable`), 심링크가 `LINK_HOP_MAX` 개를 넘음. 끝 대상의 자리는 가드가 본다.
  */
-function toolRead(home: string, root: string, inputs: ReadInputs): ToolRead {
-    const extra = (inputs.envDirs ?? []).filter((p) => linkFollowable(home, root, p)).map(realOrNull).filter((p): p is string => p !== null);
+function followLink(home: string, root: string, gitDirs: string[], p: string): string | null {
+    let cur = path.resolve('/', p);
+    for (let hop = 0; hop <= LINK_HOP_MAX; hop++) {
+        const dir = path.dirname(cur);
+        if (realOrNull(dir) !== dir) return null;
+        let st: fs.Stats;
+        try { st = fs.lstatSync(cur); } catch { return null; }
+        if (!st.isSymbolicLink()) return cur;
+        if (hop === LINK_HOP_MAX || !linkFollowable(home, root, gitDirs, cur)) return null;
+        let target: string;
+        try { target = fs.readlinkSync(cur); } catch { return null; }
+        cur = path.resolve(dir, target);
+    }
+    return null;
+}
+
+/** env 위치의 홈 표기를 realpath 홈으로 맞춘다(설계 D-15 보완 2) — 받은 홈(`spelled`) 안이 아니면 그대로. */
+function inRealHome(home: string, spelled: string, p: string): string {
+    const rel = path.relative(spelled, p);
+    return rel === '..' || rel.startsWith('../') ? p : path.join(home, rel);
+}
+
+/**
+ * 입력을 realpath 로 — env 위치(없으면 버림), 허용 항목 가운데 심링크인 것(dotfiles), git 설정 파일. 가드는 순수 함수가 건다.
+ * env 위치·허용 항목은 `followLink` 로 푼다(쓸 수 있는 자리의 고리·중간 구성 요소 심링크는 따라가지 않는다).
+ */
+function toolRead(home: string, spelled: string, root: string, git: GitPaths | null, inputs: ReadInputs): ToolRead {
+    const gitDirs = git ? [git.gitDir, git.commonDir].filter((d) => d !== '') : [];
+    const follow = (p: string): string | null => followLink(home, root, gitDirs, p);
+    const extra = (inputs.envDirs ?? []).map((p) => follow(inRealHome(home, spelled, p))).filter((p): p is string => p !== null);
     for (const d of TOOL_HOME_READ_SUBPATHS) {
         const p = path.join(home, d);
-        if (!linkFollowable(home, root, p)) continue;
-        try { fs.lstatSync(p); } catch { continue; }
-        const r = realOrNull(p);
+        const r = follow(p);
         if (r !== null && r !== p) extra.push(r);
     }
     const literals = (inputs.gitConfig ?? []).map(realOrNull).filter((p): p is string => p !== null);
@@ -236,7 +264,7 @@ function toolRead(home: string, root: string, inputs: ReadInputs): ToolRead {
 export function buildSandboxProfiles(root: string, git: GitPaths | null, protect: GitPaths[], inputs: ReadInputs, homeDir = os.homedir()): Profiles | null {
     const home = realOrNull(homeDir);
     if (home === null) return null;
-    const read = toolRead(home, root, inputs);
+    const read = toolRead(home, homeDir, root, git, inputs);
     return {
         exec: sandboxProfileText(root, git, home, false, protect, read),
         tool: sandboxProfileText(root, git, home, true, protect, read),
