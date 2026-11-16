@@ -49,6 +49,7 @@ export function DeveloperTabs() {
   const tabs = useHubTabs("developer", [
     { href: "/developer", label: t("docs") },
     { href: "/api-access", label: tNav("items.apiAccess") },
+    { href: "/desktop-app", label: t("desktopApp") },
   ]);
   return <PageTabs tabs={tabs} />;
 }

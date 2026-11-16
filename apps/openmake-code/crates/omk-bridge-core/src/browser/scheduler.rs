@@ -4,6 +4,8 @@
 //! 늘 같은 대기 폴더에 받고, 어느 폴더로 옮길지는 다운로드를 시작한 탭의 작업으로 정한다 — `downloads.rs`, D-8). 자리 대기는 도착 순 —
 //! 자리 단계에 들어선 차례표의 맨 앞만 자리를 얻는다(`notify_waiters` 로 모두 깨우면 먼저 잠근 쪽이 들어가므로, D-9). 줄의 차례·
 //! 실행 자리는 `Drop` 가드로 돌려준다 — 호출부가 `run` 의 future 를 버려도 새지 않는다(TS `finally`, D-73).
+//! 중지는 기다릴 수 있다(`StopCheck::wait`) — 실행 중인 액션의 대기(이동·요소 대기·`wait`)가 중지와 겨뤄 바로 끊긴다. TS 코어는
+//! 버린 대기가 뒤에서 계속 돌아(취소 없음) 지금도 다음 액션부터 멈춘다.
 
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
@@ -35,6 +37,8 @@ pub struct BrowserScheduler {
     state: Mutex<State>,
     /// 실행이 끝날 때(또는 줄의 차례표가 빠질 때)마다 기다리는 모두를 깨운다 — 깨어난 쪽이 조건을 다시 본다
     released: Notify,
+    /// 중지 값이 바뀔 때(중지·작업 기록 지움)마다 중지를 기다리는 모두를 깨운다 — 깨어난 쪽이 제 중지인지 다시 본다
+    stop_signal: Notify,
 }
 
 /// 요청을 시작할 때의 중지 값 — 그 뒤 전체 중지·제어권이나 그 작업의 중지가 있었는지 본다.
@@ -50,6 +54,19 @@ impl StopCheck {
         let s = self.sched.lock();
         s.stop_generation != self.generation
             || s.task_stops.get(&self.key).copied().unwrap_or(0) != self.task_generation
+    }
+
+    /// 이 요청이 중지될 때까지 기다린다 — 이미 중지됐으면 바로 끝난다. 놓치지 않게 먼저 등록하고 본 뒤 기다린다(`next_release` 와 같다).
+    /// 한계: 중지 직후 깨어나 보기 전에 `forget_task` 가 기록을 지우면 값이 되돌아가 그 중지를 놓친다.
+    pub async fn wait(&self) {
+        loop {
+            let mut n = std::pin::pin!(self.sched.stop_signal.notified());
+            n.as_mut().enable();
+            if self.stopped() {
+                return;
+            }
+            n.await;
+        }
     }
 }
 
@@ -87,13 +104,16 @@ impl BrowserScheduler {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    /// 실행 중인 요청을 멈춘다(다음 액션부터 실행하지 않는다). 작업을 주면 그 작업만, 없으면 모두.
+    /// 실행 중인 요청을 멈춘다(진행 중인 대기를 끊고, 다음 액션부터 실행하지 않는다). 작업을 주면 그 작업만, 없으면 모두.
     pub fn request_stop(&self, task: Option<&str>) {
-        let mut s = self.lock();
-        match task {
-            None => s.stop_generation += 1,
-            Some(k) => *s.task_stops.entry(k.to_owned()).or_insert(0) += 1,
+        {
+            let mut s = self.lock();
+            match task {
+                None => s.stop_generation += 1,
+                Some(k) => *s.task_stops.entry(k.to_owned()).or_insert(0) += 1,
+            }
         }
+        self.stop_signal.notify_waiters();
     }
 
     /// 지금 시작하는 요청의 중지 확인.
@@ -110,6 +130,7 @@ impl BrowserScheduler {
     /// 작업이 끝났다 — 그 작업의 중지 기록을 지운다.
     pub fn forget_task(&self, key: &str) {
         self.lock().task_stops.remove(key);
+        self.stop_signal.notify_waiters();
     }
 
     pub fn is_running(&self, key: &str) -> bool {
