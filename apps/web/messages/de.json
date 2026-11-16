@@ -1005,6 +1005,14 @@
     },
     "downloadFailed": "Download fehlgeschlagen: {error}",
     "localBadge": "Lauf im lokalen Ordner",
+    "isolation": {
+      "worktree": "Isolierter Lauf · Arbeitszweig {branch}",
+      "worktreeKept": "Isolierter Lauf · Änderungen liegen im Arbeitsordner {path} (Zweig {branch})",
+      "worktreeRemoved": "Isolierter Lauf · keine Änderungen (Arbeitsordner und Zweig entfernt)",
+      "notRepo": "Keine Isolierung · kein Git-Repository, direkte Arbeit im Ordner",
+      "disabled": "Keine Isolierung · in den Servereinstellungen deaktiviert, direkte Arbeit im Ordner",
+      "unavailable": "Isolierung fehlgeschlagen · direkt im Ordner gearbeitet"
+    },
     "errorReason": {
       "label": "Fehlergrund:",
       "goal_incomplete": "Ziel nicht erreicht",
