@@ -17,6 +17,21 @@ describe('citedClaims — 출처 번호를 인용한 문장만 뽑는다', () =>
         const text = ['## 제목 [1]', '| 구분 | 내용 [1] |', '> 인용 블록의 긴 문장입니다 [1].', '맞음 [1].', '- 확인기관은 벤처기업협회 한 곳입니다 [1].'].join('\n');
         expect(citedClaims(text).map((c) => c.text)).toEqual(['- 확인기관은 벤처기업협회 한 곳입니다 .']);
     });
+
+    it('묶음 인용·번호마다 라벨·다른 언어 라벨을 읽고, 표기를 통째로 뺀다', () => {
+        expect(citedClaims('환율은 이번 주에 올랐습니다 [출처 3, 8].')).toEqual([{ text: '환율은 이번 주에 올랐습니다 .', ns: [3, 8] }]);
+        expect(citedClaims('물가는 이번 달에 올랐습니다 [출처 11, 출처 16].')).toEqual([{ text: '물가는 이번 달에 올랐습니다 .', ns: [11, 16] }]);
+        expect(citedClaims('Prices rose sharply this month [Source 3].')).toEqual([{ text: 'Prices rose sharply this month .', ns: [3] }]);
+    });
+
+    it('한 문장의 번호는 중복 없이 나온 순서로 모은다', () => {
+        expect(citedClaims('환율은 이번 주에 올랐습니다 [출처 3, 출처 3, 8].')).toEqual([{ text: '환율은 이번 주에 올랐습니다 .', ns: [3, 8] }]);
+    });
+
+    it('라벨 없는 번호는 3자리까지만 — [123] 은 맞고 [1234] 는 아니다', () => {
+        expect(citedClaims('세 자리 번호를 인용한 문장입니다 [123].')).toEqual([{ text: '세 자리 번호를 인용한 문장입니다 .', ns: [123] }]);
+        expect(citedClaims('네 자리 번호를 인용한 문장입니다 [1234].')).toEqual([]);
+    });
 });
 
 describe('buildClaimState', () => {
@@ -67,6 +82,12 @@ describe('runGroundingGate', () => {
         const bad = await runGroundingGate({ sources, answer: '첫째 주장은 이렇습니다 [1].' }, { ...on, decide: async () => ({ pTrue: null, ms: 3000, error: 'timeout' }) });
         expect(bad).toMatchObject({ claimCount: 1, lowCount: 0, ms: 3000, error: 'timeout', claims: [{ n: 1, p: null }] });
         expect(bad?.minP).toBeUndefined();
+    });
+
+    it('묶음 인용의 번호표 밖 번호는 건너뛰고 있는 출처만 묻는다', async () => {
+        const asked: string[] = [];
+        await runGroundingGate({ sources, answer: '첫째 주장은 이렇습니다 [출처 1, 출처 99].' }, { ...on, decide: async (i) => { asked.push(i.state); return { pTrue: 0.7, ms: 1 }; } });
+        expect(asked).toEqual([buildClaimState(sources[0], '첫째 주장은 이렇습니다 .')]);
     });
 
     it('문장 수 상한까지만 묻는다', async () => {

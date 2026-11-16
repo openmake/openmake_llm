@@ -134,6 +134,12 @@ describe('appendDeterministicBlocks — 도구 검색만 돈 턴', () => {
         expect(streamed).toContain('**출처**\n- **1.** [도구 1](https://tool.example/1)');
     });
 
+    it('번호마다 라벨을 되풀이한 묶음 인용 [출처 1, 출처 2] 도 인용으로 센다', () => {
+        const { out } = run('최신 수치 [출처 1, 출처 2].', { toolSources: [toolSearch(1, 10)] });
+        expect(out).toContain('[출처 1, 출처 2]');
+        expect(listedNums(out)).toEqual([1, 2]);
+    });
+
     it('인용이 없으면 아무것도 붙이지 않는다', () => {
         const body = '공식 문서를 읽고 정리한 답변.\n\n출처: [Node.js 릴리스](https://nodejs.org/en/about/previous-releases), [블로그](https://blog.example/a)';
         const { out, streamed } = run(body, { toolSources: [toolSearch(1, 10), toolSearch(11, 10, 'second')] });

@@ -483,7 +483,10 @@
         "unassigned": "No model is assigned to this task",
         "unavailable": "This task is currently unavailable",
         "skipped": "Skipped because an earlier task did not finish",
-        "deadline": "Not run because the overall time limit was exceeded"
+        "deadline": "Not run because the overall time limit was exceeded",
+        "timeoutQueued": "Exceeded the time limit while waiting for its turn to run",
+        "unreachable": "Could not connect to the model service",
+        "upstream": "Failed due to an error in the model service"
       }
     },
     "tool": {

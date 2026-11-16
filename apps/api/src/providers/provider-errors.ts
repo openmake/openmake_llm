@@ -14,6 +14,7 @@
  *
  * - `GUEST_NOT_ALLOWED`: 인증 없는 게스트 사용자에게 차단된 기능
  * - `MISSING_API_KEY`: API 키 미설정 (환경변수/DB 모두)
+ * - `API_KEY_DISABLED`: 키는 등록돼 있으나 사용자가 꺼 둠 — `MISSING_API_KEY`(미설정)와 구분
  * - `INVALID_API_KEY`: 키 형식 오류 또는 인증 실패
  * - `QUOTA_EXCEEDED`: 사용량/토큰/요금 한도 초과 (rate limit)
  * - `INSUFFICIENT_CREDIT`: 잔액 부족 (HTTP 402 — OpenRouter 등 paid endpoint)
@@ -27,6 +28,7 @@
 export type ProviderErrorCode =
     | 'GUEST_NOT_ALLOWED'
     | 'MISSING_API_KEY'
+    | 'API_KEY_DISABLED'
     | 'INVALID_API_KEY'
     | 'QUOTA_EXCEEDED'
     | 'INSUFFICIENT_CREDIT'
@@ -65,6 +67,7 @@ export class ProviderError extends Error {
 export const PROVIDER_ERROR_HTTP_STATUS: Record<ProviderErrorCode, number> = {
     GUEST_NOT_ALLOWED: 403,
     MISSING_API_KEY: 400,
+    API_KEY_DISABLED: 400,
     INVALID_API_KEY: 401,
     QUOTA_EXCEEDED: 429,
     INSUFFICIENT_CREDIT: 402,
