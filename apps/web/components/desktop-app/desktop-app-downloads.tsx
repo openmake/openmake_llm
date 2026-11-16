@@ -46,10 +46,11 @@ export function DesktopAppDownloads() {
     );
   }
 
-  if (error) {
-    if (error instanceof ApiError && error.status === 404) {
-      return <Card><CardContent className="py-10 text-center text-sm text-muted">{t("notPublished")}</CardContent></Card>;
-    }
+  // 404 는 서버가 "게시본 없음"이라 판정한 것 — 항상 빈 상태. 그 밖의 오류는 보던 목록이 없을 때만 오류 화면(재조회 실패로 목록을 지우지 않는다).
+  if (error instanceof ApiError && error.status === 404) {
+    return <Card><CardContent className="py-10 text-center text-sm text-muted">{t("notPublished")}</CardContent></Card>;
+  }
+  if (error && !data) {
     return (
       <div className="flex flex-wrap items-center gap-2 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
         <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -61,6 +62,8 @@ export function DesktopAppDownloads() {
       </div>
     );
   }
+
+  if (!data) return null;
 
   const blocks = OS_KEYS.flatMap((key) => {
     const block: DesktopReleaseBlock | undefined = data[key];
@@ -83,7 +86,7 @@ export function DesktopAppDownloads() {
                   <a
                     href={block.url}
                     download
-                    className="ml-auto inline-flex h-8 items-center gap-2 rounded-md bg-accent px-3 text-xs font-medium text-accent-fg shadow-2 hover:bg-accent-hover"
+                    className="ml-auto inline-flex h-8 items-center justify-center gap-2 rounded-md bg-accent px-3 text-xs font-medium text-accent-fg shadow-2 transition hover:bg-accent-hover active:bg-accent-press"
                   >
                     <Download className="h-3.5 w-3.5" />
                     {t("download")}
@@ -97,8 +100,8 @@ export function DesktopAppDownloads() {
                     <button
                       type="button"
                       onClick={() => copy(block.sha256!, key)}
-                      aria-label={t("copy")}
-                      title={t("copy")}
+                      aria-label={t("copyFor", { os: t(`os.${key}`) })}
+                      title={t("copyFor", { os: t(`os.${key}`) })}
                       className="shrink-0 text-muted hover:text-fg"
                     >
                       {copied === key ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}

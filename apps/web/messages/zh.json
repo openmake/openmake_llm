@@ -2407,7 +2407,7 @@
     "version": "版本 {version}",
     "download": "下载",
     "sha256": "SHA-256",
-    "copy": "复制",
+    "copyFor": "复制 {os} SHA-256",
     "notPublished": "此服务器上没有发布的安装文件。请联系管理员。",
     "loadFailed": "无法加载安装文件信息。",
     "retry": "重试",
