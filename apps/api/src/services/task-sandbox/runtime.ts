@@ -13,6 +13,7 @@ import type { MCPToolDefinition } from '../../tool-contract/types';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { TaskSandbox, type ExecResult } from './sandbox';
 import type { TaskExecutor } from './executor';
+import type { AgentTaskIsolation } from '@openmake/shared-types';
 import { getSkillRuntime } from '../../runtime-ports/skill-runtime';
 import { createTaskTools, type DelegateFn, type SpawnFn, type ProceduralHooks } from './tools';
 import { recordBrowserMetric } from './browser-metrics';
@@ -145,6 +146,9 @@ export class TaskRuntime {
 
     /** 호스트 workspace 경로 or null(원격 실행기) — 호스트측 소비자(diff·git·영속)의 가드 기준. */
     get localWorkdir(): string | null { return this.executor.localWorkdir; }
+
+    /** worktree 격리 상태(200) — 실행기 값을 그대로. 서버 샌드박스는 null. */
+    get isolation(): AgentTaskIsolation | null { return this.executor.isolation ?? null; }
 
     /**
      * 상한을 넘는 도구 결과를 작업 공간 파일로 보관하고 미리보기 + 경로 안내를 돌려준다(tool-result-spill, 기본 꺼짐).
