@@ -51,6 +51,24 @@ describe('stripDeadCitationMarkers', () => {
         expect(r.removed).toBe(1);
     });
 
+    test('일부 유효 재작성 때 표기 앞 줄바꿈을 유지한다 (라벨 되풀이 꼴)', () => {
+        const r = stripDeadCitationMarkers('근거\n[출처 3, 출처 14]이다.', VALID);
+        expect(r.content).toBe('근거\n[출처 3]이다.');
+        expect(r.removed).toBe(1);
+    });
+
+    test('일부 유효 재작성 때 표기 앞 줄바꿈을 유지한다 (라벨 한 번 꼴)', () => {
+        const r = stripDeadCitationMarkers('근거\n[출처 3, 14]이다.', VALID);
+        expect(r.content).toBe('근거\n[출처 3]이다.');
+        expect(r.removed).toBe(1);
+    });
+
+    test('전부 무효이고 앞이 줄바꿈이면 줄바꿈과 함께 삭제된다 (기존 동작 고정)', () => {
+        const r = stripDeadCitationMarkers('근거\n[출처 14] 다음', VALID);
+        expect(r.content).toBe('근거 다음');
+        expect(r.removed).toBe(1);
+    });
+
     test('라벨 없는 대괄호 숫자([14]·마크다운 링크·각주)는 건드리지 않는다', () => {
         const text = '배열 [14] 와 링크 [제목 99](https://x.com) 유지.';
         const r = stripDeadCitationMarkers(text, VALID);
