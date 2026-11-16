@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { WEB_CHAT_MODES } from "@/addons/registry";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
-import type { WsChatRequest, WsServerEvent, WsAttachedFile, WsStreamEnvelope } from "@openmake/shared-types";
+import type { AgentTaskIsolation, WsChatRequest, WsServerEvent, WsAttachedFile, WsStreamEnvelope } from "@openmake/shared-types";
+import { isolationFromEvent, isolationFromTask, isIsolationOnlyUpdate } from "./agent-task-isolation";
 import { PORTS } from "@openmake/config";
 import { nextFollowup } from "./followup-queue";
 import { acceptStreamEvent, cursorAfterResume, resumeCursorFields, EMPTY_STREAM_CURSOR, type StreamCursor } from "./ws-seq";
@@ -623,12 +624,12 @@ export function useChatSocket() {
             (m) => m.taskId && !["completed", "failed", "cancelled"].includes(m.agentTask?.status ?? ""),
           );
           for (const m of open) {
-            void ApiClient.get<{ data: { task: { status: string; progress: number; current_turn: number; waitReason?: string } } }>(`/api/agent-tasks/${m.taskId}`)
+            void ApiClient.get<{ data: { task: { status: string; progress: number; current_turn: number; waitReason?: string; isolation?: AgentTaskIsolation | null } } }>(`/api/agent-tasks/${m.taskId}`)
               .then((r) => {
                 const task = r?.data?.task;
                 if (!task) return;
                 setChatHistory((prev) => prev.map((x) => (x.taskId === m.taskId
-                  ? { ...x, agentTask: { goal: x.agentTask?.goal ?? "", ...(x.agentTask ?? {}), status: task.status, progress: task.progress, currentTurn: task.current_turn, waitReason: task.waitReason } as AgentTaskState }
+                  ? { ...x, agentTask: { goal: x.agentTask?.goal ?? "", ...(x.agentTask ?? {}), status: task.status, progress: task.progress, currentTurn: task.current_turn, waitReason: task.waitReason, ...isolationFromTask(task) } as AgentTaskState }
                   : x)));
               })
               .catch(() => { /* 조회 실패 — 다음 이벤트가 맞춘다 */ });
@@ -647,6 +648,8 @@ export function useChatSocket() {
           if (data.reason) announceAgentTaskChange({ taskId, approvalId: data.approvalId, reason: data.reason });
           const terminal =
             status === "completed" || status === "failed" || status === "cancelled";
+          // 격리 상태(200) — 실린 이벤트(시작·종료 정리 뒤)면 카드에 넣는다.
+          const isolationExtra = isolationFromEvent(data);
           // 스텝 실시간 스트림(4-5) — 있으면 "현재 단계"로 반영(터미널에선 정리).
           const stepExtra: Partial<AgentTaskState> = step
             ? { lastStep: step as AgentTaskState["lastStep"] }
@@ -664,6 +667,7 @@ export function useChatSocket() {
                         status, currentTurn, progress,
                         // 대기 사유는 그 이벤트의 것만 — 다시 돌기 시작하면 지운다
                         waitReason: status === "paused" ? (data.waitReason ?? m.agentTask?.waitReason) : undefined,
+                        ...isolationExtra,
                         ...extra,
                       } as AgentTaskState,
                     }
@@ -671,19 +675,25 @@ export function useChatSocket() {
               ),
             );
 
-          if (terminal) {
+          // 종료 뒤 정리 결과 알림(reason "isolation")이고 카드가 이미 끝났으면 격리 표시만 바꾼다 — 결과 재조회를 다시 돌리지 않는다.
+          const cardStatus = useAppStore.getState().chatHistory.find((m) => m.taskId === taskId)?.agentTask?.status;
+          if (isIsolationOnlyUpdate(data.reason, cardStatus)) {
+            setChatHistory((prev) => prev.map((m) => (m.taskId === taskId && m.agentTask ? { ...m, agentTask: { ...m.agentTask, ...isolationExtra } } : m)));
+          } else if (terminal) {
             void (async () => {
               let result = "";
               const artifactIds: string[] = [];
               let files: string[] = [];
               let diff: string | undefined;
               let failure: Pick<AgentTaskState, "error" | "failureClass"> = {};
+              let isolation: Pick<AgentTaskState, "isolation"> = {};
               try {
                 const r = await ApiClient.get<{
-                  data: { task: { result?: string; error?: string; failure_class?: string | null }; steps?: Array<{ step_type: string; content?: string }> };
+                  data: { task: { result?: string; error?: string; failure_class?: string | null; isolation?: AgentTaskIsolation | null }; steps?: Array<{ step_type: string; content?: string }> };
                 }>(`/api/agent-tasks/${taskId}`);
                 result = r?.data?.task?.result ?? "";
                 if (status === "failed" && r?.data?.task?.error) failure = { error: r.data.task.error, failureClass: r.data.task.failure_class ?? null };
+                if (r?.data?.task) isolation = isolationFromTask(r.data.task);
                 // 코드 작업 diff 스텝 — 채팅 카드에 DiffView 로 인라인 렌더(마지막 diff 사용).
                 diff = (r?.data?.steps ?? []).filter((s) => s.step_type === "diff").pop()?.content || undefined;
                 // deliverable 아티팩트 — store 등록 후 카드가 칩으로 렌더.
@@ -704,7 +714,7 @@ export function useChatSocket() {
                 const f = await ApiClient.get<{ data: { files: string[] } }>(`/api/agent-tasks/${taskId}/files`);
                 files = f?.data?.files ?? [];
               } catch { /* 파일 없음 */ }
-              merge({ result, artifactIds, files, diff, lastStep: undefined, ...failure }, undefined);
+              merge({ result, artifactIds, files, diff, lastStep: undefined, ...failure, ...isolation }, undefined);
             })();
           } else if (status === "paused") {
             // 승인 대기 — 해당 task 의 pending approval 조회 → 카드에 인라인 승인 버튼.
