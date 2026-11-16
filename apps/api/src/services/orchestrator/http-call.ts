@@ -146,6 +146,7 @@ function httpFailure(target: CapabilityTarget, status: number, buf: Buffer): Htt
  * 슬롯을 얻으면 이벤트 루프를 한 번 양보한 뒤 신호를 다시 본다 — 같은 시각에 만료되는 대기자가 앞 작업이 놓은 슬롯으로
  * 요청을 한 번 내보내고 끊기지 않게. 요청 전에 시간 제한에 걸린 경우(슬롯 대기 중·양보 뒤)만 QueueTimeoutError,
  * 들어올 때 이미 중단됐거나 fn 이 시작된 뒤(fetch·본문 읽기 중)의 시간 초과는 signal.reason 그대로다.
+ * 만료 시각이 ms 단위로 어긋나면 요청이 나간 뒤 끊길 수 있다(그때 사유는 `timeout`).
  * 가짜 타이머로 이 경로를 시험하면 setImmediate 가 막힌다.
  */
 async function inProviderSlot<T>(target: CapabilityTarget, signal: AbortSignal, fn: () => Promise<T>): Promise<T> {

@@ -339,6 +339,28 @@ describe('작업 실패 사유 세분 — 연결 실패·서비스 오류·대�
     });
     /** 작업 신호가 중단될 때까지 붙잡는 handler */
     const holdUntilAbort = (signal?: AbortSignal) => new Promise<never>((_, reject) => signal!.addEventListener('abort', () => reject(signal!.reason), { once: true }));
+    /**
+     * AbortSignal.timeout 대역 — 실제 타이머 대신 테스트가 끊는 신호(만료 순서를 테스트가 정한다).
+     * 만든 순서대로 쌓고, expire(ms, n) 은 그 ms 로 n 번째 만든 신호를 시간 초과 사유로 끊는다. 끝나면 restore.
+     */
+    function heldTimeouts() {
+        const made: Array<{ ms: number; ac: AbortController }> = [];
+        const spy = jest.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+            const ac = new AbortController();
+            made.push({ ms, ac });
+            return ac.signal;
+        });
+        const expire = (ms: number, nth = 0) => {
+            const hit = made.filter((m) => m.ms === ms)[nth];
+            if (!hit) throw new Error(`AbortSignal.timeout(${ms}) #${nth} 가 만들어지지 않았다`);
+            hit.ac.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+        };
+        return { expire, restore: () => spy.mockRestore() };
+    }
+    /** setImmediate 를 n 번 넘긴다(양보 포함 진행) */
+    const ticks = async (n = 2) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
+    /** 마이크로태스크만 비운다 — setImmediate 양보는 아직 돌지 않는다 */
+    const microtasks = async (n = 50) => { for (let i = 0; i < n; i++) await Promise.resolve(); };
     async function isolated(env: Record<string, string>, fn: (m: {
         run: typeof executePlan;
         http: typeof import('../http-call');
@@ -395,50 +417,76 @@ describe('작업 실패 사유 세분 — 연결 실패·서비스 오류·대�
 
     it('같은 시각 만료(Gate 한도 1): 잡은 작업은 timeout, 기다리던 작업은 timeout_queued 이고 handler 를 부르지 않는다', async () => {
         await isolated({ ORCHESTRATOR_GLOBAL_MAX_INFLIGHT: '1', ORCHESTRATOR_TASK_TIMEOUT_MS: '30' }, async ({ run }) => {
-            const events: Ev[] = [];
-            behaviors.a = holdUntilAbort;
-            const p = plan({ complexity: 'multi', tasks: [{ id: 'a', capability: 'web.search' }, { id: 'b', capability: 'web.search' }] });
-            const s = await run(p, ctx({ onProgress: (e) => events.push(e as Ev) }));
-            expect(failedReason(events, 'a')).toEqual(['timeout']);
-            expect(failedReason(events, 'b')).toEqual(['timeout_queued']);
-            expect(s.results.map((r) => r.text.slice(0, 9))).toEqual(['[timeout]', '[timeout]']);
-            expect(calls).toEqual(['a']);
+            const t = heldTimeouts();
+            try {
+                const events: Ev[] = [];
+                behaviors.a = holdUntilAbort;
+                const p = plan({ complexity: 'multi', tasks: [{ id: 'a', capability: 'web.search' }, { id: 'b', capability: 'web.search' }] });
+                const done = run(p, ctx({ onProgress: (e) => events.push(e as Ev) }));
+                await ticks(3); // a 는 handler 안, b 는 Gate 대기
+                t.expire(30, 0); // a 만료 → Gate 반환 → b 깨어나 양보 중
+                await microtasks();
+                t.expire(30, 1); // 양보가 끝나기 전에 b 만료
+                await ticks();
+                const s = await done;
+                expect(failedReason(events, 'a')).toEqual(['timeout']);
+                expect(failedReason(events, 'b')).toEqual(['timeout_queued']);
+                expect(s.results.map((r) => r.text.slice(0, 9))).toEqual(['[timeout]', '[timeout]']);
+                expect(calls).toEqual(['a']);
+            } finally { t.restore(); }
         });
     });
 
     it('같은 시각 만료(provider 동시성 1): 기다리던 호출은 timeout_queued, fetch 는 잡은 작업의 1회뿐', async () => {
         await isolated({}, async ({ run, http, throttle }) => {
+            const t = heldTimeouts();
             let release!: () => void;
             const held = new Promise<void>((r) => { release = r; });
             const holders = Array.from({ length: throttle.providerConcurrency('hasa') - 1 }, () => throttle.withProviderSlot('hasa', () => held));
             const fetchSpy = jest.spyOn(global, 'fetch').mockImplementation(hangingFetch as typeof fetch);
             const events: Ev[] = [];
-            behaviors.a = async () => http.callJson(hasaTarget as never, { body: { prompt: 'a' }, timeoutMs: 30 });
-            behaviors.b = async () => http.callJson(hasaTarget as never, { body: { prompt: 'b' }, timeoutMs: 30 });
+            // 호출 시간 제한 값으로 a·b 의 신호를 구분한다
+            behaviors.a = async () => http.callJson(hasaTarget as never, { body: { prompt: 'a' }, timeoutMs: 31 });
+            behaviors.b = async () => http.callJson(hasaTarget as never, { body: { prompt: 'b' }, timeoutMs: 32 });
             const p = plan({ complexity: 'multi', tasks: [{ id: 'a', capability: 'image.generate', input: { instruction: 'x' } }, { id: 'b', capability: 'image.generate', input: { instruction: 'y' } }] });
             try {
-                await run(p, ctx({ onProgress: (e) => events.push(e as Ev) }));
+                const done = run(p, ctx({ onProgress: (e) => events.push(e as Ev) }));
+                await ticks(3); // a 는 마지막 슬롯으로 fetch 중, b 는 슬롯 대기
+                expect(fetchSpy).toHaveBeenCalledTimes(1);
+                t.expire(31); // a 만료 → 슬롯 반환 → b 깨어나 양보 중
+                await microtasks();
+                t.expire(32); // 양보가 끝나기 전에 b 만료
+                await ticks();
+                await done;
                 expect(failedReason(events, 'a')).toEqual(['timeout']);
                 expect(failedReason(events, 'b')).toEqual(['timeout_queued']);
                 expect(fetchSpy).toHaveBeenCalledTimes(1);
             } finally {
-                release(); await Promise.all(holders); fetchSpy.mockRestore();
+                release(); await Promise.all(holders); fetchSpy.mockRestore(); t.restore();
             }
         });
     });
 
     it('Gate 인계: 깨어난 대기자가 중단으로 빠지면 시간 제한이 더 긴 다음 대기자가 곧바로 Gate 를 얻는다', async () => {
         await isolated({ ORCHESTRATOR_GLOBAL_MAX_INFLIGHT: '1', ORCHESTRATOR_TASK_TIMEOUT_MS: '60' }, async ({ run }) => {
-            const events: Ev[] = [];
-            behaviors.a = holdUntilAbort;
-            const first = run(plan({ complexity: 'multi', tasks: [{ id: 'a', capability: 'web.search' }, { id: 'b', capability: 'web.search' }] }), ctx({ onProgress: (e) => events.push(e as Ev) }));
-            await new Promise((r) => setTimeout(r, 25));
-            // 뒤 대기자 c — 작업 시간 제한 만료가 a·b 보다 약 25ms 늦다
-            const second = run(plan({ complexity: 'multi', tasks: [{ id: 'c', capability: 'web.search' }] }), ctx({ onProgress: (e) => events.push(e as Ev) }));
-            const [, s2] = await Promise.all([first, second]);
-            expect(failedReason(events, 'b')).toEqual(['timeout_queued']);
-            expect(s2.results[0].status).toBe('completed');
-            expect(calls).toEqual(['a', 'c']);
+            const t = heldTimeouts();
+            try {
+                const events: Ev[] = [];
+                behaviors.a = holdUntilAbort;
+                const first = run(plan({ complexity: 'multi', tasks: [{ id: 'a', capability: 'web.search' }, { id: 'b', capability: 'web.search' }] }), ctx({ onProgress: (e) => events.push(e as Ev) }));
+                await ticks(3);
+                // 뒤 대기자 c — 작업 시간 제한을 끊지 않는다(시간 여유에 기대지 않음)
+                const second = run(plan({ complexity: 'multi', tasks: [{ id: 'c', capability: 'web.search' }] }), ctx({ onProgress: (e) => events.push(e as Ev) }));
+                await ticks(3); // a 는 handler 안, b·c 는 Gate 대기
+                t.expire(60, 0); // a 만료 → b 깨어나 양보 중
+                await microtasks();
+                t.expire(60, 1); // 양보가 끝나기 전에 b 만료 → 차례를 c 에게
+                await ticks();
+                const [, s2] = await Promise.all([first, second]);
+                expect(failedReason(events, 'b')).toEqual(['timeout_queued']);
+                expect(s2.results[0].status).toBe('completed');
+                expect(calls).toEqual(['a', 'c']);
+            } finally { t.restore(); }
         });
     });
 
