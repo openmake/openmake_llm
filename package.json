@@ -62,7 +62,7 @@
         "@types/node": "^26.6.6",
         "@types/nodemailer": "^8.0.2",
         "@types/supertest": "^7.2.1",
-        "autocannon": "^8.0.0",
+        "autocannon": "^9.0.0",
         "concurrently": "^10.0.6",
         "esbuild": "0.28.2",
         "eslint": "^10.14.0",
