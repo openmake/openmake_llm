@@ -71,7 +71,7 @@ export function stripDeadCitationMarkers(
         removed++;
         if (valid.length === 0) return '';
         const label = new RegExp(`(${SOURCE_LABEL_ALT})`, 'i').exec(match)?.[1] ?? '출처';
-        return `${match.startsWith(' ') ? ' ' : ''}[${label} ${valid.join(', ')}]`;
+        return `${/^\s/.test(match) ? match[0] : ''}[${label} ${valid.join(', ')}]`;
     });
     return { content: out, removed };
 }
