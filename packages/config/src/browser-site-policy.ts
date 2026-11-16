@@ -81,12 +81,42 @@ export function isNavigableBrowserUrl(url: unknown): boolean {
   return typeof url === "string" && (url.trim() === "about:blank" || browserHostOf(url) !== null);
 }
 
-/** 호스트 패턴 일치 — `*` 는 임의 문자열. `*.example.com` 은 하위 도메인만(`example.com` 자체는 따로 적는다). 대소문자 무시. */
+/** ECMAScript 줄 끝 글자(LF·CR·U+2028·U+2029) — 정규식 `.` 이 건너지 못하는 UTF-16 단위 */
+function isLineTerminatorUnit(u: number): boolean {
+  return u === 0x0a || u === 0x0d || u === 0x2028 || u === 0x2029;
+}
+
+/**
+ * 호스트 패턴 일치 — `*` 는 임의 문자열(줄 끝 글자 제외). `*.example.com` 은 하위 도메인만(`example.com` 자체는 따로 적는다). 대소문자 무시.
+ * 정규식 없이 UTF-16 단위로 선형 판정한다(시간 패턴 × 호스트, 역추적 없음) — 저장 검증을 거치지 않는 별표 여러 개 패턴도 폭주하지 않는다.
+ * 뜻은 옛 정규식(`^…$`, `*`→`.*`, 나머지 글자 그대로)과 같다 — 단 옛 구현이 컴파일하지 못하던 아주 긴 패턴(SyntaxError)도 이제 답을 낸다.
+ */
 export function browserHostMatches(host: string, pattern: string): boolean {
   const p = pattern.trim().toLowerCase();
   if (!p) return false;
-  const re = new RegExp(`^${p.split("*").map((s) => s.replace(/[.+^${}()|[\]\\?]/g, "\\$&")).join(".*")}$`);
-  return re.test(host.toLowerCase());
+  const h = host.toLowerCase();
+  // reach[j]: 패턴의 지금까지 부분이 호스트 앞 j 단위와 맞는가
+  let reach = new Uint8Array(h.length + 1);
+  let next = new Uint8Array(h.length + 1);
+  reach[0] = 1;
+  for (let i = 0; i < p.length; i++) {
+    const c = p.charCodeAt(i);
+    next.fill(0);
+    let any = 0;
+    if (c === 0x2a) {
+      for (let j = 0; j <= h.length; j++) {
+        next[j] = reach[j] || (j > 0 && next[j - 1] && !isLineTerminatorUnit(h.charCodeAt(j - 1)) ? 1 : 0);
+        any |= next[j];
+      }
+    } else {
+      for (let j = 0; j < h.length; j++) {
+        if (reach[j] && h.charCodeAt(j) === c) { next[j + 1] = 1; any = 1; }
+      }
+    }
+    if (!any) return false;
+    [reach, next] = [next, reach];
+  }
+  return reach[h.length] === 1;
 }
 
 /** 이 호스트에서 승인 없이 쓰기를 해도 되는가 — 거부가 이기고, 허용 목록에 있어야 한다. */
