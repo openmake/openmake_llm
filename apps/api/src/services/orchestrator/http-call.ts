@@ -34,6 +34,27 @@ export class HttpCallError extends Error {
     }
 }
 
+/**
+ * 실행 차례(provider 슬롯·전역 Gate)를 기다리다 시간 제한에 걸림 — 요청을 내보내기 전이다.
+ * name 이 'TimeoutError' 라 기존 시간 초과 판정은 그대로 타고, executor 가 이 클래스로 사유를 `timeout_queued` 로 구분한다.
+ * message 는 signal.reason 의 message 그대로(계측 error_code 가 바뀌지 않게).
+ */
+export class QueueTimeoutError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'TimeoutError';
+    }
+}
+
+function isTimeoutAbort(signal: AbortSignal): boolean {
+    return signal.aborted && (signal.reason as { name?: unknown } | undefined)?.name === 'TimeoutError';
+}
+
+/** 시간 초과로 중단된 signal 의 대기 중 시간 초과 오류 */
+export function queueTimeoutError(signal: AbortSignal): QueueTimeoutError {
+    return new QueueTimeoutError(String((signal.reason as { message?: unknown } | undefined)?.message ?? 'timeout'));
+}
+
 export function combineSignals(...signals: Array<AbortSignal | undefined>): AbortSignal {
     const list = signals.filter((s): s is AbortSignal => !!s);
     if (list.length === 1) return list[0];
@@ -122,12 +143,30 @@ function httpFailure(target: CapabilityTarget, status: number, buf: Buffer): Htt
 /**
  * provider 슬롯 안에서 실행. 슬롯 대기·호출 전 검사는 중단 사유를 보지 않고 '취소됨' 을 던지므로(공유 Semaphore — 채팅 경로와 같이 써서 무변경),
  * 타임아웃으로 중단됐으면 signal 의 TimeoutError 로 바꿔 던진다 — executor 가 사용자 취소([cancelled])와 구분해 [timeout] 으로 기록한다.
+ * 슬롯을 얻으면 이벤트 루프를 한 번 양보한 뒤 신호를 다시 본다 — 같은 시각에 만료되는 대기자가 앞 작업이 놓은 슬롯으로
+ * 요청을 한 번 내보내고 끊기지 않게. 요청 전에 시간 제한에 걸린 경우(슬롯 대기 중·양보 뒤)만 QueueTimeoutError,
+ * 들어올 때 이미 중단됐거나 fn 이 시작된 뒤(fetch·본문 읽기 중)의 시간 초과는 signal.reason 그대로다.
+ * 만료 시각이 ms 단위로 어긋나면 요청이 나간 뒤 끊길 수 있다(그때 사유는 `timeout`).
+ * 가짜 타이머로 이 경로를 시험하면 setImmediate 가 막힌다.
  */
 async function inProviderSlot<T>(target: CapabilityTarget, signal: AbortSignal, fn: () => Promise<T>): Promise<T> {
+    const abortedOnEntry = signal.aborted;
+    let started = false;
     try {
-        return await withProviderSlot(target.providerId, fn, signal);
+        return await withProviderSlot(target.providerId, async () => {
+            if (!abortedOnEntry) {
+                await new Promise<void>((r) => setImmediate(r));
+                if (isTimeoutAbort(signal)) throw queueTimeoutError(signal); // 요청 미전송 — 슬롯은 withProviderSlot 이 놓는다
+            }
+            started = true;
+            return fn();
+        }, signal);
     } catch (err) {
-        if (signal.aborted && (signal.reason as { name?: unknown } | undefined)?.name === 'TimeoutError') throw signal.reason;
+        if (err instanceof QueueTimeoutError) throw err;
+        if (isTimeoutAbort(signal)) {
+            if (!abortedOnEntry && !started) throw queueTimeoutError(signal);
+            throw signal.reason;
+        }
         throw err;
     }
 }

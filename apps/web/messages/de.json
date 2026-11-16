@@ -483,7 +483,10 @@
         "unassigned": "Dieser Aufgabe ist kein Modell zugewiesen",
         "unavailable": "Diese Aufgabe ist derzeit nicht verfügbar",
         "skipped": "Übersprungen, weil eine vorherige Aufgabe nicht abgeschlossen wurde",
-        "deadline": "Nicht ausgeführt, weil das Gesamtzeitlimit überschritten wurde"
+        "deadline": "Nicht ausgeführt, weil das Gesamtzeitlimit überschritten wurde",
+        "timeoutQueued": "Beim Warten auf die Ausführung wurde das Zeitlimit überschritten",
+        "unreachable": "Verbindung zum Modelldienst nicht möglich",
+        "upstream": "Wegen eines Fehlers im Modelldienst fehlgeschlagen"
       }
     },
     "tool": {

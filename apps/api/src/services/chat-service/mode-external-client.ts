@@ -19,6 +19,7 @@ import type { ResolvedProvider } from '../../providers/provider-router';
 import type { ModelRole } from '../../config/model-roles';
 import type { ChatModeExtension } from './chat-modes';
 import type { LLMClient } from '../../llm';
+import type { ExternalApiKeyRow } from '../../data/repositories/external-keys-repo';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('ModeExternalClient');
@@ -82,8 +83,8 @@ export async function resolveModeExternalClient(
  * 실행 불가 사유가 명확하면 대응 ProviderError 를 throw(호출부가 로컬로 폴백하지 않게),
  * 인프라 오류(pool 미초기화 등)는 삼켜서 후단 resolveAssignedModelClient 의 fail-open 에 맡긴다.
  *
- * getByUserAndProvider 기본 조회는 is_active=TRUE AND enabled=TRUE 만 반환하므로 미등록·삭제·꺼짐이 모두 null →
- * MISSING_API_KEY 로 통합한다(사용자 액션은 동일: 키 등록/재활성 또는 다른 모델 선택).
+ * 꺼진 키까지 조회해(includeDisabled) 미등록·삭제 → MISSING_API_KEY, 꺼짐 → API_KEY_DISABLED 로 구분한다
+ * (사용자 조치가 등록 ↔ 켜기로 다르다). 같은 요청의 provider gate 가 먼저 거절하므로 일관성용이다.
  */
 async function assertExternalModelUsable(providerId: string, userId: string): Promise<void> {
     const { ProviderError } = await import('../../providers/provider-errors');
@@ -98,17 +99,20 @@ async function assertExternalModelUsable(providerId: string, userId: string): Pr
         throw new ProviderError('NOT_SUPPORTED', `provider '${providerId}' sdkType '${entry.sdkType}' 은 이 모드에서 미지원`);
     }
 
-    let keyRow: unknown;
+    let keyRow: ExternalApiKeyRow | null;
     try {
         const { ExternalKeysRepository } = await import('../../data/repositories/external-keys-repo');
         const { getPool } = await import('../../data/models/unified-database');
-        keyRow = await new ExternalKeysRepository(getPool()).getByUserAndProvider(userId, providerId);
+        keyRow = await new ExternalKeysRepository(getPool()).getByUserAndProvider(userId, providerId, { includeDisabled: true });
     } catch (e) {
         // 인프라 오류는 단언하지 않는다 — 후단 fail-open 에 위임(오탐 차단보다 가용성 우선).
         logger.warn(`[Mode] 외부 키 조회 실패 — 단언 생략 (${providerId}):`, e);
         return;
     }
     if (!keyRow) {
-        throw new ProviderError('MISSING_API_KEY', `'${providerId}' BYOK 키 미등록 또는 비활성`);
+        throw new ProviderError('MISSING_API_KEY', `'${providerId}' BYOK 키 미등록`);
+    }
+    if (!keyRow.enabled) {
+        throw new ProviderError('API_KEY_DISABLED', `'${providerId}' BYOK 키가 꺼져 있음`);
     }
 }
