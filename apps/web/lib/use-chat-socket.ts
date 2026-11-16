@@ -5,7 +5,7 @@ import { WEB_CHAT_MODES } from "@/addons/registry";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import type { AgentTaskIsolation, WsChatRequest, WsServerEvent, WsAttachedFile, WsStreamEnvelope } from "@openmake/shared-types";
-import { isolationFromEvent, isolationFromTask, isIsolationOnlyUpdate } from "./agent-task-isolation";
+import { isolationFromEvent, isolationFromTask, isIsolationOnlyUpdate, startTerminalFetch, isLatestTerminalFetch } from "./agent-task-isolation";
 import { PORTS } from "@openmake/config";
 import { nextFollowup } from "./followup-queue";
 import { acceptStreamEvent, cursorAfterResume, resumeCursorFields, EMPTY_STREAM_CURSOR, type StreamCursor } from "./ws-seq";
@@ -154,6 +154,8 @@ export function useChatSocket() {
   // 에이전트 작업 진행 이벤트의 마지막 순번 — 재연결 때 agent_task_resume 에 실어 놓친 이벤트만 다시 받는다
   // (서버 agent-task-progress-log 와 페어). 순번이 없는 서버(구버전)면 null 로 남아 종전처럼 동작한다.
   const lastTaskSeqRef = useRef<number | null>(null);
+  // 작업별 종료 재조회 세대(200) — 재조회가 겹치면 나중에 시작한 것만 카드에 병합한다(앞 응답이 늦게 와도 덮지 않게).
+  const terminalFetchGenRef = useRef(new Map<string, number>());
   // 답변이 정상 종료되면 대기열(답변 중에 보낸 후속 메시지)의 첫 항목을 보낸다 — sendChat 은 아래에서 정의되므로 ref 경유.
   // 전송에 성공했을 때만 대기열에서 뺀다(소켓이 닫혀 실패하면 남는다).
   const sendChatRef = useRef<(message: string, images?: string[], files?: AttachedFileUI[], contextRefs?: Record<string, { id: string; title: string }>) => boolean>(() => false);
@@ -680,6 +682,7 @@ export function useChatSocket() {
           if (isIsolationOnlyUpdate(data.reason, cardStatus)) {
             setChatHistory((prev) => prev.map((m) => (m.taskId === taskId && m.agentTask ? { ...m, agentTask: { ...m.agentTask, ...isolationExtra } } : m)));
           } else if (terminal) {
+            const fetchGen = startTerminalFetch(terminalFetchGenRef.current, taskId);
             void (async () => {
               let result = "";
               const artifactIds: string[] = [];
@@ -714,6 +717,7 @@ export function useChatSocket() {
                 const f = await ApiClient.get<{ data: { files: string[] } }>(`/api/agent-tasks/${taskId}/files`);
                 files = f?.data?.files ?? [];
               } catch { /* 파일 없음 */ }
+              if (!isLatestTerminalFetch(terminalFetchGenRef.current, taskId, fetchGen)) return;
               merge({ result, artifactIds, files, diff, lastStep: undefined, ...failure, ...isolation }, undefined);
             })();
           } else if (status === "paused") {
