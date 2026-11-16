@@ -7,6 +7,7 @@
  * - 샌드박스: 완료·실패·주차는 workspace 보존(다운로드·재개, 기존 TTL 적용). 실패·취소는 코드 diff 를 캡처한다.
  * - 서버 종료로 끊긴 실행(interrupted)은 주차와 같이 남긴다: 저장소의 승인 기록을 만료시키지 않고 workspace 를 지우지 않는다
  *   (비정상 종료 때 남는 것과 같다 — 부팅 복구가 체크포인트에서 이어받는다). 컨테이너만 내린다.
+ * - worktree 격리(200): 종료 상태면 정리 결과(kept·removed)를 작업 행에 쓰고 알린다(agent-task/isolation-state). 주차·중단은 쓰지 않는다.
  *
  * @module services/agent-task/run-cleanup
  */
@@ -14,6 +15,7 @@ import { getApprovalRegistry } from '../task-sandbox/approval-gate';
 import { getSteeringRegistry } from './steering';
 import { captureDiffOnCleanup } from './code-diff';
 import { clearSandboxUnavailable } from './sandbox-unavailable';
+import { recordIsolationOutcome } from './isolation-state';
 import { createLogger } from '../../utils/logger';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 
@@ -21,12 +23,17 @@ const logger = createLogger('AgentTaskRunCleanup');
 
 export async function cleanupTaskRun(opts: {
     taskId: string;
+    /** 작업 소유자 — 격리 정리 결과 이벤트(200)의 대상 */
+    userId: string;
     taskRuntime: TaskRuntime | null;
     /** 종료 시점의 상태(curStatus) */
     status: string;
     /** 질문 응답 대기로 주차됐는가 */
     parked: boolean;
     stepNumber: number;
+    /** 종료 시점의 진행률·턴 — 격리 정리 결과 이벤트(200)가 상태를 그대로 싣는다 */
+    progress: number;
+    currentTurn: number;
     /** 서버 종료로 끊겼는가(agent-task/shutdown-drain) — 부팅 복구가 체크포인트에서 이어받는다 */
     interrupted?: boolean;
     /** 이어가기(188)로 끝남 — 후속 작업이 작업 공간을 복원해 가므로 보존 */
@@ -42,4 +49,8 @@ export async function cleanupTaskRun(opts: {
     const keepWorkspace = opts.status === 'completed' || opts.status === 'failed' || parked;
     if (opts.status !== 'completed' && !parked) await captureDiffOnCleanup(taskRuntime, taskId, stepNumber).catch(() => { /* fail-open */ });
     await taskRuntime.cleanup(!keepWorkspace).catch((e) => logger.warn(`[AgentTask] 샌드박스 정리 실패: ${taskId} — ${e}`));
+    await recordIsolationOutcome({
+        taskId, userId: opts.userId, status: opts.status, progress: opts.progress, currentTurn: opts.currentTurn,
+        parked: opts.parked || !!opts.interrupted, isolation: taskRuntime.isolation,
+    });
 }
