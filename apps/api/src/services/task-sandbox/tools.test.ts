@@ -250,6 +250,24 @@ describe('task-sandbox tools', () => {
             expect(r.isError).toBe(true);
             expect(txt(r)).not.toContain('일치 없음');
         });
+        // 기기가 끊은 결과(설계 2026-11-16 §8 F2·§9 N1)의 1 은 명령의 코드가 아니다 — 풀이를 끄고 오류로 둔다.
+        const stopped = (extra: Partial<ExecResult>): FakeSandbox => {
+            const sb = fakeSandbox();
+            (sb as unknown as { exec: (c: string) => Promise<ExecResult> }).exec = async () => ({ stdout: '', stderr: '', exitCode: 1, truncated: false, timedOut: false, durationMs: 1, ...extra });
+            return sb;
+        };
+        it('기기 출력 상한(outputCapped)으로 끊긴 grep 의 1 은 풀이하지 않고 오류다', async () => {
+            const r = await byName(createTaskTools(stopped({ truncated: true, outputCapped: true })), 'bash').handler({ command: 'grep -rn foo src' });
+            expect(r.isError).toBe(true);
+            expect(txt(r)).toContain('[exit=1 TRUNCATED ');
+            expect(txt(r)).not.toContain('일치 없음');
+        });
+        it('시간 초과(timedOut)로 끊긴 grep 의 1 은 풀이하지 않고 오류다', async () => {
+            const r = await byName(createTaskTools(stopped({ timedOut: true })), 'bash').handler({ command: 'grep -rn foo src' });
+            expect(r.isError).toBe(true);
+            expect(txt(r)).toContain('[exit=1 TIMEOUT ');
+            expect(txt(r)).not.toContain('일치 없음');
+        });
     });
 
     describe('bash 파이프에 가려진 실패 경고', () => {

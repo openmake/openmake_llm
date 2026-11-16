@@ -205,8 +205,8 @@
         {"msg": {"kind": "exec", "command": "echo -n 한글 출력; echo -n 오류 >&2"}, "asked": false, "expect": {"ok": true, "stdout": "한글 출력", "stderr": "오류", "exitCode": 0}, "autoApproved": 0},
         {"msg": {"kind": "exec", "command": "printf 'a\\xffb\\xe3\\x81'"}, "asked": false, "expect": {"ok": true, "stdout": "a�b�", "stderr": "", "exitCode": 0}, "autoApproved": 0},
         {"msg": {"kind": "exec", "command": "head -c 1048576 /dev/zero | tr '\\0' a"}, "asked": false, "compare": "stdout-length", "expect": {"ok": true, "stdoutLength": 1048576, "stderr": "", "exitCode": 0}, "autoApproved": 0},
-        {"msg": {"kind": "exec", "command": "head -c 1048577 /dev/zero | tr '\\0' a"}, "asked": false, "compare": "stdout-length", "expect": {"ok": true, "stdoutLength": 1048576, "stderr": "", "exitCode": 1}, "autoApproved": 0},
-        {"msg": {"kind": "exec", "command": "echo keep; head -c 1048577 /dev/zero | tr '\\0' a >&2"}, "asked": false, "compare": "no-stderr", "expect": {"ok": true, "stdout": "keep\n", "exitCode": 1}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "head -c 1048577 /dev/zero | tr '\\0' a"}, "asked": false, "compare": "stdout-length", "expect": {"ok": true, "stdoutLength": 1048576, "stderr": "[출력이 상한(1MB)을 넘어 중단됐습니다 — head·grep 등으로 출력을 줄여 다시 실행하세요]", "exitCode": 1, "truncated": true}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "echo keep; head -c 1048577 /dev/zero | tr '\\0' a >&2"}, "asked": false, "compare": "no-stderr", "expect": {"ok": true, "stdout": "keep\n", "exitCode": 1, "truncated": true}, "autoApproved": 0},
         {"msg": {"kind": "exec", "command": "env"}, "asked": false, "compare": "stdout-lines", "expect": {"ok": true, "stdoutHas": ["HOME={{HOME}}", "PATH="], "stdoutLacks": ["OMK_COMPANION_API_KEY=", "GITHUB_TOKEN=", "OMK_BRIDGE_AUTO_APPROVE="], "stderr": "", "exitCode": 0}, "autoApproved": 0}
       ],
       "changes": []

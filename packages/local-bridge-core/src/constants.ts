@@ -4,6 +4,16 @@ import type { BridgeAuthCloseReason } from './types';
 
 export const EXEC_TIMEOUT_MS = 120000;
 export const MAX_BUFFER = 1024 * 1024;
+/**
+ * exec 를 코어가 끊은 사유 문구 — 결과 stderr 끝에 붙인다(설계 2026-11-16 D1). Rust `exec_stop_notice` 와 같은 글자
+ * (fixture `constants.json` `execStopNotice`). 초는 쓰인 시간 제한을 1000 으로 나눠 올림한 값(최소 1), 상한은 MAX_BUFFER 의 MB.
+ */
+export function execStopNotice(kind: 'timeout' | 'overflow', timeoutMs: number): string {
+    if (kind === 'timeout') {
+        return `[명령이 시간 제한(${Math.max(1, Math.ceil(timeoutMs / 1000))}초)을 넘어 중단됐습니다 — 끝나지 않거나 오래 걸리는 명령은 범위를 줄이거나 나눠서 실행하세요]`;
+    }
+    return `[출력이 상한(${MAX_BUFFER / (1024 * 1024)}MB)을 넘어 중단됐습니다 — head·grep 등으로 출력을 줄여 다시 실행하세요]`;
+}
 /** 재연결 기준 간격(ms) — 실제 대기는 이 값의 절반~전체 구간에서 흩어지고(jitter), 실패가 이어지면 두 배씩 늘어난다. */
 export const RECONNECT_MS = 10000;
 /** 재연결 간격 상한(ms) — 서버가 오래 내려가 있어도 이보다 드물게 두드리지 않는다. */
