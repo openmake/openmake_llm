@@ -19,17 +19,11 @@ import { WEB_SEARCH_TEMPLATES, getLocalizedTemplate } from '../../sockets/ws-cha
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { StreamFromExternalContext } from './external-provider-types';
 import { parseInjectedSources } from '../../tools/web-search/format-sources';
+import { CITATION_MARKER_SRC, SOURCE_LABEL_ALT } from '../../tools/web-search/citation-markers';
 import type { SearchSourceRef } from '../../tools/web-search/types';
 import { scrubResultBlockMarkers } from '../orchestrator/result-markers';
 
 const logger = createLogger('ChatExternalProvider');
-
-/** 7개 언어 sourceLabel 의 정규식 alternation (중복 제거·이스케이프) — 템플릿이 SoT */
-const SOURCE_LABEL_ALT = [...new Set(Object.values(WEB_SEARCH_TEMPLATES).map((t) => t.sourceLabel))]
-    .map((l) => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .join('|');
-/** 라벨 인용 마커 소스 — `[출처 3]`·`[Source 1, 2]` 형태. 라벨 없는 `[3]` 은 각주/코드 오탐 위험으로 제외. */
-const CITATION_MARKER_SRC = `\\[\\s*(?:${SOURCE_LABEL_ALT})\\s*\\d+(?:\\s*[,·、]\\s*\\d+)*\\s*\\]`;
 
 /** 평문 출처 섹션의 머리줄 — (짧은 수식어) + 출처 라벨(복수형 s·n 허용) + 콜론. 1번 그룹 = 콜론 뒤 같은 줄의 내용. */
 const PLAIN_SOURCE_LINE_SRC = `^[ \\t]*[^\\n:：]{0,${MODEL_SOURCE_SECTION.LABEL_PREFIX_MAX_CHARS}}?(?:${SOURCE_LABEL_ALT})[sn]?[ \\t]*[:：][ \\t]*(.*)$`;
@@ -77,7 +71,7 @@ export function stripDeadCitationMarkers(
         removed++;
         if (valid.length === 0) return '';
         const label = new RegExp(`(${SOURCE_LABEL_ALT})`, 'i').exec(match)?.[1] ?? '출처';
-        return `${match.startsWith(' ') ? ' ' : ''}[${label} ${valid.join(', ')}]`;
+        return `${/^\s/.test(match) ? match[0] : ''}[${label} ${valid.join(', ')}]`;
     });
     return { content: out, removed };
 }

@@ -11,6 +11,7 @@ import { DECISION, GROUNDING_GATE } from '../../config/decision';
 import { findLocalModel } from '../../config/local-models';
 import { ChatGroundingGateLogRepository, type ChatGroundingGateLogEntry } from '../../data/repositories/chat-grounding-gate-log-repository';
 import { getPool } from '../../data/models/unified-database';
+import { CITATION_MARKER_SRC } from '../../tools/web-search/citation-markers';
 import type { SearchSourceRef } from '../../tools/web-search/types';
 import { createLogger } from '../../utils/logger';
 import { decideNoul, type NoulDecision } from './jev-decision';
@@ -46,8 +47,8 @@ export interface CitedClaim {
 }
 
 const oneLine = (text: string): string => text.replace(/\s+/g, ' ').trim();
-/** 본문의 출처 표기 — "[출처 12]"·"[12]" */
-const CITATION = /\[(?:출처\s*)?(\d{1,3})\]/g;
+/** 본문의 출처 표기 — 라벨 인용("[출처 12]"·"[출처 3, 8]"·"[출처 11, 출처 16]"·"[Source 3]")과 "[12]" */
+const CITATION = new RegExp(`(?:${CITATION_MARKER_SRC})|\\[\\d{1,3}\\]`, 'gi');
 /** 문장으로 보지 않는 줄 — 표·머리글·인용 블록·코드 울타리 */
 const NON_PROSE_LINE = /^\s*(\||#|>|```)/;
 /** 문장 경계 — 마침표류 뒤의 공백. 뒤따르는 출처 표기는 앞 문장에 붙여 둔다 */
@@ -60,7 +61,7 @@ export function citedClaims(answer: string): CitedClaim[] {
     for (const line of answer.split(/\n+/)) {
         if (NON_PROSE_LINE.test(line)) continue;
         for (const sentence of line.split(SENTENCE_BREAK)) {
-            const ns = [...new Set([...sentence.matchAll(CITATION)].map((m) => Number(m[1])))];
+            const ns = [...new Set([...sentence.matchAll(CITATION)].flatMap((m) => m[0].match(/\d+/g)!.map(Number)))];
             if (ns.length === 0) continue;
             const text = oneLine(sentence.replace(CITATION, '').replace(EMPHASIS_MARKS, ''));
             if (text.length < GROUNDING_GATE.CLAIM_MIN_CHARS) continue;
