@@ -219,7 +219,7 @@ describe('home-read', () => {
         guard: Case<{ home: string; path: string; top?: boolean }, boolean>[];
         gitConfig: Case<{ home: string; out: string }, string[]>[];
         envDirs: Case<{ env: Record<string, string> }, string[]>[];
-        follow: Case<{ home: string; root: string; path: string }, boolean>[];
+        follow: Case<{ home: string; root: string; gitDirs?: string[]; path: string }, boolean>[];
         reach: Case<{ scope: { home: string; allow: string[]; literals: string[] }; path: string }, boolean>[];
     }>('home-read');
     it.each(doc.guard.map((c) => [c.id, c] as const))('guard/%s', (_id, c) => {
@@ -232,7 +232,7 @@ describe('home-read', () => {
         expect(miseEnvDirs(c.input.env)).toEqual(c.expect);
     });
     it.each(doc.follow.map((c) => [c.id, c] as const))('follow/%s', (_id, c) => {
-        expect(linkFollowable(c.input.home, c.input.root, c.input.path)).toBe(c.expect);
+        expect(linkFollowable(c.input.home, c.input.root, c.input.gitDirs ?? [], c.input.path)).toBe(c.expect);
     });
     it.each(doc.reach.map((c) => [c.id, c] as const))('reach/%s', (_id, c) => {
         expect(reachable(c.input.scope, c.input.path)).toBe(c.expect);

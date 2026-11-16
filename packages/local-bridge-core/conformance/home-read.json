@@ -61,7 +61,12 @@
     {"id": "outside-other", "input": {"home": "/h", "root": "/work/proj", "path": "/opt/mise"}, "expect": true},
     {"id": "home-under-tmp-plain", "input": {"home": "/private/var/folders/x/T/t/fakehome", "root": "/private/var/folders/x/T/t/root", "path": "/private/var/folders/x/T/t/fakehome/.config/mise"}, "expect": true},
     {"id": "home-under-tmp-cache", "input": {"home": "/private/var/folders/x/T/t/fakehome", "root": "/private/var/folders/x/T/t/root", "path": "/private/var/folders/x/T/t/fakehome/.cache/mise"}, "expect": false},
-    {"id": "unnormalized", "input": {"home": "/h", "root": "/h/work/proj", "path": "/h/x/../.cache//mise/"}, "expect": false}
+    {"id": "unnormalized", "input": {"home": "/h", "root": "/h/work/proj", "path": "/h/x/../.cache//mise/"}, "expect": false},
+    {"id": "inside-git-dir", "input": {"home": "/h", "root": "/h/wt", "gitDirs": ["/h/main/.git/worktrees/wt", "/h/main/.git"], "path": "/h/main/.git/worktrees/wt/mise"}, "expect": false},
+    {"id": "inside-common-dir", "input": {"home": "/h", "root": "/h/wt", "gitDirs": ["/h/main/.git/worktrees/wt", "/h/main/.git"], "path": "/h/main/.git/mise"}, "expect": false},
+    {"id": "git-dir-sibling-prefix", "input": {"home": "/h", "root": "/h/wt", "gitDirs": ["/h/main/.git"], "path": "/h/main/.git2/mise"}, "expect": true},
+    {"id": "git-dir-outside-home", "input": {"home": "/h", "root": "/work/wt", "gitDirs": ["/work/main/.git"], "path": "/work/main/.git/mise"}, "expect": false},
+    {"id": "git-dirs-other-place", "input": {"home": "/h", "root": "/h/wt", "gitDirs": ["/h/main/.git"], "path": "/h/.config/mise"}, "expect": true}
   ],
   "reach": [
     {"id": "outside-home", "input": {"scope": {"home": "/h", "allow": ["/h/work/repo", "/h/.nvm", "/opt/x"], "literals": ["/h/.gitconfig.local"]}, "path": "/elsewhere/x"}, "expect": true},

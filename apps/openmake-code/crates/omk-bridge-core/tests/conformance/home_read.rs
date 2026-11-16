@@ -15,8 +15,9 @@ pub fn constants(values: &serde_json::Map<String, Value>) -> Vec<&'static str> {
         ("HOME_PRIVACY_SUBPATHS", c::HOME_PRIVACY_SUBPATHS),
         ("TOOL_ANCESTOR_READ_NAMES", c::TOOL_ANCESTOR_READ_NAMES),
     ];
-    let numbers: [(&'static str, usize); 4] = [
+    let numbers: [(&'static str, usize); 5] = [
         ("TOOL_ANCESTOR_MAX", c::TOOL_ANCESTOR_MAX),
+        ("LINK_HOP_MAX", c::LINK_HOP_MAX),
         ("TOOL_READ_EXTRA_MAX", c::TOOL_READ_EXTRA_MAX),
         ("GIT_CONFIG_READ_MAX", c::GIT_CONFIG_READ_MAX),
         ("TSC_LINK_SCAN_MAX", c::TSC_LINK_SCAN_MAX),
@@ -93,6 +94,7 @@ fn follow() {
         let got = link_followable(
             i["home"].as_str().unwrap(),
             i["root"].as_str().unwrap(),
+            &i.get("gitDirs").map(strs).unwrap_or_default(),
             i["path"].as_str().unwrap(),
         );
         assert_eq!(Value::Bool(got), *e, "{ctx}");

@@ -13,6 +13,7 @@
     "HOME_PRIVACY_SUBPATHS": ["Desktop", "Documents", "Downloads", "Pictures", "Music", "Movies", "Library/Mobile Documents", "Library/CloudStorage", "Library/Photos", "Library/Containers", "Library/Group Containers", "Library/Daemon Containers", "Library/Application Support/AddressBook", "Library/Calendars", "Library/Reminders"],
     "TOOL_ANCESTOR_READ_NAMES": ["mise.toml", ".mise.toml", "mise.local.toml", ".mise.local.toml", ".config/mise.toml", ".config/mise", ".mise", "mise", ".tool-versions", ".nvmrc", ".node-version", ".python-version"],
     "TOOL_ANCESTOR_MAX": 16,
+    "LINK_HOP_MAX": 8,
     "TOOL_READ_EXTRA_MAX": 64,
     "GIT_CONFIG_READ_MAX": 32,
     "SANDBOX_BIN": "/usr/bin/sandbox-exec",

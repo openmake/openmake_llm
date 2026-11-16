@@ -140,6 +140,76 @@ sbDescribe('홈 읽기 좁히기 — 실제 sandbox-exec', () => {
         expect(cat(p.tool, path.join(home, '.cache/alt/s.txt'))).toBe(false);
     });
 
+    it('D-15 보완 2(코드 검증 R2 A1-R2): 사슬의 중간 고리가 연결 폴더에 있거나 중간 구성 요소가 심링크면 따라가지 않는다', () => {
+        file('home/work/other/s.txt', 'secret');
+        const root = path.join(home, 'dotfiles');
+        fs.mkdirSync(path.join(home, '.config'));
+        fs.mkdirSync(root);
+        fs.symlinkSync(path.join(root, 'mise'), path.join(home, '.config/mise'));
+        fs.symlinkSync(path.join(home, 'work/other'), path.join(root, 'mise'));
+        const p = profiles(root);
+        expect(p.scope.allow).not.toContain(path.join(home, 'work/other'));
+        expect(cat(p.tool, path.join(home, 'work/other/s.txt'))).toBe(false);
+        expect(cat(p.tool, path.join(home, '.config/mise/s.txt'))).toBe(false);
+        // 중간 구성 요소(`.config` 통째) 심링크 — 따라가지 않는다(한계).
+        fs.rmSync(path.join(home, '.config'), { recursive: true });
+        const cfg = file('home/dot/config/mise/config.toml', '');
+        fs.symlinkSync(path.join(home, 'dot/config'), path.join(home, '.config'));
+        const p2 = profiles(path.join(work, 'root'));
+        expect(p2.scope.allow).not.toContain(path.join(home, 'dot/config/mise'));
+        expect(cat(p2.tool, cfg)).toBe(false);
+    });
+
+    it('D-15 보완 2: 쓰기 허용된 git dir·common dir 안의 고리도 따라가지 않는다(linked worktree)', () => {
+        file('home/work/other/s.txt', 'secret');
+        const common = path.join(home, 'main/.git');
+        const git = { gitDir: path.join(common, 'worktrees/wt'), commonDir: common };
+        fs.mkdirSync(git.gitDir, { recursive: true });
+        fs.mkdirSync(path.join(home, '.config'));
+        fs.symlinkSync(path.join(common, 'mise'), path.join(home, '.config/mise'));
+        fs.symlinkSync(path.join(home, 'work/other'), path.join(common, 'mise'));
+        const p = profiles(path.join(home, 'wt'), git);
+        expect(p.scope.allow).not.toContain(path.join(home, 'work/other'));
+        expect(cat(p.tool, path.join(home, 'work/other/s.txt'))).toBe(false);
+    });
+
+    it('D-15 보완 2: hop 상한(LINK_HOP_MAX) — 심링크 8개 사슬은 따라가고 9개는 버린다', () => {
+        const nvm = file('home/c/nvm-real/x', 'n');
+        const volta = file('home/c/volta-real/x', 'v');
+        const chain = (entry: string, name: string, links: number): void => {
+            let from = path.join(home, entry);
+            for (let i = 1; i < links; i++) {
+                const to = path.join(home, 'c', `${name}${i}`);
+                fs.symlinkSync(to, from);
+                from = to;
+            }
+            fs.symlinkSync(path.join(home, 'c', `${name}-real`), from);
+        };
+        chain('.nvm', 'nvm', 8);
+        chain('.volta', 'volta', 9);
+        const p = profiles(path.join(work, 'root'));
+        expect(p.scope.allow).toContain(path.join(home, 'c/nvm-real'));
+        expect(p.scope.allow).not.toContain(path.join(home, 'c/volta-real'));
+        expect(cat(p.tool, nvm)).toBe(true);
+        expect(cat(p.tool, volta)).toBe(false);
+    });
+
+    it('D-15 보완 2: env 위치는 홈 표기를 realpath 홈으로 맞춘 뒤 같은 판정을 탄다(홈 표기가 심링크인 장비)', () => {
+        file('home/xdg/mise/config.toml', '');
+        file('home/work/env/s.txt', 'secret');
+        const spelled = path.join(work, 'homelink');
+        fs.symlinkSync(home, spelled);
+        fs.mkdirSync(path.join(home, '.cache'));
+        fs.symlinkSync(path.join(home, 'work/env'), path.join(home, '.cache/alt'));
+        const root = path.join(work, 'root');
+        fs.mkdirSync(root);
+        const p = buildSandboxProfiles(root, null, [], { envDirs: [path.join(spelled, 'xdg/mise'), path.join(spelled, '.cache/alt')] }, spelled);
+        if (!p) throw new Error('프로파일 없음');
+        expect(p.scope.allow).toContain(path.join(home, 'xdg/mise'));
+        expect(p.scope.allow).not.toContain(path.join(home, 'work/env'));
+        expect(cat(p.tool, path.join(home, 'work/env/s.txt'))).toBe(false);
+    });
+
     it('D-18·§8 M4: 전역 git 설정의 include·excludesFile 은 literal 이 있어야 도구 git 이 읽는다', () => {
         file('home/.gitconfig', '[include]\n\tpath = ~/.gitconfig.local\n[core]\n\texcludesFile = ~/.gitignore_global\n');
         file('home/.gitconfig.local', '[user]\n\tname = t\n');

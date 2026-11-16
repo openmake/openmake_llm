@@ -238,6 +238,104 @@ fn symlinks_planted_in_writable_places_are_not_followed() {
     assert!(!cat(&p.tool, &format!("{h}/.cache/alt/s.txt")));
 }
 
+/// D-15 보완 2(코드 검증 R2 A1-R2) — 사슬의 **중간 고리**가 쓸 수 있는 자리(연결 폴더)에 있으면 따라가지 않는다. 중간 구성 요소가
+/// 심링크인 항목도 따라가지 않는다.
+#[test]
+fn symlink_chains_through_writable_places_are_not_followed() {
+    let w = Work::new();
+    w.file("home/work/other/s.txt", "secret");
+    w.file("home/dot/config/git/config", "");
+    let h = w.home();
+    let root = format!("{h}/dotfiles");
+    std::fs::create_dir_all(format!("{h}/.config")).unwrap();
+    std::fs::create_dir_all(&root).unwrap();
+    std::os::unix::fs::symlink(format!("{root}/mise"), format!("{h}/.config/mise")).unwrap();
+    std::os::unix::fs::symlink(format!("{h}/work/other"), format!("{root}/mise")).unwrap();
+    let p = w.profiles(&root, None, &none());
+    assert!(!p.scope.allow.contains(&format!("{h}/work/other")));
+    assert!(!cat(&p.tool, &format!("{h}/work/other/s.txt")));
+    assert!(!cat(&p.tool, &format!("{h}/.config/mise/s.txt")));
+    // 중간 구성 요소(`.config` 통째) 심링크 — 따라가지 않는다(한계).
+    let w2 = Work::new();
+    w2.file("home/dot/config/mise/config.toml", "");
+    let h2 = w2.home();
+    std::os::unix::fs::symlink(format!("{h2}/dot/config"), format!("{h2}/.config")).unwrap();
+    let p2 = w2.profiles(&w2.join("root"), None, &none());
+    assert!(!p2.scope.allow.contains(&format!("{h2}/dot/config/mise")));
+    assert!(!cat(&p2.tool, &format!("{h2}/dot/config/mise/config.toml")));
+}
+
+/// D-15 보완 2 — 쓰기 허용된 git dir·common dir 안의 고리도 따라가지 않는다(linked worktree).
+#[test]
+fn symlink_chains_through_git_dirs_are_not_followed() {
+    let w = Work::new();
+    w.file("home/work/other/s.txt", "secret");
+    let h = w.home();
+    let common = format!("{h}/main/.git");
+    let git = GitPaths {
+        git_dir: format!("{common}/worktrees/wt"),
+        common_dir: common.clone(),
+    };
+    std::fs::create_dir_all(&git.git_dir).unwrap();
+    std::fs::create_dir_all(format!("{h}/.config")).unwrap();
+    std::os::unix::fs::symlink(format!("{common}/mise"), format!("{h}/.config/mise")).unwrap();
+    std::os::unix::fs::symlink(format!("{h}/work/other"), format!("{common}/mise")).unwrap();
+    let p = w.profiles(&format!("{h}/wt"), Some(&git), &none());
+    assert!(!p.scope.allow.contains(&format!("{h}/work/other")));
+    assert!(!cat(&p.tool, &format!("{h}/work/other/s.txt")));
+}
+
+/// D-15 보완 2 — hop 상한(`LINK_HOP_MAX`): 심링크 8개 사슬은 따라가고 9개는 버린다.
+#[test]
+fn symlink_chains_longer_than_the_hop_limit_are_dropped() {
+    let w = Work::new();
+    w.file("home/c/nvm-real/x", "n");
+    w.file("home/c/volta-real/x", "v");
+    let h = w.home();
+    let chain = |entry: &str, name: &str, links: usize| {
+        let mut from = format!("{h}/{entry}");
+        for i in 1..links {
+            let to = format!("{h}/c/{name}{i}");
+            std::os::unix::fs::symlink(&to, &from).unwrap();
+            from = to;
+        }
+        std::os::unix::fs::symlink(format!("{h}/c/{name}-real"), &from).unwrap();
+    };
+    chain(".nvm", "nvm", 8);
+    chain(".volta", "volta", 9);
+    let p = w.profiles(&w.join("root"), None, &none());
+    assert!(p.scope.allow.contains(&format!("{h}/c/nvm-real")));
+    assert!(!p.scope.allow.contains(&format!("{h}/c/volta-real")));
+    assert!(cat(&p.tool, &format!("{h}/c/nvm-real/x")));
+    assert!(!cat(&p.tool, &format!("{h}/c/volta-real/x")));
+}
+
+/// D-15 보완 2 — env 위치는 홈 표기를 realpath 홈으로 맞춘 뒤 같은 판정을 탄다(홈 표기가 심링크인 장비).
+#[test]
+fn env_locations_with_a_symlinked_home_spelling_use_the_real_home() {
+    let w = Work::new();
+    w.file("home/xdg/mise/config.toml", "");
+    w.file("home/work/env/s.txt", "secret");
+    let h = w.home();
+    let spelled = w.join("homelink");
+    std::os::unix::fs::symlink(&h, &spelled).unwrap();
+    std::fs::create_dir_all(format!("{h}/.cache")).unwrap();
+    std::os::unix::fs::symlink(format!("{h}/work/env"), format!("{h}/.cache/alt")).unwrap();
+    let root = w.join("root");
+    std::fs::create_dir_all(&root).unwrap();
+    let inputs = ReadInputs {
+        env_dirs: vec![
+            format!("{spelled}/xdg/mise"),
+            format!("{spelled}/.cache/alt"),
+        ],
+        ..none()
+    };
+    let p = sandbox_profiles(&root, None, &[], &spelled, &inputs).unwrap();
+    assert!(p.scope.allow.contains(&format!("{h}/xdg/mise")));
+    assert!(!p.scope.allow.contains(&format!("{h}/work/env")));
+    assert!(!cat(&p.tool, &format!("{h}/work/env/s.txt")));
+}
+
 /// D-18·§8 M4 — 전역 git 설정의 include·excludesFile 은 literal 이 있어야 도구 git 이 읽는다.
 #[test]
 fn git_config_literals_keep_tool_git_working() {
