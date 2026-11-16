@@ -45,6 +45,7 @@ export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode
     ko: {
         GUEST_NOT_ALLOWED: '이 모델은 로그인이 필요합니다. 로그인 후 다시 시도해주세요.',
         MISSING_API_KEY: '외부 LLM 제공자의 API 키가 설정되지 않았습니다. 관리자에게 문의하거나 다른 모델을 선택하세요.',
+        API_KEY_DISABLED: '이 모델의 외부 LLM 제공자 API 키가 꺼져 있습니다. 설정 → 외부 API 키에서 켜거나 다른 모델을 선택하세요.',
         INVALID_API_KEY: '외부 LLM 제공자의 API 키 인증에 실패했습니다. 관리자에게 문의하세요.',
         QUOTA_EXCEEDED: '외부 LLM 제공자의 사용량 한도가 초과되었습니다. 잠시 후 다시 시도하거나 다른 모델을 선택하세요.',
         INSUFFICIENT_CREDIT: '외부 LLM 제공자의 잔액이 부족합니다. 관리자에게 문의하거나 다른 모델을 선택하세요.',
@@ -59,6 +60,7 @@ export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode
     en: {
         GUEST_NOT_ALLOWED: 'This model requires authentication. Please log in and try again.',
         MISSING_API_KEY: 'The API key for the external LLM provider is not configured. Please contact your administrator or select a different model.',
+        API_KEY_DISABLED: 'The API key for this model\'s external LLM provider is turned off. Turn it on under Settings → External API keys, or select a different model.',
         INVALID_API_KEY: 'Authentication with the external LLM provider failed. Please contact your administrator.',
         QUOTA_EXCEEDED: 'The usage limit for the external LLM provider has been exceeded. Please try again later or select a different model.',
         INSUFFICIENT_CREDIT: 'The external LLM provider has insufficient credit. Please contact your administrator or select a different model.',
@@ -73,6 +75,7 @@ export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode
     ja: {
         GUEST_NOT_ALLOWED: 'このモデルはログインが必要です。ログイン後に再度お試しください。',
         MISSING_API_KEY: '外部LLMプロバイダーのAPIキーが設定されていません。管理者にお問い合わせいただくか、別のモデルを選択してください。',
+        API_KEY_DISABLED: 'このモデルの外部LLMプロバイダーのAPIキーがオフになっています。設定 → 外部 API キーでオンにするか、別のモデルを選択してください。',
         INVALID_API_KEY: '外部LLMプロバイダーのAPIキー認証に失敗しました。管理者にお問い合わせください。',
         QUOTA_EXCEEDED: '外部LLMプロバイダーの使用上限を超過しました。しばらくしてから再度お試しいただくか、別のモデルを選択してください。',
         INSUFFICIENT_CREDIT: '外部LLMプロバイダーの残高が不足しています。管理者にお問い合わせいただくか、別のモデルを選択してください。',
@@ -87,6 +90,7 @@ export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode
     zh: {
         GUEST_NOT_ALLOWED: '此模型需要登录。请登录后重试。',
         MISSING_API_KEY: '未配置外部LLM提供商的API密钥。请联系管理员或选择其他模型。',
+        API_KEY_DISABLED: '此模型的外部LLM提供商API密钥已关闭。请在 设置 → 外部 API 密钥 中开启，或选择其他模型。',
         INVALID_API_KEY: '外部LLM提供商的API密钥认证失败。请联系管理员。',
         QUOTA_EXCEEDED: '已超过外部LLM提供商的使用限制。请稍后重试或选择其他模型。',
         INSUFFICIENT_CREDIT: '外部LLM提供商的余额不足。请联系管理员或选择其他模型。',
@@ -101,6 +105,7 @@ export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode
     es: {
         GUEST_NOT_ALLOWED: 'Este modelo requiere autenticación. Por favor, inicie sesión e inténtelo de nuevo.',
         MISSING_API_KEY: 'La clave API del proveedor LLM externo no está configurada. Por favor, contacte al administrador o seleccione un modelo diferente.',
+        API_KEY_DISABLED: 'La clave API del proveedor LLM externo de este modelo está desactivada. Actívela en Configuración → Claves API externas o seleccione un modelo diferente.',
         INVALID_API_KEY: 'La autenticación con el proveedor LLM externo falló. Por favor, contacte al administrador.',
         QUOTA_EXCEEDED: 'Se ha superado el límite de uso del proveedor LLM externo. Por favor, inténtelo más tarde o seleccione un modelo diferente.',
         INSUFFICIENT_CREDIT: 'El proveedor LLM externo tiene saldo insuficiente. Por favor, contacte al administrador o seleccione un modelo diferente.',
@@ -115,6 +120,7 @@ export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode
     de: {
         GUEST_NOT_ALLOWED: 'Dieses Modell erfordert eine Anmeldung. Bitte melden Sie sich an und versuchen Sie es erneut.',
         MISSING_API_KEY: 'Der API-Schlüssel des externen LLM-Anbieters ist nicht konfiguriert. Bitte wenden Sie sich an den Administrator oder wählen Sie ein anderes Modell.',
+        API_KEY_DISABLED: 'Der API-Schlüssel des externen LLM-Anbieters für dieses Modell ist ausgeschaltet. Schalten Sie ihn unter Einstellungen → Externe API-Schlüssel ein oder wählen Sie ein anderes Modell.',
         INVALID_API_KEY: 'Die Authentifizierung beim externen LLM-Anbieter ist fehlgeschlagen. Bitte wenden Sie sich an den Administrator.',
         QUOTA_EXCEEDED: 'Das Nutzungslimit des externen LLM-Anbieters wurde überschritten. Bitte versuchen Sie es später erneut oder wählen Sie ein anderes Modell.',
         INSUFFICIENT_CREDIT: 'Der externe LLM-Anbieter verfügt über unzureichendes Guthaben. Bitte wenden Sie sich an den Administrator oder wählen Sie ein anderes Modell.',
@@ -129,6 +135,7 @@ export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode
     fr: {
         GUEST_NOT_ALLOWED: 'Ce modèle nécessite une authentification. Veuillez vous connecter et réessayer.',
         MISSING_API_KEY: 'La clé API du fournisseur LLM externe n\'est pas configurée. Veuillez contacter l\'administrateur ou sélectionner un autre modèle.',
+        API_KEY_DISABLED: 'La clé API du fournisseur LLM externe de ce modèle est désactivée. Activez-la dans Paramètres → Clés API externes ou sélectionnez un autre modèle.',
         INVALID_API_KEY: 'L\'authentification auprès du fournisseur LLM externe a échoué. Veuillez contacter l\'administrateur.',
         QUOTA_EXCEEDED: 'La limite d\'utilisation du fournisseur LLM externe a été dépassée. Veuillez réessayer plus tard ou sélectionner un autre modèle.',
         INSUFFICIENT_CREDIT: 'Le fournisseur LLM externe dispose d\'un crédit insuffisant. Veuillez contacter l\'administrateur ou sélectionner un autre modèle.',

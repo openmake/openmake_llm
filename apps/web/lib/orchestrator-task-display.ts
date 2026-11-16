@@ -11,6 +11,9 @@ const FAILURE_KEYS: Record<string, string> = {
   disabled: "unavailable",
   skipped: "skipped",
   deadline: "deadline",
+  timeout_queued: "timeoutQueued",
+  unreachable: "unreachable",
+  upstream: "upstream",
 };
 
 /** 실패 reason(·외부 provider) → 문구 키. 문구가 없는 코드·reason 없음(옛 서버)은 null */

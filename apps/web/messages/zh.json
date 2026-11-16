@@ -483,7 +483,10 @@
         "unassigned": "此任务未分配模型",
         "unavailable": "此任务当前不可用",
         "skipped": "前置任务未完成，已跳过",
-        "deadline": "超出总时限，未能执行"
+        "deadline": "超出总时限，未能执行",
+        "timeoutQueued": "等待执行顺序时超出时限",
+        "unreachable": "无法连接到模型服务",
+        "upstream": "模型服务出错，任务失败"
       }
     },
     "tool": {
