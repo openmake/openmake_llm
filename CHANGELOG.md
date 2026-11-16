@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.139.1](https://github.com/openmake/openmake_llm/compare/v1.139.0...v1.139.1) (2026-11-16)
+
+
+### 🐛 버그 수정
+
+* **bridge:** 도구 프로파일의 홈 읽기를 허용 목록으로 바꾸고 exec 는 개인 폴더 읽기를 막는다 ([ced2fb6](https://github.com/openmake/openmake_llm/commit/ced2fb657057b82b411cea0a365c5322086c7771))
+* **bridge:** 허용 항목·env 위치의 심링크는 hop 단위로 풀고 쓸 수 있는 자리의 고리는 따라가지 않는다 ([a8772f5](https://github.com/openmake/openmake_llm/commit/a8772f50e41b7307845f3fc300993cb82d333aaa))
+
 ## [1.139.0](https://github.com/openmake/openmake_llm/compare/v1.138.3...v1.139.0) (2026-11-16)
 
 
