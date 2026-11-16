@@ -149,6 +149,26 @@ export const CAPABILITY_LABELS_KO: Record<Capability, string> = {
     'web.search': '웹 검색',
 };
 
+/** 사람이 읽는 라벨(en) — 영어 턴의 종합 결과 블록 머리줄용(식별자 대신) */
+export const CAPABILITY_LABELS_EN: Record<Capability, string> = {
+    'text.reason': 'Text reasoning and analysis',
+    'text.code': 'Code writing and analysis',
+    'text.synthesize': 'Final answer synthesis',
+    'text.embed': 'Embedding',
+    'vision.describe': 'Image understanding',
+    'vision.ocr': 'Image text recognition (OCR)',
+    'image.generate': 'Image generation',
+    'image.edit': 'Image editing',
+    'audio.transcribe': 'Speech recognition (STT)',
+    'audio.speech': 'Speech synthesis (TTS)',
+    'audio.analyze': 'Audio analysis',
+    'music.analyze': 'Music analysis',
+    'music.generate': 'Music generation',
+    'video.generate': 'Video generation',
+    'video.analyze': 'Video understanding',
+    'web.search': 'Web search',
+};
+
 /** Planner 가 각 capability 를 언제 쓰는지 — 프롬프트에 그대로 싣는 한 줄 설명 */
 export const CAPABILITY_PLANNER_HINTS: Record<Capability, string> = {
     'text.reason': '일반 질문·설명·분석. 대부분의 텍스트 질문은 이것 하나면 된다',

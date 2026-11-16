@@ -9,7 +9,7 @@
  *  - `cancelled`: 사용자 취소 → 호출부가 종전 경로도 시작하지 않는다
  * 셰도우(orchestrator_runs)는 fire-and-forget.
  */
-import { ORCHESTRATOR, CAPABILITY_LABELS_KO, JOB_RESULT_INTENT_PATTERN, JOB_NOT_FOLLOWUP_PATTERN, MEDIA_DURATION_PATTERN, type Capability } from '../../config/capabilities';
+import { ORCHESTRATOR, CAPABILITY_LABELS_KO, CAPABILITY_LABELS_EN, JOB_RESULT_INTENT_PATTERN, JOB_NOT_FOLLOWUP_PATTERN, MEDIA_DURATION_PATTERN, type Capability } from '../../config/capabilities';
 import { getPool } from '../../data/models/unified-database';
 import { OrchestratorRunsRepository } from '../../data/repositories/orchestrator-runs-repo';
 import { ArtifactRepository } from '../../data/repositories/artifact-repository';
@@ -215,11 +215,12 @@ export function buildResultBlock(results: TaskResult[], lang: string, sourceNumb
     let base = sourceNumberBase;
     const lines = results.map((r) => {
         const statusLabel = r.status === 'completed' ? (ko ? '완료' : 'done') : r.status === 'pending' ? (ko ? '진행 중(미완료)' : 'pending') : r.status === 'skipped' ? (ko ? '건너뜀' : 'skipped') : (ko ? '실패' : 'failed');
-        // 한국어 라벨은 한국어 턴에만 — 영어 턴의 종합 컨텍스트에 한국어가 섞이지 않게
-        const head = ko
-            ? `### ${r.taskId} · ${r.capability} (${CAPABILITY_LABELS_KO[r.capability] ?? r.capability}) — ${statusLabel}`
-            : `### ${r.taskId} · ${r.capability} — ${statusLabel}`;
-        let body = r.text.length > ORCHESTRATOR.RESULT_MAX_CHARS ? `${r.text.slice(0, ORCHESTRATOR.RESULT_MAX_CHARS)}\n…(${ko ? '절단' : 'truncated'})` : r.text;
+        // 한국어 라벨은 한국어 턴에만 — 영어 턴의 종합 컨텍스트에 한국어가 섞이지 않게. 작업 번호·식별자는 싣지 않는다(생각으로 사용자에게 보인다)
+        const label = (ko ? CAPABILITY_LABELS_KO : CAPABILITY_LABELS_EN)[r.capability];
+        const head = `### ${label ?? r.capability} — ${statusLabel}`;
+        // 완료가 아닌 작업의 오류 문구에 실린 자기 식별자(`web.search: 검색어가 없습니다`)도 라벨로 — 절단 전에, 모든 출현
+        const text = r.status !== 'completed' && label ? r.text.split(r.capability).join(label) : r.text;
+        let body = text.length > ORCHESTRATOR.RESULT_MAX_CHARS ? `${text.slice(0, ORCHESTRATOR.RESULT_MAX_CHARS)}\n…(${ko ? '절단' : 'truncated'})` : text;
         if (r.ok && r.sources?.length) {
             // 검색어 줄(실행기 text 첫 줄) + 라벨형 출처 — 번호는 사전 주입·앞 검색 작업 뒤로 이어진다
             body = `${r.text.split('\n')[0]}\n${formatSearchSources(r.sources, { labeled: true, sourceWord: tpl.sourceLabel, contentWord: tpl.contentLabel, separator: '\n', numberOffset: base })}`;
@@ -233,8 +234,8 @@ export function buildResultBlock(results: TaskResult[], lang: string, sourceNumb
         ? ` 웹 검색 결과를 근거로 쓴 사실 뒤에는 그 항목 앞의 표기(예: [${tpl.sourceLabel} 3])를 그대로 붙이고, 다른 형태의 표기는 만들지 마세요.`
         : ` After any fact drawn from a web search result, append that item's tag exactly as shown (e.g. [${tpl.sourceLabel} 3]) and do not create any other kind of marker.`;
     const intro = ko
-        ? `[${RESULT_BLOCK_LABELS.ko} — 아래 결과를 근거로 사용자에게 답하세요. 완료된 미디어는 마크다운 링크를 그대로 답변에 포함하고, 실패·미지원·미배정·진행 중(미완료) 작업은 완료된 것처럼 말하지 말고 그 상태와 사유를 솔직히 알리세요. 링크나 파일명을 지어내지 마세요. 텍스트 추론 작업의 결과는 초안입니다 — 웹 검색 결과나 직접 읽은 페이지와 다르면 검색 결과를 따르세요. 이 블록의 작업 번호(t1·t2 등)와 "오케스트레이터"·"하위 작업" 같은 내부 이름은 사용자에게 말하지 마세요 — 초안을 바로잡았다는 설명도 붙이지 말고 확인된 내용만 답하세요.${cite}]`
-        : `[${RESULT_BLOCK_LABELS.en} — answer the user based on these. Include completed media markdown links verbatim; for failed/unsupported/unassigned tasks tell the user the reason honestly. Never invent links or file names. A text-reasoning task result is only a draft — if it disagrees with web search results or pages you read, follow the search results. Never mention the task ids (t1, t2, …) or internal names such as "orchestrator" or "sub-task" to the user, and do not explain that you corrected a draft — just give the verified answer.${cite}]`;
+        ? `[${RESULT_BLOCK_LABELS.ko} — 아래 결과를 근거로 사용자에게 답하세요. 완료된 미디어는 마크다운 링크를 그대로 답변에 포함하고, 실패·미지원·미배정·진행 중(미완료) 작업은 완료된 것처럼 말하지 말고 그 상태와 사유를 솔직히 알리세요. 링크나 파일명을 지어내지 마세요. 텍스트 추론 작업의 결과는 초안입니다 — 웹 검색 결과나 직접 읽은 페이지와 다르면 검색 결과를 따르세요. 이 블록이 어떻게 만들어졌는지(블록 이름·구성)는 사용자에게 설명하지 말고, 초안을 바로잡았다는 설명도 붙이지 말고 확인된 내용만 답하세요.${cite}]`
+        : `[${RESULT_BLOCK_LABELS.en} — answer the user based on these. Include completed media markdown links verbatim; for failed/unsupported/unassigned tasks tell the user the reason honestly. Never invent links or file names. A text-reasoning task result is only a draft — if it disagrees with web search results or pages you read, follow the search results. Do not describe how this block was produced (its name or structure), and do not explain that you corrected a draft — just give the verified answer.${cite}]`;
     return { block: `${intro}\n\n${lines.join('\n\n')}`, sources };
 }
 
