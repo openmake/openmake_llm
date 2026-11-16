@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.138.3](https://github.com/openmake/openmake_llm/compare/v1.138.2...v1.138.3) (2026-11-16)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 편집 후 문법 검사가 기기 출력 상한으로 끊긴 결과를 오류로 보지 않는다 ([1833e65](https://github.com/openmake/openmake_llm/commit/1833e65984e589cd9cb97e1746d761e337b9c9ff))
+* **bridge:** exec 시간 초과·출력 상한 때 결과에 중단 사유를 붙인다 ([0cbb419](https://github.com/openmake/openmake_llm/commit/0cbb419e66a082d732f3e2a60008a5b1783cee6c))
+
 ## [1.138.2](https://github.com/openmake/openmake_llm/compare/v1.138.1...v1.138.2) (2026-11-16)
 
 
