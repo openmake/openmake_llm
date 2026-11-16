@@ -59,6 +59,13 @@ describe('scrubResultBlockMarkers', () => {
     });
 });
 
+describe('scrubResultBlockMarkers — 새 블록 이름', () => {
+    it('새 이름도 같은 규칙으로 정리한다(옛 이름 사례는 위에서 그대로 통과)', () => {
+        expect(ko('맑음 [사전 작업 결과 출처 16, 18].', [16, 18]).content).toBe('맑음 [출처 16, 18].');
+        expect(scrubResultBlockMarkers('Done [Prepared task results 3 tasks]', { sourceLabel: 'Source', validNums: new Set(['3']) }).content).toBe('Done');
+    });
+});
+
 describe('resultBlockMarkersWereCleaned', () => {
     it('스트리밍 본문에 있던 표식이 최종본에 없으면 true', () => {
         expect(resultBlockMarkersWereCleaned('a [오케스트레이터 작업 결과 t1, 결과 6]', 'a [출처 6]')).toBe(true);
