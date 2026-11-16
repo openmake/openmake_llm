@@ -32,6 +32,25 @@ describe('stripDeadCitationMarkers', () => {
         expect(r.removed).toBe(5);
     });
 
+    test('번호마다 라벨을 되풀이한 묶음 인용 — 전부 유효면 그대로', () => {
+        const text = '근거 [출처 1, 출처 2, 출처 10]이다.';
+        const r = stripDeadCitationMarkers(text, VALID);
+        expect(r.content).toBe(text);
+        expect(r.removed).toBe(0);
+    });
+
+    test('번호마다 라벨을 되풀이한 묶음 인용 — 일부 유효면 라벨 한 번으로 재작성', () => {
+        const r = stripDeadCitationMarkers('근거 [출처 3, 출처 14]이다.', VALID);
+        expect(r.content).toBe('근거 [출처 3]이다.');
+        expect(r.removed).toBe(1);
+    });
+
+    test('번호마다 라벨을 되풀이한 묶음 인용 — 전부 무효면 선행 공백과 함께 삭제', () => {
+        const r = stripDeadCitationMarkers('근거 [출처 14, 출처 15]이다.', VALID);
+        expect(r.content).toBe('근거이다.');
+        expect(r.removed).toBe(1);
+    });
+
     test('라벨 없는 대괄호 숫자([14]·마크다운 링크·각주)는 건드리지 않는다', () => {
         const text = '배열 [14] 와 링크 [제목 99](https://x.com) 유지.';
         const r = stripDeadCitationMarkers(text, VALID);
@@ -47,6 +66,10 @@ describe('citationMarkersWereCleaned', () => {
 
     test('복합 인용이 축소돼도 true', () => {
         expect(citationMarkersWereCleaned('근거 [출처 3, 14]', '근거 [출처 3]')).toBe(true);
+    });
+
+    test('번호마다 라벨을 되풀이한 묶음 인용이 축소돼도 true', () => {
+        expect(citationMarkersWereCleaned('근거 [출처 3, 출처 14]', '근거 [출처 3]')).toBe(true);
     });
 
     test('마커 변화가 없으면 false (출처 목록 append 만 있어도)', () => {
