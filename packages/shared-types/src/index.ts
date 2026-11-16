@@ -480,3 +480,4 @@ export * from "./agent-task-metrics";
 export * from "./mcp-monitoring";
 export * from "./conversation-share";
 export * from "./agent-task-isolation";
+export * from "./desktop-update";

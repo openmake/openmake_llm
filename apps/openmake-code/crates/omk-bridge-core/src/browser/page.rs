@@ -1,6 +1,6 @@
 //! 페이지 조작 도우미(TS `local-browser.ts` 의 `evaluate`·`currentUrl`·`poll`·`clickAt`·`typeText`·`press`·`goto`·
 //! `interactiveNodes`·`findByRole`·`centerOf`·`followPopup`·`waitDocumentReady`). 액션 분기는 `actions.rs` 가 한다 —
-//! 여기 함수들은 판정을 지난 `run_action` 안에서만 불린다.
+//! 여기 함수들은 판정을 지난 `run_action` 안에서만 불린다. 이동·요소 대기·문서 대기는 중지와 겨뤄 끊긴다(`Ctx::stoppable`).
 
 use std::future::Future;
 use std::time::Duration;
@@ -126,12 +126,12 @@ impl Ctx<'_> {
     /// 식의 값이 `null`·`undefined` 가 아닐 때까지.
     pub(super) async fn poll_eval(&self, expression: &str, message: &str) -> Result<Value, String> {
         let t = self.action_timeout();
-        poll(
+        self.stoppable(poll(
             || async { self.eval(expression).await.map(present) },
             message,
             t,
-        )
-        .await
+        ))
+        .await?
     }
 
     async fn ready_once(&self) -> Result<Option<bool>, String> {
@@ -140,14 +140,17 @@ impl Ctx<'_> {
     }
 
     async fn wait_ready(&self, timeout_ms: u64) -> Result<bool, String> {
-        poll(|| self.ready_once(), READ_TIMEOUT, timeout_ms).await
+        self.stoppable(poll(|| self.ready_once(), READ_TIMEOUT, timeout_ms))
+            .await?
     }
 
-    /// 문서가 읽힐 때까지 — 시간 안에 읽혔으면 참. 시간 초과는 실패가 아니라 거짓.
-    pub(super) async fn wait_document_ready(&self) -> bool {
-        self.wait_ready(self.browser.env.extract_ready_ms)
-            .await
-            .is_ok()
+    /// 문서가 읽힐 때까지 — 시간 안에 읽혔으면 참. 시간 초과는 실패가 아니라 거짓. 중지로 끊기면 실패.
+    pub(super) async fn wait_document_ready(&self) -> Result<bool, String> {
+        match self.wait_ready(self.browser.env.extract_ready_ms).await {
+            Ok(_) => Ok(true),
+            Err(e) if self.was_cut() => Err(e),
+            Err(_) => Ok(false),
+        }
     }
 
     pub(super) async fn click_at(&self, x: Option<Value>, y: Option<Value>) -> Result<(), String> {
@@ -174,7 +177,7 @@ impl Ctx<'_> {
             .await?;
         self.send("Input.dispatchMouseEvent", event("mouseReleased", true))
             .await?;
-        // 누르기로 이동이 시작됐으면 문서가 읽힐 때까지 기다린다 — 다음 액션이 옛 페이지에서 돌지 않게.
+        // 누르기로 이동이 시작됐으면 문서가 읽힐 때까지 기다린다 — 다음 액션이 옛 페이지에서 돌지 않게. 중지는 마지막 문서 대기만 끊는다.
         sleep(Duration::from_millis(BROWSER_CLICK_SETTLE_MS)).await;
         self.follow_popup().await?;
         self.wait_ready(self.action_timeout()).await.map(|_| ())
@@ -221,7 +224,12 @@ impl Ctx<'_> {
     }
 
     /// 이동 — 다운로드로 끝났으면(isDownload, 문서는 그대로) 참. 대기는 보내기 전에 등록한다(답보다 먼저 온 이벤트를 놓치지 않게).
+    /// 답·이동 완료를 기다리는 동안 중지되면 끊는다.
     pub(super) async fn goto(&self, url: &str) -> Result<bool, String> {
+        self.stoppable(self.navigate(url)).await?
+    }
+
+    async fn navigate(&self, url: &str) -> Result<bool, String> {
         let sid = self.session();
         let mine = sid.clone();
         let loaded = self.cdp.wait_for(
@@ -295,7 +303,8 @@ impl Ctx<'_> {
                 .then(|| matches[nth as usize].clone());
             Ok(at)
         };
-        poll(found, &message, self.action_timeout()).await
+        self.stoppable(poll(found, &message, self.action_timeout()))
+            .await?
     }
 
     pub(super) async fn center_of(&self, id: &Value) -> Result<(Value, Value), String> {
