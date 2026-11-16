@@ -2407,7 +2407,7 @@
     "version": "Version {version}",
     "download": "Herunterladen",
     "sha256": "SHA-256",
-    "copy": "Kopieren",
+    "copyFor": "{os}-SHA-256 kopieren",
     "notPublished": "Auf diesem Server sind keine Installationsdateien veröffentlicht. Bitte wende dich an deinen Administrator.",
     "loadFailed": "Informationen zu den Installationsdateien konnten nicht geladen werden.",
     "retry": "Erneut versuchen",
@@ -2415,7 +2415,7 @@
       "title": "Installationsanleitung",
       "native": "macOS: Öffne die dmg und verschiebe die App in den Ordner „Programme“. Erscheint beim ersten Start eine Warnung, wähle Systemeinstellungen → Datenschutz & Sicherheit → Dennoch öffnen.",
       "windows": "Windows: Führe die Installationsdatei aus. Erscheint der Bildschirm „Der Computer wurde durch Windows geschützt“, klicke auf Weitere Informationen → Trotzdem ausführen.",
-      "apiKey": "Trage nach der Installation in den App-Einstellungen die Serveradresse (die Adresse dieser Website) und einen API key ein — einen Companion·CLI-Verbindungsschlüssel stellst du unter <link>API-Zugriff</link> aus."
+      "apiKey": "Trage nach der Installation in den App-Einstellungen die Serveradresse (die Adresse dieser Website) und einen API key ein — einen Verbindungsschlüssel für Companion und die CLI stellst du unter <link>API-Zugriff</link> aus."
     }
   },
   "notFound": {

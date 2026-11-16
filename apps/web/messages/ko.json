@@ -2407,7 +2407,7 @@
     "version": "버전 {version}",
     "download": "내려받기",
     "sha256": "SHA-256",
-    "copy": "복사",
+    "copyFor": "{os} SHA-256 복사",
     "notPublished": "이 서버에 게시된 설치 파일이 없습니다. 관리자에게 문의하세요.",
     "loadFailed": "설치 파일 정보를 불러오지 못했습니다.",
     "retry": "다시 시도",

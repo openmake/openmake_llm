@@ -693,7 +693,7 @@ export function Composer() {
 
         {/* Cowork D2 — 로컬 실행: 데스크톱 앱이 연결한 폴더에서 작업 실행. */}
         {agentTaskMode && (
-          <div className="flex flex-wrap items-center gap-2 px-3 pt-2 text-xs">
+          <div className={cn("flex items-center gap-2 px-3 pt-2 text-xs", !bridgeConnected && "flex-wrap")}>
             <span className="shrink-0 text-muted">{t("localExec.label")}</span>
             <button
               type="button"
