@@ -17,12 +17,13 @@ use crate::constants::{ExecStop, MAX_BUFFER, SANDBOX_BIN, exec_stop_notice};
 use crate::denylist::match_denylist;
 use crate::exec_env::build_exec_env;
 use crate::exec_path::resolve_exec_path;
-use crate::git_trust::{GitPaths, detect_git, protected_git_dirs};
+use crate::git_trust::{GitPaths, detect_git_top, git_config_reads, protected_git_dirs};
 use crate::msg::{BridgeMsg, BridgeResult};
 use crate::node_error;
 use crate::platform::{Platform, bulk_approval_allowed, shell_invocation};
 use crate::proc::{self, ProcEnd, ProcSpec, Stderr, Stdin};
-use crate::sandbox::sandbox_profile;
+use crate::sandbox::{ReadInputs, mise_env_dirs, sandbox_profiles};
+use crate::sandbox_profile::ReadScope;
 use crate::timed_fs::FsGate;
 use crate::tool_env::{ToolEnv, ToolSandbox};
 
@@ -98,6 +99,8 @@ pub(crate) struct ExecState {
     profile: Mutex<Option<String>>,
     /// 확인 없이 뜨는 자식(worktree git·tsc·py_compile·pytest 탐지)용 도구 프로파일 텍스트 — exec 프로파일 + 네트워크 차단(D-1).
     tool_profile: Mutex<Option<String>>,
+    /// 도구 프로파일이 홈에서 읽기를 여는 범위 — 프로파일을 만들 때 쓴 값(진단 실행 전 훑기, 설계 2026-11-16 D-22).
+    tool_scope: Mutex<Option<ReadScope>>,
     /// 연결 때 믿기로 한 git 디렉터리(`git_trust`) — 없으면 git 없음(쓰기 허용 줄 없음, worktree 거절).
     git: Mutex<Option<GitPaths>>,
     /// 금지 줄·파일 kind 가드를 걸 git 디렉터리 — 믿는 git 과 연결 폴더의 `.git`(디렉터리, 또는 폴더 안을 가리키는 gitfile·
@@ -113,6 +116,7 @@ impl ExecState {
             path_cache: tokio::sync::Mutex::new(None),
             profile: Mutex::new(None),
             tool_profile: Mutex::new(None),
+            tool_scope: Mutex::new(None),
             git: Mutex::new(None),
             protect: Mutex::new(Vec::new()),
         }
@@ -148,25 +152,39 @@ impl ExecState {
     pub(crate) async fn prepare(&self, root: &str, gate: &FsGate) {
         *self.path_cache.lock().await = None;
         let h = &self.host;
-        let git = detect_git(root, &h.env, h.platform, h.sandbox_enabled, gate).await;
+        let found = detect_git_top(root, &h.env, h.platform, h.sandbox_enabled, gate).await;
+        let (git, top) = match found {
+            Some((g, t)) => (Some(g), t),
+            None => (None, None),
+        };
         *lock(&self.git) = git.clone();
-        let (root, home, sandbox) = (root.to_owned(), h.home.clone(), h.sandbox_enabled);
+        let sandbox = h.sandbox_enabled;
+        // 도구 프로파일 홈 읽기 입력(설계 2026-11-16 D-18·D-19·§8 M2) — git 설정 탐지는 믿는 git 이 있을 때만.
+        let git_config = match (&git, sandbox) {
+            (Some(_), true) => git_config_reads(root, &h.env, h.platform, sandbox, &h.home).await,
+            _ => Vec::new(),
+        };
+        let inputs = ReadInputs {
+            top,
+            env_dirs: mise_env_dirs(&h.env),
+            git_config,
+        };
+        let (root, home) = (root.to_owned(), h.home.clone());
         let build = move || {
             let protect = protected_git_dirs(git.as_ref(), &root);
-            let text = |tool| {
-                sandbox
-                    .then(|| sandbox_profile(&root, git.as_ref(), &protect, &home, tool))
-                    .flatten()
-            };
-            Ok((protect.clone(), text(false), text(true)))
+            let built = sandbox
+                .then(|| sandbox_profiles(&root, git.as_ref(), &protect, &home, &inputs))
+                .flatten();
+            Ok((protect, built))
         };
-        let (protect, profile, tool) =
-            gate.run("샌드박스 준비", build)
-                .await
-                .unwrap_or((Vec::new(), None, None));
+        let (protect, built) = gate
+            .run("샌드박스 준비", build)
+            .await
+            .unwrap_or((Vec::new(), None));
         *lock(&self.protect) = protect;
-        *lock(&self.profile) = profile;
-        *lock(&self.tool_profile) = tool;
+        *lock(&self.profile) = built.as_ref().map(|b| b.exec.clone());
+        *lock(&self.tool_profile) = built.as_ref().map(|b| b.tool.clone());
+        *lock(&self.tool_scope) = built.map(|b| b.scope);
     }
 
     /// 연결 때 믿기로 한 git 디렉터리.
@@ -182,6 +200,14 @@ impl ExecState {
     /// 금지 줄·파일 kind 가드를 거는 git 디렉터리들(믿는 git 과 연결 폴더의 `.git` 쪽).
     pub(crate) fn protect_paths(&self) -> Vec<GitPaths> {
         lock(&self.protect).clone()
+    }
+
+    /// 도구 프로파일의 읽기 범위 — 샌드박스가 켜지고 프로파일이 있을 때만(진단이 닿지 않는 의존을 거른다, 설계 D-22).
+    pub(crate) fn tool_reach(&self) -> Option<ReadScope> {
+        if !self.host.sandbox_enabled {
+            return None;
+        }
+        lock(&self.tool_scope).clone()
     }
 
     /// 확인 없이 뜨는 자식을 감쌀 도구 프로파일 — 꺼짐, 프로파일, 켜졌는데 없음(fail-closed).

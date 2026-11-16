@@ -11,8 +11,8 @@
 //! 탐지 git 은 프로파일 파일을 쓰기 전에 돌므로 고정 인라인 프로파일(쓰기·네트워크 금지)로 감싼다.
 
 use crate::constants::{
-    GIT_FIXED_ARGS, GIT_PATH_DENIED_PREFIX, GIT_PROBE_PROFILE, GIT_PROBE_TIMEOUT_MS,
-    GITFILE_MAX_BYTES, SANDBOX_BIN,
+    GIT_CONFIG_READ_MAX, GIT_FIXED_ARGS, GIT_PATH_DENIED_PREFIX, GIT_PROBE_PROFILE,
+    GIT_PROBE_TIMEOUT_MS, GITFILE_MAX_BYTES, SANDBOX_BIN,
 };
 use crate::exec_env::build_exec_env;
 use crate::exec_path::{abs_path_entries, env_get};
@@ -118,14 +118,15 @@ fn backlink(git_dir: &str) -> Option<String> {
     real(&resolve(git_dir, v))
 }
 
-/// 믿는 배치인가(FS 만 본다). `core_worktree` 는 git dir config 의 `core.worktree` 원문.
+/// 믿는 배치인가(FS 만 본다). `core_worktree` 는 git dir config 의 `core.worktree` 원문. 둘째 값은 작업 트리 최상위의
+/// realpath(배치 1~3 — 배치 4 는 없음, 설계 2026-11-16 D-19).
 fn decide(
     root: &str,
     g: &str,
     c: &str,
     top: &str,
     core_worktree: Option<&str>,
-) -> Option<GitPaths> {
+) -> Option<(GitPaths, Option<String>)> {
     let (root, git_dir, common_dir, top) = (real(root)?, real(g)?, real(c)?, real(top)?);
     let in_root = within(&git_dir, &root) && within(&common_dir, &root);
     let found = GitPaths {
@@ -133,8 +134,9 @@ fn decide(
         common_dir: common_dir.clone(),
     };
     if in_root {
-        return Some(found); // 4
+        return Some((found, None)); // 4
     }
+    let found = (found, Some(top.clone()));
     if !within(&root, &top) {
         return None;
     }
@@ -156,6 +158,7 @@ fn decide(
 
 /// 연결 폴더의 git 디렉터리를 구해 믿을 때만 돌려준다(레포가 아니거나 믿지 않으면 `None` — git 없음).
 /// `sandbox` 면 탐지 git 을 인라인 프로파일로 감싼다. FS 판정은 관문 안에서 한다(막힌 볼륨에서 멈추지 않게).
+/// 테스트 전용(제품은 [`detect_git_top`] 을 쓴다).
 pub async fn detect_git(
     root: &str,
     env: &[(String, String)],
@@ -163,6 +166,19 @@ pub async fn detect_git(
     sandbox: bool,
     gate: &FsGate,
 ) -> Option<GitPaths> {
+    detect_git_top(root, env, platform, sandbox, gate)
+        .await
+        .map(|(g, _)| g)
+}
+
+/// [`detect_git`] + 믿는 git 의 작업 트리 최상위(realpath, 배치 4 는 없음) — `GitPaths` 와 따로 돌려준다(설계 §8 L1).
+pub async fn detect_git_top(
+    root: &str,
+    env: &[(String, String)],
+    platform: Platform,
+    sandbox: bool,
+    gate: &FsGate,
+) -> Option<(GitPaths, Option<String>)> {
     let rev = [
         "rev-parse",
         "--absolute-git-dir",
@@ -185,6 +201,70 @@ pub async fn detect_git(
     let (root, g, c, top) = (root.to_owned(), g.to_owned(), c.to_owned(), top.to_owned());
     let judge = move || Ok(decide(&root, &g, &c, &top, wt.as_deref()));
     gate.run("샌드박스 준비", judge).await.ok().flatten()
+}
+
+/// `git config --includes --show-origin --list -z` 출력에서 도구 git 이 읽어야 하는 파일(설계 D-18·§8 M4) — realpath 전, 순서대로
+/// 중복 없이 `GIT_CONFIG_READ_MAX` 개까지. 항목은 `\0` 로 나뉘고 origin·본문이 번갈아 온다(짝이 없는 끝은 버린다). 본문은 첫
+/// `\n` 앞이 키, 뒤가 값(없으면 값 없는 키). 모으는 것: ① `file:` origin 의 절대경로 ② `include.path`·`includeif.<…>.path` 값
+/// (`~/` 는 홈, 상대 경로는 그 origin 파일 폴더 기준 — origin 이 절대경로가 아니면 버림) ③ `core.excludesfile`·
+/// `core.attributesfile` 값(`~/` 는 홈, 상대 경로는 버림). 그 밖의 `~` 표기는 버린다.
+pub fn parse_git_config_reads(out: &str, home: &str) -> Vec<String> {
+    let tokens: Vec<&str> = out.split('\0').collect();
+    let mut found: Vec<String> = Vec::new();
+    let mut push = |p: String| {
+        if !found.contains(&p) {
+            found.push(p);
+        }
+    };
+    for pair in tokens.as_chunks::<2>().0 {
+        let origin = pair[0]
+            .strip_prefix("file:")
+            .filter(|o| o.starts_with('/'))
+            .map(|o| resolve("/", o));
+        if let Some(o) = &origin {
+            push(o.clone());
+        }
+        let Some((key, value)) = pair[1].split_once('\n') else {
+            continue;
+        };
+        let include =
+            key == "include.path" || (key.starts_with("includeif.") && key.ends_with(".path"));
+        let file = key == "core.excludesfile" || key == "core.attributesfile";
+        if value.is_empty() || !(include || file) {
+            continue;
+        }
+        let path = if let Some(rest) = value.strip_prefix("~/") {
+            Some(resolve(home, rest))
+        } else if value.starts_with('~') {
+            None
+        } else if value.starts_with('/') {
+            Some(resolve("/", value))
+        } else if include {
+            origin.as_deref().map(|o| resolve(&dirname(o), value))
+        } else {
+            None
+        };
+        if let Some(p) = path {
+            push(p);
+        }
+    }
+    found.truncate(GIT_CONFIG_READ_MAX);
+    found
+}
+
+/// 연결 때 git 설정이 가리키는 파일 — 탐지 git 을 한 번 더 띄운다(cwd=연결 폴더, 실패·시간 초과는 빈 목록). 믿는 git 이 있을 때만 부른다.
+pub async fn git_config_reads(
+    root: &str,
+    env: &[(String, String)],
+    platform: Platform,
+    sandbox: bool,
+    home: &str,
+) -> Vec<String> {
+    let args = ["config", "--includes", "--show-origin", "--list", "-z"];
+    probe(&args, root, env, platform, sandbox)
+        .await
+        .map(|out| parse_git_config_reads(&out, home))
+        .unwrap_or_default()
 }
 
 /// 존재하는 최근접 조상의 realpath + 나머지 — 없는 파일을 쓰는 경우도 실제 위치로 본다. 둘째 값은 새로 생길 이름들(위에서 아래로).

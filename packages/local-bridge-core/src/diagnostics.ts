@@ -20,22 +20,23 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
-import { DIAG_MAX_PER_FILE, DIAG_MAX_TOTAL, DIAG_MSG_MAX, DIAG_TIMEOUT_MS, MAX_BUFFER } from './constants';
+import { DIAG_MAX_PER_FILE, DIAG_MAX_TOTAL, DIAG_MSG_MAX, DIAG_TIMEOUT_MS, MAX_BUFFER, PY_FATAL_MARKER, TSC_CONFIG_UNREADABLE, TSC_LINK_SCAN_MAX } from './constants';
 import { buildExecEnv } from './exec-env';
 import { absPathEntries, onPath } from './exec-path';
-import { sandboxExecError, sandboxExecFailed, wrapInSandbox } from './sandbox';
+import { reachable, sandboxExecError, sandboxExecFailed, wrapInSandbox, type ReadScope } from './sandbox';
 import type { BridgeDiagnostic } from './types';
 
 const TS_EXT = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
 const PY_EXT = new Set(['.py']);
 
-function run(file: string, args: string[], cwd: string, extraPath: string | undefined, sandbox: string | null | undefined): Promise<{ stdout: string; stderr: string }> {
+/** ok: 정상 종료(코드 0)였나 — 띄우지 못함·시간 초과·신호·0 아닌 코드는 false. */
+function run(file: string, args: string[], cwd: string, extraPath: string | undefined, sandbox: string | null | undefined): Promise<{ stdout: string; stderr: string; ok: boolean }> {
     const cmd = wrapInSandbox(file, args, sandbox); // 프로파일 없음이면 여기서 throw — 자식을 띄우지 않는다
     const wrapped = typeof sandbox === 'string';
     const envPath = extraPath || absPathEntries(process.env.PATH || process.env.Path || '');
     // 감쌀 때 이름으로 띄우는 실행 파일(python3)은 먼저 찾는다 — 없으면 sandbox-exec 의 execvp 실패(71)가 아니라
     // 종전과 같은 "띄우지 못함"(빈 출력)이다.
-    if (wrapped && !file.includes('/') && !onPath(file, envPath)) return Promise.resolve({ stdout: '', stderr: '' });
+    if (wrapped && !file.includes('/') && !onPath(file, envPath)) return Promise.resolve({ stdout: '', stderr: '', ok: false });
     return new Promise((resolve, reject) => {
         execFile(
             cmd.file, cmd.args,
@@ -50,7 +51,7 @@ function run(file: string, args: string[], cwd: string, extraPath: string | unde
             (err, stdout, stderr) => {
                 // sandbox-exec 자체 실패(프로파일 파일 유실 등)는 "진단 없음"으로 삼키지 않고 프로파일 없음과 같이 거절한다.
                 if (err && sandboxExecFailed(wrapped, err.code, String(stderr ?? ''))) reject(sandboxExecError(err.code, file));
-                else resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? '') });
+                else resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? ''), ok: !err });
             },
         );
     });
@@ -132,16 +133,63 @@ function capDiagnostics(all: BridgeDiagnostic[]): { diagnostics: BridgeDiagnosti
 }
 
 /**
+ * py_compile 이 그 파일을 검사하지 못했나(설계 D-21·§9 L1·A1) — 어떤 줄이 PY_FATAL_MARKER 로 시작하거나(인터프리터가 못 뜸),
+ * 정상 종료(코드 0)가 아닌데(띄우지 못함·python3 없음·시간 초과·신호·0 아닌 코드) 출력에 `Error`·`error` 가 없다.
+ */
+function pyUnchecked(out: string, ok: boolean): boolean {
+    return out.split('\n').some((l) => l.startsWith(PY_FATAL_MARKER)) || (!ok && !/Error|error/.test(out));
+}
+
+/**
+ * tsc 를 찾은 `node_modules` 의 1단계 항목과 `@scope` 아래 1단계 가운데, 도구 프로파일이 읽지 못하는 곳을 가리키는 심링크가
+ * 있나(설계 D-22·§9 N2) — 첫 발견에서 멈춘다. 살펴본 심링크가 TSC_LINK_SCAN_MAX 개면 "없음". 끊어진 링크는 세지만 닿지 않는
+ * 것으로 보지 않는다. 폴더를 읽지 못하면 "없음"(종전 동작 쪽). 그 전에 `tsc` 자신과 `node_modules` 의 realpath 가 닿는지 본다
+ * (코드 검증 R1 B1 — `node_modules` 자체가 닿지 않는 곳을 가리키는 심링크면 tsc 가 제 스크립트를 못 읽고 0건으로 끝난다).
+ */
+function unreachableLink(tsc: string, scope: ReadScope): boolean {
+    const modules = path.dirname(path.dirname(tsc));
+    for (const p of [tsc, modules]) {
+        let real: string | null = null;
+        try { real = fs.realpathSync.native(p); } catch { /* 끊어진 링크 */ }
+        if (real !== null && !reachable(scope, real)) return true;
+    }
+    let seen = 0;
+    const stack: [string, boolean][] = [[modules, true]];
+    while (stack.length > 0) {
+        const [dir, top] = stack.pop()!;
+        let entries: fs.Dirent[];
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+        const scoped: [string, boolean][] = [];
+        for (const e of entries) {
+            const p = path.join(dir, e.name);
+            if (e.isSymbolicLink()) {
+                if (seen === TSC_LINK_SCAN_MAX) return false;
+                seen++;
+                let real: string | null = null;
+                try { real = fs.realpathSync.native(p); } catch { /* 끊어진 링크 */ }
+                if (real !== null && !reachable(scope, real)) return true;
+            } else if (top && e.isDirectory() && e.name.startsWith('@')) scoped.push([p, false]);
+        }
+        stack.push(...scoped.reverse());
+    }
+    return false;
+}
+
+/**
  * 지정한 파일들의 진단을 모은다. 실행할 도구가 없으면 빈 결과 + `serverKind:'none'`.
  * @param base 스코프 루트(연결/선택 폴더의 실경로)
  * @param absPaths 이미 스코프 검증된 절대경로들
  * @param sandbox 자식을 감쌀 도구 프로파일 — undefined 면 감싸지 않고, null 이면 자식을 띄워야 할 때 거절한다(`wrapInSandbox`)
+ * @param reach 도구 프로파일 읽기 범위(샌드박스가 켜졌을 때 코어가 준다, 설계 D-22) — 있으면 닿지 않는 의존이 보이는 tsconfig 묶음은
+ *   tsc 를 띄우지 않고, 출력에 TSC_CONFIG_UNREADABLE 이 있는 묶음의 진단은 버린다. 검사하지 못한 도구는 serverKind 에서 뺀다
+ *   (§9 N1 — py_compile 은 모든 파일이 "검사 못 함"일 때).
  */
 export async function collectDiagnostics(
     base: string,
     absPaths: string[],
     execPath?: string,
     sandbox?: string | null,
+    reach?: ReadScope | null,
 ): Promise<{ diagnostics: BridgeDiagnostic[]; truncated: boolean; serverKind: string }> {
     // base 의 엄격한 하위만 — 대상이 연결 폴더 자신이면(`paths: ['.']`, 이름이 `.ts` 로 끝나는 폴더) 위로 찾기가 폴더 **밖**에서
     // 시작해 조상의 tsconfig·tsc 를 실행했다(설계 D-9). 그 밖은 조용히 건너뛴다(디렉터리는 진단 대상이 아니다).
@@ -160,17 +208,21 @@ export async function collectDiagnostics(
             if (cfg && tsc && !byProject.has(cfg)) byProject.set(cfg, tsc);
         }
         for (const [cfg, tsc] of byProject) {
+            if (reach && unreachableLink(tsc, reach)) continue;
             const cwd = path.dirname(cfg);
             const { stdout, stderr } = await run(tsc, ['--noEmit', '--pretty', 'false', '-p', cfg], cwd, execPath, sandbox);
-            all.push(...parseTsc(`${stdout}\n${stderr}`, base, cwd));
+            const out = `${stdout}\n${stderr}`;
+            if (reach && out.includes(TSC_CONFIG_UNREADABLE)) continue;
+            all.push(...parseTsc(out, base, cwd));
             kinds.push('tsc');
         }
     }
 
     // Python — 파일 단위 문법 검사(py_compile 은 표준 라이브러리라 별도 설치가 없다).
     for (const f of py) {
-        const { stdout, stderr } = await run('python3', ['-I', '-m', 'py_compile', f], base, execPath, sandbox);
+        const { stdout, stderr, ok } = await run('python3', ['-I', '-m', 'py_compile', f], base, execPath, sandbox);
         const out = `${stdout}\n${stderr}`;
+        if (pyUnchecked(out, ok)) continue;
         if (/Error|error/.test(out)) all.push(...parsePyCompile(out, base, f));
         kinds.push('py_compile');
     }

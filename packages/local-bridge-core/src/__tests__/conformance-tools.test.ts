@@ -44,12 +44,12 @@ function shapeCoreCases(doc: Record<string, unknown>, suite: string): void {
     }
 }
 /** callsRequired — 모든 사례에 toolCalls(띄운 자식이 없으면 빈 배열)를 둔다(test-runner, PR-1.4 리뷰 N2). */
-function shapeDirect(doc: Record<string, unknown>, suite: string, inputKeys: string[], callsRequired = false): void {
+function shapeDirect(doc: Record<string, unknown>, suite: string, inputKeys: string[], callsRequired = false, inputOptional: string[] = []): void {
     for (const c of nonEmpty(doc.direct, `${suite}/direct`)) {
         const at = `${suite}/direct/${String(c.id)}`;
         shape(c, ['id', 'setup', 'input', 'expect', ...(callsRequired ? ['toolCalls'] : [])], callsRequired ? [] : ['toolCalls'], at);
         shapeToolSetup(c.setup, at);
-        shape(c.input, inputKeys, [], `${at}/input`);
+        shape(c.input, inputKeys, inputOptional, `${at}/input`);
         if (c.toolCalls !== undefined) shapeToolCalls(c.toolCalls, at);
     }
 }
@@ -88,7 +88,7 @@ describe('fixture 모양 — 묶음 이름·키 허용 목록·빈 목록', () =
         const doc = load<Record<string, unknown>>('diagnostics-parse');
         shape(doc, ['suite', 'version', 'cases', 'direct'], [], 'diagnostics-parse');
         shapeCoreCases(doc, 'diagnostics-parse');
-        shapeDirect(doc, 'diagnostics-parse', ['base', 'paths', 'execPath']);
+        shapeDirect(doc, 'diagnostics-parse', ['base', 'paths', 'execPath'], false, ['reach']);
         for (const c of doc.direct as Record<string, unknown>[]) {
             shape(c.expect, ['diagnostics', 'truncated', 'serverKind'], [], `diagnostics-parse/direct/${String(c.id)}/expect`);
         }
@@ -173,7 +173,8 @@ describe('code-nav', () => {
 });
 
 describe('diagnostics-parse', () => {
-    type Input = { base: string; paths: string[]; execPath: string };
+    // reach(생략 가능) — 도구 프로파일의 읽기 범위(설계 2026-11-16 D-22). 있으면 샌드박스가 켜진 코어처럼 거른다.
+    type Input = { base: string; paths: string[]; execPath: string; reach?: { home: string; allow: string[]; literals: string[] } };
     const doc = load<{ cases: CoreCase[]; direct: Direct<Input, unknown>[] }>('diagnostics-parse');
 
     it.each(doc.cases.map((c) => [c.id, c] as const))('cases/%s', (_id, c) => runCoreCase('diagnostics-parse', 'lsp_diagnostics', c), 20000);
@@ -183,7 +184,7 @@ describe('diagnostics-parse', () => {
         try {
             applyToolSetup(tmp, c.setup);
             const input = fill(c.input, tmp);
-            const got = await withEnv(runnerEnv(tmp), () => collectDiagnostics(input.base, input.paths, input.execPath));
+            const got = await withEnv(runnerEnv(tmp), () => collectDiagnostics(input.base, input.paths, input.execPath, undefined, input.reach));
             expect(got).toEqual(fill(c.expect, tmp));
             if (c.toolCalls) {
                 const want = fill(c.toolCalls, tmp);

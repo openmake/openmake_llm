@@ -104,7 +104,9 @@ describe('중첩 레포를 folder 로 골라도 worktree 격리가 된다', () =
         const root2 = makeRepo('ws2');
         fs.mkdirSync(path.join(root2, 'proj'));
         fs.writeFileSync(path.join(root2, 'proj', '.git'), `gitdir: ${other}/.git\n`);
-        expect(await run(makeCore(root2), wt('add', 'proj'))).toEqual({ ok: false, error: MISMATCH });
+        // 폴더 밖 레포가 실제 홈 아래라 도구 프로파일(홈 읽기 허용 목록, 설계 2026-11-16 D-15)의 탐지 git 이 그 git 디렉터리를
+        // 읽지 못한다 — 대조 전에 "레포 아님"으로 거절된다. 거절이면 된다(대조 문구 자체는 worktree 테스트가 본다).
+        expect(await run(makeCore(root2), wt('add', 'proj'))).toEqual({ ok: false, error: SANDBOX_ENABLED ? 'git 레포가 아닙니다' : MISMATCH });
     }, 30000);
 
     (SANDBOX_ENABLED ? it : it.skip)('중첩 레포에 fsmonitor·필터·훅을 심어도 폴더 밖 표식이 없다', async () => {
