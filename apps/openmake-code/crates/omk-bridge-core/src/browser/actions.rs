@@ -1,5 +1,6 @@
 //! 브라우저 액션 → CDP 명령(TS `local-browser.ts` 의 `runAction`·`uploadFiles`). `run_action` 은 `run.rs` 의 판정
 //! (중지 → 실제 탭 주소 → 사이트 정책 → 빈 페이지 → 업로드 검사) 뒤 한 곳에서만 불린다(`pub(super)`). 페이지 도우미는 `page.rs`.
+//! 실행 도중의 중지는 대기 자리(`wait`·요소 대기·이동)만 끊는다 — 입력 묶음·저장·업로드 명령은 끝까지 보낸다.
 
 use std::time::Duration;
 
@@ -56,7 +57,7 @@ pub(super) async fn run_action(
             if cx.goto(&str_of(a.get("url"))).await? {
                 r.set("download", true);
             }
-            if let Some(u) = cx.url().await {
+            if let Some(u) = cx.stoppable(cx.url()).await? {
                 r.set("url", u);
             }
         }
@@ -153,7 +154,8 @@ pub(super) async fn run_action(
             } else {
                 ms.clamp(0.0, BROWSER_WAIT_MAX_MS as f64)
             };
-            tokio::time::sleep(Duration::from_secs_f64(ms / 1000.0)).await;
+            cx.stoppable(tokio::time::sleep(Duration::from_secs_f64(ms / 1000.0)))
+                .await?;
         }
         Some("waitFor") => {
             let expr = format!("!!document.querySelector({sel})");
@@ -162,7 +164,8 @@ pub(super) async fn run_action(
                 let v = cx.eval(&expr).await?;
                 Ok(js_truthy(v.as_ref()).then_some(()))
             };
-            super::page::poll(found, &message, cx.action_timeout()).await?;
+            cx.stoppable(super::page::poll(found, &message, cx.action_timeout()))
+                .await??;
         }
         Some("screenshot") => {
             // 중첩 액션은 같은 i 를 공유한다 — 기본 이름은 step 으로 구분
@@ -185,7 +188,7 @@ pub(super) async fn run_action(
         Some(t @ ("extractText" | "extractHtml")) => {
             // selector 없이 페이지 전체를 읽을 때는 문서가 읽힐 때까지 기다린다 — 로딩 중의 빈 본문을 "성공·빈 문자열"로 보고하지 않게
             let by_selector = js_truthy(a.get("selector"));
-            let ready = by_selector || cx.wait_document_ready().await;
+            let ready = by_selector || cx.wait_document_ready().await?;
             let text = t == "extractText";
             let got = if by_selector {
                 let expr = if text {

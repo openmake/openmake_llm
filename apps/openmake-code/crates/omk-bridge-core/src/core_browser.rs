@@ -52,7 +52,7 @@ impl BridgeCore {
         self.browser.as_ref().is_some_and(|b| b.is_user_control())
     }
 
-    /// 실행 중인 모든 브라우저 요청을 멈춘다(다음 액션부터).
+    /// 실행 중인 모든 브라우저 요청을 멈춘다(진행 중인 대기를 끊고, 다음 액션부터 실행하지 않는다).
     pub fn stop_browser(&self) {
         if let Some(b) = &self.browser {
             b.request_stop(None);

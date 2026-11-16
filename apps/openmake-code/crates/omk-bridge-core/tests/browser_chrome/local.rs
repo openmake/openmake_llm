@@ -39,6 +39,7 @@ pub fn pages(other: Arc<Mutex<String>>) -> http::Handler {
         "/hop" => html(HOP),
         "/slow-hop" => html(SLOW_HOP),
         "/late" => html(LATE),
+        "/slow-head" => Resp::HoldHead,
         "/redirect" => {
             let to = format!("{}/form", other.lock().unwrap());
             Resp::Full(302, vec![("Location".into(), to)], Vec::new())
