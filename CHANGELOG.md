@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.138.2](https://github.com/openmake/openmake_llm/compare/v1.138.1...v1.138.2) (2026-11-16)
+
+
+### 🔧 기타
+
+* **release:** 1.138.2 — [#1815](https://github.com/openmake/openmake_llm/issues/1815) 릴리스 유도 ([180ffe6](https://github.com/openmake/openmake_llm/commit/180ffe67ac0c497c4edf455b2436000c9f4a64df))
+
 ## [1.138.1](https://github.com/openmake/openmake_llm/compare/v1.138.0...v1.138.1) (2026-11-15)
 
 
