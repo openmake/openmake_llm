@@ -81,6 +81,14 @@ export interface StreamFromExternalContext {
     timings?: ChatTimings;
     /** 멀티모달 오케스트레이터가 이번 턴에 만든 미디어 마크다운(성공분만) — 모델이 누락해도 결정적 첨부 */
     orchestratorMedia?: string[];
+    /** 오케스트레이터 검색 작업의 출처(작업 1개 = 목록 1개, 턴 번호 기준 뒤) — 도구 출처와 같이 번호표에 넣고 턴에 한 번 발행한다 */
+    orchestratorSources?: import('../../tools/web-search/types').SearchSourceRef[][];
+    /** 오케스트레이터 출처를 이미 발행했는지 — 폴백 재시도가 같은 ctx 로 다시 돌 때 중복 발행 방지 */
+    orchestratorSourcesEmitted?: boolean;
+    /** 이번 턴에 오케스트레이터 작업 결과 블록이 주입됐는지 — 최종 본문의 내부 표식 정리 대상 턴 */
+    orchestratorBlockInjected?: boolean;
+    /** 출처 번호표 원문 — 오케스트레이터 블록을 붙이기 전 문자열. 있으면 enhancedMessage 대신 이것만 읽는다 */
+    sourceContextText?: string;
     /** 이번 턴에 delegate_agent_task 로 위임한 백그라운드 작업 — 도구 배치가 채워 되돌려준다(REST 응답 agent_tasks). */
     delegatedTasks?: import('./delegated-task-record').DelegatedTaskRecord[];
 }

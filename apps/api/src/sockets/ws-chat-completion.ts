@@ -8,6 +8,7 @@
 import { hasScriptMixing } from '../services/chat-service/script-purity';
 import { generatedLinkWasCleaned } from '../services/chat-service/generated-link-guard';
 import { citationMarkersWereCleaned, integrationScrubWasCleaned } from '../services/chat-service/external-deterministic-append';
+import { resultBlockMarkersWereCleaned } from '../services/orchestrator/result-markers';
 
 /**
  * done 에 동봉할 cleanedContent.
@@ -18,6 +19,7 @@ import { citationMarkersWereCleaned, integrationScrubWasCleaned } from '../servi
  *   - 스크립트 순수성 교정이 실제로 적용된 턴 (스트리밍 화면엔 한자 혼입이 남아 있다)
  *   - 죽은 인용 마커 제거가 적용된 턴 ([출처 N] 수집 목록 밖 번호)
  *   - 지도 환각 HTML 제거가 적용된 턴 (가짜 카카오 이미지 링크가 코드 텍스트로 노출)
+ *   - 오케스트레이터 내부 표식 정리가 적용된 턴 (`[오케스트레이터 작업 결과 t1, …]`)
  */
 export function resolveCleanedContent(params: {
     artifactCount: number;
@@ -30,6 +32,7 @@ export function resolveCleanedContent(params: {
     const changed = (hasScriptMixing(streamedResponse) && !hasScriptMixing(finalResponse))
         || citationMarkersWereCleaned(streamedResponse, finalResponse)
         || integrationScrubWasCleaned(streamedResponse, finalResponse)
-        || generatedLinkWasCleaned(streamedResponse, finalResponse);
+        || generatedLinkWasCleaned(streamedResponse, finalResponse)
+        || resultBlockMarkersWereCleaned(streamedResponse, finalResponse);
     return changed ? finalResponse : undefined;
 }

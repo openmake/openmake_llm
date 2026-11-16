@@ -159,6 +159,32 @@ describe('streamFromExternalProvider — 외부 실패 시 로컬 폴백', () =>
     });
 });
 
+describe('streamFromExternalProvider — 오케스트레이터 출처 발행', () => {
+    const orchSources = [[{ n: 11, title: '날씨', url: 'https://w.x/11', snippet: 's' }]];
+
+    it('폴백으로 스트림을 다시 돌려도 오케스트레이터 출처는 턴에 한 번만 발행하고, 답 끝 목록에는 그대로 쓴다', async () => {
+        const failing = makeResolved('chatgpt', 'gpt-5.5', async () => {
+            throw new ProviderError('QUOTA_EXCEEDED', '한도 초과');
+        });
+        const cited: StreamImpl = async (_opts, cb) => {
+            cb.onToken?.('맑음 [출처 11]');
+            return { content: '맑음 [출처 11]', usage: {}, finishReason: 'stop' };
+        };
+        const local = makeResolved('local-llm', 'qwen3.6-35b-a3b', cited);
+        const deps = makeDeps(local) as unknown as { mcpToolResultCallback?: jest.Mock };
+        deps.mcpToolResultCallback = jest.fn();
+
+        const out = await streamFromExternalProvider(
+            deps as never, failing, baseReq as never, () => {},
+            { orchestratorSources: orchSources, orchestratorBlockInjected: true, sourceContextText: '질문' },
+        );
+
+        expect(deps.mcpToolResultCallback).toHaveBeenCalledTimes(1);
+        expect(deps.mcpToolResultCallback).toHaveBeenCalledWith({ toolName: 'web.search', resources: [], sources: orchSources[0] });
+        expect(out).toContain('(https://w.x/11)');
+    });
+});
+
 describe('servedModelLabel — 표기 규약', () => {
     it('로컬은 bare model id (기존 응답 표기 유지)', () => {
         expect(servedModelLabel(makeResolved('local-llm', 'qwen3.6-35b-a3b', okStream)))

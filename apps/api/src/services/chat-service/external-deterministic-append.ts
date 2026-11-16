@@ -20,6 +20,7 @@ import type { ChatMessageRequest } from '../chat-service-types';
 import type { StreamFromExternalContext } from './external-provider-types';
 import { parseInjectedSources } from '../../tools/web-search/format-sources';
 import type { SearchSourceRef } from '../../tools/web-search/types';
+import { scrubResultBlockMarkers } from '../orchestrator/result-markers';
 
 const logger = createLogger('ChatExternalProvider');
 
@@ -226,7 +227,8 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
     // (이미 스트리밍된 본문은 수정 불가 → 모든 교정은 append-only.)
     // 소스 문자열은 message-pipeline 경로에선 req.webSearchContext 가 아니라 ctx.enhancedMessage
     // (finalEnhancedMessage, context-builder 가 웹검색 컨텍스트를 합친 값)에 실려 온다. 둘 다 fallback.
-    const webSearchCtxText = req.webSearchContext || ctx.enhancedMessage || '';
+    // 오케스트레이터 블록을 붙인 턴은 블록 앞 문자열(sourceContextText)만 읽는다 — 블록의 검색 출처는 toolSources 로만 번호표에 든다.
+    const webSearchCtxText = req.webSearchContext || (ctx.sourceContextText ?? ctx.enhancedMessage) || '';
     // 사전 주입이 없어도 모델이 web_search 도구를 불러 출처가 있으면 같은 처리를 한다 — 게이트가 사전 주입만 보던
     // 때는 도구 검색만 돈 턴의 [출처 N] 인용에 목록이 붙지 않고 목록 밖 번호 마커도 남았다.
     // 컨텍스트에서 번호→(제목, URL) 파싱 — canonical 목록 생성·누락 검증에 공용.
@@ -234,6 +236,21 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
     const hasInjectedSources = numToSource.size > 0;
     const srcLang = ctx.resolvedLanguage || req.userLanguagePreference || 'en';
     const srcLabel = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, srcLang).sourceLabel;
+    // 같은 턴에 모델이 부른 web_search·오케스트레이터 검색의 출처도 번호표에 넣는다 — 번호가 사전 주입 뒤(11~)라 여기 없으면
+    // 모델의 [출처 11] 인용이 아래에서 죽은 마커로 지워지고 무관한 사전 검색 전체가 붙는다(2026-10-12 라이브).
+    const toolSources = (input.toolSources ?? []).filter((list) => list.length > 0);
+    const injectedNums = [...numToSource.keys()];
+    for (const s of toolSources.flat()) {
+        if (!numToSource.has(String(s.n))) numToSource.set(String(s.n), { title: s.title, url: s.url });
+    }
+    // 오케스트레이터 블록 내부 표식(`[오케스트레이터 작업 결과 t1, 결과 6]`) 정리 — 인용 수집·목록 첨부보다 먼저(표식 안 숫자를 인용으로 읽지 않게)
+    if (ctx.orchestratorBlockInjected) {
+        const marks = scrubResultBlockMarkers(finalContent, { sourceLabel: srcLabel, validNums: new Set(numToSource.keys()) });
+        if (marks.removed > 0) {
+            finalContent = marks.content;
+            logger.info(`🧹 오케스트레이터 내부 표식 ${marks.removed}개 정리`);
+        }
+    }
     const headerRe = new RegExp(`(^|\\n)\\s*(#{1,3}\\s*|\\*\\*\\s*)${srcLabel}`);
     const headerIdx = finalContent.search(headerRe);
     // 도구 검색만 돈 턴에서 모델이 출처 섹션을 직접 썼으면 건드리지 않는다 — 목록 작성 금지 지시가 없는 턴이라
@@ -241,14 +258,7 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
     // (2026-10-12 라이브: 모델 1번 = 공식 블로그, 도구 1번 = 무관한 페이지 — URL 없는 섹션에 붙였더니 엉뚱한 출처가 달렸다).
     // 이 턴은 평문 머리줄(`검색 결과 출처:`)도 섹션으로 본다. 사전 주입 턴의 판정(헤딩·굵은 글씨면 섹션)은 그대로.
     const alreadyHasSources = headerIdx >= 0 || (!hasInjectedSources && findPlainSourceSection(finalContent) !== null);
-    if (hasInjectedSources || (!alreadyHasSources && (input.toolSources ?? []).some((list) => list.length > 0))) {
-        // 같은 턴에 모델이 부른 web_search 의 출처도 번호표에 넣는다 — 번호가 사전 주입 뒤(11~)라 여기 없으면
-        // 모델의 [출처 11] 인용이 아래에서 죽은 마커로 지워지고 무관한 사전 검색 전체가 붙는다(2026-10-12 라이브).
-        const toolSources = (input.toolSources ?? []).filter((list) => list.length > 0);
-        const injectedNums = [...numToSource.keys()];
-        for (const s of toolSources.flat()) {
-            if (!numToSource.has(String(s.n))) numToSource.set(String(s.n), { title: s.title, url: s.url });
-        }
+    if (hasInjectedSources || (!alreadyHasSources && toolSources.length > 0)) {
         // 인용이 없을 때 붙일 기본 목록 — 도구 검색이 돈 턴은 가장 최근 검색의 상위 N건(모델이 마지막에 보고 쓴 근거),
         // 도구 검색이 없던 턴은 번호표 전체(= 사전 주입 전체, 기존 동작). 사전 주입 없이 도구 검색만 돈 턴은
         // 기본 목록이 없다 — 모델이 읽은 페이지를 `출처: A, B` 평문으로 직접 쓴 답에 검색 결과가 덧붙는 소음 방지.

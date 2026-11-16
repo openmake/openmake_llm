@@ -44,6 +44,10 @@ import { kindFromMime, mimeFromName } from './media-io';
 import type { PlannerAttachmentMeta } from '../../prompts/orchestrator-planner';
 import type { ExecContext, OrchestratorAttachment, OrchestratorProgressEvent, TaskMedia, TaskResult } from './types';
 import { createLogger } from '../../utils/logger';
+import { RESULT_BLOCK_LABELS } from '../../config/orchestrator-result-block';
+import { WEB_SEARCH_TEMPLATES, getLocalizedTemplate } from '../../sockets/ws-chat-locales';
+import { formatSearchSources, toSourceRefs } from '../../tools/web-search/format-sources';
+import type { SearchSourceRef } from '../../tools/web-search/types';
 
 const logger = createLogger('Orchestrator');
 
@@ -53,6 +57,8 @@ interface OrchestratorOutcome {
     contextBlock?: string;
     /** executed: 성공한 작업의 미디어 마크다운(결정적 첨부) */
     mediaMarkdowns: string[];
+    /** executed: 검색 작업의 출처(작업 1개 = 목록 1개, 번호는 sourceNumberBase 뒤) — 호출부가 턴 출처 번호표에 넣는다 */
+    sources?: SearchSourceRef[][];
     plannerMs: number;
     execMs?: number;
 }
@@ -197,22 +203,54 @@ export async function recentAssistantMessages(req: ChatMessageRequest): Promise<
     return msgs.map((m) => expandArtifactPlaceholders(m, (id) => contents.get(id)).slice(0, ORCHESTRATOR.EXEC_RECENT_MESSAGE_MAX_CHARS));
 }
 
-export function buildResultBlock(results: TaskResult[], lang: string): string {
+/**
+ * 종합 모델에 넘길 작업 결과 블록. 검색 작업의 출처는 사전 주입 검색과 같은 라벨형(`[출처 N]`)으로, 이 턴의 출처 번호 기준
+ * (`sourceNumberBase`) 뒤 번호를 **작업 순서대로 이어서** 매긴다(병렬로 끝나도 결정적). 같은 번호의 구조화 출처를 작업당 목록 1개로
+ * 돌려준다 — 호출부가 턴 출처 번호표에 넣는다. 번호표 밖 목록이면 모델이 블록 이름·작업 번호로 인용을 지어낸다(2026-11-16 라이브).
+ */
+export function buildResultBlock(results: TaskResult[], lang: string, sourceNumberBase = 0): { block: string; sources: SearchSourceRef[][] } {
     const ko = lang === 'ko';
+    const tpl = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, lang);
+    const sources: SearchSourceRef[][] = [];
+    let base = sourceNumberBase;
     const lines = results.map((r) => {
         const statusLabel = r.status === 'completed' ? (ko ? '완료' : 'done') : r.status === 'pending' ? (ko ? '진행 중(미완료)' : 'pending') : r.status === 'skipped' ? (ko ? '건너뜀' : 'skipped') : (ko ? '실패' : 'failed');
         // 한국어 라벨은 한국어 턴에만 — 영어 턴의 종합 컨텍스트에 한국어가 섞이지 않게
         const head = ko
             ? `### ${r.taskId} · ${r.capability} (${CAPABILITY_LABELS_KO[r.capability] ?? r.capability}) — ${statusLabel}`
             : `### ${r.taskId} · ${r.capability} — ${statusLabel}`;
-        const body = r.text.length > ORCHESTRATOR.RESULT_MAX_CHARS ? `${r.text.slice(0, ORCHESTRATOR.RESULT_MAX_CHARS)}\n…(${ko ? '절단' : 'truncated'})` : r.text;
+        let body = r.text.length > ORCHESTRATOR.RESULT_MAX_CHARS ? `${r.text.slice(0, ORCHESTRATOR.RESULT_MAX_CHARS)}\n…(${ko ? '절단' : 'truncated'})` : r.text;
+        if (r.ok && r.sources?.length) {
+            // 검색어 줄(실행기 text 첫 줄) + 라벨형 출처 — 번호는 사전 주입·앞 검색 작업 뒤로 이어진다
+            body = `${r.text.split('\n')[0]}\n${formatSearchSources(r.sources, { labeled: true, sourceWord: tpl.sourceLabel, contentWord: tpl.contentLabel, separator: '\n', numberOffset: base })}`;
+            sources.push(toSourceRefs(r.sources, { numberOffset: base }));
+            base += r.sources.length;
+        }
         const media = r.media.length ? `\n${r.media.map((x) => x.markdown).join('\n')}` : '';
         return `${head}\n${body}${media}`;
     });
+    const cite = sources.length === 0 ? '' : ko
+        ? ` 웹 검색 결과를 근거로 쓴 사실 뒤에는 그 항목 앞의 표기(예: [${tpl.sourceLabel} 3])를 그대로 붙이고, 다른 형태의 표기는 만들지 마세요.`
+        : ` After any fact drawn from a web search result, append that item's tag exactly as shown (e.g. [${tpl.sourceLabel} 3]) and do not create any other kind of marker.`;
     const intro = ko
-        ? '[오케스트레이터 작업 결과 — 아래 결과를 근거로 사용자에게 답하세요. 완료된 미디어는 마크다운 링크를 그대로 답변에 포함하고, 실패·미지원·미배정·진행 중(미완료) 작업은 완료된 것처럼 말하지 말고 그 상태와 사유를 솔직히 알리세요. 링크나 파일명을 지어내지 마세요. 텍스트 추론 작업의 결과는 초안입니다 — 웹 검색 결과나 직접 읽은 페이지와 다르면 검색 결과를 따르세요. 이 블록의 작업 번호(t1·t2 등)와 "오케스트레이터"·"하위 작업" 같은 내부 이름은 사용자에게 말하지 마세요 — 초안을 바로잡았다는 설명도 붙이지 말고 확인된 내용만 답하세요.]'
-        : '[Orchestrator task results — answer the user based on these. Include completed media markdown links verbatim; for failed/unsupported/unassigned tasks tell the user the reason honestly. Never invent links or file names. A text-reasoning task result is only a draft — if it disagrees with web search results or pages you read, follow the search results. Never mention the task ids (t1, t2, …) or internal names such as "orchestrator" or "sub-task" to the user, and do not explain that you corrected a draft — just give the verified answer.]';
-    return `${intro}\n\n${lines.join('\n\n')}`;
+        ? `[${RESULT_BLOCK_LABELS.ko} — 아래 결과를 근거로 사용자에게 답하세요. 완료된 미디어는 마크다운 링크를 그대로 답변에 포함하고, 실패·미지원·미배정·진행 중(미완료) 작업은 완료된 것처럼 말하지 말고 그 상태와 사유를 솔직히 알리세요. 링크나 파일명을 지어내지 마세요. 텍스트 추론 작업의 결과는 초안입니다 — 웹 검색 결과나 직접 읽은 페이지와 다르면 검색 결과를 따르세요. 이 블록의 작업 번호(t1·t2 등)와 "오케스트레이터"·"하위 작업" 같은 내부 이름은 사용자에게 말하지 마세요 — 초안을 바로잡았다는 설명도 붙이지 말고 확인된 내용만 답하세요.${cite}]`
+        : `[${RESULT_BLOCK_LABELS.en} — answer the user based on these. Include completed media markdown links verbatim; for failed/unsupported/unassigned tasks tell the user the reason honestly. Never invent links or file names. A text-reasoning task result is only a draft — if it disagrees with web search results or pages you read, follow the search results. Never mention the task ids (t1, t2, …) or internal names such as "orchestrator" or "sub-task" to the user, and do not explain that you corrected a draft — just give the verified answer.${cite}]`;
+    return { block: `${intro}\n\n${lines.join('\n\n')}`, sources };
+}
+
+/**
+ * 실행 결과를 종합 스트림 ctx 필드로 — executed 면 검색 출처(턴 번호표 등록·발행용)와 블록 주입 표시를 싣고,
+ * 출처 수만큼 턴 번호 기준(userContext.sourceNumberBase, 턴 공유 객체)을 민다. 같은 턴의 web_search 도구는 그 뒤 번호를 받는다
+ * (tools/web-search/tools.ts 와 같은 규칙).
+ */
+export function orchestratorStreamFields(
+    outcome: Pick<OrchestratorOutcome, 'mode' | 'sources'>,
+    userContext: { sourceNumberBase?: number },
+): { orchestratorSources?: SearchSourceRef[][]; orchestratorBlockInjected?: boolean } {
+    if (outcome.mode !== 'executed') return {};
+    const sources = outcome.sources ?? [];
+    userContext.sourceNumberBase = (userContext.sourceNumberBase ?? 0) + sources.flat().length;
+    return { orchestratorSources: sources, orchestratorBlockInjected: true };
 }
 
 /**
@@ -281,6 +319,8 @@ interface RunOrchestratorInput {
     requestId?: string;
     signal?: AbortSignal;
     onProgress?: (event: OrchestratorProgressEvent) => void;
+    /** 이 턴에 이미 붙은 출처 수 — 검색 작업 출처 번호의 기준(UserContext.sourceNumberBase) */
+    sourceNumberBase?: number;
 }
 
 export async function runOrchestrator(input: RunOrchestratorInput): Promise<OrchestratorOutcome> {
@@ -354,7 +394,8 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
     });
     if (summary.cancelled) return { mode: 'cancelled', mediaMarkdowns: [], plannerMs: planned.ms, execMs: summary.ms };
     logger.info(`[Orchestrator] 실행 완료 ok=${summary.ok} failed=${summary.failed} skipped=${summary.skipped} media=${media.length} (${summary.ms}ms)`);
-    return { mode: 'executed', contextBlock: buildResultBlock(summary.results, lang), mediaMarkdowns: media.map((m) => m.markdown), plannerMs: planned.ms, execMs: summary.ms };
+    const built = buildResultBlock(summary.results, lang, input.sourceNumberBase ?? 0);
+    return { mode: 'executed', contextBlock: built.block, mediaMarkdowns: media.map((m) => m.markdown), sources: built.sources, plannerMs: planned.ms, execMs: summary.ms };
 }
 
 /**

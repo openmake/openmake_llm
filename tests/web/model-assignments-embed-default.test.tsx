@@ -9,6 +9,7 @@ import { JSDOM } from 'jsdom';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import messages from '../../apps/web/messages/ko.json';
 import { ModelAssignmentsSection } from '../../apps/web/components/settings/model-assignments-section';
@@ -57,11 +58,12 @@ async function withSection(
     }
     return Response.json({ success: true, data: {} });
   };
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const root = createRoot(document.getElementById('root')!);
   const flush = async () => { for (let i = 0; i < 20; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
   try {
     await act(async () => {
-      root.render(<NextIntlClientProvider locale="ko" messages={messages} timeZone="Asia/Seoul"><ModelAssignmentsSection scope={scope} /></NextIntlClientProvider>);
+      root.render(<QueryClientProvider client={queryClient}><NextIntlClientProvider locale="ko" messages={messages} timeZone="Asia/Seoul"><ModelAssignmentsSection scope={scope} /></NextIntlClientProvider></QueryClientProvider>);
     });
     await flush();
     await run({
@@ -77,6 +79,7 @@ async function withSection(
     });
   } finally {
     await act(async () => root.unmount());
+    queryClient.clear();
     globalThis.fetch = originalFetch;
     dom.window.close();
   }

@@ -189,6 +189,15 @@ export async function runExternalStream(
     const state = createToolBatchState();
     // 오케스트레이터 산출물(성공분만) — 모델이 최종 응답에서 빠뜨려도 결정적으로 첨부한다
     if (ctx.orchestratorMedia?.length) state.generatedMediaMarkdowns.push(...ctx.orchestratorMedia);
+    // 오케스트레이터 검색 출처 — 도구 출처와 같이 번호표(state.toolSources, 시도마다 새 state)에 넣고, 화면·저장(search_sources)은
+    // 도구와 같은 콜백으로 턴에 한 번만 알린다(폴백 재시도가 같은 ctx 로 다시 돈다)
+    for (const list of ctx.orchestratorSources ?? []) if (list.length > 0) state.toolSources.push(list);
+    if (ctx.orchestratorSources?.length && !ctx.orchestratorSourcesEmitted && deps.mcpToolResultCallback) {
+        ctx.orchestratorSourcesEmitted = true;
+        try {
+            for (const sources of ctx.orchestratorSources) if (sources.length > 0) deps.mcpToolResultCallback({ toolName: 'web.search', resources: [], sources });
+        } catch (e) { logger.warn(`오케스트레이터 출처 콜백 실패: ${e instanceof Error ? e.message : String(e)}`); }
+    }
 
 
     try {
