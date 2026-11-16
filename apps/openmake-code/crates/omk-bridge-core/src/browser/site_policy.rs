@@ -9,7 +9,6 @@ use serde_json::Value;
 
 use super::constants::{ACTION_CLASS, ActionClass, BROWSER_DETAIL_MAX_CHARS};
 use super::js_value::{js_string, js_to_lower};
-use crate::js_regex;
 use crate::js_text::{js_trim, utf16_prefix};
 
 /// 승인 없이 쓰기를 허용하는 호스트 패턴과, 허용에 걸려도 승인을 요구하는 패턴(거부가 이긴다).
@@ -71,42 +70,45 @@ pub fn is_navigable(url: Option<&Value>) -> bool {
         .is_some_and(|s| js_trim(s) == "about:blank" || host_of(url).is_some())
 }
 
-/// 패턴 → TS 와 같은 정규식 글자 — `*` 는 `.*`, 나머지는 `. + ^ $ { } ( ) | [ ] \ ?` 를 이스케이프(D-75).
-fn pattern_source(p: &str) -> String {
-    let parts: Vec<String> = p
-        .split('*')
-        .map(|s| {
-            let mut out = String::with_capacity(s.len());
-            for c in s.chars() {
-                if ".+^${}()|[]\\?".contains(c) {
-                    out.push('\\');
-                }
-                out.push(c);
-            }
-            out
-        })
-        .collect();
-    format!("^{}$", parts.join(".*"))
+/// ECMAScript 줄 끝 글자(LF·CR·U+2028·U+2029) — 정규식 `.` 이 건너지 못하는 UTF-16 단위.
+fn is_line_terminator(u: u16) -> bool {
+    matches!(u, 0x0a | 0x0d | 0x2028 | 0x2029)
 }
 
 /// 호스트 패턴 일치 — `*` 는 임의 문자열(줄 끝 글자 제외 — JS `.`), 대소문자 무시, 판정은 UTF-16 단위(JS 와 같다).
-/// 컴파일 실패는 생길 수 없는 꼴이지만 실패하면 "안 맞음"(막는 쪽).
 ///
-/// 판정은 한도 없는 `test_units` 다. 패턴은 메타 문자를 모두 이스케이프하고 `*` 만 `.*` 로 바꾸므로 글자와 한 글자 루프뿐이다 —
-/// 역추적 스택은 `*` 하나당 한 항목이라 메모리 폭주는 없고, 시간은 `*` 개수만큼 차수가 오른다. 서버는 저장할 때 정규화된 패턴만
-/// 받는다(`@openmake/config` `browserSitePolicyProblems` — 시스템 설정·조직 정책 둘 다): `*` 는 맨 앞 라벨 하나, 200자 이하라
-/// `^.*\.…$` 꼴이고 판정은 호스트 길이 × 패턴 길이에 선형이다. 저장 검증을 거치지 않는 길(서버 환경 변수 `BROWSER_SITE_POLICY`)의
-/// 별표 여러 개 패턴은 느릴 수 있다 — 한도 있는 판정으로 옮기는 일은 별건이다(거부 목록에서 한도 초과를 무엇으로 볼지 정해야 한다).
+/// TS `browserHostMatches` 와 같은 알고리즘이다 — 정규식 없이 도달 집합 한 줄로 선형 판정한다(시간 패턴 × 호스트, 메모리
+/// 호스트, 역추적 없음). 저장 검증을 거치지 않는 길(서버 환경 변수 `BROWSER_SITE_POLICY`)의 별표 여러 개 패턴도 폭주하지
+/// 않는다. 뜻은 옛 정규식(`^…$`, `*`→`.*`, 나머지 글자 그대로)과 같다 — 단 옛 구현이 컴파일하지 못해 거짓이던 아주 긴
+/// 패턴도 이제 답을 낸다.
 pub fn host_matches(host: &str, pattern: &str) -> bool {
-    let p = js_to_lower(js_trim(pattern));
+    let p: Vec<u16> = js_to_lower(js_trim(pattern)).encode_utf16().collect();
     if p.is_empty() {
         return false;
     }
-    let Ok(re) = js_regex::compile(&pattern_source(&p), false) else {
-        return false;
-    };
-    let units: Vec<u16> = js_to_lower(host).encode_utf16().collect();
-    re.test_units(&units)
+    let h: Vec<u16> = js_to_lower(host).encode_utf16().collect();
+    // reach[j]: 패턴의 지금까지 부분이 호스트 앞 j 단위와 맞는가
+    let mut reach = vec![false; h.len() + 1];
+    let mut next = vec![false; h.len() + 1];
+    reach[0] = true;
+    for &c in &p {
+        if c == u16::from(b'*') {
+            next[0] = reach[0];
+            for (j, &u) in h.iter().enumerate() {
+                next[j + 1] = reach[j + 1] || (next[j] && !is_line_terminator(u));
+            }
+        } else {
+            next[0] = false;
+            for (j, &u) in h.iter().enumerate() {
+                next[j + 1] = reach[j] && u == c;
+            }
+        }
+        if !next.contains(&true) {
+            return false;
+        }
+        std::mem::swap(&mut reach, &mut next);
+    }
+    reach[h.len()]
 }
 
 /// 이 호스트에서 승인 없이 쓰기를 해도 되는가 — 거부가 이기고, 허용 목록에 있어야 한다. 빈 호스트·없음은 거짓.
