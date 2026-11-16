@@ -1008,6 +1008,14 @@
     },
     "downloadFailed": "다운로드 실패: {error}",
     "localBadge": "로컬 폴더 실행",
+    "isolation": {
+      "worktree": "격리 실행 · 작업 브랜치 {branch}",
+      "worktreeKept": "격리 실행 · 변경이 작업 폴더 {path} 에 남아 있음 (브랜치 {branch})",
+      "worktreeRemoved": "격리 실행 · 변경 없음(작업 폴더·브랜치 정리됨)",
+      "notRepo": "격리 없음 · git 저장소가 아니어서 폴더에서 직접 작업",
+      "disabled": "격리 없음 · 서버 설정으로 꺼져 있어 폴더에서 직접 작업",
+      "unavailable": "격리 실패 · 폴더에서 직접 작업함"
+    },
     "errorReason": {
       "label": "실패 사유:",
       "goal_incomplete": "목표 미달성",

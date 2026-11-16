@@ -9,6 +9,8 @@
  *   - DB → docker 분리 운영
  */
 
+import type { AgentTaskIsolation } from "./agent-task-isolation";
+
 /* ── API 응답 래퍼 (backend utils/api-response 와 1:1) ───────────────── */
 export interface ApiMeta {
   timestamp: string;
@@ -419,8 +421,10 @@ export type WsServerEvent =
       step?: { stepType: string; toolName?: string; preview?: string };
       /** 승인 이관·에스컬레이션·철회 대상 승인 id(HITL 2단계) — 계획 편집 알림엔 없다 */
       approvalId?: string;
-      /** 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다 */
-      reason?: "assigned" | "escalated" | "revoked" | "plan_edited";
+      /** 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다. "isolation" 은 종료 뒤 worktree 정리 결과(isolation.outcome)를 알린다 — 받은 쪽은 격리 표시만 갱신한다 */
+      reason?: "assigned" | "escalated" | "revoked" | "plan_edited" | "isolation";
+      /** 로컬 실행의 worktree 격리 상태(200) — 시작 때 한 번, 종료 정리 뒤(reason "isolation") 한 번 실린다 */
+      isolation?: AgentTaskIsolation;
       /** 멈춘 작업이 기다리는 것 — "device_wait" 는 로컬 기기 연결 대기, "hitl_parked" 는 사용자 답 대기, "browser_takeover" 는 사용자가 브라우저를 넘겨받음 */
       waitReason?: string;
       /** 사용자별 순번(증가) — 재연결 때 `agent_task_resume{afterSeq}` 로 보내면 그 뒤 이벤트만 다시 받는다 */
@@ -475,3 +479,4 @@ export * from "./admin-local-bridge";
 export * from "./agent-task-metrics";
 export * from "./mcp-monitoring";
 export * from "./conversation-share";
+export * from "./agent-task-isolation";
