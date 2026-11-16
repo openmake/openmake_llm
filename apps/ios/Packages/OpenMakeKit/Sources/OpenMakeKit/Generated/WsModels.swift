@@ -117,7 +117,8 @@ public struct WsServerEvent: Codable {
     public let args: [String: JSONAny]?
     public let riskClass: ToolRiskClass?
     public let decision: Decision?
-    /// 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다
+    /// 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다. "isolation" 은 종료 뒤 worktree 정리
+    /// 결과(isolation.outcome)를 알린다 — 받은 쪽은 격리 표시만 갱신한다
     public let reason: ApprovalRejectReason?
     public let resources: [MCPToolResource]?
     public let modeID: String?
@@ -126,6 +127,8 @@ public struct WsServerEvent: Codable {
     public let delta: String?
     public let id: String?
     public let currentTurn: Double?
+    /// 로컬 실행의 worktree 격리 상태(200) — 시작 때 한 번, 종료 정리 뒤(reason "isolation") 한 번 실린다
+    public let isolation: AgentTaskIsolation?
     /// 사용자별 순번(증가) — 재연결 때 `agent_task_resume{afterSeq}` 로 보내면 그 뒤 이벤트만 다시 받는다
     public let seq: Double?
     public let status: String?
@@ -188,6 +191,7 @@ public struct WsServerEvent: Codable {
         case delta = "delta"
         case id = "id"
         case currentTurn = "currentTurn"
+        case isolation = "isolation"
         case seq = "seq"
         case status = "status"
         case step = "step"
@@ -196,7 +200,7 @@ public struct WsServerEvent: Codable {
         case waitReason = "waitReason"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: SummaryUnion?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: ExpiresAt?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, taskSuggestion: TaskSuggestion?, streamID: String?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, thinking: String?, t: Double?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, capabilities: WsServerCapabilities?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, approvalID: String?, args: [String: JSONAny]?, riskClass: ToolRiskClass?, decision: Decision?, reason: ApprovalRejectReason?, resources: [MCPToolResource]?, modeID: String?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?, waitReason: String?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: SummaryUnion?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: ExpiresAt?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, taskSuggestion: TaskSuggestion?, streamID: String?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, thinking: String?, t: Double?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, capabilities: WsServerCapabilities?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, approvalID: String?, args: [String: JSONAny]?, riskClass: ToolRiskClass?, decision: Decision?, reason: ApprovalRejectReason?, resources: [MCPToolResource]?, modeID: String?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, isolation: AgentTaskIsolation?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?, waitReason: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
@@ -246,6 +250,7 @@ public struct WsServerEvent: Codable {
         self.delta = delta
         self.id = id
         self.currentTurn = currentTurn
+        self.isolation = isolation
         self.seq = seq
         self.status = status
         self.step = step
@@ -323,6 +328,7 @@ public extension WsServerEvent {
         delta: String?? = nil,
         id: String?? = nil,
         currentTurn: Double?? = nil,
+        isolation: AgentTaskIsolation?? = nil,
         seq: Double?? = nil,
         status: String?? = nil,
         step: Step?? = nil,
@@ -380,6 +386,7 @@ public extension WsServerEvent {
             delta: delta ?? self.delta,
             id: id ?? self.id,
             currentTurn: currentTurn ?? self.currentTurn,
+            isolation: isolation ?? self.isolation,
             seq: seq ?? self.seq,
             status: status ?? self.status,
             step: step ?? self.step,
@@ -622,6 +629,102 @@ public enum ExpiresAt: Codable {
             try container.encode(x)
         }
     }
+}
+
+/// 로컬 실행의 worktree 격리 상태(200) — 시작 때 한 번, 종료 정리 뒤(reason "isolation") 한 번 실린다
+///
+/// 에이전트 작업의 worktree 격리 상태 계약 (200, 2026-11-16).
+///
+/// 로컬 실행(로컬 브리지)에서 서버가 작업 시작 때 정해 `agent_tasks.isolation` 에 남기고, 작업 응답 (`GET
+/// /api/agent-tasks/:id` 의 `task.isolation`)과 진행 이벤트(`agent_task_progress.isolation`)로 내려준다.
+/// 화면은 값 → 문구 대응만 한다. NULL·없음 = 해당 없음(샌드박스 실행, 옛 행).
+///
+/// worktree : 작업 폴더(`worktreeRel`, 실행 폴더(연결 폴더 + folder_rel) 기준 상대경로)·브랜치에서 격리
+/// 실행.              outcome 은 작업이 끝난 뒤(종료 상태에서만) 정리 결과 — kept = 변경이 남아 보존, removed = 변경 없어
+/// 정리.   direct   : 격리 없이 연결 폴더에서 직접 작업. reason —              not_repo = git 저장소가 아님,
+/// disabled = 서버 설정으로 꺼짐, unavailable = 격리를 시도했으나 실패.
+// MARK: - AgentTaskIsolation
+public struct AgentTaskIsolation: Codable {
+    public let branch: String?
+    public let outcome: Outcome?
+    public let state: State
+    public let worktreeRel: String?
+    public let reason: Reason?
+
+    public enum CodingKeys: String, CodingKey {
+        case branch = "branch"
+        case outcome = "outcome"
+        case state = "state"
+        case worktreeRel = "worktreeRel"
+        case reason = "reason"
+    }
+
+    public init(branch: String?, outcome: Outcome?, state: State, worktreeRel: String?, reason: Reason?) {
+        self.branch = branch
+        self.outcome = outcome
+        self.state = state
+        self.worktreeRel = worktreeRel
+        self.reason = reason
+    }
+}
+
+// MARK: AgentTaskIsolation convenience initializers and mutators
+
+public extension AgentTaskIsolation {
+    init(data: Data) throws {
+        self = try newJSONDecoder().decode(AgentTaskIsolation.self, from: data)
+    }
+
+    init(_ json: String, using encoding: String.Encoding = .utf8) throws {
+        guard let data = json.data(using: encoding) else {
+            throw NSError(domain: "JSONDecoding", code: 0, userInfo: nil)
+        }
+        try self.init(data: data)
+    }
+
+    init(fromURL url: URL) throws {
+        try self.init(data: try Data(contentsOf: url))
+    }
+
+    func with(
+        branch: String?? = nil,
+        outcome: Outcome?? = nil,
+        state: State? = nil,
+        worktreeRel: String?? = nil,
+        reason: Reason?? = nil
+    ) -> AgentTaskIsolation {
+        return AgentTaskIsolation(
+            branch: branch ?? self.branch,
+            outcome: outcome ?? self.outcome,
+            state: state ?? self.state,
+            worktreeRel: worktreeRel ?? self.worktreeRel,
+            reason: reason ?? self.reason
+        )
+    }
+
+    func jsonData() throws -> Data {
+        return try newJSONEncoder().encode(self)
+    }
+
+    func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
+        return String(data: try self.jsonData(), encoding: encoding)
+    }
+}
+
+public enum Outcome: String, Codable {
+    case kept = "kept"
+    case removed = "removed"
+}
+
+public enum Reason: String, Codable {
+    case disabled = "disabled"
+    case notRepo = "not_repo"
+    case unavailable = "unavailable"
+}
+
+public enum State: String, Codable {
+    case direct = "direct"
+    case worktree = "worktree"
 }
 
 /// 백엔드 실제 페이로드(ws-chat-handler): 스트리밍 완료 시 토큰 메트릭. tokensPerSec 는 toFixed(2) 문자열.
@@ -878,11 +981,13 @@ public enum Phase: String, Codable {
 /// 승인 거절 사유 — 백엔드 approval-gate 의 ApprovalRejectReason 과 같은 값(user: 사람이 거절, timeout: 무응답 만료,
 /// abort: 요청 중단 등).
 ///
-/// 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다
+/// 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다. "isolation" 은 종료 뒤 worktree 정리
+/// 결과(isolation.outcome)를 알린다 — 받은 쪽은 격리 표시만 갱신한다
 public enum ApprovalRejectReason: String, Codable {
     case abort = "abort"
     case assigned = "assigned"
     case escalated = "escalated"
+    case isolation = "isolation"
     case parked = "parked"
     case planEdited = "plan_edited"
     case policyFloor = "policy_floor"
