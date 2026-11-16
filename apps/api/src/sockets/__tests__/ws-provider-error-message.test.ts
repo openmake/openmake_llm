@@ -20,3 +20,20 @@ describe('providerErrorMessage', () => {
         expect(providerErrorMessage('xx', 'UPSTREAM_ERROR', 400)).toBe(WS_PROVIDER_REJECTED_MESSAGES.en);
     });
 });
+
+describe('API_KEY_DISABLED 안내', () => {
+    it('모든 언어에 꺼진 키 안내가 있고 미등록(MISSING_API_KEY) 안내와 다르다', () => {
+        for (const [lang, table] of Object.entries(WS_PROVIDER_ERROR_MESSAGES)) {
+            expect(table.API_KEY_DISABLED).toBeTruthy();
+            expect(table.API_KEY_DISABLED).not.toBe(table.MISSING_API_KEY);
+            expect(providerErrorMessage(lang, 'API_KEY_DISABLED')).toBe(table.API_KEY_DISABLED);
+        }
+        expect(Object.keys(WS_PROVIDER_ERROR_MESSAGES)).toHaveLength(7);
+    });
+    it('ko 문구는 켜는 곳을 안내하고 관리자 문의를 말하지 않는다', () => {
+        const m = WS_PROVIDER_ERROR_MESSAGES.ko.API_KEY_DISABLED;
+        expect(m).toMatch(/꺼져 있습니다/);
+        expect(m).toMatch(/설정 → 외부 API 키/);
+        expect(m).not.toMatch(/관리자/);
+    });
+});

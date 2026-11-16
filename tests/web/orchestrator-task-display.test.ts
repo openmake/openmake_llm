@@ -18,6 +18,15 @@ test('분류가 뚜렷한 코드만 문구를 둔다', () => {
   assert.deepEqual(orchestratorFailureMessage('disabled'), { key: 'unavailable' });
   assert.deepEqual(orchestratorFailureMessage('skipped'), { key: 'skipped' });
   assert.deepEqual(orchestratorFailureMessage('deadline'), { key: 'deadline' });
+  assert.deepEqual(orchestratorFailureMessage('unreachable'), { key: 'unreachable' });
+  assert.deepEqual(orchestratorFailureMessage('upstream'), { key: 'upstream' });
+  assert.deepEqual(orchestratorFailureMessage('timeout_queued'), { key: 'timeoutQueued' });
+});
+
+test('대기 중 시간 초과는 provider 가 있어도 "응답하지 않아" 문구(timeoutExternal)를 쓰지 않는다', () => {
+  assert.deepEqual(orchestratorFailureMessage('timeout_queued', 'ext'), { key: 'timeoutQueued' });
+  assert.deepEqual(orchestratorFailureMessage('upstream', 'ext'), { key: 'upstream' });
+  assert.deepEqual(orchestratorFailureMessage('unreachable', 'ext'), { key: 'unreachable' });
 });
 
 test('reason 없음(옛 서버)·cancelled·failed·그 밖의 코드는 null — summary 원문을 그대로 그린다', () => {
@@ -28,7 +37,7 @@ test('reason 없음(옛 서버)·cancelled·failed·그 밖의 코드는 null �
 
 test('문구 키는 ko 원본에 모두 있다', () => {
   const failure = (ko as { chat: { orchestrator: { failure: Record<string, string> } } }).chat.orchestrator.failure;
-  for (const r of ['timeout', 'unassigned', 'unsupported', 'skipped', 'deadline']) {
+  for (const r of ['timeout', 'unassigned', 'unsupported', 'skipped', 'deadline', 'unreachable', 'upstream', 'timeout_queued']) {
     assert.ok(failure[orchestratorFailureMessage(r)!.key], r);
   }
   assert.ok(failure[orchestratorFailureMessage('timeout', 'ext')!.key].includes('{provider}'));

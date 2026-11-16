@@ -1,7 +1,7 @@
 /**
  * ProviderRouter.resolve — 사용자 외부(BYOK) 키 켜짐 여부(마이그레이션 199).
- * 꺼진 키는 삭제한 키처럼 MISSING_API_KEY(오류 코드 그대로 — 뒤쪽 폴백·표시가 바뀌지 않는다)이고
- * 문구만 "꺼져 있습니다" 로 원인을 남긴다(로그용). 켜진 키는 정상 해석된다. 키 값은 더미다.
+ * 꺼진 키는 API_KEY_DISABLED(미등록 MISSING_API_KEY 와 구분 — 사용자 조치가 "켜기" 로 다르다)이고
+ * 복호화 전에 거절한다. 켜진 키는 정상 해석된다. 키 값은 더미다.
  */
 import { ProviderRouter } from '../provider-router';
 import { ProviderError } from '../provider-errors';
@@ -42,11 +42,11 @@ describe('ProviderRouter.resolve — 외부 키 켜짐 여부', () => {
         expect(repo.getByUserAndProvider).toHaveBeenCalledWith('u1', 'groq', { includeDisabled: true });
     });
 
-    it('꺼진 키 → MISSING_API_KEY, 문구 "꺼져 있습니다", 복호화하지 않는다', async () => {
+    it('꺼진 키 → API_KEY_DISABLED, 문구 "꺼져 있습니다", 복호화하지 않는다', async () => {
         const { router, repo } = makeRouter(makeKeyRow({ enabled: false }));
         const err = await router.resolve('groq:llama-x', { userId: 'u1' }).catch((e: unknown) => e);
         expect(err).toBeInstanceOf(ProviderError);
-        expect((err as ProviderError).code).toBe('MISSING_API_KEY');
+        expect((err as ProviderError).code).toBe('API_KEY_DISABLED');
         expect((err as ProviderError).message).toContain('꺼져 있습니다');
         expect(repo.decryptKey).not.toHaveBeenCalled();
     });

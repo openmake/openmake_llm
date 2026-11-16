@@ -11,6 +11,7 @@ jest.mock('../executors', () => ({
 }));
 
 import { executePlan } from '../executor';
+import { HttpCallError } from '../http-call';
 import { buildResultBlock } from '../orchestrate';
 import { validatePlan } from '../plan-schema';
 import type { ExecContext } from '../types';
@@ -150,9 +151,12 @@ describe('실패 TaskResult.model — 실행을 시도한 배정 대상(task_res
         behaviors.g = async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); };
         behaviors.c = async () => { throw new DOMException('This operation was aborted', 'AbortError'); };
         const p = plan({ complexity: 'multi', tasks: [{ id: 'g', capability: 'image.generate', input: { instruction: 'x' } }, { id: 'c', capability: 'web.search' }] });
-        const s = await executePlan(p, ctx());
+        const events: Array<{ id?: string; status?: string; reason?: string }> = [];
+        const s = await executePlan(p, ctx({ onProgress: (e) => events.push(e as never) }));
         expect(s.results.find((r) => r.taskId === 'g')!.text).toMatch(/^\[timeout\] /);
         expect(s.results.find((r) => r.taskId === 'c')!.text).toMatch(/^\[cancelled\] /);
+        // 호출이 시작된 뒤의 시간 초과는 timeout(대기 중 시간 초과 아님)
+        expect(events.filter((e) => e.id === 'g' && e.status === 'failed').map((e) => e.reason)).toEqual(['timeout']);
     });
 
     it('provider 슬롯 대기 중 호출 타임아웃이 만료돼도 [timeout] 이다(사용자 취소 아님)', async () => {
@@ -165,9 +169,11 @@ describe('실패 TaskResult.model — 실행을 시도한 배정 대상(task_res
         const t = { capability: 'image.generate', fullId: 'hasa:Qwen-Image', providerId: 'hasa', model: 'hasa/Qwen-Image', baseUrl: 'http://gw', endpoint: '/v1/images/generations', headers: {}, params: {}, source: 'user', transport: 'gateway' };
         behaviors.g = async () => callJson(t as never, { body: { prompt: 'x' }, timeoutMs: 30 });
         const p = plan({ complexity: 'multi', tasks: [{ id: 'g', capability: 'image.generate', input: { instruction: 'x' } }] });
+        const events: Array<{ id?: string; status?: string; reason?: string }> = [];
         try {
-            const s = await executePlan(p, ctx());
+            const s = await executePlan(p, ctx({ onProgress: (e) => events.push(e as never) }));
             expect(s.results[0].text).toMatch(/^\[timeout\] /);
+            expect(events.filter((e) => e.status === 'failed').map((e) => e.reason)).toEqual(['timeout_queued']);
             expect(fetchSpy).not.toHaveBeenCalled();
         } finally {
             release(); await Promise.all(holders); fetchSpy.mockRestore();
@@ -182,8 +188,10 @@ describe('실패 TaskResult.model — 실행을 시도한 배정 대상(task_res
                 const { executePlan: run } = await import('../executor');
                 behaviors.a = async () => { await new Promise((r) => setTimeout(r, 100)); return { ok: true, text: 'A', media: [] }; };
                 const p = plan({ complexity: 'multi', tasks: [{ id: 'a', capability: 'web.search' }, { id: 'b', capability: 'web.search' }] });
-                const s = await run(p, ctx());
+                const events: Array<{ id?: string; status?: string; reason?: string }> = [];
+                const s = await run(p, ctx({ onProgress: (e) => events.push(e as never) }));
                 expect(s.results.find((r) => r.taskId === 'b')!.text).toMatch(/^\[timeout\] /);
+                expect(events.filter((e) => e.id === 'b' && e.status === 'failed').map((e) => e.reason)).toEqual(['timeout_queued']);
                 expect(calls).toEqual(['a']);
             });
         } finally {
@@ -318,5 +326,232 @@ describe('orchestrator_task 실패 이벤트 reason·provider — 화면이 실�
         const p = plan({ complexity: 'multi', tasks: [{ id: 'slow', capability: 'web.search' }, { id: 'next', capability: 'text.code', depends_on: ['slow'] }] });
         await executePlan(p, ctx({ signal: ac.signal, onProgress: (e) => events.push(e as Ev) }));
         expect(events.filter((e) => e.type === 'orchestrator_task' && e.id === 'next')).toEqual([]);
+    });
+});
+
+describe('작업 실패 사유 세분 — 연결 실패·서비스 오류·대기 중 시간 초과', () => {
+    type Ev = { type: string; id?: string; status?: string; reason?: string };
+    const failedReason = (events: Ev[], id: string) => events.filter((e) => e.type === 'orchestrator_task' && e.id === id && e.status === 'failed').map((e) => e.reason);
+    const hasaTarget = { capability: 'image.generate', fullId: 'hasa:Qwen-Image', providerId: 'hasa', model: 'hasa/Qwen-Image', baseUrl: 'http://127.0.0.1:9', endpoint: '/v1/images/generations', headers: {}, params: {}, source: 'user', transport: 'gateway' };
+    /** fetch 대역 — 신호가 중단되면 그 사유로 reject(응답 없음) */
+    const hangingFetch = (_u: unknown, init?: RequestInit) => new Promise<Response>((_, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal!.reason), { once: true });
+    });
+    /** 작업 신호가 중단될 때까지 붙잡는 handler */
+    const holdUntilAbort = (signal?: AbortSignal) => new Promise<never>((_, reject) => signal!.addEventListener('abort', () => reject(signal!.reason), { once: true }));
+    /** heldTimeouts 가 만든 모든 신호 — afterEach 에서 남은 것을 끊는다 */
+    const liveTimeouts: AbortController[] = [];
+    /**
+     * 한 테스트가 jest 시간 초과로 finally 에 닿지 못해도 뒤 테스트로 새지 않게 한다.
+     * 남은 대역 신호를 끊어 멈춘 본문을 끝내고(isolateModulesAsync 가 닫혀야 다음 격리가 열린다·env 도 그때 복원) spy 를 복원한다(spyOn 만).
+     */
+    afterEach(async () => {
+        for (const ac of liveTimeouts.splice(0)) if (!ac.signal.aborted) ac.abort(new DOMException('test cleanup', 'TimeoutError'));
+        await ticks(5);
+        jest.restoreAllMocks();
+    });
+    /**
+     * AbortSignal.timeout 대역 — 실제 타이머 대신 테스트가 끊는 신호(만료 순서를 테스트가 정한다).
+     * 만든 순서대로 쌓고, expire(ms, n) 은 그 ms 로 n 번째 만든 신호를 시간 초과 사유로 끊는다. 끝나면 restore.
+     */
+    function heldTimeouts() {
+        const made: Array<{ ms: number; ac: AbortController }> = [];
+        const spy = jest.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+            const ac = new AbortController();
+            made.push({ ms, ac });
+            liveTimeouts.push(ac);
+            return ac.signal;
+        });
+        const expire = (ms: number, nth = 0) => {
+            const hit = made.filter((m) => m.ms === ms)[nth];
+            if (!hit) throw new Error(`AbortSignal.timeout(${ms}) #${nth} 가 만들어지지 않았다`);
+            hit.ac.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+        };
+        return { expire, restore: () => spy.mockRestore() };
+    }
+    /** setImmediate 를 n 번 넘긴다(양보 포함 진행) */
+    const ticks = async (n = 2) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
+    /** 마이크로태스크만 비운다 — setImmediate 양보는 아직 돌지 않는다 */
+    const microtasks = async (n = 50) => { for (let i = 0; i < n; i++) await Promise.resolve(); };
+    async function isolated(env: Record<string, string>, fn: (m: {
+        run: typeof executePlan;
+        http: typeof import('../http-call');
+        throttle: typeof import('../../../llm/external-throttle');
+    }) => Promise<void>) {
+        const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
+        Object.assign(process.env, env);
+        try {
+            // executor·http-call·external-throttle 을 같은 격리 안에서 가져온다 — QueueTimeoutError 클래스가 같아야 instanceof 가 맞는다
+            await jest.isolateModulesAsync(async () => {
+                const { executePlan: run } = await import('../executor');
+                const http = await import('../http-call');
+                const throttle = await import('../../../llm/external-throttle');
+                await fn({ run, http, throttle });
+            });
+        } finally {
+            for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+        }
+    }
+
+    it('fetch 연결 실패(cause.code=ECONNREFUSED) → unreachable, text 는 [failed]', async () => {
+        const events: Ev[] = [];
+        behaviors.a = async () => { throw new TypeError('fetch failed', { cause: Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:9'), { code: 'ECONNREFUSED' }) }); };
+        behaviors.b = async () => { throw Object.assign(new Error('request aborted'), { code: 'ENOTFOUND' }); };
+        behaviors.c = async () => { throw new TypeError('fetch failed', { cause: Object.assign(new Error('other side closed'), { code: 'UND_ERR_SOCKET' }) }); };
+        const p = plan({ complexity: 'multi', tasks: [{ id: 'a', capability: 'web.search' }, { id: 'b', capability: 'web.search' }, { id: 'c', capability: 'web.search' }] });
+        const s = await executePlan(p, ctx({ onProgress: (e) => events.push(e as Ev) }));
+        expect(failedReason(events, 'a')).toEqual(['unreachable']);
+        expect(s.results.find((r) => r.taskId === 'a')!.text).toMatch(/^\[failed\] /);
+        // 자체 code 도 본다 · message 에 aborted 가 있어도 연결 실패 코드가 먼저다
+        expect(failedReason(events, 'b')).toEqual(['unreachable']);
+        // 응답 도중에도 나는 코드는 집합에 없다 → failed
+        expect(failedReason(events, 'c')).toEqual(['failed']);
+    });
+
+    it('HttpCallError 5xx → upstream, 4xx·키 거절(5xx 포함) → failed, 사용자 취소 → cancelled', async () => {
+        const events: Ev[] = [];
+        behaviors.u = async () => { throw new HttpCallError('HTTP 500 {"error":{"message":"Cannot connect to host"}}', 500); };
+        behaviors.d = async () => { throw new HttpCallError('다운로드 실패 (HTTP 502): http://127.0.0.1:9/x', 502); };
+        behaviors.q = async () => { throw new HttpCallError('HTTP 400 bad request', 400); };
+        behaviors.k = async () => { throw new HttpCallError('HTTP 401 키 거절', 401, 'http', true); };
+        behaviors.k5 = async () => { throw new HttpCallError('HTTP 500 키 거절', 500, 'http', true); };
+        behaviors.x = async () => { throw new DOMException('This operation was aborted', 'AbortError'); };
+        const ids = ['u', 'd', 'q', 'k', 'k5', 'x'];
+        const p = plan({ complexity: 'multi', tasks: ids.slice(0, 4).map((id) => ({ id, capability: 'web.search' })) });
+        const p2 = plan({ complexity: 'multi', tasks: ids.slice(4).map((id) => ({ id, capability: 'web.search' })) });
+        const s = await executePlan(p, ctx({ onProgress: (e) => events.push(e as Ev) }));
+        await executePlan(p2, ctx({ onProgress: (e) => events.push(e as Ev) }));
+        expect(ids.map((id) => [id, failedReason(events, id)[0]])).toEqual([
+            ['u', 'upstream'], ['d', 'upstream'], ['q', 'failed'], ['k', 'failed'], ['k5', 'failed'], ['x', 'cancelled'],
+        ]);
+        expect(s.results.find((r) => r.taskId === 'u')!.text).toMatch(/^\[failed\] HTTP 500 /);
+    });
+
+    it('같은 시각 만료(Gate 한도 1): 잡은 작업은 timeout, 기다리던 작업은 timeout_queued 이고 handler 를 부르지 않는다', async () => {
+        await isolated({ ORCHESTRATOR_GLOBAL_MAX_INFLIGHT: '1', ORCHESTRATOR_TASK_TIMEOUT_MS: '30' }, async ({ run }) => {
+            const t = heldTimeouts();
+            try {
+                const events: Ev[] = [];
+                behaviors.a = holdUntilAbort;
+                const p = plan({ complexity: 'multi', tasks: [{ id: 'a', capability: 'web.search' }, { id: 'b', capability: 'web.search' }] });
+                const done = run(p, ctx({ onProgress: (e) => events.push(e as Ev) }));
+                await ticks(3); // a 는 handler 안, b 는 Gate 대기
+                t.expire(30, 0); // a 만료 → Gate 반환 → b 깨어나 양보 중
+                await microtasks();
+                t.expire(30, 1); // 양보가 끝나기 전에 b 만료
+                await ticks();
+                const s = await done;
+                expect(failedReason(events, 'a')).toEqual(['timeout']);
+                expect(failedReason(events, 'b')).toEqual(['timeout_queued']);
+                expect(s.results.map((r) => r.text.slice(0, 9))).toEqual(['[timeout]', '[timeout]']);
+                expect(calls).toEqual(['a']);
+            } finally { t.restore(); }
+        });
+    });
+
+    it('같은 시각 만료(provider 동시성 1): 기다리던 호출은 timeout_queued, fetch 는 잡은 작업의 1회뿐', async () => {
+        await isolated({}, async ({ run, http, throttle }) => {
+            const t = heldTimeouts();
+            let release!: () => void;
+            const held = new Promise<void>((r) => { release = r; });
+            const holders = Array.from({ length: throttle.providerConcurrency('hasa') - 1 }, () => throttle.withProviderSlot('hasa', () => held));
+            const fetchSpy = jest.spyOn(global, 'fetch').mockImplementation(hangingFetch as typeof fetch);
+            const events: Ev[] = [];
+            // 호출 시간 제한 값으로 a·b 의 신호를 구분한다
+            behaviors.a = async () => http.callJson(hasaTarget as never, { body: { prompt: 'a' }, timeoutMs: 31 });
+            behaviors.b = async () => http.callJson(hasaTarget as never, { body: { prompt: 'b' }, timeoutMs: 32 });
+            const p = plan({ complexity: 'multi', tasks: [{ id: 'a', capability: 'image.generate', input: { instruction: 'x' } }, { id: 'b', capability: 'image.generate', input: { instruction: 'y' } }] });
+            try {
+                const done = run(p, ctx({ onProgress: (e) => events.push(e as Ev) }));
+                await ticks(3); // a 는 마지막 슬롯으로 fetch 중, b 는 슬롯 대기
+                expect(fetchSpy).toHaveBeenCalledTimes(1);
+                t.expire(31); // a 만료 → 슬롯 반환 → b 깨어나 양보 중
+                await microtasks();
+                t.expire(32); // 양보가 끝나기 전에 b 만료
+                await ticks();
+                await done;
+                expect(failedReason(events, 'a')).toEqual(['timeout']);
+                expect(failedReason(events, 'b')).toEqual(['timeout_queued']);
+                expect(fetchSpy).toHaveBeenCalledTimes(1);
+            } finally {
+                release(); await Promise.all(holders); fetchSpy.mockRestore(); t.restore();
+            }
+        });
+    });
+
+    it('Gate 인계: 깨어난 대기자가 중단으로 빠지면 시간 제한이 더 긴 다음 대기자가 곧바로 Gate 를 얻는다', async () => {
+        await isolated({ ORCHESTRATOR_GLOBAL_MAX_INFLIGHT: '1', ORCHESTRATOR_TASK_TIMEOUT_MS: '60' }, async ({ run }) => {
+            const t = heldTimeouts();
+            try {
+                const events: Ev[] = [];
+                behaviors.a = holdUntilAbort;
+                const first = run(plan({ complexity: 'multi', tasks: [{ id: 'a', capability: 'web.search' }, { id: 'b', capability: 'web.search' }] }), ctx({ onProgress: (e) => events.push(e as Ev) }));
+                await ticks(3);
+                // 뒤 대기자 c — 작업 시간 제한을 끊지 않는다(시간 여유에 기대지 않음)
+                const second = run(plan({ complexity: 'multi', tasks: [{ id: 'c', capability: 'web.search' }] }), ctx({ onProgress: (e) => events.push(e as Ev) }));
+                await ticks(3); // a 는 handler 안, b·c 는 Gate 대기
+                t.expire(60, 0); // a 만료 → b 깨어나 양보 중
+                await microtasks();
+                t.expire(60, 1); // 양보가 끝나기 전에 b 만료 → 차례를 c 에게
+                await ticks();
+                const [, s2] = await Promise.all([first, second]);
+                expect(failedReason(events, 'b')).toEqual(['timeout_queued']);
+                expect(s2.results[0].status).toBe('completed');
+                expect(calls).toEqual(['a', 'c']);
+            } finally { t.restore(); }
+        });
+    });
+
+    it('들어올 때 이미 중단된 신호로 호출하면 timeout(queued 아님), fetch 0회', async () => {
+        await isolated({ ORCHESTRATOR_TASK_TIMEOUT_MS: '30' }, async ({ run, http }) => {
+            const fetchSpy = jest.spyOn(global, 'fetch').mockImplementation(hangingFetch as typeof fetch);
+            const events: Ev[] = [];
+            behaviors.g = async (signal) => {
+                await new Promise((r) => signal!.addEventListener('abort', r, { once: true }));
+                return http.callJson(hasaTarget as never, { body: { prompt: 'x' }, timeoutMs: 1000, signal });
+            };
+            try {
+                const s = await run(plan({ complexity: 'multi', tasks: [{ id: 'g', capability: 'image.generate', input: { instruction: 'x' } }] }), ctx({ onProgress: (e) => events.push(e as Ev) }));
+                expect(s.results[0].text).toMatch(/^\[timeout\] /);
+                expect(failedReason(events, 'g')).toEqual(['timeout']);
+                expect(fetchSpy).not.toHaveBeenCalled();
+            } finally { fetchSpy.mockRestore(); }
+        });
+    });
+
+    it('슬롯이 비어 있고 fetch 가 응답 없이 호출 시간 제한에 걸리면 timeout, fetch 1회', async () => {
+        await isolated({}, async ({ run, http }) => {
+            const fetchSpy = jest.spyOn(global, 'fetch').mockImplementation(hangingFetch as typeof fetch);
+            const events: Ev[] = [];
+            behaviors.g = async () => http.callJson(hasaTarget as never, { body: { prompt: 'x' }, timeoutMs: 30 });
+            try {
+                const s = await run(plan({ complexity: 'multi', tasks: [{ id: 'g', capability: 'image.generate', input: { instruction: 'x' } }] }), ctx({ onProgress: (e) => events.push(e as Ev) }));
+                expect(s.results[0].text).toMatch(/^\[timeout\] /);
+                expect(failedReason(events, 'g')).toEqual(['timeout']);
+                expect(fetchSpy).toHaveBeenCalledTimes(1);
+            } finally { fetchSpy.mockRestore(); }
+        });
+    });
+
+    it('다중 호출: 첫 호출이 성공한 뒤 둘째 호출이 슬롯 대기 중 만료되면 timeout_queued', async () => {
+        await isolated({}, async ({ run, http, throttle }) => {
+            let release!: () => void;
+            const held = new Promise<void>((r) => { release = r; });
+            const holders: Array<Promise<void>> = [];
+            const fetchSpy = jest.spyOn(global, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ id: 'job-1' }), { status: 200 }));
+            const events: Ev[] = [];
+            behaviors.v = async () => {
+                await http.callJson(hasaTarget as never, { body: { prompt: 'x' }, timeoutMs: 1000 });
+                for (let i = 0; i < throttle.providerConcurrency('hasa'); i++) holders.push(throttle.withProviderSlot('hasa', () => held));
+                return http.callJson(hasaTarget as never, { method: 'GET', url: 'http://127.0.0.1:9/v1/jobs/job-1', timeoutMs: 30 });
+            };
+            try {
+                await run(plan({ complexity: 'multi', tasks: [{ id: 'v', capability: 'image.generate', input: { instruction: 'x' } }] }), ctx({ onProgress: (e) => events.push(e as Ev) }));
+                expect(failedReason(events, 'v')).toEqual(['timeout_queued']);
+                expect(fetchSpy).toHaveBeenCalledTimes(1);
+            } finally {
+                release(); await Promise.all(holders); fetchSpy.mockRestore();
+            }
+        });
     });
 });
