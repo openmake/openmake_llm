@@ -196,8 +196,9 @@ sbDescribe('도구 자식 샌드박스 — sandbox-exec 자체가 실패하면 "
         const f = write('a.py', 'def f(:\n');
         write('conftest.py', '');
         expect(await detectTestRunner(base, '/nonexistent-omk-path', p)).toBe('none');
+        // 검사하지 못한 py_compile 은 serverKind 에서 빠진다(설계 2026-11-16 §9 N1·A1).
         expect(await collectDiagnostics(base, [f], '/nonexistent-omk-path', p))
-            .toEqual({ diagnostics: [], truncated: false, serverKind: 'py_compile' });
+            .toEqual({ diagnostics: [], truncated: false, serverKind: 'none' });
     }, 30000);
 });
 

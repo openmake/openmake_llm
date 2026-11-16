@@ -202,6 +202,14 @@ impl ExecState {
         lock(&self.protect).clone()
     }
 
+    /// 도구 프로파일의 읽기 범위 — 샌드박스가 켜지고 프로파일이 있을 때만(진단이 닿지 않는 의존을 거른다, 설계 D-22).
+    pub(crate) fn tool_reach(&self) -> Option<ReadScope> {
+        if !self.host.sandbox_enabled {
+            return None;
+        }
+        lock(&self.tool_scope).clone()
+    }
+
     /// 확인 없이 뜨는 자식을 감쌀 도구 프로파일 — 꺼짐, 프로파일, 켜졌는데 없음(fail-closed).
     pub(crate) fn tool_sandbox(&self) -> ToolSandbox {
         match lock(&self.tool_profile).clone() {

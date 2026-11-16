@@ -254,7 +254,8 @@ fn broken_profile_is_refused_not_swallowed() {
     assert_eq!(got.err().as_deref(), Some(MISSING));
 }
 
-/// python3 가 PATH 에 없으면 거절(71)이 아니라 종전대로 "띄우지 못함" — 빈 진단·none.
+/// python3 가 PATH 에 없으면 거절(71)이 아니라 종전대로 "띄우지 못함" — 빈 진단·none. 검사하지 못한 py_compile 은
+/// `serverKind` 에서 빠진다(설계 2026-11-16 §9 N1·A1).
 #[test]
 fn missing_python_is_not_refused() {
     let w = Work::new();
@@ -284,7 +285,7 @@ fn missing_python_is_not_refused() {
         .unwrap();
     assert_eq!(
         (got.diagnostics.len(), got.truncated, got.server_kind),
-        (0, false, "py_compile")
+        (0, false, "none")
     );
 }
 
