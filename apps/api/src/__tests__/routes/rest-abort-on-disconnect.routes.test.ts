@@ -36,10 +36,17 @@ const lastHandler = (path: string) => {
     return layer.route.stack[layer.route.stack.length - 1].handle;
 };
 
+// 실소켓 왕복이 부하(전체 검사 중 swap)로 늦어질 수 있다 — 조건 대기(8초) 두 번을 덮도록 전역(10초)보다 길게.
+jest.setTimeout(30000);
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const until = async (cond: () => boolean, ms = 1000) => {
+// 시간이 지나면 던진다 — 조용히 돌아오면 뒤의 단언이 엉뚱한 이유로 실패해 원인이 가려진다.
+const until = async (cond: () => boolean, ms = 8000) => {
     const end = Date.now() + ms;
-    while (!cond() && Date.now() < end) await sleep(10);
+    while (!cond()) {
+        if (Date.now() >= end) throw new Error('until: 조건 대기 시간 초과');
+        await sleep(10);
+    }
 };
 
 describe('REST 채팅 — 클라이언트 끊김 시 processChat abortSignal', () => {
