@@ -190,7 +190,7 @@ export async function executePlan(plan: ValidatedPlan, ctx: ExecContext): Promis
             if (pre) { results.push(pre); failedOrSkipped.add(task.id); ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: pre.text.slice(0, 120), ...failureFields(task, ctx, textKind(pre.text)) }); continue; }
             const blockedBy = task.dependsOn.find((d) => failedOrSkipped.has(d));
             if (blockedBy) {
-                const r: TaskResult = { taskId: task.id, capability: task.capability, ok: false, status: 'skipped', text: `[skipped] 선행 작업 '${blockedBy}' 미완료(${ctx.results.get(blockedBy)?.status ?? 'failed'})`, media: [], ms: 0, error: `skipped: ${blockedBy}` };
+                const r: TaskResult = { taskId: task.id, capability: task.capability, ok: false, status: 'skipped', text: `[skipped] 선행 작업 미완료(${ctx.results.get(blockedBy)?.status ?? 'failed'})`, media: [], ms: 0, error: `skipped: ${blockedBy}` };
                 results.push(r); ctx.results.set(task.id, r); failedOrSkipped.add(task.id);
                 ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: r.text, ...failureFields(task, ctx, 'skipped') });
                 continue;
