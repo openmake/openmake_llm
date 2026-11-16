@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use omk_bridge_core::browser::constants::BROWSER_USER_CONTROL_ERROR;
+use omk_bridge_core::browser::constants::{BROWSER_USER_CONTROL_ERROR, STOPPED_ERROR};
 use omk_bridge_core::browser::local_browser::LocalBrowser;
 use omk_bridge_core::browser::run::BrowserRunOptions;
 use serde_json::{Value, json};
@@ -49,6 +49,60 @@ fn oks(r: &Value) -> Vec<bool> {
     r["results"]
         .as_array()
         .map_or_else(Vec::new, |a| a.iter().map(|x| x["ok"] == true).collect())
+}
+
+/// 시험 서버가 그 경로를 `n` 번째로 받을 때까지(실시간, 10초 한도).
+async fn until_hit(server: &Server, path: &str, n: usize) -> Result<(), String> {
+    for _ in 0..500 {
+        if server
+            .hits
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|h| *h == path)
+            .count()
+            >= n
+        {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    Err(format!("{path} 요청이 닿지 않았다"))
+}
+
+/// 머리를 붙든 주소로 이동하다 중지 — 중지 시점부터 요청 끝까지 잰다(D4 실측, 3초 안). 결과·경과 ms.
+async fn stop_slow_goto(
+    b: &LocalBrowser,
+    server: &Server,
+    origin: &str,
+    o: &BrowserRunOptions,
+) -> Result<(Value, u128), String> {
+    let seen = server
+        .hits
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|h| *h == "/slow-head")
+        .count();
+    let job = async {
+        let r = run(b, json!({"actions": [{"type": "goto", "url": format!("{origin}/slow-head")}], "sitePolicy": allow_all()}), o).await;
+        (r, std::time::Instant::now())
+    };
+    let stopper = async {
+        until_hit(server, "/slow-head", seen + 1).await?;
+        b.request_stop(None);
+        Ok::<_, String>(std::time::Instant::now())
+    };
+    let ((r, end), at) = futures_util::future::join(job, stopper).await;
+    let ms = end.duration_since(at?).as_millis();
+    println!("    D4 실측: 중지 → 요청 끝 {ms}ms");
+    eq(
+        text(&r["results"][0]["error"]),
+        STOPPED_ERROR.to_owned(),
+        "중지 문구",
+    )?;
+    yes(ms < 3000, &format!("3초 안에 끝남({ms}ms)"))?;
+    Ok((r, ms))
 }
 
 fn obj_has(v: &Value, want: Value) -> Result<(), String> {
@@ -256,6 +310,47 @@ pub async fn cases(
         let last = r["results"].as_array().and_then(|a| a.last()).cloned().unwrap_or_default();
         yes(text(&last["error"]).contains("중지"), "마지막 결과가 중지")
     }).await;
+
+    s.case("중지 — 빈 탭에서 응답을 기다리는 이동을 바로 끊고, 같은 작업의 다음 이동은 된다", async {
+        let t = o("t-stop-blank");
+        let (r, _) = stop_slow_goto(b, server, origin, &t).await?;
+        eq(text(&r["finalUrl"]), "about:blank".to_owned(), "finalUrl")?;
+        let again = run(b, json!({"actions": [{"type": "goto", "url": format!("{origin}/")}], "sitePolicy": all}), &t).await;
+        eq(&again["ok"], &json!(true), "다음 이동")
+    }).await;
+
+    s.case("중지 — 읽힌 페이지에서 응답을 기다리는 이동을 바로 끊고 앞 주소에 남는다", async {
+        let t = o("t-stop-read");
+        run(b, json!({"actions": [{"type": "goto", "url": format!("{origin}/")}], "sitePolicy": all}), &t).await;
+        let (r, _) = stop_slow_goto(b, server, origin, &t).await?;
+        eq(text(&r["finalUrl"]), format!("{origin}/"), "finalUrl")
+    }).await;
+
+    s.case("중지 — wait 10초 도중이면 바로 끝난다", async {
+        let stopper = async {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            b.request_stop(None);
+            std::time::Instant::now()
+        };
+        let job = async {
+            let r = run(
+                b,
+                json!({"actions": [{"type": "wait", "ms": 10000}], "sitePolicy": all}),
+                &o("t-stop-wait"),
+            )
+            .await;
+            (r, std::time::Instant::now())
+        };
+        let ((r, end), at) = futures_util::future::join(job, stopper).await;
+        let ms = end.duration_since(at).as_millis();
+        eq(
+            text(&r["results"][0]["error"]),
+            STOPPED_ERROR.to_owned(),
+            "중지 문구",
+        )?;
+        yes(ms < 3000, &format!("3초 안에 끝남({ms}ms)"))
+    })
+    .await;
 
     s.case("탭 — 작업마다 따로, 닫은 뒤에는 새 탭", async {
         run(b, json!({"actions": [{"type": "goto", "url": format!("{origin}/form")}], "sitePolicy": all}), &o("task-a")).await;
