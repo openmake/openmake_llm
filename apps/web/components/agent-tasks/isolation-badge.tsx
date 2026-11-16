@@ -18,7 +18,7 @@ export function IsolationBadge({ label, className }: { label: IsolationLabel | n
   const t = useTranslations("agentTasks.isolation");
   if (!label) return null;
   return (
-    <span className={cn("mt-2 inline-flex max-w-full items-center break-all rounded-full border px-2 py-0.5 text-[10px] font-medium", TONE[label.tone], className)}>
+    <span className={cn("mt-2 inline-flex max-w-full items-center break-words rounded-md border px-2 py-0.5 text-[10px] font-medium", TONE[label.tone], className)}>
       {t(label.key, label.params)}
     </span>
   );

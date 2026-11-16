@@ -53,3 +53,15 @@ const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 export function isIsolationOnlyUpdate(reason: string | undefined, cardStatus: string | undefined): boolean {
   return reason === "isolation" && TERMINAL.has(cardStatus ?? "");
 }
+
+/** 작업별 종료 재조회 세대를 하나 올리고 그 번호를 돌려준다 — 재조회를 시작할 때 부른다. */
+export function startTerminalFetch(gens: Map<string, number>, taskId: string): number {
+  const gen = (gens.get(taskId) ?? 0) + 1;
+  gens.set(taskId, gen);
+  return gen;
+}
+
+/** 이 재조회가 그 작업의 마지막으로 시작한 조회인가 — 아니면 응답을 병합하지 않는다("나중에 시작한 조회가 이긴다"). */
+export function isLatestTerminalFetch(gens: Map<string, number>, taskId: string, gen: number): boolean {
+  return gens.get(taskId) === gen;
+}

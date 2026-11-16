@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import ko from '../../apps/web/messages/ko.json';
-import { isolationLabel, isolationFromTask, isolationFromEvent, isIsolationOnlyUpdate } from '../../apps/web/lib/agent-task-isolation';
+import { isolationLabel, isolationFromTask, isolationFromEvent, isIsolationOnlyUpdate, startTerminalFetch, isLatestTerminalFetch } from '../../apps/web/lib/agent-task-isolation';
 
 const WT = { state: 'worktree' as const, branch: 'omk-task/abcd1234', worktreeRel: '.openmake/worktrees/t1' };
 
@@ -49,4 +49,14 @@ test('reason:isolation + 이미 종료된 카드만 재조회를 건너뛴다(is
   assert.equal(isIsolationOnlyUpdate('isolation', undefined), false);
   assert.equal(isIsolationOnlyUpdate(undefined, 'completed'), false);
   assert.equal(isIsolationOnlyUpdate('plan_edited', 'completed'), false);
+});
+
+test('종료 재조회는 나중에 시작한 조회만 병합한다 — 앞 응답이 늦게 와도 덮지 않는다', () => {
+  const gens = new Map<string, number>();
+  const first = startTerminalFetch(gens, 't1');
+  const second = startTerminalFetch(gens, 't1');
+  const other = startTerminalFetch(gens, 't2');
+  assert.equal(isLatestTerminalFetch(gens, 't1', first), false);
+  assert.equal(isLatestTerminalFetch(gens, 't1', second), true);
+  assert.equal(isLatestTerminalFetch(gens, 't2', other), true);
 });
