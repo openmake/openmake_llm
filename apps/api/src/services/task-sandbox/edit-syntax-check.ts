@@ -42,7 +42,8 @@ function jsonError(content: string): string | null {
 /** 명령으로 검사 — 오류 출력, 통과·검사 불가면 null. */
 async function runCheck(sandbox: TaskExecutor, kind: keyof typeof COMMANDS, relPath: string): Promise<string | null> {
     const r = await sandbox.exec(COMMANDS[kind].build(relPath));
-    if (r.exitCode === 0 || r.timedOut || r.exitCode === EDIT_SYNTAX_CHECK.EXIT_NOT_FOUND) return null;
+    // 시간 초과·기기 출력 상한(outputCapped)으로 끊긴 결과의 종료 코드는 검사 결과가 아니다.
+    if (r.exitCode === 0 || r.timedOut || r.outputCapped === true || r.exitCode === EDIT_SYNTAX_CHECK.EXIT_NOT_FOUND) return null;
     return (r.stderr || r.stdout).trim() || null;
 }
 

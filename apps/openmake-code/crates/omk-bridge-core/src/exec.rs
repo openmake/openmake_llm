@@ -13,7 +13,7 @@ use std::panic::AssertUnwindSafe;
 use std::pin::Pin;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use crate::constants::{MAX_BUFFER, SANDBOX_BIN};
+use crate::constants::{ExecStop, MAX_BUFFER, SANDBOX_BIN, exec_stop_notice};
 use crate::denylist::match_denylist;
 use crate::exec_env::build_exec_env;
 use crate::exec_path::resolve_exec_path;
@@ -21,7 +21,7 @@ use crate::git_trust::{GitPaths, detect_git, protected_git_dirs};
 use crate::msg::{BridgeMsg, BridgeResult};
 use crate::node_error;
 use crate::platform::{Platform, bulk_approval_allowed, shell_invocation};
-use crate::proc::{self, ProcSpec, Stderr, Stdin};
+use crate::proc::{self, ProcEnd, ProcSpec, Stderr, Stdin};
 use crate::sandbox::sandbox_profile;
 use crate::timed_fs::FsGate;
 use crate::tool_env::{ToolEnv, ToolSandbox};
@@ -312,10 +312,27 @@ pub(crate) async fn run_exec(
     })
     .await;
     let exit_code = out.end.exec_file_code();
+    // 코어가 끊었으면 사유를 stderr 끝에 붙이고 표식을 싣는다(설계 2026-11-16 D1·§8 F2). 직접 자식의 종료 코드가 있는
+    // 시간 초과·신호·띄우기 실패는 붙이지 않는다(TS 와 구분이 안 된다). 상한 자르기 뒤라 stderr 는 상한 + 문구 길이까지
+    // 커질 수 있다. 서버가 stderr 를 앞에서 자르면 문구는 잘려도 표식(`TIMEOUT`·`TRUNCATED`)은 남는다.
+    let stop = match out.end {
+        ProcEnd::TimedOut { exited: None } => Some(ExecStop::TimedOut),
+        ProcEnd::Overflow => Some(ExecStop::Overflow),
+        _ => None,
+    };
+    let mut stderr = out.stderr;
+    if let Some(kind) = stop {
+        if !stderr.is_empty() && !stderr.ends_with('\n') {
+            stderr.push('\n');
+        }
+        stderr.push_str(&exec_stop_notice(kind, h.exec_timeout_ms));
+    }
     Ok(BridgeResult {
         stdout: Some(out.stdout),
-        stderr: Some(out.stderr),
+        stderr: Some(stderr),
         exit_code: Some(exit_code),
+        timed_out: (stop == Some(ExecStop::TimedOut)).then_some(true),
+        truncated: (stop == Some(ExecStop::Overflow)).then_some(true),
         ..BridgeResult::success()
     })
 }

@@ -41,5 +41,14 @@
     "DIAG_MAX_TOTAL": 60,
     "DIAG_MSG_MAX": 300,
     "TEST_RUNNER_PROBE_TIMEOUT_MS": 5000
-  }
+  },
+  "execStopNotice": [
+    {"id": "timeout-default", "input": {"kind": "timeout", "timeoutMs": 120000}, "expect": "[명령이 시간 제한(120초)을 넘어 중단됐습니다 — 끝나지 않거나 오래 걸리는 명령은 범위를 줄이거나 나눠서 실행하세요]"},
+    {"id": "timeout-round-up", "input": {"kind": "timeout", "timeoutMs": 1500}, "expect": "[명령이 시간 제한(2초)을 넘어 중단됐습니다 — 끝나지 않거나 오래 걸리는 명령은 범위를 줄이거나 나눠서 실행하세요]"},
+    {"id": "timeout-exact-second", "input": {"kind": "timeout", "timeoutMs": 1000}, "expect": "[명령이 시간 제한(1초)을 넘어 중단됐습니다 — 끝나지 않거나 오래 걸리는 명령은 범위를 줄이거나 나눠서 실행하세요]"},
+    {"id": "timeout-just-over", "input": {"kind": "timeout", "timeoutMs": 1001}, "expect": "[명령이 시간 제한(2초)을 넘어 중단됐습니다 — 끝나지 않거나 오래 걸리는 명령은 범위를 줄이거나 나눠서 실행하세요]"},
+    {"id": "timeout-under-second", "input": {"kind": "timeout", "timeoutMs": 400}, "expect": "[명령이 시간 제한(1초)을 넘어 중단됐습니다 — 끝나지 않거나 오래 걸리는 명령은 범위를 줄이거나 나눠서 실행하세요]"},
+    {"id": "timeout-zero-min-one", "input": {"kind": "timeout", "timeoutMs": 0}, "expect": "[명령이 시간 제한(1초)을 넘어 중단됐습니다 — 끝나지 않거나 오래 걸리는 명령은 범위를 줄이거나 나눠서 실행하세요]"},
+    {"id": "overflow", "input": {"kind": "overflow", "timeoutMs": 120000}, "expect": "[출력이 상한(1MB)을 넘어 중단됐습니다 — head·grep 등으로 출력을 줄여 다시 실행하세요]"}
+  ]
 }
