@@ -4,6 +4,7 @@
 -- 격리 없이 연결 폴더에서 직접 작업한다(fail-open). 그 결과를 서버가 정해 이 열에 남기고 화면이 그대로 그린다.
 -- 값은 packages/shared-types AgentTaskIsolation:
 --   {"state":"worktree","branch":"…","worktreeRel":"…","outcome":"kept"|"removed"?}
+--     worktreeRel = 실행 폴더(연결 폴더 + folder_rel) 기준 상대경로
 --   {"state":"direct","reason":"not_repo"|"disabled"|"unavailable"}
 -- NULL = 해당 없음(샌드박스 실행, 옛 행). additive·멱등.
 
