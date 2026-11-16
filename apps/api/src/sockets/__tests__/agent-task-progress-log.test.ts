@@ -118,4 +118,15 @@ describe('sequenceAgentTaskProgress — 소켓으로 나가는 필드', () => {
         expect(out).toMatchObject({ type: 'agent_task_progress', status: 'paused', waitReason: 'device_wait' });
         expect(sequenceAgentTaskProgress({ userId: 'u1', taskId: 't1', status: 'running', progress: 10, currentTurn: 2 }, log)).not.toHaveProperty('waitReason');
     });
+
+    it('격리 상태(isolation)·reason:isolation 을 소켓 메시지와 재생에 그대로 싣는다(200)', () => {
+        const log = new AgentTaskProgressLog({ startSeq: 100, maxEvents: 10, ttlMs: 60_000 });
+        const isolation = { state: 'worktree' as const, branch: 'omk-task/abcd1234', worktreeRel: '.openmake/worktrees/t1', outcome: 'kept' as const };
+        const out = sequenceAgentTaskProgress({ userId: 'u1', taskId: 't1', status: 'completed', progress: 100, currentTurn: 3, isolation, reason: 'isolation' }, log);
+        expect(out).toMatchObject({ type: 'agent_task_progress', status: 'completed', isolation, reason: 'isolation' });
+        const sent: Array<Record<string, unknown>> = [];
+        replayAgentTaskProgress({ send: (m: string) => { sent.push(JSON.parse(m)); } }, 'u1', 0, log);
+        expect(sent[sent.length - 1]).toMatchObject({ isolation, reason: 'isolation' });
+        expect(sequenceAgentTaskProgress({ userId: 'u1', taskId: 't1', status: 'running', progress: 10, currentTurn: 2 }, log)).not.toHaveProperty('isolation');
+    });
 });

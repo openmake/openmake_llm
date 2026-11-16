@@ -38,4 +38,9 @@ describe('toPublicTask', () => {
         expect(pub.resumable).toBe(true);
         expect(pub).toMatchObject({ id: 't1', user_id: 'u1', goal: 'g', status: 'failed' });
     });
+
+    it('worktree 격리 상태(200)를 그대로 내보낸다', () => {
+        const isolation = { state: 'worktree', branch: 'omk-task/abcd1234', worktreeRel: '.openmake/worktrees/t1', outcome: 'kept' };
+        expect((toPublicTask({ ...row, isolation }) as Record<string, unknown>).isolation).toEqual(isolation);
+    });
 });
