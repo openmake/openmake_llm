@@ -1,5 +1,6 @@
 //! 실제 Chrome 테스트의 작은 HTTP 서버(tokio `net`, 손으로 쓴 응답 — `hyper` 를 코어 개발 의존에 넣지 않는다, 계획 §6).
-//! 요청마다 `Connection: close`. `Hold` 응답은 앞부분만 보내고 소켓을 끝까지 쥔다(문서가 계속 `loading`).
+//! 요청마다 `Connection: close`. `Hold` 응답은 앞부분만 보내고 소켓을 끝까지 쥔다(문서가 계속 `loading`). `HoldHead` 는 머리도
+//! 보내지 않고 쥔다(이동이 응답을 기다린 채 남는다 — `Page.navigate` 의 답이 오지 않는다).
 
 use std::sync::{Arc, Mutex};
 
@@ -55,6 +56,8 @@ pub enum Resp {
     Full(u16, Vec<(String, String)>, Vec<u8>),
     /// 앞부분만 보내고 끝내지 않는다
     Hold(String),
+    /// 아무것도 보내지 않고 끝내지 않는다
+    HoldHead,
 }
 
 pub fn html(body: &str) -> Resp {
@@ -156,6 +159,11 @@ async fn handle(
             );
             let _ = s.write_all(out.as_bytes()).await;
             held.lock().unwrap().push(s);
+        }
+        // `finish_held` 가 끝내지 않는다(머리 없는 응답에 본문 끝을 붙이면 깨진다) — 런타임이 끝날 때 함께 닫힌다
+        Resp::HoldHead => {
+            let _keep = s;
+            std::future::pending::<()>().await;
         }
     }
 }
