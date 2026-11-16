@@ -154,6 +154,8 @@ export interface AgentTask {
     input_images?: unknown;
     /** Cowork D1a: 실행 백엔드(081) — 'sandbox'(기본) | 'local'(로컬 브리지) */
     executor?: 'sandbox' | 'local';
+    /** 로컬 실행의 worktree 격리 상태(200) — NULL 은 해당 없음(샌드박스·옛 행) */
+    isolation?: import('@openmake/shared-types').AgentTaskIsolation | null;
     /** 로컬 실행 대상 브리지 디바이스(101) — NULL 은 최근 접속 디바이스 폴백 */
     device_id?: string;
     /** 로컬 실행 대상 폴더(102) — 연결 루트 기준 상대경로. NULL 은 루트 */

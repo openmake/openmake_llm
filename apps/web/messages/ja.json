@@ -1008,6 +1008,14 @@
     },
     "downloadFailed": "ダウンロードに失敗しました: {error}",
     "localBadge": "ローカルフォルダ実行",
+    "isolation": {
+      "worktree": "隔離実行 · 作業ブランチ {branch}",
+      "worktreeKept": "隔離実行 · 変更は作業フォルダ {path} に残っています（ブランチ {branch}）",
+      "worktreeRemoved": "隔離実行 · 変更なし（作業フォルダとブランチを削除済み）",
+      "notRepo": "隔離なし · git リポジトリではないためフォルダで直接作業",
+      "disabled": "隔離なし · サーバー設定でオフのためフォルダで直接作業",
+      "unavailable": "隔離失敗 · フォルダで直接作業しました"
+    },
     "errorReason": {
       "label": "失敗理由:",
       "goal_incomplete": "目標未達成",

@@ -8,8 +8,9 @@ export const AGENT_TASK_CHANGED_EVENT = "omk:agent-task-changed";
 export interface AgentTaskChange {
   taskId: string;
   approvalId?: string;
-  /** resync — 진행 이벤트를 놓쳤고 서버에 남아 있지 않다(taskId 는 빈 문자열). 보고 있는 것을 전부 다시 읽는다. */
-  reason: "assigned" | "escalated" | "revoked" | "plan_edited" | "resync";
+  /** resync — 진행 이벤트를 놓쳤고 서버에 남아 있지 않다(taskId 는 빈 문자열). 보고 있는 것을 전부 다시 읽는다.
+   *  isolation — 종료 뒤 worktree 정리 결과가 기록됐다(200). 작업 상세가 다시 읽는다. */
+  reason: "assigned" | "escalated" | "revoked" | "plan_edited" | "resync" | "isolation";
 }
 
 export function announceAgentTaskChange(change: AgentTaskChange): void {

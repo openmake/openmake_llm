@@ -16,7 +16,8 @@ import type { TaskExecutor, ExecResult, CodeNavSpec, CodeNavData } from '../task
 import { stripWorkspacePrefix } from '../task-sandbox/workspace-path';
 import { getLocalBridgeRegistry, type BridgeKind, type BridgeResult, type BridgeRequestPayload } from './registry';
 import { getLocalBridgeUnknownOutcomeNotice } from '../../prompts/agent-task-prompt';
-import { LocalDeviceUnavailableError, isUnsupportedKindError, type DeviceLoss } from './device-errors';
+import { LocalDeviceUnavailableError, isUnsupportedKindError, isNotARepoError, type DeviceLoss } from './device-errors';
+import type { AgentTaskIsolation } from '@openmake/shared-types';
 import { classifyBrowserAction, planBrowserActions, type BrowserSitePlan, type BrowserUploadApproval } from '@openmake/config';
 import { resolveEffectivePolicy } from '../org/effective-policy';
 import { auditBrowserPolicyBlock } from './browser-policy-audit';
@@ -82,6 +83,7 @@ export class RemoteExecutor implements TaskExecutor {
     private worktreeRel: string | null = null;
     /** worktree 작업 브랜치명 — 사용자 안내·결과 보고용. */
     private worktreeBranch: string | null = null;
+    private isolationState: AgentTaskIsolation | null = null;
     private deviceLoss: DeviceLoss | null = null;
 
     /**
@@ -114,17 +116,27 @@ export class RemoteExecutor implements TaskExecutor {
         // 한다(DB folder_rel 조회 없이 사고 분석·감사가 되도록).
         logger.info(`[${this.taskId}] 로컬 실행기 준비 (device=${dev.deviceId}, folder="${dev.folderName}"${this.folderRel ? `/${this.folderRel}` : ''})`);
 
-        if (!LOCAL_BRIDGE.WORKTREE_ENABLED) return;
+        if (!LOCAL_BRIDGE.WORKTREE_ENABLED) { this.isolationState = { state: 'direct', reason: 'disabled' }; return; }
         const r = await this.req({ kind: 'worktree', op: 'add', taskId: this.taskId });
         if (r.ok && r.worktreeRel) {
             this.worktreeRel = r.worktreeRel;
             this.worktreeBranch = r.branch ?? null;
+            // 브랜치 없는 ok(현 기기에는 없다)는 격리는 걸린 채 화면용 상태를 남기지 않는다.
+            // 기기 응답은 런타임 검증이 없으므로 문자열이 아닌 값도 같은 경로(null)로 본다.
+            this.isolationState = typeof r.branch === 'string' && r.branch && typeof r.worktreeRel === 'string'
+                ? { state: 'worktree', branch: r.branch, worktreeRel: r.worktreeRel } : null;
             logger.info(`[${this.taskId}] worktree 격리 활성 (${r.worktreeRel}, branch=${r.branch})`);
         } else {
-            // git 레포가 아니거나 생성 실패 — 격리 없이 진행한다(기존 동작 유지).
-            logger.info(`[${this.taskId}] worktree 격리 미적용: ${r.error ?? 'worktreeRel 없음'}`);
+            // git 레포가 아니거나 생성 실패 — 격리 없이 진행한다(기존 동작 유지). 전송 실패·능력 미지원은 문구를 보지 않는다.
+            const notRepo = !r.transport && !r.unsupported && isNotARepoError(r.error ?? '');
+            this.isolationState = { state: 'direct', reason: notRepo ? 'not_repo' : 'unavailable' };
+            const msg = `[${this.taskId}] worktree 격리 미적용: ${r.error ?? 'worktreeRel 없음'}`;
+            if (notRepo) logger.info(msg); else logger.warn(msg);
         }
     }
+
+    /** worktree 격리 상태(200) — create 가 정하고 cleanup 이 종료 결과(outcome)를 채운다. create 전·브랜치 없는 격리는 null. */
+    get isolation(): AgentTaskIsolation | null { return this.isolationState; }
 
     private async req(payload: BridgeRequestPayload, timeoutMs?: number): Promise<BridgeResult> {
         const withFolder = this.folderRel ? { ...payload, folder: this.folderRel } : payload;
@@ -372,6 +384,8 @@ export class RemoteExecutor implements TaskExecutor {
                 .catch(() => ({ ok: false } as BridgeResult));
             if (r.ok) {
                 logger.info(`[${this.taskId}] worktree ${r.kept ? `보존 (branch=${this.worktreeBranch})` : '정리 완료'}`);
+                // 정리 결과(200) — 실패·무응답이면 모르므로 채우지 않는다.
+                if (this.isolationState?.state === 'worktree') this.isolationState = { ...this.isolationState, outcome: r.kept ? 'kept' : 'removed' };
             }
         }
         // taskId 포함 — 디바이스가 이 작업의 일괄 승인을 즉시 회수한다.
