@@ -8,7 +8,8 @@ import * as path from 'path';
 import { matchDenylist } from '../denylist';
 import { safeFrom, safeFromAsync } from '../scope';
 import { SECRET_SUBPATHS, sbSub, TOOL_SECRET_SUBPATHS } from '../constants';
-import { buildSandboxProfile } from '../sandbox';
+import { buildSandboxProfiles } from '../sandbox';
+import type { GitPaths } from '../git-trust';
 
 describe('EXEC_DENYLIST', () => {
     const blocked: [string, string][] = [
@@ -116,16 +117,21 @@ describe('safeFrom — 경로 스코프', () => {
     });
 });
 
-describe('buildSandboxProfile — SBPL 규칙(텍스트, 파일로 쓰지 않는다)', () => {
+describe('buildSandboxProfiles — SBPL 규칙(텍스트, 파일로 쓰지 않는다, 제품이 연결 때 쓰는 함수)', () => {
     let dir: string;
     beforeAll(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-sbpl-')); });
     afterAll(() => { fs.rmSync(dir, { recursive: true, force: true }); });
     const lines = (t: string | null): string[] => (t as string).trim().split('\n');
+    // 제품이 연결 때 부르는 함수(BridgeCore) — 홈은 실제 홈, 홈 읽기 입력은 비운다.
+    const profile = (root: string, git: GitPaths | null, tool: boolean, protect: GitPaths[] = git ? [git] : []): string | null => {
+        const p = buildSandboxProfiles(root, git, protect, {});
+        return p && (tool ? p.tool : p.exec);
+    };
     const q = (p: string): string => JSON.stringify(p);
 
     it('git 금지 줄이 프로파일 맨 끝이다 (last-match-wins — 위치가 곧 보안)', () => {
         const gitDir = path.join(dir, 'repo', '.git');
-        const l = lines(buildSandboxProfile(path.join(dir, 'repo'), { gitDir, commonDir: gitDir }, false));
+        const l = lines(profile(path.join(dir, 'repo'), { gitDir, commonDir: gitDir }, false));
         const last = l[l.length - 1];
         expect(last).toBe(`(deny file-write* (subpath ${q(`${gitDir}/hooks`)}) (literal ${q(`${gitDir}/config`)}) (literal ${q(gitDir)}) (literal ${q(`${gitDir}/commondir`)}) (literal ${q(`${gitDir}/config.worktree`)}))`);
         // 폴더 allow 는 hooks deny 보다 앞이어야 한다(뒤면 deny 를 덮어쓴다).
@@ -136,8 +142,8 @@ describe('buildSandboxProfile — SBPL 규칙(텍스트, 파일로 쓰지 않는
 
     it('도구 프로파일 = exec 프로파일 + 홈 읽기 허용 목록(D-15) + 자격 파일 읽기 금지(D-7) + 비밀 stat 금지(D-17) + (deny network*), git 금지 줄은 여전히 맨 끝', () => {
         const git = { gitDir: path.join(dir, 'repo', '.git'), commonDir: path.join(dir, 'repo', '.git') };
-        const e = lines(buildSandboxProfile(path.join(dir, 'repo'), git, false));
-        const t = lines(buildSandboxProfile(path.join(dir, 'repo'), git, true));
+        const e = lines(profile(path.join(dir, 'repo'), git, false));
+        const t = lines(profile(path.join(dir, 'repo'), git, true));
         const home = fs.realpathSync.native(os.homedir());
         expect(e).not.toContain('(deny network*)');
         // 자격 파일·비밀 stat 금지는 SECRET_SUBPATHS 줄 바로 뒤 — exec 프로파일에는 없다(승인된 npm·gh 가 쓴다).
@@ -159,7 +165,7 @@ describe('buildSandboxProfile — SBPL 규칙(텍스트, 파일로 쓰지 않는
     it('linked worktree: common dir 쓰기를 열고, 금지는 common 의 hooks·config·자신·commondir·config.worktree + worktrees·git dir 자신·commondir·config.worktree', () => {
         const common = path.join(dir, 'main', '.git');
         const gitDir = path.join(common, 'worktrees', 'lw');
-        const l = lines(buildSandboxProfile(path.join(dir, 'lw'), { gitDir, commonDir: common }, false));
+        const l = lines(profile(path.join(dir, 'lw'), { gitDir, commonDir: common }, false));
         expect(l).toContain(`(allow file-write* (subpath ${q(gitDir)}))`);
         expect(l).toContain(`(allow file-write* (subpath ${q(common)}))`);
         expect(l[l.length - 1]).toBe(`(deny file-write* (subpath ${q(`${common}/hooks`)}) (literal ${q(`${common}/config`)}) (literal ${q(common)}) (literal ${q(`${common}/commondir`)}) (literal ${q(`${common}/config.worktree`)}) (literal ${q(`${common}/worktrees`)}) (literal ${q(gitDir)}) (literal ${q(`${gitDir}/commondir`)}) (literal ${q(`${gitDir}/config.worktree`)}))`);
@@ -167,20 +173,20 @@ describe('buildSandboxProfile — SBPL 규칙(텍스트, 파일로 쓰지 않는
 
     it('믿지 않는 연결 폴더의 .git(protect): 쓰기 허용 줄 없이 금지 줄만', () => {
         const dotGit = path.join(dir, 'repo', '.git');
-        const l = lines(buildSandboxProfile(path.join(dir, 'repo'), null, false, [{ gitDir: dotGit, commonDir: dotGit }]));
+        const l = lines(profile(path.join(dir, 'repo'), null, false, [{ gitDir: dotGit, commonDir: dotGit }]));
         expect(l.filter((x) => x.includes(q(dotGit)) && x.startsWith('(allow'))).toEqual([]);
         expect(l[l.length - 1]).toContain(`(literal ${q(`${dotGit}/config`)})`);
     });
 
     it('비 git 폴더 프로파일에는 gitDir allow·hooks deny 가 없다', () => {
-        const text = buildSandboxProfile(path.join(dir, 'plain'), null, false) as string;
+        const text = profile(path.join(dir, 'plain'), null, false) as string;
         expect(text).not.toContain('hooks');
         expect(text).toContain('(deny file-write*)');
         expect(text).toContain('.ssh'); // 비밀 읽기 차단은 항상 포함
     });
 
     it('경로의 따옴표·역슬래시를 escape 한다 (SBPL 문자열 주입 차단)', () => {
-        const text = buildSandboxProfile(path.join(dir, 'we"ird'), null, false) as string;
+        const text = profile(path.join(dir, 'we"ird'), null, false) as string;
         expect(text).toContain('we\\"ird'); // 따옴표가 escape 된 채로만 존재
     });
 });

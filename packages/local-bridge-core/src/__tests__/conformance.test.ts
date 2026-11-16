@@ -8,7 +8,7 @@ import * as path from 'path';
 import { EXEC_DENYLIST, matchDenylist, normalizeForDenylist } from '../denylist';
 import { buildExecEnv } from '../exec-env';
 import { bulkApprovalAllowed, folderNameOf, pathListSeparator, shellInvocation } from '../platform';
-import { miseEnvDirs, reachable, readGuard, sandboxProfileText } from '../sandbox';
+import { linkFollowable, miseEnvDirs, reachable, readGuard, sandboxProfileText } from '../sandbox';
 import { parseGitConfigReads } from '../git-trust';
 import { safeFrom, safeFromAsync } from '../scope';
 import { RequestGuard } from '../request-guard';
@@ -201,7 +201,7 @@ describe('sandbox-profile', () => {
     };
     const doc = load<{ cases: Case<In, { profile: string }>[] }>('sandbox-profile');
     // `{{HOME}}` 자리에 넣는 임의 홈 — 실제 홈에 의존하지 않는다(Rust 러너와 같은 값, 입력 글자에도 넣는다).
-    const FAKE_HOME = '/synthetic/home';
+    const FAKE_HOME = '/synthetic/fakehome';
     const h = (s: string): string => s.split('{{HOME}}').join(FAKE_HOME);
 
     it.each(doc.cases.map((c) => [c.id, c] as const))('%s — 프로파일 전체 텍스트가 같다', (_id, c) => {
@@ -219,6 +219,7 @@ describe('home-read', () => {
         guard: Case<{ home: string; path: string; top?: boolean }, boolean>[];
         gitConfig: Case<{ home: string; out: string }, string[]>[];
         envDirs: Case<{ env: Record<string, string> }, string[]>[];
+        follow: Case<{ home: string; root: string; path: string }, boolean>[];
         reach: Case<{ scope: { home: string; allow: string[]; literals: string[] }; path: string }, boolean>[];
     }>('home-read');
     it.each(doc.guard.map((c) => [c.id, c] as const))('guard/%s', (_id, c) => {
@@ -229,6 +230,9 @@ describe('home-read', () => {
     });
     it.each(doc.envDirs.map((c) => [c.id, c] as const))('envDirs/%s', (_id, c) => {
         expect(miseEnvDirs(c.input.env)).toEqual(c.expect);
+    });
+    it.each(doc.follow.map((c) => [c.id, c] as const))('follow/%s', (_id, c) => {
+        expect(linkFollowable(c.input.home, c.input.root, c.input.path)).toBe(c.expect);
     });
     it.each(doc.reach.map((c) => [c.id, c] as const))('reach/%s', (_id, c) => {
         expect(reachable(c.input.scope, c.input.path)).toBe(c.expect);

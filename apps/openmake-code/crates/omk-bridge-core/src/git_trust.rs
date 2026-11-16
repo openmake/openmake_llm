@@ -158,6 +158,7 @@ fn decide(
 
 /// 연결 폴더의 git 디렉터리를 구해 믿을 때만 돌려준다(레포가 아니거나 믿지 않으면 `None` — git 없음).
 /// `sandbox` 면 탐지 git 을 인라인 프로파일로 감싼다. FS 판정은 관문 안에서 한다(막힌 볼륨에서 멈추지 않게).
+/// 테스트 전용(제품은 [`detect_git_top`] 을 쓴다).
 pub async fn detect_git(
     root: &str,
     env: &[(String, String)],

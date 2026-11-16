@@ -446,10 +446,10 @@
         {"file":"root/tsconfig.json","content":"{}"},
         {"file":"root/a.ts","content":""},
         {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS2307: Cannot find module 'dep'.\n","stderr":"","exit":2,"record":"tsc"},
-        {"dir":"home/elsewhere/dep"},
-        {"symlink":"root/node_modules/dep","target":"{{TMP}}/home/elsewhere/dep"}
+        {"dir":"fakehome/elsewhere/dep"},
+        {"symlink":"root/node_modules/dep","target":"{{TMP}}/fakehome/elsewhere/dep"}
       ],
-      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/home","allow":["{{TMP}}/root"],"literals":[]}},
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/fakehome","allow":["{{TMP}}/root"],"literals":[]}},
       "expect": {"diagnostics":[],"truncated":false,"serverKind":"none"},
       "toolCalls": []
     },
@@ -459,11 +459,36 @@
         {"file":"root/tsconfig.json","content":"{}"},
         {"file":"root/a.ts","content":""},
         {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS2307: Cannot find module 'dep'.\n","stderr":"","exit":2,"record":"tsc"},
-        {"dir":"home/elsewhere/dep"},
+        {"dir":"fakehome/elsewhere/dep"},
         {"dir":"root/node_modules/@s"},
-        {"symlink":"root/node_modules/@s/dep","target":"{{TMP}}/home/elsewhere/dep"}
+        {"symlink":"root/node_modules/@s/dep","target":"{{TMP}}/fakehome/elsewhere/dep"}
       ],
-      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/home","allow":["{{TMP}}/root"],"literals":[]}},
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/fakehome","allow":["{{TMP}}/root"],"literals":[]}},
+      "expect": {"diagnostics":[],"truncated":false,"serverKind":"none"},
+      "toolCalls": []
+    },
+    {
+      "id": "tsc-modules-dir-link-outside-reach",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"fakehome/shared/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS2307: Cannot find module 'dep'.\n","stderr":"","exit":2,"record":"tsc"},
+        {"symlink":"root/node_modules","target":"{{TMP}}/fakehome/shared/node_modules"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/fakehome","allow":["{{TMP}}/root"],"literals":[]}},
+      "expect": {"diagnostics":[],"truncated":false,"serverKind":"none"},
+      "toolCalls": []
+    },
+    {
+      "id": "tsc-bin-link-outside-reach",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"fakehome/shared/tsc","stdout":"a.ts(1,1): error TS2307: Cannot find module 'dep'.\n","stderr":"","exit":2,"record":"tsc"},
+        {"dir":"root/node_modules/.bin"},
+        {"symlink":"root/node_modules/.bin/tsc","target":"{{TMP}}/fakehome/shared/tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/fakehome","allow":["{{TMP}}/root"],"literals":[]}},
       "expect": {"diagnostics":[],"truncated":false,"serverKind":"none"},
       "toolCalls": []
     },
@@ -473,10 +498,10 @@
         {"file":"root/tsconfig.json","content":"{}"},
         {"file":"root/a.ts","content":""},
         {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS2307: Cannot find module 'dep'.\n","stderr":"","exit":2,"record":"tsc"},
-        {"dir":"home/.ssh/dep"},
-        {"symlink":"root/node_modules/dep","target":"{{TMP}}/home/.ssh/dep"}
+        {"dir":"fakehome/.ssh/dep"},
+        {"symlink":"root/node_modules/dep","target":"{{TMP}}/fakehome/.ssh/dep"}
       ],
-      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/home","allow":["{{TMP}}/home"],"literals":[]}},
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/fakehome","allow":["{{TMP}}/fakehome"],"literals":[]}},
       "expect": {"diagnostics":[],"truncated":false,"serverKind":"none"},
       "toolCalls": []
     },
@@ -489,7 +514,7 @@
         {"dir":"root/libs/dep"},
         {"symlink":"root/node_modules/dep","target":"{{TMP}}/root/libs/dep"}
       ],
-      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/home","allow":["{{TMP}}/root"],"literals":[]}},
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/fakehome","allow":["{{TMP}}/root"],"literals":[]}},
       "expect": {"diagnostics":[{"path":"a.ts","line":1,"col":1,"severity":"error","code":"TS2307","message":"Cannot find module 'dep'.","source":"tsc"}],"truncated":false,"serverKind":"tsc"},
       "toolCalls": [{"tool":"tsc","args":["--noEmit","--pretty","false","-p","{{TMP}}/root/tsconfig.json"],"cwd":"{{TMP}}/root","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}]
     },
@@ -502,7 +527,7 @@
         {"dir":"outside/dep"},
         {"symlink":"root/node_modules/dep","target":"{{TMP}}/outside/dep"}
       ],
-      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/home","allow":["{{TMP}}/root"],"literals":[]}},
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/fakehome","allow":["{{TMP}}/root"],"literals":[]}},
       "expect": {"diagnostics":[{"path":"a.ts","line":1,"col":1,"severity":"error","code":"TS2307","message":"Cannot find module 'dep'.","source":"tsc"}],"truncated":false,"serverKind":"tsc"},
       "toolCalls": [{"tool":"tsc","args":["--noEmit","--pretty","false","-p","{{TMP}}/root/tsconfig.json"],"cwd":"{{TMP}}/root","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}]
     },
@@ -512,9 +537,9 @@
         {"file":"root/tsconfig.json","content":"{}"},
         {"file":"root/a.ts","content":""},
         {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS2307: Cannot find module 'dep'.\n","stderr":"","exit":2,"record":"tsc"},
-        {"symlink":"root/node_modules/dep","target":"{{TMP}}/home/missing"}
+        {"symlink":"root/node_modules/dep","target":"{{TMP}}/fakehome/missing"}
       ],
-      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/home","allow":["{{TMP}}/root"],"literals":[]}},
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/fakehome","allow":["{{TMP}}/root"],"literals":[]}},
       "expect": {"diagnostics":[{"path":"a.ts","line":1,"col":1,"severity":"error","code":"TS2307","message":"Cannot find module 'dep'.","source":"tsc"}],"truncated":false,"serverKind":"tsc"},
       "toolCalls": [{"tool":"tsc","args":["--noEmit","--pretty","false","-p","{{TMP}}/root/tsconfig.json"],"cwd":"{{TMP}}/root","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}]
     },
@@ -524,8 +549,8 @@
         {"file":"root/tsconfig.json","content":"{}"},
         {"file":"root/a.ts","content":""},
         {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS2307: Cannot find module 'dep'.\n","stderr":"","exit":2,"record":"tsc"},
-        {"dir":"home/elsewhere/dep"},
-        {"symlink":"root/node_modules/dep","target":"{{TMP}}/home/elsewhere/dep"}
+        {"dir":"fakehome/elsewhere/dep"},
+        {"symlink":"root/node_modules/dep","target":"{{TMP}}/fakehome/elsewhere/dep"}
       ],
       "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
       "expect": {"diagnostics":[{"path":"a.ts","line":1,"col":1,"severity":"error","code":"TS2307","message":"Cannot find module 'dep'.","source":"tsc"}],"truncated":false,"serverKind":"tsc"},
@@ -538,7 +563,7 @@
         {"file":"root/a.ts","content":""},
         {"fakeTool":"root/node_modules/.bin/tsc","stdout":"error TS5083: Cannot read file '/x/tsconfig.base.json'.\na.ts(1,1): error TS2307: Cannot find module 'dep'.\n","stderr":"","exit":2,"record":"tsc"}
       ],
-      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/home","allow":["{{TMP}}/root"],"literals":[]}},
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/fakehome","allow":["{{TMP}}/root"],"literals":[]}},
       "expect": {"diagnostics":[],"truncated":false,"serverKind":"none"},
       "toolCalls": [{"tool":"tsc","args":["--noEmit","--pretty","false","-p","{{TMP}}/root/tsconfig.json"],"cwd":"{{TMP}}/root","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}]
     },
@@ -562,7 +587,7 @@
         {"file":"root/p2/b.ts","content":""},
         {"fakeTool":"root/p2/node_modules/.bin/tsc","stdout":"b.ts(2,2): error TS2: ok\n","stderr":"","exit":2,"record":"tsc2"}
       ],
-      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/p1/a.ts","{{TMP}}/root/p2/b.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/home","allow":["{{TMP}}/root"],"literals":[]}},
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/p1/a.ts","{{TMP}}/root/p2/b.ts"],"execPath":"{{BIN}}","reach":{"home":"{{TMP}}/fakehome","allow":["{{TMP}}/root"],"literals":[]}},
       "expect": {"diagnostics":[{"path":"p2/b.ts","line":2,"col":2,"severity":"error","code":"TS2","message":"ok","source":"tsc"}],"truncated":false,"serverKind":"tsc"}
     },
     {

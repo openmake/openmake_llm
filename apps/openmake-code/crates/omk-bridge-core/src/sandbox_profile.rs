@@ -78,6 +78,29 @@ pub fn read_guard(home: &str, p: &str, top: bool) -> bool {
     !items.iter().any(|i| within(i, p) || within(p, i))
 }
 
+/// 홈 밖에서 샌드박스 자식이 쓸 수 있는 임시 자리 — 프로파일이 쓰기를 여는 두 곳과 그 `/tmp`·`/var/folders` 표기.
+const TMP_WRITE_DIRS: &[&str] = &[
+    "/private/tmp",
+    "/private/var/folders",
+    "/tmp",
+    "/var/folders",
+];
+
+/// 연결 때 층이 이 경로의 심링크를 따라가도 되는가(설계 D-15 보완, 코드 검증 R1 A1) — realpath **전** 경로가 샌드박스 자식이
+/// 쓸 수 있는 자리 안이면 거짓이다(자식이 그 자리를 홈의 다른 폴더를 가리키는 심링크로 바꿔 다음 연결의 읽기를 넓히는 길).
+/// 홈 안이면 홈의 `CACHE_SUBPATHS`·연결 폴더로, 홈 밖이면 연결 폴더·임시 자리로 본다(홈이 임시 폴더 아래인 테스트에서도 같은 판정).
+pub fn link_followable(home: &str, root: &str, p: &str) -> bool {
+    let places: Vec<String> = if within(p, home) {
+        CACHE_SUBPATHS
+            .iter()
+            .map(|d| node_path::join(&[home, d]))
+            .collect()
+    } else {
+        TMP_WRITE_DIRS.iter().map(|d| (*d).to_owned()).collect()
+    };
+    !within(p, root) && !places.iter().any(|d| within(p, d))
+}
+
 /// 도구 프로파일 읽기 범위 안인가(설계 D-22·§9 N2) — 홈 밖은 닿는다. 홈 안은 허용 subpath·literal 안이어야 하고 비밀 목록 밖이어야 한다.
 pub fn reachable(scope: &ReadScope, p: &str) -> bool {
     let home = scope.home.as_str();
@@ -193,6 +216,7 @@ pub fn tool_read_scope(
 }
 
 /// 홈 읽기 입력 없이 만든 프로파일 텍스트 — [`build_sandbox_profile_with`] 에 빈 [`ToolRead`].
+/// 테스트 전용(제품은 `sandbox::sandbox_profiles` 를 거쳐 [`build_sandbox_profile_with`] 를 쓴다).
 pub fn build_sandbox_profile(
     root: &str,
     git: Option<&GitPaths>,

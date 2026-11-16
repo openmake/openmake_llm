@@ -47,12 +47,14 @@ sbDescribe('홈 읽기 좁히기 — 실제 sandbox-exec', () => {
         file('home/.ssh/x');
         file('home/.npmrc');
         const site = file('home/Library/Python/3.9/lib/python/site-packages/pytest/__init__.py', '');
+        const localSite = file('home/.local/lib/python3.12/site-packages/pytest/__init__.py', '');
         const p = profiles(path.join(work, 'root'));
         expect(cat(p.tool, path.join(home, 'notes.txt'))).toBe(false);
         expect(ok(p.tool, ['/bin/ls', home])).toBe(false);
         expect(stat(p.tool, path.join(home, 'notes.txt'))).toBe(true);
         expect(cat(p.tool, path.join(home, '.gitconfig'))).toBe(true);
         expect(cat(p.tool, site)).toBe(true); // pytest 탐지가 붙이는 사용자 site
+        expect(cat(p.tool, localSite)).toBe(true); // mise·pyenv·uv python 의 사용자 site
         expect(stat(p.tool, path.join(home, '.ssh/x'))).toBe(false);
         expect(stat(p.tool, path.join(home, '.npmrc'))).toBe(false);
         expect(cat(p.tool, path.join(home, 'Desktop/x'))).toBe(false);
@@ -122,6 +124,20 @@ sbDescribe('홈 읽기 좁히기 — 실제 sandbox-exec', () => {
         expect(p.scope.allow).not.toContain(path.join(home, 'Documents/mise-data'));
         expect(p.scope.allow).not.toContain(home);
         expect(cat(p.tool, dotCfg)).toBe(true);
+    });
+
+    it('D-15 보완(코드 검증 R1 A1): 샌드박스 자식이 쓸 수 있는 자리(홈 캐시 폴더)에 심은 심링크는 따라가지 않는다', () => {
+        file('home/work/other/s.txt', 'secret');
+        file('home/work/env/s.txt', 'secret');
+        fs.mkdirSync(path.join(home, '.cache'));
+        fs.symlinkSync(path.join(home, 'work/other'), path.join(home, '.cache/mise'));
+        fs.symlinkSync(path.join(home, 'work/env'), path.join(home, '.cache/alt'));
+        const p = profiles(path.join(work, 'root'), null, { envDirs: [path.join(home, '.cache/alt')] });
+        expect(p.scope.allow).not.toContain(path.join(home, 'work/other'));
+        expect(p.scope.allow).not.toContain(path.join(home, 'work/env'));
+        expect(cat(p.tool, path.join(home, '.cache/mise/s.txt'))).toBe(false);
+        expect(cat(p.tool, path.join(home, 'work/other/s.txt'))).toBe(false);
+        expect(cat(p.tool, path.join(home, '.cache/alt/s.txt'))).toBe(false);
     });
 
     it('D-18·§8 M4: 전역 git 설정의 include·excludesFile 은 literal 이 있어야 도구 git 이 읽는다', () => {

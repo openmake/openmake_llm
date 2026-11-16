@@ -143,11 +143,18 @@ function pyUnchecked(out: string, ok: boolean): boolean {
 /**
  * tsc 를 찾은 `node_modules` 의 1단계 항목과 `@scope` 아래 1단계 가운데, 도구 프로파일이 읽지 못하는 곳을 가리키는 심링크가
  * 있나(설계 D-22·§9 N2) — 첫 발견에서 멈춘다. 살펴본 심링크가 TSC_LINK_SCAN_MAX 개면 "없음". 끊어진 링크는 세지만 닿지 않는
- * 것으로 보지 않는다. 폴더를 읽지 못하면 "없음"(종전 동작 쪽).
+ * 것으로 보지 않는다. 폴더를 읽지 못하면 "없음"(종전 동작 쪽). 그 전에 `tsc` 자신과 `node_modules` 의 realpath 가 닿는지 본다
+ * (코드 검증 R1 B1 — `node_modules` 자체가 닿지 않는 곳을 가리키는 심링크면 tsc 가 제 스크립트를 못 읽고 0건으로 끝난다).
  */
 function unreachableLink(tsc: string, scope: ReadScope): boolean {
+    const modules = path.dirname(path.dirname(tsc));
+    for (const p of [tsc, modules]) {
+        let real: string | null = null;
+        try { real = fs.realpathSync.native(p); } catch { /* 끊어진 링크 */ }
+        if (real !== null && !reachable(scope, real)) return true;
+    }
     let seen = 0;
-    const stack: [string, boolean][] = [[path.dirname(path.dirname(tsc)), true]];
+    const stack: [string, boolean][] = [[modules, true]];
     while (stack.length > 0) {
         const [dir, top] = stack.pop()!;
         let entries: fs.Dirent[];

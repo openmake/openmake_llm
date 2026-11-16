@@ -94,10 +94,13 @@ fn tool_profile_reads_only_the_allowlist_and_exec_only_loses_privacy_folders() {
     w.file("home/.npmrc", "t");
     let site = "home/Library/Python/3.9/lib/python/site-packages/pytest/__init__.py";
     w.file(site, "");
+    let local_site = "home/.local/lib/python3.12/site-packages/pytest/__init__.py";
+    w.file(local_site, "");
     let h = w.home();
     let p = w.profiles(&w.join("root"), None, &none());
     // pytest 탐지가 붙이는 사용자 site(`site.getusersitepackages()`)는 허용 목록에 있다.
     assert!(cat(&p.tool, &w.join(site)));
+    assert!(cat(&p.tool, &w.join(local_site)));
     // 도구 프로파일
     assert!(!cat(&p.tool, &format!("{h}/notes.txt")));
     assert!(!ok(&p.tool, &["/bin/ls", &h]));
@@ -211,6 +214,28 @@ fn symlinked_entries_and_env_locations_follow_the_guard() {
     assert!(!allow.contains(&format!("{h}/Documents/mise-data")));
     assert!(!allow.contains(&h));
     assert!(cat(&p.tool, &format!("{h}/dot/mise/config.toml")));
+}
+
+/// D-15 보완(코드 검증 R1 A1) — 샌드박스 자식이 쓸 수 있는 자리(홈 캐시 폴더)에 심은 심링크는 따라가지 않는다.
+#[test]
+fn symlinks_planted_in_writable_places_are_not_followed() {
+    let w = Work::new();
+    w.file("home/work/other/s.txt", "secret");
+    w.file("home/work/env/s.txt", "secret");
+    let h = w.home();
+    std::fs::create_dir_all(format!("{h}/.cache")).unwrap();
+    std::os::unix::fs::symlink(format!("{h}/work/other"), format!("{h}/.cache/mise")).unwrap();
+    std::os::unix::fs::symlink(format!("{h}/work/env"), format!("{h}/.cache/alt")).unwrap();
+    let inputs = ReadInputs {
+        env_dirs: vec![format!("{h}/.cache/alt")],
+        ..none()
+    };
+    let p = w.profiles(&w.join("root"), None, &inputs);
+    assert!(!p.scope.allow.contains(&format!("{h}/work/other")));
+    assert!(!p.scope.allow.contains(&format!("{h}/work/env")));
+    assert!(!cat(&p.tool, &format!("{h}/.cache/mise/s.txt")));
+    assert!(!cat(&p.tool, &format!("{h}/work/other/s.txt")));
+    assert!(!cat(&p.tool, &format!("{h}/.cache/alt/s.txt")));
 }
 
 /// D-18·§8 M4 — 전역 git 설정의 include·excludesFile 은 literal 이 있어야 도구 git 이 읽는다.
