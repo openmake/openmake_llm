@@ -73,11 +73,13 @@ function formatExec(r: ExecResult, command?: string): MCPToolResult {
     if (r.stdout) parts.push(`[stdout]\n${r.stdout}`);
     if (r.stderr) parts.push(`[stderr]\n${r.stderr}`);
     parts.push(`[exit=${r.exitCode}${r.timedOut ? ' TIMEOUT' : ''}${r.truncated ? ' TRUNCATED' : ''} ${r.durationMs}ms]`);
-    const note = command !== undefined && !r.timedOut ? interpretExitCode(command, r.exitCode) : null;
+    // 시간 초과·기기 출력 상한(outputCapped)으로 끊긴 결과의 종료 코드는 명령의 코드가 아니다 — 풀이를 끄고 오류로 둔다.
+    const stopped = r.timedOut || r.outputCapped === true;
+    const note = command !== undefined && !stopped ? interpretExitCode(command, r.exitCode) : null;
     if (note) parts.push(note);
     const masked = maskedPipeFailureNote(r);
     if (masked) parts.push(masked);
-    return textResult(parts.join('\n'), (r.exitCode !== 0 && !note) || r.timedOut);
+    return textResult(parts.join('\n'), (r.exitCode !== 0 && !note) || stopped);
 }
 
 function str(v: unknown): string { return typeof v === 'string' ? v : ''; }

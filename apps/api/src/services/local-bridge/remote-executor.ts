@@ -43,8 +43,11 @@ function toExecResult(r: BridgeResult): ExecResult {
         stdout: (r.stdout ?? '').slice(0, LOCAL_BRIDGE.OUTPUT_CAP),
         stderr: (r.ok ? (r.stderr ?? '') : (r.error ?? r.stderr ?? '로컬 실행 실패')).slice(0, LOCAL_BRIDGE.OUTPUT_CAP),
         exitCode: r.ok ? (r.exitCode ?? 0) : (r.exitCode ?? -1),
-        truncated: (r.stdout?.length ?? 0) > LOCAL_BRIDGE.OUTPUT_CAP,
-        timedOut: false,
+        // 기기 표식(설계 2026-11-16 §8 F2·§9 N1) — 옛 기기는 싣지 않아 지금과 같다. 기기가 붙인 사유 문구는 stderr 끝이라
+        // 위 상한에서 잘릴 수 있지만 표식(`TIMEOUT`·`TRUNCATED`)은 남는다.
+        truncated: (r.stdout?.length ?? 0) > LOCAL_BRIDGE.OUTPUT_CAP || r.truncated === true,
+        timedOut: r.timedOut === true,
+        ...(r.truncated === true ? { outputCapped: true } : {}),
         durationMs: r.durationMs ?? 0,
     };
 }
