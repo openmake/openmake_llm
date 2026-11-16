@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { WEB_CHAT_MODES } from "@/addons/registry";
 import type { SearchSourceRef } from "@openmake/shared-types";
+import { isolationLabel } from "@/lib/agent-task-isolation";
+import { IsolationBadge } from "@/components/agent-tasks/isolation-badge";
 import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -417,6 +419,8 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
         {task.goal && (
           <p className="break-words text-xs text-muted"><span className="font-semibold text-fg-2">{t("agentTask.goal")}</span>&nbsp; {task.goal}</p>
         )}
+        {/* 로컬 실행 worktree 격리 상태(200) — 서버 값만 그린다. */}
+        <IsolationBadge label={isolationLabel(task.isolation)} className="mt-0 self-start" />
         {showProgress && (
           <div className="flex items-center gap-2.5">
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">

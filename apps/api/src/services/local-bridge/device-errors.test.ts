@@ -4,12 +4,13 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { BRIDGE_UNSUPPORTED_KIND_PREFIX, BRIDGE_INVALID_REGEX_PREFIX, isUnsupportedKindError } from './device-errors';
+import { BRIDGE_UNSUPPORTED_KIND_PREFIX, BRIDGE_INVALID_REGEX_PREFIX, isUnsupportedKindError, isNotARepoError } from './device-errors';
 
 interface FixtureRequest { msg: { kind?: unknown; folder?: string }; expect: { ok: boolean; error?: string } }
 interface Fixture { cases: { id: string; requests: FixtureRequest[] }[] }
 
 const FIXTURE = resolve(__dirname, '../../../../../packages/local-bridge-core/conformance/file-kinds.json');
+const WORKTREE_FIXTURE = resolve(__dirname, '../../../../../packages/local-bridge-core/conformance/worktree.json');
 const CODE_NAV_FIXTURE = resolve(__dirname, '../../../../../packages/local-bridge-core/conformance/code-nav.json');
 
 describe('isUnsupportedKindError', () => {
@@ -41,5 +42,23 @@ describe('BRIDGE_INVALID_REGEX_PREFIX', () => {
             .map((r) => r.expect.errorPrefix);
         expect(prefixes.length).toBeGreaterThan(0);
         for (const p of prefixes) expect(p).toBe(BRIDGE_INVALID_REGEX_PREFIX);
+    });
+});
+
+describe('isNotARepoError', () => {
+    it('적합성 fixture(worktree add-not-a-repo)의 기대 문구는 참이다', () => {
+        const fixture = JSON.parse(readFileSync(WORKTREE_FIXTURE, 'utf8')) as { cases: { id: string; steps: { expect?: { ok: boolean; error?: string } }[] }[] };
+        const c = fixture.cases.find((x) => x.id === 'add-not-a-repo');
+        const error = c?.steps[0]?.expect?.error;
+        expect(error).toBeDefined();
+        expect(isNotARepoError(error ?? '')).toBe(true);
+    });
+
+    it('완전 일치만 참 — 다른 worktree 오류·접두·빈 문구는 거짓', () => {
+        expect(isNotARepoError('git 레포가 아닙니다: /x')).toBe(false);
+        // 기기 GIT_DIR_MISMATCH_ERROR(local-bridge-core constants.ts) — 저장소는 맞지만 거절된 경우라 not_repo 가 아니다
+        expect(isNotARepoError('git 디렉터리가 연결할 때와 달라 worktree 연산을 거부했습니다(폴더 재연결 필요).')).toBe(false);
+        expect(isNotARepoError('worktree add 실패')).toBe(false);
+        expect(isNotARepoError('')).toBe(false);
     });
 });

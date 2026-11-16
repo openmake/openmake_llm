@@ -1008,6 +1008,14 @@
     },
     "downloadFailed": "Download failed: {error}",
     "localBadge": "Local folder run",
+    "isolation": {
+      "worktree": "Isolated run · task branch {branch}",
+      "worktreeKept": "Isolated run · changes kept in task folder {path} (branch {branch})",
+      "worktreeRemoved": "Isolated run · no changes (task folder and branch cleaned up)",
+      "notRepo": "Not isolated · not a git repository, working directly in the folder",
+      "disabled": "Not isolated · turned off in server settings, working directly in the folder",
+      "unavailable": "Isolation failed · worked directly in the folder"
+    },
     "errorReason": {
       "label": "Failure reason:",
       "goal_incomplete": "Goal not met",

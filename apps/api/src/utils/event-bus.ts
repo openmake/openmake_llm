@@ -14,11 +14,13 @@
  * @module utils/event-bus
  */
 import { EventEmitter } from 'events';
+import type { AgentTaskIsolation } from '@openmake/shared-types';
 
 export const AGENT_TASK_PROGRESS = 'agent_task_progress';
 
-/** 진행 이벤트에 붙는 승인·계획 변경 사유(HITL 2단계 D7) — 새 WS 이벤트 타입 대신 선택 필드로 싣는다 */
-export const AGENT_TASK_PROGRESS_REASONS = ['assigned', 'escalated', 'revoked', 'plan_edited'] as const;
+/** 진행 이벤트에 붙는 승인·계획 변경 사유(HITL 2단계 D7) — 새 WS 이벤트 타입 대신 선택 필드로 싣는다.
+ *  'isolation' 은 종료 뒤 worktree 정리 결과 알림(200) — 받은 쪽은 격리 표시만 갱신한다. */
+export const AGENT_TASK_PROGRESS_REASONS = ['assigned', 'escalated', 'revoked', 'plan_edited', 'isolation'] as const;
 export type AgentTaskProgressReason = (typeof AGENT_TASK_PROGRESS_REASONS)[number];
 
 /** 에이전트 작업 진행 이벤트 — 상태 전체를 실어 프론트가 GET 없이 카드 갱신 가능 */
@@ -36,6 +38,8 @@ export interface AgentTaskProgressEvent {
     reason?: AgentTaskProgressReason;
     /** 멈춘 작업이 기다리는 것 — 'device_wait' 면 채팅 카드가 "승인 대기" 대신 기기 연결 대기로 보인다 */
     waitReason?: string;
+    /** 로컬 실행의 worktree 격리 상태(200) — 시작 때 한 번, 종료 정리 뒤(reason 'isolation') 한 번 */
+    isolation?: AgentTaskIsolation;
 }
 
 /** 사용자 인증 철회(보안 점검 A3 보조 방어) — 데이터 계층이 발행, ws 계층(ws-user-eviction)이 그 사용자의 열린 채팅 소켓을 닫는다 */
