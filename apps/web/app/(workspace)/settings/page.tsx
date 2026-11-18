@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { useQuery } from "@tanstack/react-query";
+import { enablePushSubscription, isPushRegistrationRejected, syncExistingPushSubscription } from "@/lib/push-subscribe";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
 import { fetchModels } from "@/lib/models-api";
@@ -258,6 +259,11 @@ export default function SettingsPage() {
   const [pushSupported, setPushSupported] = useState<boolean | null>(null);
   const [pushSwReady, setPushSwReady] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
+  // 푸시 토글 실패 시 서버 오류 원문(빈 문자열이면 원문 없이 안내 문구만)
+  const [pushError, setPushError] = useState<string | null>(null);
+  // 토글 처리 재진입 차단 / 사용자가 토글을 조작했으면 늦게 도착한 초기 재등록 결과는 버린다
+  const pushBusyRef = useRef(false);
+  const pushUserActedRef = useRef(false);
 
   // 개인정보
   const [saveHistory, setSaveHistory] = useState(true);
@@ -288,17 +294,51 @@ export default function SettingsPage() {
     setPushSupported(supported);
     if (!supported) return;
 
+    let alive = true;
+    // 언마운트됐거나 사용자가 이미 토글을 조작했으면 초기 결과를 반영하지 않는다
+    const stale = () => !alive || pushUserActedRef.current;
     navigator.serviceWorker.ready
       .then((reg) => {
+        if (!alive) return;
         setPushSwReady(true);
-        return reg.pushManager.getSubscription();
-      })
-      .then((sub) => {
-        if (sub) setPushAlerts(true);
+        // 초기 재등록 중에는 토글을 비활성화한다
+        setPushLoading(true);
+        let hadSub = false;
+        // 브라우저 구독만 남고 서버 등록이 없을 수 있다 → 다시 등록이 성공해야 켜짐으로 그린다
+        return syncExistingPushSubscription({
+          getSubscription: async () => {
+            const sub = await reg.pushManager.getSubscription();
+            hadSub = sub !== null;
+            return sub;
+          },
+          register: (body) => ApiClient.post("/api/push/subscribe", body),
+        })
+          .then(
+            (on) => {
+              if (!stale()) setPushAlerts(on);
+            },
+            (err: unknown) => {
+              if (stale()) return;
+              if (isPushRegistrationRejected(err)) {
+                // 서버 검증 거부(400·422, 호스트 거부 등) → 꺼짐 + 오류 문구
+                setPushAlerts(false);
+                setPushError(err instanceof Error ? err.message : "");
+              } else {
+                // 일시 오류(네트워크·401·403·429·5xx) → 브라우저 구독이 있으면 켜짐 유지, 문구 없음
+                setPushAlerts(hadSub);
+              }
+            },
+          )
+          .finally(() => {
+            if (!stale()) setPushLoading(false);
+          });
       })
       .catch(() => {
         // SW 등록 안 됨
       });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
@@ -314,31 +354,31 @@ export default function SettingsPage() {
 
   async function handlePushToggle(on: boolean) {
     if (typeof window === "undefined") return;
+    if (pushBusyRef.current) return;
+    pushBusyRef.current = true;
+    pushUserActedRef.current = true;
     setPushLoading(true);
+    setPushError(null);
     try {
       if (on) {
         const permission = await Notification.requestPermission();
-        if (permission !== "granted") {
-          setPushLoading(false);
-          return;
-        }
+        if (permission !== "granted") return;
         const reg = await navigator.serviceWorker.ready;
-        let sub = await reg.pushManager.getSubscription();
-        if (!sub) {
-          const vapidRes = await ApiClient.get<{ data: { publicKey: string } }>(
-            "/api/push/vapid-key",
-          );
-          const key = vapidRes?.data?.publicKey;
-          if (!key) throw new Error("VAPID key 없음");
-          sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(key),
-          });
-        }
-        const json = sub.toJSON();
-        await ApiClient.post("/api/push/subscribe", {
-          endpoint: sub.endpoint,
-          keys: json.keys,
+        // 서버 등록 실패 시 새로 만든 구독은 해제되고 오류가 던져진다 → 토글은 꺼짐 유지
+        await enablePushSubscription({
+          getSubscription: () => reg.pushManager.getSubscription(),
+          createSubscription: async () => {
+            const vapidRes = await ApiClient.get<{ data: { publicKey: string } }>(
+              "/api/push/vapid-key",
+            );
+            const key = vapidRes?.data?.publicKey;
+            if (!key) throw new Error("VAPID key 없음");
+            return reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(key),
+            });
+          },
+          register: (body) => ApiClient.post("/api/push/subscribe", body),
         });
         setPushAlerts(true);
       } else {
@@ -352,7 +392,9 @@ export default function SettingsPage() {
       }
     } catch (err) {
       console.error("push toggle error", err);
+      setPushError(err instanceof Error ? err.message : "");
     } finally {
+      pushBusyRef.current = false;
       setPushLoading(false);
     }
   }
@@ -750,13 +792,22 @@ export default function SettingsPage() {
                         {tSettings("pushSwNotReady")}
                       </p>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <Toggle
-                          checked={pushAlerts}
-                          onChange={(v) => void handlePushToggle(v)}
-                        />
-                        {pushLoading && (
-                          <Loader2 className="h-4 w-4 animate-spin text-muted" />
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="flex items-center gap-2">
+                          <Toggle
+                            checked={pushAlerts}
+                            disabled={pushLoading}
+                            onChange={(v) => void handlePushToggle(v)}
+                          />
+                          {pushLoading && (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted" />
+                          )}
+                        </div>
+                        {pushError !== null && (
+                          <p role="alert" className="text-xs text-danger">
+                            {tSettings("pushToggleFailed")}
+                            {pushError && ` (${pushError})`}
+                          </p>
                         )}
                       </div>
                     )}
@@ -901,19 +952,23 @@ export default function SettingsPage() {
 function Toggle({
   checked,
   onChange,
+  disabled = false,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
         "relative inline-flex h-6 w-11 items-center rounded-pill transition",
         checked ? "bg-accent" : "bg-surface-3",
+        disabled && "cursor-not-allowed opacity-60",
       )}
     >
       <span
