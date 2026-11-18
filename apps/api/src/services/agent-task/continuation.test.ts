@@ -144,6 +144,18 @@ describe('continueAsNewSegment', () => {
         await entry.run();
         expect(executeMock.mock.calls[0][0].resume).toEqual({ conversation: cp.conversation, fromTurn: 0, fromStep: 0 });
     });
+    it('로컬 실행이면 후속 continuation.worktreeKey = 앞 세그먼트의 키(없으면 앞 세그먼트 id)', async () => {
+        const base = input();
+        const task = base.task as unknown as Record<string, unknown>;
+        await continueAsNewSegment({ ...base, task: { ...task, id: 'root', executor: 'local' } as never });
+        expect(repo.createContinuationSuccessor.mock.calls[0][0].create.continuation.worktreeKey).toBe('root');
+        await continueAsNewSegment({ ...base, task: { ...task, id: 'seg1', executor: 'local', continuation: { fromTaskId: 'root', segmentIndex: 1, reason: 'context', summary: 's', chainUsedMs: 0, chainUsedTokens: 0, worktreeKey: 'root' } } as never });
+        expect(repo.createContinuationSuccessor.mock.calls[1][0].create.continuation.worktreeKey).toBe('root');
+    });
+    it('샌드박스 실행이면 worktreeKey 를 싣지 않는다', async () => {
+        await continueAsNewSegment(input());
+        expect(repo.createContinuationSuccessor.mock.calls[0][0].create.continuation).not.toHaveProperty('worktreeKey');
+    });
     it('선점에 실패하면(이미 이어짐) 후속을 만들지 않고 skipped', async () => {
         repo.createContinuationSuccessor.mockResolvedValueOnce(false);
         const r = await continueAsNewSegment(input());
