@@ -14,7 +14,7 @@
  * - 새로운 VAPID 키 쌍 생성
  */
 
-import webPush from 'web-push';
+import * as webPush from 'web-push';
 import { getConfig } from '../config/env';
 import { createLogger } from './logger';
 

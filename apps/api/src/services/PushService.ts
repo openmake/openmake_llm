@@ -1,5 +1,5 @@
 import { getPool } from '../data/models/unified-database';
-import webPush from 'web-push';
+import * as webPush from 'web-push';
 import { getVapidKeys } from '../utils/vapid';
 import { createLogger } from '../utils/logger';
 import { getNativePushService } from './NativePushService';
