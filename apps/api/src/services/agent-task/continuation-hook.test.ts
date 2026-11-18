@@ -300,6 +300,8 @@ describe('finishIfAlreadyContinued — 이미 후속을 만든 세그먼트의 �
         expect(await finishIfAlreadyContinued({ preTask: { id: 'seg1', continued_by_task_id: 'seg2' } as never, userRole: 'user', update })).toBe(true);
         expect(followMock).toHaveBeenCalledWith('seg1', { userRole: 'user' });
         expect(update).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed', completionPath: 'continued', result: expect.stringContaining('seg2') }));
+        // 재실행 행은 pending·queued 다 — completed 로 바로 갈 수 없어(task-state) running 을 먼저 거친다
+        expect(update.mock.calls.map(([u]) => (u as { status?: string }).status)).toEqual(['running', 'completed']);
     });
     it('후속이 없으면 아무것도 하지 않는다(종전 재개)', async () => {
         const update = jest.fn();

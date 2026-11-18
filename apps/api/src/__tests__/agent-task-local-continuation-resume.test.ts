@@ -19,7 +19,14 @@ jest.mock('../utils/event-bus', () => ({ emitAgentTaskProgress: jest.fn() }));
 jest.mock('../services/PushService', () => ({ getPushService: () => ({ sendPush: jest.fn().mockResolvedValue(undefined) }) }));
 
 const rows = new Map<string, Record<string, unknown>>();
-const updateAgentTask = jest.fn().mockResolvedValue(undefined);
+// 저장소 가짜 — 실제 저장소(agent-task-repository)처럼 전이표(task-state)를 강제한다: 표 밖 전이는 거부(throw), 허용 전이는 행 상태를 바꾼다.
+const updateAgentTask = jest.fn(async (id: string, u: { status?: string }) => {
+    const row = rows.get(id);
+    if (!row || !u.status) return;
+    const { isTransitionAllowed, AgentTaskTransitionError } = jest.requireActual('../services/agent-task/task-state');
+    if (!isTransitionAllowed(row.status, u.status)) throw new AgentTaskTransitionError(id, String(row.status), u.status);
+    row.status = u.status;
+});
 jest.mock('../data/models/unified-database', () => ({
     getUnifiedDatabase: () => ({
         getAgentTask: jest.fn(async (id: string) => rows.get(id)),
@@ -117,8 +124,9 @@ describe('로컬 이어가기 세그먼트 재개 — 서비스 배선', () => {
         expect(updates().pop()).toMatchObject({ status: 'completed' });
     });
 
-    it('이미 후속을 만든 로컬 세그먼트의 재실행은 도구 없이 이어짐으로 마감하고, 마감 갱신에 복원된 누적 토큰을 싣는다', async () => {
-        rows.set('seg2', { id: 'seg2', status: 'pending', executor: 'local', continued_by_task_id: 'seg3', total_tokens: 1234, cached_prompt_tokens: 40, cache_reported_prompt_tokens: 100 });
+    // 재실행의 시작 상태: 주차 재개·부팅 복구 claim 은 pending, /resume claim·큐 대기는 queued — 둘 다 completed 로 바로 갈 수 없다(task-state)
+    it.each(['pending', 'queued'])('이미 후속을 만든 로컬 세그먼트의 재실행(%s 에서)은 도구 없이 이어짐으로 마감하고, 마감 갱신에 복원된 누적 토큰을 싣는다', async (start) => {
+        rows.set('seg2', { id: 'seg2', status: start, executor: 'local', continued_by_task_id: 'seg3', total_tokens: 1234, cached_prompt_tokens: 40, cache_reported_prompt_tokens: 100 });
         mockFollow.mockResolvedValue({ successorId: 'seg3' });
         await run({ resume: resumeOf('OLD SYSTEM') });
 
@@ -128,6 +136,10 @@ describe('로컬 이어가기 세그먼트 재개 — 서비스 배선', () => {
         const done = updates().find((u) => u.completionPath === 'continued');
         expect(done).toMatchObject({ status: 'completed', totalTokens: 1234, cachedPromptTokens: 40, cacheReportedPromptTokens: 100 });
         expect(updates().every((u) => u.totalTokens !== 0)).toBe(true);
+        expect(rows.get('seg2')!.status).toBe('completed');
+        // 전이 거부로 실패 처리되면 failed 갱신과 종료(실패) 알림 표식이 남는다 — 둘 다 없어야 한다
+        expect(updates().some((u) => u.status === 'failed')).toBe(false);
+        expect(updates().some((u) => u.terminalNotifyPending)).toBe(false);
     });
 
     it.each([
