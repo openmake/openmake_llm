@@ -549,7 +549,8 @@
       "SUBSCRIPTION_REQUIRED": "サブスクリプションが必要",
       "INVALID_API_KEY": "認証エラー",
       "MISSING_API_KEY": "認証エラー",
-      "UPSTREAM_ERROR": "アップストリームエラー"
+      "UPSTREAM_ERROR": "アップストリームエラー",
+      "UPSTREAM_TIMEOUT": "応答タイムアウト"
     },
     "verification": {
       "title": "検証で指摘された点"

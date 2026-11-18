@@ -549,7 +549,8 @@
       "SUBSCRIPTION_REQUIRED": "Abonnement erforderlich",
       "INVALID_API_KEY": "Authentifizierungsfehler",
       "MISSING_API_KEY": "Authentifizierungsfehler",
-      "UPSTREAM_ERROR": "Upstream-Fehler"
+      "UPSTREAM_ERROR": "Upstream-Fehler",
+      "UPSTREAM_TIMEOUT": "Zeitüberschreitung der Antwort"
     },
     "verification": {
       "title": "Von der Prüfung gefundene Probleme"

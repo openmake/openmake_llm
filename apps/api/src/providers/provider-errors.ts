@@ -23,6 +23,7 @@
  * - `MODEL_NOT_FOUND`: provider가 해당 모델을 알지 못함
  * - `NOT_SUPPORTED`: provider가 요청 기능(스트리밍/툴/비전 등)을 지원하지 않음
  * - `UPSTREAM_ERROR`: provider 응답이 5xx 또는 네트워크 실패
+ * - `UPSTREAM_TIMEOUT`: provider 가 첫 청크·청크 사이 시한 안에 아무것도 보내지 않아 앱이 끊음(무응답)
  * - `INVALID_MODEL_ID`: 'provider:model' fullId 형식 오류
  */
 export type ProviderErrorCode =
@@ -37,6 +38,7 @@ export type ProviderErrorCode =
     | 'MODEL_NOT_FOUND'
     | 'NOT_SUPPORTED'
     | 'UPSTREAM_ERROR'
+    | 'UPSTREAM_TIMEOUT'
     /** 프롬프트가 모델 컨텍스트 한도를 넘음 — 재시도해도 같으므로 UPSTREAM_ERROR 와 분리한다. */
     | 'CONTEXT_TOO_LARGE'
     | 'INVALID_MODEL_ID';
@@ -76,6 +78,7 @@ export const PROVIDER_ERROR_HTTP_STATUS: Record<ProviderErrorCode, number> = {
     MODEL_NOT_FOUND: 404,
     NOT_SUPPORTED: 400,
     UPSTREAM_ERROR: 502,
+    UPSTREAM_TIMEOUT: 504,
     CONTEXT_TOO_LARGE: 413,
     INVALID_MODEL_ID: 400,
 };
