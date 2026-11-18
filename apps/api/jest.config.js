@@ -43,6 +43,8 @@ module.exports = {
         // @openai-oauth/core 는 ESM-only — 런타임(Node 24)은 require(esm) 로 로드하지만
         // jest CJS 런타임은 불가. 테스트는 provider 의 transportFactory 주입으로 대체.
         '^@openai-oauth/core$': '<rootDir>/__mocks__/empty.js',
+        // web-push 4.x 도 ESM-only — 런타임은 require(esm), jest 는 최소 shim(발송 검증 테스트는 jest.mock 으로 대체).
+        '^web-push$': '<rootDir>/__mocks__/web-push.js',
         '^jsdom$': '<rootDir>/__mocks__/empty.js',
         '^@mozilla/readability$': '<rootDir>/__mocks__/empty.js',
         '^turndown$': '<rootDir>/__mocks__/empty.js',
