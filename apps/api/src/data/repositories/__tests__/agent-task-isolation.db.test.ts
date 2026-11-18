@@ -40,4 +40,11 @@ describeOrSkip('AgentTaskRepository — isolation 열 (실제 Postgres, 200)', (
         const r = await pool.query('SELECT isolation IS NULL AS is_null FROM agent_tasks WHERE id = $1', [taskId]);
         expect(r.rows[0].is_null).toBe(true);
     });
+
+    it('연결 폴더 기준 작업 폴더 경로(rootRel)도 그대로 왕복한다', async () => {
+        const repo = new AgentTaskRepository(pool);
+        const isolation = { state: 'worktree' as const, branch: `omk-task/${tag}`, worktreeRel: `.openmake/worktrees/${taskId}/sub`, rootRel: `ws-git/sub/.openmake/worktrees/${taskId}/sub`, outcome: 'kept' as const };
+        await repo.updateAgentTask(taskId, { isolation });
+        expect((await repo.getAgentTask(taskId))?.isolation).toEqual(isolation);
+    });
 });
