@@ -70,6 +70,9 @@ struct MenuContent: View {
                 Button(L("menu.disconnect")) { helper.disconnect(folder: f) }
             }
         }
+        if helper.instanceBlocked {
+            Button(L("menu.retry")) { helper.retryInstance() }
+        }
         Divider()
         Button(helper.connectedFolders.isEmpty ? L("menu.connectFolder") : L("menu.addFolder")) { helper.chooseFolderAndConnect() }
         if helper.connectedFolders.count > 1 {

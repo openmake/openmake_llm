@@ -69,9 +69,14 @@ function exitOf(child, ms = 8000) {
     });
 }
 
+// 헬퍼 홈 — 지원 폴더(device-id·instance.lock)를 사용자 것과 떼어 놓는다. 같은 Mac 에서 Companion 이 떠 있으면 omk-helper 는
+// 지원 폴더 잠금을 못 잡아 instance_conflict 로 끝난다(device-id 충돌 설계 §3.3).
+const HELPER_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-cpharness-home-'));
+process.on('exit', () => fs.rmSync(HELPER_HOME, { recursive: true, force: true }));
+
 /** 헬퍼를 띄우는 곳은 여기 하나. API key 는 argv·env 가 아니라 stdin 의 auth 명령으로 준다. */
 function spawnHelper(args, opts = {}) {
-    const env = { ...process.env, ...(opts.env || {}) };
+    const env = { ...process.env, HOME: HELPER_HOME, ...(opts.env || {}) };
     delete env.OMK_COMPANION_API_KEY;
     const [cmd, argv] = HELPER_BIN
         ? [HELPER_BIN, args]

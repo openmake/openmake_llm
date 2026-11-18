@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { BRIDGE_UNSUPPORTED_KIND_PREFIX, BRIDGE_INVALID_REGEX_PREFIX, BROWSER_USER_STOPPED_ERROR, isUnsupportedKindError, isNotARepoError, isBrowserUserStoppedError } from './device-errors';
+import { BRIDGE_DEVICE_CONFLICT_MESSAGE, BRIDGE_DEVICE_CONFLICT_REASON } from '../../config/local-bridge';
 
 interface FixtureRequest { msg: { kind?: unknown; folder?: string }; expect: { ok: boolean; error?: string } }
 interface Fixture { cases: { id: string; requests: FixtureRequest[] }[] }
@@ -76,5 +77,15 @@ describe('isBrowserUserStoppedError', () => {
         expect(isBrowserUserStoppedError(fixture.messages.BROWSER_USER_CONTROL_ERROR)).toBe(false);
         expect(isBrowserUserStoppedError('요소를 찾지 못했습니다: #a')).toBe(false);
         expect(isBrowserUserStoppedError(undefined)).toBe(false);
+    });
+});
+
+describe('같은 기기 id 충돌 사유 (2026-11-19)', () => {
+    const CONN_FIXTURE = resolve(__dirname, '../../../../../packages/local-bridge-core/conformance/conn-constants.json');
+
+    it('서버의 거절 사유·문구가 코어 fixture(conn-constants)와 같다 — 앱은 이 사유로 다국어 상태를 고른다', () => {
+        const { values } = JSON.parse(readFileSync(CONN_FIXTURE, 'utf8')) as { values: Record<string, unknown> };
+        expect(BRIDGE_DEVICE_CONFLICT_REASON).toBe(values.DEVICE_CONFLICT_REASON);
+        expect(BRIDGE_DEVICE_CONFLICT_MESSAGE).toBe(values.DEVICE_CONFLICT_TEXT);
     });
 });

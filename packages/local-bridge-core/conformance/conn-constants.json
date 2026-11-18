@@ -19,6 +19,8 @@
       "account_deleted": "계정이 삭제되었습니다 — 관리자에게 문의하세요",
       "bridge_scope_required": "이 API key 에는 'bridge' 스코프가 없습니다 — bridge 스코프 키를 발급해 설정에 넣으세요"
     },
+    "DEVICE_CONFLICT_REASON": "device_conflict",
+    "DEVICE_CONFLICT_TEXT": "같은 기기 id 로 다른 앱이 이미 연결돼 있습니다 — 실행 중인 다른 OpenMake Companion·CLI 를 종료하세요",
     "NOTICE_KINDS": ["approval_pending"],
     "NOTICE_TOOL_NAME_MAX": 100,
     "TASK_ID_RE": {"source": "^[a-zA-Z0-9-]{8,64}$", "flags": ""},
