@@ -437,6 +437,17 @@ test('the org-specific removal change set selects a real suite for every non-API
   for (const file of ['db/init/005-new.sh', 'apps/desktop-native/check-l10n.sh', 'apps/desktop-native/lib/new.sh']) assert.throws(() => selectFeatures([file]), /Unmapped changed source/, file);
 });
 
+// plan-pr2.4: 후속 앱 교체 스크립트와 그 셸 테스트는 macOS 전용(hdiutil·PlistBuddy) — 실행은 desktop-native 워크플로(Gate 2-S)가 하고,
+// 선택은 build.sh 와 같은 desktopBuild 로 묶는다(Unmapped 로 막히지 않게).
+test('the successor replace script and its shell test map to desktopBuild', () => {
+  for (const file of ['apps/desktop-native/scripts/successor-replace.sh', 'apps/desktop-native/tests/successor-replace.test.sh']) {
+    const selection = selectFeatures([file]);
+    assert.equal(selection.desktopBuild, true, file);
+    assert.deepEqual(selection.api, [], file);
+  }
+  assert.throws(() => selectFeatures(['apps/desktop-native/scripts/other.sh']), /Unmapped changed source/);
+});
+
 test('desktop, CLI and admin-init fixtures referenced by the new suites exist', async () => {
   const { existsSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
