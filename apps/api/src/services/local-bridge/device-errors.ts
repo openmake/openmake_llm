@@ -53,3 +53,16 @@ export const BRIDGE_NOT_A_REPO_ERROR = 'git 레포가 아닙니다';
 export function isNotARepoError(error: string): boolean {
     return error === BRIDGE_NOT_A_REPO_ERROR;
 }
+
+/**
+ * 사용자가 기기에서 "브라우저 작업 중지"를 눌러 멈춘 액션의 오류 문구(완전 일치).
+ * 출처: `packages/local-bridge-core/src/browser/local-browser-defs.ts` 의 STOPPED_ERROR, 적합성 fixture
+ * `packages/local-bridge-core/conformance/browser-constants.json` 의 `messages.STOPPED_ERROR`(device-errors.test 가 대조한다).
+ * 서버는 이 문구로 "다시 시도하지 말라"는 안내를 붙인다(remote-executor). 디바이스 코어와 짝인 프로토콜 문구라 env 로 바꾸지 않는다.
+ */
+export const BROWSER_USER_STOPPED_ERROR = '사용자가 브라우저 작업을 중지했습니다';
+
+/** 브라우저 액션 오류가 사용자의 직접 중지인가 — 넘겨받기(사용자 조작 중)·시간 초과·일반 오류는 아니다. */
+export function isBrowserUserStoppedError(error: unknown): boolean {
+    return error === BROWSER_USER_STOPPED_ERROR;
+}
