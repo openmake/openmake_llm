@@ -6,13 +6,20 @@
  * 화면은 값 → 문구 대응만 한다. NULL·없음 = 해당 없음(샌드박스 실행, 옛 행).
  *
  *   worktree : 작업 폴더(`worktreeRel`, 실행 폴더(연결 폴더 + folder_rel) 기준 상대경로)·브랜치에서 격리 실행.
+ *              rootRel 은 같은 작업 폴더의 연결 폴더 기준 상대경로(folder_rel + worktreeRel) — 화면이 위치를 그릴 때 쓴다(옛 행에는 없다).
  *              outcome 은 작업이 끝난 뒤(종료 상태에서만) 정리 결과 — kept = 변경이 남아 보존, removed = 변경 없어 정리.
  *              ignoredOnly 는 kept 일 때만 — git 이 무시하는 파일만 남아 보존했다(기기가 알려 준 경우만, 2026-11-18).
  *   direct   : 격리 없이 연결 폴더에서 직접 작업. reason —
  *              not_repo = git 저장소가 아님, disabled = 서버 설정으로 꺼짐, unavailable = 격리를 시도했으나 실패.
  */
 export type AgentTaskIsolation =
-  | { state: AgentTaskIsolationWorktreeState; branch: string; worktreeRel: string; outcome?: AgentTaskIsolationOutcome; ignoredOnly?: boolean }
+  | {
+      state: AgentTaskIsolationWorktreeState; branch: string; worktreeRel: string;
+      /** 연결 폴더 기준 작업 폴더 상대경로(folder_rel + worktreeRel). 옛 행에는 없다 */
+      rootRel?: string;
+      outcome?: AgentTaskIsolationOutcome;
+      ignoredOnly?: boolean;
+    }
   | { state: AgentTaskIsolationDirectState; reason: AgentTaskIsolationDirectReason };
 
 // 아래 별칭은 계약 스키마에 정의 이름을 남겨 iOS 생성물(quicktype)이 `State`·`Outcome`·`Reason` 같은
