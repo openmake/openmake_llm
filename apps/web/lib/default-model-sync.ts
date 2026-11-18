@@ -42,12 +42,14 @@ export function clearDefaultModelOnLogout(): void {
 /**
  * 소유자 기록 전(구 버전)에 남은 값의 주인 정하기 — 로그아웃 없이 이어진 세션(`continued`)으로 로그인한
  * 사용자의 값으로 본다. 로그아웃·세션 종료는 로그인 흔적을 지우므로 새로 로그인한 다른 계정은 주인이 되지 않는다.
+ * 새 로그인이면 그 자리에서 버린다 — 남겨 두면 판정 적용 전에 동기화가 한 번 더 돌 때(이제 흔적이 있어 continued)
+ * 다른 계정의 값을 이 사용자 것으로 채택해 선호에 저장했다(2026-11-18 Fable 리뷰 r2).
  * auth-sync 가 setAuth 직전에 불러, 사용자별 모델 목록 질의가 시작되기 전에 정해진다.
  */
 export function adoptLegacyModelOwner(userId: string, continued: boolean): void {
   const { selectedModel, selectedModelOwner } = useAppStore.getState();
-  if (!continued || selectedModelOwner !== null || selectedModel === "default") return;
-  useAppStore.getState().setSelectedModel(selectedModel, userId);
+  if (selectedModelOwner !== null || selectedModel === "default") return;
+  useAppStore.getState().setSelectedModel(continued ? selectedModel : "default", continued ? userId : null);
 }
 
 /** 저장한 모델을 못 써 자동으로 답하는 상태인가 (auto·ok 가 아닌 것) */
