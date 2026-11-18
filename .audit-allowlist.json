@@ -1,4 +1,11 @@
 {
   "$comment": "npm audit 게이트(scripts/audit-gate.cjs) 허용 목록 — 운영 의존성의 high 이상 권고 중 당장 올릴 수 없는 것. 만료일이 지나면 게이트가 다시 실패한다. 2026-09-17 게이트 도입 시점의 기존 부채를 기록했다.",
-  "advisories": []
+  "advisories": [
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "reason": "패치 버전 없음(<=4.0.7 전부 해당). 운영 경로는 apps/web → next-intl → @parcel/watcher 의 파일 감시 glob 뿐이며 패턴은 저장소 설정값이라 사용자 입력이 닿지 않는다(ReDoS 도달 불가). 패치가 나오면 올리고 이 항목을 지운다.",
+      "expires": "2026-12-18"
+    }
+  ]
 }
