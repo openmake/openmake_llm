@@ -57,7 +57,9 @@ describe('handleBridgeMessage — 연결 방식 게이트', () => {
         const { ws, raw, sent } = fakeWs(undefined);
         await handleBridgeMessage(ws, hello);
         expect(mockRegister).not.toHaveBeenCalled();
-        expect(sent[0]).toMatchObject({ type: 'error' });
+        // 앱 이름에 묶이지 않는 안내(옛·새 데스크톱 앱 모두 이 경로다)
+        expect(sent[0]).toMatchObject({ type: 'error', message: expect.stringContaining('OpenMake 데스크톱 앱 또는 CLI') });
+        expect(sent[0]).not.toMatchObject({ message: expect.stringContaining('Companion') });
         expect(raw.close).toHaveBeenCalledWith(1008, 'bridge_api_key_required');
     });
 

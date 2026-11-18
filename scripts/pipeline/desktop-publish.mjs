@@ -86,16 +86,29 @@ function writeJsonAtomic(file, value, mode) {
     renameSync(temporary, file);
 }
 
-/** 서버에 게시된 macOS 앱(latest.json 의 native). 버전이 없거나 깨졌으면 undefined = 게시본 없음. file·sha256 은 규칙에 맞을 때만. */
+/** latest.json 의 macOS 블록 — native(옛 정체성 OpenMake Companion)·macos(새 정체성 OpenMake Code). 어느 파일명이 어느 블록인지는 publish-desktop.sh 몫. */
+const MAC_BLOCKS = ['native', 'macos'];
+
+/**
+ * 서버에 게시된 macOS 앱 = 두 블록 중 버전이 높은 쪽(같으면 macos). 옛 정체성 버전 < 새 앱 버전이 전제다.
+ * 버전이 없거나 깨진 블록은 없는 셈이고, 둘 다 없으면 undefined = 게시본 없음. file·sha256 은 규칙에 맞을 때만.
+ */
 function readPublished(manifestPath) {
-    let native;
-    try { native = JSON.parse(readFileSync(manifestPath, 'utf8'))?.native; } catch { return undefined; }
-    if (typeof native?.version !== 'string' || !VERSION_RE.test(native.version)) return undefined;
-    return {
-        version: native.version,
-        ...(typeof native.file === 'string' && FILE_RE.test(native.file) ? { file: native.file } : {}),
-        ...(typeof native.sha256 === 'string' && SHA256_RE.test(native.sha256) ? { sha256: native.sha256 } : {}),
-    };
+    let manifest;
+    try { manifest = JSON.parse(readFileSync(manifestPath, 'utf8')); } catch { return undefined; }
+    let best;
+    for (const block of MAC_BLOCKS) {
+        const value = manifest?.[block];
+        if (typeof value?.version !== 'string' || !VERSION_RE.test(value.version)) continue;
+        if (best && compareVersions(value.version, best.version) < 0) continue;
+        best = {
+            block,
+            version: value.version,
+            ...(typeof value.file === 'string' && FILE_RE.test(value.file) ? { file: value.file } : {}),
+            ...(typeof value.sha256 === 'string' && SHA256_RE.test(value.sha256) ? { sha256: value.sha256 } : {}),
+        };
+    }
+    return best;
 }
 
 /** 응답 본문을 상한까지만 읽어 문자열로(content-length 선검사 + 읽은 길이 검사). 넘으면 throw. */
@@ -154,7 +167,7 @@ const defaultDeps = {
         const result = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
         return { status: result.status ?? 128, stdout: result.stdout ?? '' };
     },
-    /** 기존 게시 스크립트를 그대로 부른다 — 파일명 검사·windows 블록 보존은 그쪽 몫. */
+    /** 기존 게시 스크립트를 그대로 부른다 — 파일명 검사·블록 선택·다른 블록 보존은 그쪽 몫. */
     runPublishScript: ({ cwd, file, dir }) => spawnSync('bash', [path.join(cwd, 'scripts/publish-desktop.sh'), file], {
         env: { ...process.env, DESKTOP_UPDATE_DIR: dir }, stdio: ['ignore', 'inherit', 'inherit'],
     }).status ?? 1,
@@ -185,7 +198,7 @@ export async function publish(options, deps = {}) {
         const published = readPublished(manifestPath), publishedVersion = published?.version;
         const decision = decide({ repoVersion: version, publishedVersion });
         // 게시하지 않을 때도 지금 게시된 바이트를 남긴다 — 손 게시 등으로 릴리스 자산과 달라졌는지 사후 대조용.
-        if (decision !== 'publish') receipt.published = { file: published.file, sha256: published.sha256 };
+        if (decision !== 'publish') Object.assign(receipt, { block: published.block, published: { file: published.file, sha256: published.sha256 } });
         if (decision === 'unchanged') return finish('unchanged', EXIT.OK);
         if (decision === 'ahead') {
             console.warn(`desktop-publish: published ${publishedVersion} is higher than checkout ${version}; not downgrading`);
@@ -215,12 +228,18 @@ export async function publish(options, deps = {}) {
             if (hadManifest) copyFileSync(manifestPath, prevPath);
             const restore = () => { if (hadManifest) copyFileSync(prevPath, manifestPath); else rmSync(manifestPath, { force: true }); };
             if (runPublishScript({ cwd, file: received, dir }) !== 0) { restore(); throw new Error('publish-desktop.sh failed; previous manifest restored'); }
-            let native;
-            try { native = JSON.parse(readFileSync(manifestPath, 'utf8'))?.native; } catch { /* 아래에서 실패 */ }
-            if (native?.version !== version || native?.file !== asset.file || native?.sha256 !== asset.sha256) {
+            let manifest;
+            try { manifest = JSON.parse(readFileSync(manifestPath, 'utf8')); } catch { /* 아래에서 실패 */ }
+            // 두 macOS 블록 중 하나가 릴리스 자산과 같아야 한다 — 어느 블록인지는 영수증에 남긴다.
+            const block = MAC_BLOCKS.find((name) => {
+                const value = manifest?.[name];
+                return value?.version === version && value?.file === asset.file && value?.sha256 === asset.sha256;
+            });
+            if (!block) {
                 restore();
                 throw new Error('published manifest does not match the release asset; previous manifest restored');
             }
+            receipt.block = block;
         } finally {
             rmSync(incoming, { recursive: true, force: true });
         }

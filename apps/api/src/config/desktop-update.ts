@@ -3,8 +3,8 @@
  *
  * 데스크톱 앱이 GET /api/desktop/latest 로 최신 버전을 확인하고
  * /api/desktop/download/:file 로 dmg 를 받는다. 산출물은 git 에 넣지 않고
- * 서버 디렉토리(DESKTOP_UPDATE_DIR)에 두며, scripts/publish-desktop.sh 가
- * dmg 복사 + latest.json(버전·파일명·sha256) 생성을 담당한다.
+ * 서버 디렉토리(DESKTOP_UPDATE_DIR)에 두며, scripts/publish-desktop.sh(macOS)·publish-desktop-windows.sh 가
+ * 설치 파일 복사 + latest.json 의 자기 블록(버전·파일명·sha256) 갱신을 담당한다 — 다른 블록은 남긴다.
  *
  * @module config/desktop-update
  */
@@ -17,6 +17,8 @@ export const DESKTOP_UPDATE = {
     FILE_PATTERN: /^OpenMake-Companion-[A-Za-z0-9.-]+\.dmg$/,
     /** Windows 설치 파일 이름 패턴(Companion P4) — `OpenMake-Companion-Setup-<버전>.exe` 만 */
     WINDOWS_FILE_PATTERN: /^OpenMake-Companion-Setup-[A-Za-z0-9.-]+\.exe$/,
+    /** macOS 새 정체성(OpenMake Code) dmg 이름 패턴 — latest.json 의 macos 블록. scripts/publish-desktop.sh 와 글자 그대로 같다 */
+    MACOS_FILE_PATTERN: /^OpenMake-Code-[A-Za-z0-9.-]+\.dmg$/,
 } as const;
 
 /** 웹(Next) 포트 기본값 — scripts/resolve-ports.cjs 와 같은 값 */
