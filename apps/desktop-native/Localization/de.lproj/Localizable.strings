@@ -106,6 +106,8 @@
 "update.successor.badBundleId" = "Die App im heruntergeladenen Image ist nicht OpenMake Code (Bundle-ID stimmt nicht überein).";
 "update.successor.badVersion" = "Die App-Version im heruntergeladenen Image weicht von der vom Server angekündigten Version ab.";
 "update.successor.prepare" = "Der Austausch konnte nicht vorbereitet werden (Support-Ordner nicht beschreibbar). Es wurde nichts geändert.";
+"update.successor.startTime" = "Der Austausch konnte nicht vorbereitet werden (die Startzeit des Austauschvorgangs konnte nicht gelesen werden). Es wurde nichts geändert.";
+"update.successor.backupLeft" = "Der Austausch wurde angehalten, weil OpenMake Code.app.old von einem früheren Austausch noch vorhanden ist. Es kann die App sein, die Sie zuvor verwendet haben; prüfen Sie sie, verschieben oder löschen Sie sie und suchen Sie dann erneut nach Updates.";
 "update.successor.launch" = "OpenMake Code ist nicht korrekt gestartet, daher wurde die Installation rückgängig gemacht. Sie können diese App weiter verwenden.";
 "update.successor.killFailed" = "OpenMake Code konnte nicht beendet werden. Beenden Sie OpenMake Code selbst und öffnen Sie dann OpenMake Companion erneut.";
 "menu.browser.takeover" = "Browser übernehmen (Agent pausieren)";

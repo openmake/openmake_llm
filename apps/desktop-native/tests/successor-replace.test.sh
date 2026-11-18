@@ -31,13 +31,30 @@ not() { ! "$@"; }
 
 # ─── 고정물 ───
 cat > "$ROOT/fake.c" <<'C'
+#include <fcntl.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
+/* 새 앱 대역: FAKE_KH 가 FIFO 면 실제로 읽어 받은 바이트를 FAKE_KH_OUT 에 남긴다(키 넘겨주기 검증). */
+static void take_key(void) {
+  const char *kh = getenv("FAKE_KH"), *out = getenv("FAKE_KH_OUT");
+  struct stat st;
+  if (!kh || !out || stat(kh, &st) != 0 || !S_ISFIFO(st.st_mode)) return;
+  int in = open(kh, O_RDONLY);
+  if (in < 0) return;
+  int o = open(out, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  char b[256];
+  ssize_t n;
+  while ((n = read(in, b, sizeof b)) > 0) if (o >= 0) write(o, b, (size_t)n);
+  close(in);
+  if (o >= 0) close(o);
+}
 int main(void) {
   const char *m = getenv("FAKE_MODE");
   if (m && !strcmp(m, "ignore-term")) signal(SIGTERM, SIG_IGN);
+  take_key();
   if (m && !strcmp(m, "die1")) { sleep(1); return 0; }
   sleep(120);
   return 0;
@@ -144,7 +161,7 @@ echo "$*" >> "$FAKE_DIR/alert.log"
 SH
   chmod +x "$C/bin/open" "$C/bin/osascript"
   ENVS=(
-    PATH="$C/bin:$PATH" FAKE_DIR="$C" FAKE_PENDING="$PENDING"
+    PATH="$C/bin:$PATH" FAKE_DIR="$C" FAKE_PENDING="$PENDING" FAKE_KH="$KH" FAKE_KH_OUT="$C/kh-received"
     OMK_SUCC_APP="$OLD" OMK_SUCC_DMG="$C/update.dmg" OMK_SUCC_NAME="OpenMake Code"
     OMK_SUCC_BUNDLE_ID=cc.openmake.code OMK_SUCC_VERSION=0.5.0 OMK_SUCC_LOG="$C/log"
     OMK_SUCC_PENDING="$PENDING" OMK_KH="$KH"
@@ -154,7 +171,8 @@ SH
     OMK_SUCC_MSG_MOUNT=MSG_MOUNT OMK_SUCC_MSG_NO_APP=MSG_NO_APP OMK_SUCC_MSG_BUNDLE_ID=MSG_BUNDLE_ID
     OMK_SUCC_MSG_VERSION=MSG_VERSION OMK_SUCC_MSG_COPY=MSG_COPY OMK_SUCC_MSG_RUNNING=MSG_RUNNING
     OMK_SUCC_MSG_PREPARE=MSG_PREPARE OMK_SUCC_MSG_REPLACE=MSG_REPLACE OMK_SUCC_MSG_LAUNCH=MSG_LAUNCH
-    OMK_SUCC_MSG_KILL_FAILED=MSG_KILL_FAILED
+    OMK_SUCC_MSG_KILL_FAILED=MSG_KILL_FAILED OMK_SUCC_MSG_START_TIME=MSG_START_TIME
+    OMK_SUCC_MSG_BACKUP_LEFT=MSG_BACKUP_LEFT
   )
   touch "$C/open.log" "$C/reopen.log" "$C/alert.log" "$C/open-new.log"
 }
@@ -187,6 +205,8 @@ fifo_gone() {
 }
 fifo_was_made() { grep -q 'key-handoff writer [0-9]' "$C/log"; }
 key_not_logged() { ! grep -q "$KEY" "$C/log"; }
+# 새 앱이 FIFO 에서 실제로 받은 바이트가 보낸 키(줄바꿈 없이)와 같다.
+key_received() { [ -f "$C/kh-received" ] && printf '%s' "$KEY" | cmp -s - "$C/kh-received"; }
 app_pid() { cat "$C/app.pid"; }
 app_dead() { ! kill -0 "$(app_pid)" 2>/dev/null; }
 new_is_dmg_app() { [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$NEW/Contents/Info.plist" 2>/dev/null)" = 0.5.0 ]; }
@@ -217,6 +237,7 @@ t "옛 앱이 지워졌다" test ! -e "$OLD"
 t "확정 뒤 표식이 없다 (⑨)" marker_absent
 t "새 프로세스가 살아 있다" kill -0 "$(app_pid)"
 t "FIFO 를 만들었다" fifo_was_made
+t "새 앱이 FIFO 로 받은 바이트 = 보낸 키" key_received
 t "FIFO·쓰는 쪽 정리" fifo_gone
 t "키가 로그에 없다" key_not_logged
 t "옛 앱을 다시 열지 않았다" reopens 0
@@ -376,6 +397,38 @@ t "옛 앱 그대로, open 1회" eval 'old_intact && reopens 1'
 t "실패 버전 기록" failed_recorded
 t "문구" alerted MSG_PREPARE
 
+for c in "dir:key-handoff 자리가 디렉터리" "nokh:키는 있는데 FIFO 경로가 비었다"; do
+  echo "# FIFO 를 준비하지 못한다 — ${c#*:} → 되돌리기 A"
+  setup "fifo-${c%%:*}"
+  make_app "$C/Applications" "OpenMake Code" cc.openmake.code 0.4.9 "OpenMake Code"
+  ditto "$NEW" "$C/orig-new.app"
+  if [ "${c%%:*}" = dir ]; then mkdir -p "$KH/sub"; run; else run OMK_KH=; fi
+  t "종료 코드 ≠ 0" test "$RC" != 0
+  t "새 앱을 열지 않았다" opened_new 0
+  t "원래 OpenMake Code.app 이 그대로 돌아왔다" diff -r "$C/orig-new.app" "$NEW"
+  t ".old·.new 없음" eval '[ ! -e "$NEW.old" ] && [ ! -e "$NEW.new" ]'
+  t "옛 앱 그대로, open 1회" eval 'old_intact && reopens 1'
+  t "실패 버전 기록·표식 없음" eval 'failed_recorded && marker_absent'
+  t "키가 로그에 없다" key_not_logged
+  t "문구" alerted MSG_PREPARE
+done
+
+echo "# 앞선 갈래 B 가 남긴 .old(사용자 원래 앱)가 있다 → 지우지 않고 중단"
+setup backup-left
+make_app "$C/Applications" "OpenMake Code" cc.openmake.code 0.5.0 "OpenMake Code"
+make_app "$C/Applications" "OpenMake Code.app.old" cc.openmake.code 0.4.9 "OpenMake Code"
+mv "$C/Applications/OpenMake Code.app.old.app" "$NEW.old"
+ditto "$NEW" "$C/orig-new.app"; ditto "$NEW.old" "$C/orig-backup.app"
+run
+t "종료 코드 ≠ 0" test "$RC" != 0
+t ".old 바이트 그대로" diff -r "$C/orig-backup.app" "$NEW.old"
+t "자리의 앱 바이트 그대로" diff -r "$C/orig-new.app" "$NEW"
+t ".new 없음" test ! -e "$NEW.new"
+t "새 앱을 열지 않았다" opened_new 0
+t "옛 앱 그대로, open 1회" eval 'old_intact && reopens 1'
+t "실패 버전 기록·표식 없음" eval 'failed_recorded && marker_absent'
+t "문구" alerted MSG_BACKUP_LEFT
+
 echo "# ⑬ FIFO 를 만든 뒤 스크립트에 TERM"
 setup term
 run_bg FAKE_OPEN_PAUSE=1
@@ -433,10 +486,25 @@ t "표식이 없다" marker_absent
 t "아무것도 옮기지 않았다" nothing_left
 t "새 앱을 열지 않았다" opened_new 0
 t "옛 앱 그대로, open 1회" eval 'old_intact && reopens 1'
+t "시작 시각 문구(지원 폴더 문구가 아니다)" eval 'alerted MSG_START_TIME && ! alerted MSG_PREPARE'
 
 echo "# ⑰ 정적: 스크립트가 표식의 나이·수정 시각을 읽거나 맞추지 않는다"
 t "stat·find -mmin/-newer·touch 0건" not grep -nE '(^|[^A-Za-z_])stat([^A-Za-z_]|$)|-mmin|-mtime|-newer|(^|[^A-Za-z_])touch([^A-Za-z_]|$)' "$SCRIPT"
 t "표식 뒤 판정을 exec·nohup 으로 넘기지 않는다" not grep -nE '^[^#]*\b(exec [^>]|nohup)' "$SCRIPT"
+
+echo "# Swift↔스크립트 환경 변수 이름 짝 (set -u — 이름 하나가 어긋나면 경고 없이 죽는다)"
+UPDATER="$HERE/../OpenMakeCompanion/Sources/OpenMakeCompanion/Updater.swift"
+# Swift: successorMessages 부터 spawnSuccessorScript 끝(info 앞)까지 넘기는 OMK_* 이름
+SWIFT_NAMES="$(sed -n '/successorMessages: \[String: String\]/,/private func info(/p' "$UPDATER" | grep -oE '"OMK_[A-Z_]+"' | tr -d '"' | sort -u)"
+# 스크립트: 참조하는 OMK_* 전부 / 그중 기본값(:-) 없이 쓰는 것. 스크립트 안에서 대입하는 변수(OMK_KEY)는 뺀다.
+SELF_SET="$(grep -oE '(^|[^A-Za-z_$])OMK_[A-Z_]+=' "$SCRIPT" | grep -oE 'OMK_[A-Z_]+' | sort -u)"
+REFS="$(grep -oE '\$\{?OMK_[A-Z_]+' "$SCRIPT" | grep -oE 'OMK_[A-Z_]+' | sort -u | comm -23 - <(echo "$SELF_SET"))"
+DEFAULTED="$(grep -oE '\$\{OMK_[A-Z_]+:-' "$SCRIPT" | grep -oE 'OMK_[A-Z_]+' | sort -u)"
+REQUIRED="$(comm -23 <(echo "$REFS") <(echo "$DEFAULTED"))"
+t "Swift 이름 목록을 읽었다(10개 이상)" test "$(echo "$SWIFT_NAMES" | grep -c .)" -ge 10
+t "스크립트가 기본값 없이 쓰는 이름은 전부 Swift 가 넘긴다" test -z "$(comm -23 <(echo "$REQUIRED") <(echo "$SWIFT_NAMES"))"
+t "Swift 가 넘기는 이름은 전부 스크립트가 쓴다(오타 방지)" test -z "$(comm -13 <(echo "$REFS") <(echo "$SWIFT_NAMES"))"
+t "테스트 환경도 기본값 없는 이름을 전부 준다" test -z "$(comm -23 <(echo "$REQUIRED") <(printf '%s\n' "${ENVS[@]}" | grep -oE '^OMK_[A-Z_]+' | sort -u))"
 
 echo
 echo "결과: 통과 $PASS, 실패 $FAIL"

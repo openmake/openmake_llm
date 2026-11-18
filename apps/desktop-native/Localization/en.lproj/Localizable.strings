@@ -106,6 +106,8 @@
 "update.successor.badBundleId" = "The app in the downloaded image is not OpenMake Code (bundle ID mismatch).";
 "update.successor.badVersion" = "The app version in the downloaded image differs from the version the server announced.";
 "update.successor.prepare" = "Could not prepare the replacement (the support folder is not writable). Nothing was changed.";
+"update.successor.startTime" = "Could not prepare the replacement (could not read the start time of the replacement task). Nothing was changed.";
+"update.successor.backupLeft" = "The replacement was stopped because OpenMake Code.app.old, left by an earlier replacement, still exists. It may be the app you used before; check it, move or delete it, then check for updates again.";
 "update.successor.launch" = "OpenMake Code did not start correctly, so the installation was reverted. You can keep using this app.";
 "update.successor.killFailed" = "OpenMake Code could not be stopped. Quit OpenMake Code yourself, then reopen OpenMake Companion.";
 "menu.browser.takeover" = "Take Over Browser (Pause Agent)";

@@ -106,6 +106,8 @@
 "update.successor.badBundleId" = "ダウンロードしたイメージ内のアプリが OpenMake Code ではありません（バンドル ID 不一致）。";
 "update.successor.badVersion" = "ダウンロードしたイメージ内のアプリのバージョンが、サーバーが通知したバージョンと異なります。";
 "update.successor.prepare" = "置き換えを準備できませんでした（サポートフォルダに書き込めません）。何も変更していません。";
+"update.successor.startTime" = "置き換えを準備できませんでした（置き換え処理の開始時刻を読み取れません）。何も変更していません。";
+"update.successor.backupLeft" = "以前の置き換えで残った OpenMake Code.app.old があるため、置き換えを中止しました。以前使っていたアプリの可能性があります。確認して移動または削除してから、もう一度アップデートを確認してください。";
 "update.successor.launch" = "OpenMake Code が正常に起動しなかったため、インストールを元に戻しました。このアプリをそのまま使えます。";
 "update.successor.killFailed" = "OpenMake Code を終了できませんでした。OpenMake Code を手動で終了してから OpenMake Companion を再度開いてください。";
 "menu.browser.takeover" = "ブラウザを引き継ぐ（エージェントを一時停止）";
