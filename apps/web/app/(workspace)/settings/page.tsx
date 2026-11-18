@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { useQuery } from "@tanstack/react-query";
+import { enablePushSubscription } from "@/lib/push-subscribe";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
 import { fetchModels } from "@/lib/models-api";
@@ -258,6 +259,8 @@ export default function SettingsPage() {
   const [pushSupported, setPushSupported] = useState<boolean | null>(null);
   const [pushSwReady, setPushSwReady] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
+  // 푸시 토글 실패 시 서버 오류 원문(빈 문자열이면 원문 없이 안내 문구만)
+  const [pushError, setPushError] = useState<string | null>(null);
 
   // 개인정보
   const [saveHistory, setSaveHistory] = useState(true);
@@ -315,6 +318,7 @@ export default function SettingsPage() {
   async function handlePushToggle(on: boolean) {
     if (typeof window === "undefined") return;
     setPushLoading(true);
+    setPushError(null);
     try {
       if (on) {
         const permission = await Notification.requestPermission();
@@ -323,22 +327,21 @@ export default function SettingsPage() {
           return;
         }
         const reg = await navigator.serviceWorker.ready;
-        let sub = await reg.pushManager.getSubscription();
-        if (!sub) {
-          const vapidRes = await ApiClient.get<{ data: { publicKey: string } }>(
-            "/api/push/vapid-key",
-          );
-          const key = vapidRes?.data?.publicKey;
-          if (!key) throw new Error("VAPID key 없음");
-          sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(key),
-          });
-        }
-        const json = sub.toJSON();
-        await ApiClient.post("/api/push/subscribe", {
-          endpoint: sub.endpoint,
-          keys: json.keys,
+        // 서버 등록 실패 시 새로 만든 구독은 해제되고 오류가 던져진다 → 토글은 꺼짐 유지
+        await enablePushSubscription({
+          getSubscription: () => reg.pushManager.getSubscription(),
+          createSubscription: async () => {
+            const vapidRes = await ApiClient.get<{ data: { publicKey: string } }>(
+              "/api/push/vapid-key",
+            );
+            const key = vapidRes?.data?.publicKey;
+            if (!key) throw new Error("VAPID key 없음");
+            return reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(key),
+            });
+          },
+          register: (body) => ApiClient.post("/api/push/subscribe", body),
         });
         setPushAlerts(true);
       } else {
@@ -352,6 +355,7 @@ export default function SettingsPage() {
       }
     } catch (err) {
       console.error("push toggle error", err);
+      setPushError(err instanceof Error ? err.message : "");
     } finally {
       setPushLoading(false);
     }
@@ -750,13 +754,21 @@ export default function SettingsPage() {
                         {tSettings("pushSwNotReady")}
                       </p>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <Toggle
-                          checked={pushAlerts}
-                          onChange={(v) => void handlePushToggle(v)}
-                        />
-                        {pushLoading && (
-                          <Loader2 className="h-4 w-4 animate-spin text-muted" />
+                      <div className="flex flex-col items-end gap-1">
+                        <div className="flex items-center gap-2">
+                          <Toggle
+                            checked={pushAlerts}
+                            onChange={(v) => void handlePushToggle(v)}
+                          />
+                          {pushLoading && (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted" />
+                          )}
+                        </div>
+                        {pushError !== null && (
+                          <p role="alert" className="text-xs text-danger">
+                            {tSettings("pushToggleFailed")}
+                            {pushError && ` (${pushError})`}
+                          </p>
                         )}
                       </div>
                     )}
