@@ -12,9 +12,10 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
-use serde_json::Value;
+use serde_json::{Value, json};
 use support::TmpDir;
 use support::child::{Helper, bin, command, is};
+use support::flow::started;
 use support::server::Server;
 
 const WAIT_ENV: &str = "OMK_HELPER_LOCK_WAIT_MS";
@@ -184,6 +185,60 @@ fn lock_failure_stops_without_retry_or_identity() {
     );
     assert_eq!(server.hellos().len(), 0);
     assert!(!dir.join("device-id").exists());
+}
+
+/// 지원 폴더를 만들지 못하면(상위 폴더 권한) 잠금 실패와 같은 신호로 끝난다 — 앱이 안내와 "다시 시도" 를 보인다(리뷰 r2).
+#[test]
+fn support_dir_failure_reports_lock_failed() {
+    let server = Server::start();
+    let home = TmpDir::new();
+    let lib = home.path().join("Library");
+    std::fs::create_dir_all(&lib).unwrap();
+    std::fs::set_permissions(&lib, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let mut h = spawn_in(&home, &server.url(), "5000");
+    let st = h.wait_exit(Duration::from_secs(8));
+    std::fs::set_permissions(&lib, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(st.code(), Some(omk_helper::INSTANCE_EXIT), "{st:?}");
+    h.finished_output();
+    h.wait_ev("lock failed", is_global("instance_lock_failed"));
+    assert_eq!(h.count(is_global("idle")), 0);
+    assert_eq!(h.count(is_global("connecting")), 0);
+    assert_eq!(server.hellos().len(), 0);
+    assert!(!support_of(&home).exists());
+}
+
+/// 정상 종료 중에는 런타임 정리(블록된 FS 작업을 기다림)가 끝날 때까지 잠금을 쥔다 — 기다리던 헬퍼는 이전 헬퍼가 끝난 뒤에야
+/// 잡는다(리뷰 r2).
+#[test]
+fn graceful_shutdown_holds_lock_until_runtime_cleanup() {
+    let server = Server::start();
+    let (mut a, root, dev) = started(&server, &[("OMK_BRIDGE_FS_TIMEOUT_MS", "200")], "lock-root");
+    let pipe = format!("{root}/pipe");
+    assert!(
+        std::process::Command::new("mkfifo")
+            .arg(&pipe)
+            .status()
+            .unwrap()
+            .success()
+    );
+    // FIFO 읽기는 쓰는 쪽이 없어 블록된 채 남는다 — 시간 제한 결과가 오면 작업이 걸려 있다는 뜻이다.
+    let r = server.exec(&dev, json!({"kind": "read", "path": "pipe"}));
+    assert_eq!(r["ok"], json!(false), "{r}");
+
+    let mut c = command(&a.home, &["--server", &server.url()]);
+    c.env(WAIT_ENV, "10000");
+    let mut b = Helper::start(c, TmpDir::new());
+    b.wait_ev("b waiting", is_global("connecting"));
+
+    a.send(&json!({"cmd": "quit"}));
+    b.wait_ev("b idle", is_global("idle"));
+    assert!(
+        a.child.try_wait().unwrap().is_some(),
+        "이전 헬퍼가 끝나기 전에 잠금을 넘겼다"
+    );
+    assert_eq!(a.wait_exit(Duration::from_secs(8)).code(), Some(0));
+    b.send(&json!({"cmd": "quit"}));
+    b.wait_exit(Duration::from_secs(8));
 }
 
 #[test]
