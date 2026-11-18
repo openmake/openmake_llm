@@ -40,7 +40,7 @@ export interface SelectToolsOptions {
     budget: number;
     /** 이미 노출된 도구 이름(샌드박스 도구 + 정적 extraTools) — 제외. */
     exclude?: Set<string>;
-    /** 원장 귀속 사용자(F25 PR-4, S6) — embedding 모드(tool-selector-embedding)에서만 search.embed 로 기록. 키워드 모드는 무시. */
+    /** 원장 귀속 사용자(F25 PR-4, S6)이자 임베딩 행위자(text.embed 개인 배정·BYOK 의 주인) — embedding 모드(tool-selector-embedding)에서만 쓴다. 키워드 모드는 무시. */
     costUserId?: string;
 }
 
