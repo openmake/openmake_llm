@@ -193,6 +193,42 @@ describe('ApprovalRegistry — 결정 때 되찾기', () => {
     });
 });
 
+describe('ApprovalRegistry — closeTask 무효화와 재실행 순서', () => {
+    it('closeTask 는 무효화가 끝나야 풀린다', async () => {
+        const s = store();
+        const voiding = deferred<undefined>();
+        s.voidUnconsumedForTask.mockReturnValueOnce(voiding.promise);
+        let closed = false;
+        void new ApprovalRegistry(s, slots(true).port).closeTask('t1').then(() => { closed = true; });
+        await flush();
+        expect(closed).toBe(false);
+        voiding.resolve(undefined);
+        await flush();
+        expect(closed).toBe(true);
+    });
+
+    it('취소(closeTask) 직후 재실행의 같은 호출은 취소 전 미소비 승인을 쓰지 않는다 — 무효화가 늦어도', async () => {
+        // 저장소 상태: 자리가 없어 주차로 넘긴 미소비 승인 1건. 무효화는 늦게 끝난다.
+        const s = store();
+        let unconsumed = true;
+        const voiding = deferred<undefined>();
+        s.voidUnconsumedForTask.mockImplementationOnce(async () => { await voiding.promise; unconsumed = false; return undefined; });
+        s.takeoverForCall.mockImplementation(async () => {
+            if (!unconsumed) return undefined;
+            unconsumed = false;
+            return { approval_id: 'apv_prior', status: 'approved', decided_at: new Date().toISOString(), created_at: new Date().toISOString(), answer_text: null };
+        });
+        const reg = new ApprovalRegistry(s, slots(true).port);
+        void reg.closeTask('t1');
+        const a = await ask(reg);          // 재실행된 작업이 같은 호출을 다시 요청
+        voiding.resolve(undefined);
+        await flush();
+        expect(a.settled).toEqual([]);     // 이어받아 approved 로 풀리지 않고
+        expect(a.id()).not.toBe('');       // 새 카드로 다시 묻는다
+        expect(a.id()).not.toBe('apv_prior');
+    });
+});
+
 describe('ApprovalRegistry — 자리 없음 분기의 저장 순서', () => {
     it('저장이 끝나기 전에는 request 가 풀리지 않고, 끝나면 resumeAfterRelease → parked 순', async () => {
         const { port, order } = slots(false);

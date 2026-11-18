@@ -39,6 +39,24 @@ describe('resolveCancelTarget', () => {
     });
 });
 
+describe('POST /:taskId/cancel — 승인 정리 순서', () => {
+    beforeEach(() => { jest.clearAllMocks(); for (const k of Object.keys(rows)) delete rows[k]; });
+    it('실행 중이 아닌 작업은 closeTask(미소비 승인 무효화)가 끝난 뒤에 응답한다', async () => {
+        rows.q = { id: 'q', status: 'queued', user_id: 'u1' };
+        cancel.mockReturnValue(false);
+        let release!: () => void;
+        let closed = false;
+        closeTask.mockImplementationOnce(() => new Promise<void>((r) => { release = () => { closed = true; r(); }; }));
+        const pending = request(app).post('/api/agent-tasks/q/cancel').then((res) => ({ res, closedAtResponse: closed }));
+        await new Promise((r) => setTimeout(r, 30));
+        expect(closeTask).toHaveBeenCalledWith('q');
+        release();
+        const { res, closedAtResponse } = await pending;
+        expect(res.status).toBe(200);
+        expect(closedAtResponse).toBe(true);
+    });
+});
+
 describe('POST /:taskId/cancel — 체인', () => {
     beforeEach(() => {
         jest.clearAllMocks();

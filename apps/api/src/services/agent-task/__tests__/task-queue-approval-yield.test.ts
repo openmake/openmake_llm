@@ -188,6 +188,8 @@ describe('승인 대기 중인 작업은 실행 슬롯을 차지하지 않는다
     } as unknown as ApprovalStore;
 
     it('사용자 상한만큼의 작업이 승인 대기 중이어도 새 작업이 바로 시작된다', async () => {
+        // 상한을 기본값(전역 4·유저 2)으로 고정 — 로컬 .env 의 AGENT_TASK_QUEUE_USER_MAX 와 무관하게(싱글톤은 첫 조회 때 상한을 읽는다)
+        Object.assign(AGENT_TASK_LIMITS as { QUEUE_GLOBAL_MAX: number; QUEUE_USER_MAX: number }, { QUEUE_GLOBAL_MAX: 4, QUEUE_USER_MAX: 2 });
         const q = getAgentTaskQueue();
         const registry = new ApprovalRegistry(store);
         const cards: string[] = [];
