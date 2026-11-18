@@ -265,6 +265,8 @@ pub struct BridgeResult {
     pub worktree_rel: Option<String>,
     pub branch: Option<String>,
     pub kept: Option<bool>,
+    /// worktree remove — git 이 무시하는 파일만 남아 보존했다(`"ignoredOnly"`). 그 밖에는 키가 없다.
+    pub ignored_only: Option<bool>,
     /// 읽기 전용 도구 결과 — 상자 하나로 둔다(결과가 연결 크레이트의 이벤트 enum 에 그대로 실려 크기를 늘리지 않게).
     pub tool: Option<Box<ToolOutput>>,
     /// browser — 넘겨받은 상태라 실행하지 않았다(서버는 오류로 돌려주지 않고 작업을 주차한다).
@@ -330,6 +332,9 @@ impl BridgeResult {
         }
         if let Some(k) = self.kept {
             o.insert("kept".to_owned(), Value::Bool(k));
+        }
+        if let Some(k) = self.ignored_only {
+            o.insert("ignoredOnly".to_owned(), Value::Bool(k));
         }
         match self.tool.as_deref() {
             None => {}

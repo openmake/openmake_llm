@@ -119,10 +119,12 @@ fn stdout(r: &Value) -> Value {
 fn capabilities_follow_chrome() {
     let with = bed(true);
     let mut want: Vec<&str> = BRIDGE_KINDS.to_vec();
+    want.push("worktree_keep_ignored");
+    let base = want.clone();
     want.extend(["browser", "browser_upload"]);
     assert_eq!(with.core.capabilities(), want);
     let without = bed(false);
-    assert_eq!(without.core.capabilities(), BRIDGE_KINDS);
+    assert_eq!(without.core.capabilities(), base);
     let r = run(
         &without,
         json!({"kind": "browser", "actions": [{"type": "wait"}]}),

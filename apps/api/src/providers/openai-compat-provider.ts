@@ -39,6 +39,7 @@ import { pingCredential } from './credential-ping';
 import { readCachedPromptTokens } from '../llm/cached-prompt-tokens';
 import { mapOpenAIError } from './openai-compat-errors';
 import { GATEWAY_NO_RETRY_HEADERS } from '../llm/gateway-headers';
+import { createExternalStreamMonitor } from './external-stream-monitor';
 
 // 오류 분류는 openai-compat-errors.ts 로 분리 — 기존 import 경로 호환을 위해 re-export.
 export { mapOpenAIError };
@@ -359,6 +360,12 @@ export class OpenAICompatProvider implements IProvider {
         let aborted = false;
         opts.abortSignal?.addEventListener('abort', () => { aborted = true; });
 
+        // 무응답 시한·진단 로그는 external-stream-monitor — aborted 플래그는 종전대로 opts.abortSignal 만 본다.
+        const monitor = createExternalStreamMonitor({
+            providerId: this.id, modelId: opts.modelId, via: this.modelPrefix ? 'gateway' : 'direct',
+            ...(opts.abortSignal ? { callerSignal: opts.abortSignal } : {}),
+        });
+
         try {
             // OpenRouter provider routing — providerId === 'openrouter' 일 때만 body 의 provider 필드로 전달.
             // 타 OpenAI-compat endpoint (Groq/Together 등) 는 이 필드를 무시 — 안전.
@@ -408,10 +415,11 @@ export class OpenAICompatProvider implements IProvider {
                 ...buildGeminiThinkingParams(this.id, opts.thinking, !!this.modelPrefix),
             };
 
-            const stream = await this.client.chat.completions.create(
+            monitor.logStart({ msgs: messages.length, tools: tools?.length ?? 0, thinking: !!opts.thinking });
+            const stream = await monitor.open(this.client.chat.completions.create(
                 requestParams as never,
-                { maxRetries: 0, ...(opts.abortSignal ? { signal: opts.abortSignal } : {}) }, // 게이트웨이·직결 모두 SDK 재시도 0
-            );
+                { maxRetries: 0, signal: monitor.signal }, // 게이트웨이·직결 모두 SDK 재시도 0
+            ));
 
             let content = '';
             const pseudoGate = new PseudoToolCallGate();
@@ -466,6 +474,7 @@ export class OpenAICompatProvider implements IProvider {
                 }>;
                 usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
             }>) {
+                monitor.onChunk();
                 if (aborted) break;
 
                 const choice = chunk.choices?.[0];
@@ -500,6 +509,9 @@ export class OpenAICompatProvider implements IProvider {
                     cachedPromptTokens = readCachedPromptTokens(chunk.usage) ?? cachedPromptTokens;
                 }
             }
+
+            // SDK 스트림은 본문 도중 abort 를 받으면 오류 없이 끝난다 — 시한 만료면 아래 catch 에서 UPSTREAM_TIMEOUT 으로 바꾼다.
+            if (!aborted && monitor.stalled()) throw new Error('stream stalled');
 
             // 사고 가르개 flush — 닫힘 없이 끝난 사고·미완 여는 태그 접두를 내보낸다(가짜 도구 호출 게이트보다 먼저).
             if (thoughtSplitter) {
@@ -568,7 +580,9 @@ export class OpenAICompatProvider implements IProvider {
             if (aborted) {
                 throw new ProviderError('UPSTREAM_ERROR', 'OpenAI 호환 호출 중단', err);
             }
-            throw mapOpenAIError(err);
+            throw monitor.timeoutError(err) ?? mapOpenAIError(err);
+        } finally {
+            monitor.dispose();
         }
     }
 

@@ -39,11 +39,13 @@ export const LEGACY_BRIDGE_KINDS: readonly BridgeKind[] = [
 /**
  * 기기 능력 — 요청 종류에 더해, 요청 안의 추가 기능을 알리는 값.
  * browser_upload: browser 요청의 uploadFile 액션(2026-10-06) — 알리지 않는 기기에는 업로드를 보내지 않는다.
+ * worktree_keep_ignored: worktree remove 가 무시 파일만 남은 작업 폴더를 보존한다(2026-11-18) — 알리지 않는 옛 기기에는
+ *   서버가 파일을 만든 것을 아는 작업(write·browser 성공)의 remove 를 보내지 않는다.
  */
-export type BridgeCapability = BridgeKind | 'browser_upload';
+export type BridgeCapability = BridgeKind | 'browser_upload' | 'worktree_keep_ignored';
 
 /** 서버가 아는 능력 전체 — 기기가 보낸 능력 목록에서 이 밖의 값은 버린다. */
-const KNOWN_BRIDGE_KINDS: ReadonlySet<string> = new Set<string>([...LEGACY_BRIDGE_KINDS, 'browser', 'browser_upload']);
+const KNOWN_BRIDGE_KINDS: ReadonlySet<string> = new Set<string>([...LEGACY_BRIDGE_KINDS, 'browser', 'browser_upload', 'worktree_keep_ignored']);
 
 /**
  * PURE: bridge_hello.capabilities → 지원 종류 집합. 배열이 아니면 undefined(구버전 — LEGACY_BRIDGE_KINDS 로 본다),
@@ -156,6 +158,8 @@ export interface BridgeResult {
     branch?: string;
     /** worktree remove 결과 — 변경분이 남아 보존했으면 true. */
     kept?: boolean;
+    /** worktree remove 결과 — git 이 무시하는 파일만 남아 보존했으면 true(그 밖에는 없음, 옛 기기는 싣지 않는다). */
+    ignoredOnly?: boolean;
     /** folders 결과 — 열거 상한 초과로 목록이 절단됐으면 true. exec 결과 — 기기가 출력 상한으로 자식을 끊었으면 true. */
     truncated?: boolean;
     /** exec 결과 — 기기가 시간 제한으로 자식을 끊었으면 true(옛 기기는 싣지 않는다). */

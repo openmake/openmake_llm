@@ -96,6 +96,20 @@ describe('handleWorktree', () => {
         expect(fs.existsSync(wt2)).toBe(true); // 사용자 작업 결과를 임의 삭제하지 않는다
     });
 
+    it('remove: 무시 파일만 만든 작업 폴더는 지우지 않는다', async () => {
+        fs.writeFileSync(path.join(repo, '.gitignore'), '*.zip\nout/\n');
+        git(['add', '.'], repo);
+        git(['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'ignore'], repo);
+        const add = await run({ kind: 'worktree', op: 'add', taskId: TASK }, repo);
+        const wt = path.join(repo, add.worktreeRel!);
+        fs.mkdirSync(path.join(wt, 'out'));
+        fs.writeFileSync(path.join(wt, 'out/report.md'), 'r');
+        fs.writeFileSync(path.join(wt, 'sample.zip'), 'z');
+        const r = await run({ kind: 'worktree', op: 'remove', taskId: TASK }, repo);
+        expect(r).toMatchObject({ ok: true, kept: true, ignoredOnly: true });
+        expect(fs.existsSync(path.join(wt, 'out/report.md'))).toBe(true);
+    });
+
     it('레포 하위 폴더 base: show-prefix 만큼 내려간 worktreeRel 을 돌려준다', async () => {
         const sub = path.join(repo, 'apps', 'web');
         fs.mkdirSync(sub, { recursive: true });

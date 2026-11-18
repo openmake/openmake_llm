@@ -18,6 +18,13 @@
  */
 export const LLM_TIMEOUT_MAX_MS = 1_200_000;
 
+/** 0 을 "끔" 으로 살리는 ms env 읽기 — 비었거나 숫자가 아니거나 음수면 기본값. */
+function readNonNegativeMs(raw: string | undefined, fallback: number): number {
+    if (raw === undefined || raw.trim() === '') return fallback;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
 /**
  * LLM 호출 및 에이전트 관련 타임아웃
  */
@@ -46,6 +53,14 @@ export const LLM_TIMEOUTS = {
     FAST_FAIL_PREFILL_MS_PER_1K_TOKENS: Number(process.env.LLM_FAST_FAIL_PREFILL_MS_PER_1K_TOKENS) || 1000,
     /** Fast-fail 유효 타임아웃 상한 (ms) — 전역 LLM_TIMEOUT(기본 120000)과 정렬. env override: LLM_FAST_FAIL_MAX_MS */
     FAST_FAIL_MAX_MS: Number(process.env.LLM_FAST_FAIL_MAX_MS) || 120000,
+    /**
+     * 외부 provider 스트리밍 채팅: 요청 전송부터 첫 SSE 청크(내용 무관)까지 상한 (ms). 0 = 끔.
+     * SDK·전송층에 앱 시한이 없어 upstream 이 조용하면 300초까지 무표시로 기다리던 구멍(2026-11-16 운영 gemini-3.8-flash)을 막는다.
+     * env override: EXTERNAL_LLM_FIRST_CHUNK_TIMEOUT_MS
+     */
+    EXTERNAL_FIRST_CHUNK_TIMEOUT_MS: readNonNegativeMs(process.env.EXTERNAL_LLM_FIRST_CHUNK_TIMEOUT_MS, 120000),
+    /** 외부 provider 스트리밍 채팅: 첫 청크 뒤 청크 사이 유휴 상한 (ms). 0 = 끔. env override: EXTERNAL_LLM_STREAM_IDLE_TIMEOUT_MS */
+    EXTERNAL_STREAM_IDLE_TIMEOUT_MS: readNonNegativeMs(process.env.EXTERNAL_LLM_STREAM_IDLE_TIMEOUT_MS, 120000),
     /** 관리자 게이트웨이 모델 상태 카드의 `/model/info` 조회 타임아웃 (ms) — 느리면 카드가 실패 사유를 보인다 */
     GATEWAY_MODEL_STATUS_TIMEOUT_MS: Number(process.env.LLM_GATEWAY_MODEL_STATUS_TIMEOUT_MS) || 5000,
     /**
