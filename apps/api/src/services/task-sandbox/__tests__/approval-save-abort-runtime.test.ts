@@ -102,3 +102,21 @@ describe('TaskRuntime — 결정 때 자리가 없을 때', () => {
         expect(t.exec).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('TaskRuntime — 결정 이어받기 중 취소(abort 우선)', () => {
+    it('takeoverForCall 대기 → 취소 → 미소비 승인 도착 → 도구 핸들러 실행 0회', async () => {
+        const t = setup();
+        const takeover = deferred<unknown>();
+        (t.store.takeoverForCall as jest.Mock).mockReturnValueOnce(takeover.promise);
+        const ac = new AbortController();
+        const result = t.runtime.executeTaskTool('bash', { command: 'echo hi' }, { signal: ac.signal, ...t.hooks })
+            .then((r) => r, (e: unknown) => e);
+        await waitFor(() => t.store.takeoverForCall.mock.calls.length > 0 || undefined, '이어받기 시작');
+        ac.abort();
+        takeover.resolve({ approval_id: 'apv_prior', status: 'approved', decided_at: new Date().toISOString(), created_at: new Date().toISOString(), answer_text: null });
+        await result;
+        expect(t.exec).not.toHaveBeenCalled();
+        expect(t.hooks.onBeforeExecute).not.toHaveBeenCalled();
+        expect(t.hooks.onApprovalRejected).toHaveBeenCalledWith({ toolName: 'bash', reason: 'abort' });
+    });
+});

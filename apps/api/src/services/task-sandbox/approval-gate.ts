@@ -191,6 +191,8 @@ export class ApprovalRegistry {
     private autoApproveTasks = new Set<string>();
     /** 무인 작업(예약 실행) — 승인할 사람이 없어 승인 요청을 기다리지 않고 설정된 결론으로 끝낸다. 메모리뿐이라 재시작 뒤 재개분은 종전처럼 기다린다. */
     private unattendedTasks = new Set<string>();
+    /** 진행 중인 closeTask 정리 — 같은 작업의 이어받기는 이게 끝난 뒤에만 한다(취소 직후 재실행이 취소 전 승인을 소비하지 않게). */
+    private closing = new Map<string, Promise<void>>();
 
     /** slots — 승인 대기 중 실행 슬롯 양보·되찾기(기본은 동시성 큐). 테스트는 가짜를 넣는다. */
     constructor(private readonly store?: ApprovalStore, private readonly slots?: ApprovalSlotPort) {}
@@ -306,6 +308,7 @@ export class ApprovalRegistry {
         // 살아 있는 pending 이 있으면 그 id 를 그대로 써서 승인함의 항목이 바뀌지 않게 한다.
         const argsHash = hashApprovalArgs(input.args);
         // 저장소가 없으면(테스트·비영속) 대기 등록까지 동기적으로 끝낸다 — 호출 직후 list() 가 보이도록.
+        if (this.store) await this.closing.get(input.taskId);
         let prior = this.store ? await this.persist((s) => s.takeoverForCall(input.taskId, input.toolName, argsHash)) : undefined;
         // 오래된 미소비 승인은 쓰지 않고 다시 묻는다 — 승인함 "최근 결정" 창을 벗어나면 사용자가 볼 수도 철회할 수도 없다.
         // 질문 도구의 답은 권한이 아니라 사용자의 답이라 그대로 이어받는다. 이어받기가 이미 소비 표시를 했으므로 행은 다시 쓰이지 않는다.
@@ -315,6 +318,8 @@ export class ApprovalRegistry {
             prior = undefined;
         }
         if (prior && prior.status !== 'pending') {
+            // abort 우선 — 이어받기를 기다리는 사이 취소됐으면 결정과 무관하게 abort(호출부는 승인 뒤 중단 신호를 다시 보지 않는다)
+            if (opts.signal?.aborted) return { decision: 'rejected', reason: 'abort', waitedMs: 0 };
             logger.info(`[${input.taskId}] 재시작 전 결정 이어받음(${prior.status}): ${input.toolName}`);
             return prior.status === 'approved'
                 ? { decision: 'approved', waitedMs: 0, ...(prior.answer_text ? { text: prior.answer_text } : {}) }
@@ -473,13 +478,19 @@ export class ApprovalRegistry {
         return this.settleOrPersist(approvalId, { decision: 'approved', text, decidedBy: actorId });
     }
 
-    /** 작업 종료 시 저장소에 남은 pending 정리(124) — 메모리 waiter 는 signal abort 가 이미 해소했다. */
-    closeTask(taskId: string): void {
+    /** 작업 종료 시 저장소에 남은 pending 정리(124) — 메모리 waiter 는 signal abort 가 이미 해소했다.
+     *  정리가 끝나야 풀린다(실패는 삼킨다). 그동안 같은 작업의 이어받기는 기다린다. */
+    closeTask(taskId: string): Promise<void> {
         this.autoApproveTasks.delete(taskId);
         this.unattendedTasks.delete(taskId);
-        void this.persist((s) => s.expirePendingForTask(taskId));
-        // 자리가 없어 주차로 넘긴 미소비 승인 — 취소·종료된 작업을 다시 실행해도 옛 승인이 쓰이지 않게(주차·서버 종료는 closeTask 를 타지 않는다)
-        if (this.store?.voidUnconsumedForTask) void this.persist((s) => s.voidUnconsumedForTask!(taskId));
+        const done = Promise.all([
+            this.persist((s) => s.expirePendingForTask(taskId)),
+            // 자리가 없어 주차로 넘긴 미소비 승인 — 취소·종료된 작업을 다시 실행해도 옛 승인이 쓰이지 않게(주차·서버 종료는 closeTask 를 타지 않는다)
+            this.store?.voidUnconsumedForTask ? this.persist((s) => s.voidUnconsumedForTask!(taskId)) : undefined,
+        ]).then(() => undefined);
+        this.closing.set(taskId, done);
+        void done.then(() => { if (this.closing.get(taskId) === done) this.closing.delete(taskId); });
+        return done;
     }
 }
 
