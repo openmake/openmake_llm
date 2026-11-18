@@ -251,7 +251,7 @@
       "dismiss": "閉じる",
       "copyKey": "キーをコピー",
       "copied": "コピー済み",
-      "bridgeHint": "このキーは Companion と CLI の接続専用です。Companion の設定または CLI のログイン(openmake-code login)に入力してください。推論 API の呼び出しには使えません。",
+      "bridgeHint": "このキーはデスクトップアプリと CLI の接続専用です。デスクトップアプリの設定または CLI のログイン(openmake-code login)に入力してください。推論 API の呼び出しには使えません。",
       "curlTitle": "クイックスタート (curl)",
       "copyCurl": "curl をコピー"
     },
@@ -965,8 +965,8 @@
     "stateLabel": "ステータス:",
     "turnLabel": "ターン:",
     "queuePosition": "待機順 {position} 番 — 先のタスクが終わると自動で開始します",
-    "waitingDevice": "ローカルデバイスの接続待ち — Companion を接続すると続行します",
-    "waitingBrowserTakeover": "ユーザーがブラウザを操作中 — Companion でブラウザを戻すと続行します",
+    "waitingDevice": "ローカルデバイスの接続待ち — デスクトップアプリを接続すると続行します",
+    "waitingBrowserTakeover": "ユーザーがブラウザを操作中 — デスクトップアプリでブラウザを戻すと続行します",
     "waitingModel": "モデルサーバーの応答を待っています — 復旧すると自動的に続きから実行します",
     "planLabel": "計画 ({completed}/{total})",
     "outputsLabel": "成果物 {count}件",
@@ -1052,10 +1052,10 @@
         "llm_error": "しばらくしてから再実行してください。続く場合は別のモデルを選ぶか、管理者に連絡してください。",
         "interrupted": "再開できる場合は中断した地点から続け、できない場合はもう一度実行してください。",
         "unknown": "失敗理由の全文を確認し、再実行しても同じ場合は管理者に連絡してください。",
-        "device_wait_expired": "Companion(または CLI)を接続してから、もう一度実行してください。",
-        "browser_takeover_expired": "Companion のメニューでブラウザを戻してから、もう一度実行してください。",
+        "device_wait_expired": "デスクトップアプリ(または CLI)を接続してから、もう一度実行してください。",
+        "browser_takeover_expired": "デスクトップアプリのメニューでブラウザを戻してから、もう一度実行してください。",
         "sandbox_unavailable": "しばらくしてから再実行してください。同時に動いているタスクが減ると実行環境を確保できます。続く場合は管理者に連絡してください。",
-        "interrupted_local_device": "Companion(または CLI)を再接続してから、再開できる場合は再開し、できない場合はもう一度実行してください。",
+        "interrupted_local_device": "デスクトップアプリ(または CLI)を再接続してから、再開できる場合は再開し、できない場合はもう一度実行してください。",
         "lease_held_elsewhere": "しばらくしてから再実行してください。",
         "recovery_limit": "中断した地点から再開できます。同じ地点でまた止まる場合は、目標を小さく分けて再実行するか、管理者に連絡してください。"
       }
@@ -2406,7 +2406,7 @@
   },
   "desktopApp": {
     "title": "デスクトップアプリ",
-    "subtitle": "OpenMake Companion — 自分の PC のフォルダーでエージェント作業を実行できるアプリです。",
+    "subtitle": "OpenMake デスクトップアプリ — 自分の PC のフォルダーでエージェント作業を実行できるアプリです。",
     "loading": "読み込み中…",
     "filesTitle": "インストールファイル",
     "os": {
@@ -2424,7 +2424,7 @@
       "title": "インストール手順",
       "native": "macOS: dmg を開き、アプリをアプリケーションフォルダーに移動します。初回起動時に警告が出たら、システム設定 → プライバシーとセキュリティ → このまま開く を押します。",
       "windows": "Windows: インストールファイルを実行します。「Windows によって PC が保護されました」画面が出たら、詳細情報 → 実行 を押します。",
-      "apiKey": "インストール後、アプリの設定にサーバーアドレス（この Web のアドレス）と API key を入力します — <link>API アクセス</link>で Companion・CLI 接続用のキーを発行してください。"
+      "apiKey": "インストール後、アプリの設定にサーバーアドレス（この Web のアドレス）と API key を入力します — <link>API アクセス</link>でデスクトップアプリ・CLI 接続用のキーを発行してください。"
     }
   },
   "notFound": {
@@ -2754,7 +2754,7 @@
   },
   "adminBridgeDevices": {
     "title": "接続デバイス",
-    "description": "Companion・CLI でローカル実行に接続している全デバイスです。フォルダは名前のみ表示されます。",
+    "description": "デスクトップアプリ・CLI でローカル実行に接続している全デバイスです。フォルダは名前のみ表示されます。",
     "loadError": "読み込みに失敗しました。",
     "disabled": "ローカル実行機能はオフです(LOCAL_EXECUTOR_ENABLED)。",
     "listTitle": "接続中のデバイス",
