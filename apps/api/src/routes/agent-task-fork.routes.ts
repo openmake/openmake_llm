@@ -50,7 +50,8 @@ forkRouter.post('/:taskId/fork', asyncHandler(async (req: Request, res: Response
     const base = cleanConversationForFork(cp.conversation as ChatMessage[], { stripReplies: AGENT_TASK_SCHEDULE.FORK_STRIP_REPLY_NUDGES_ENABLED });
     const cut = findDanglingToolCalls(base) ? base.map((m) => m.role).lastIndexOf('assistant') : base.length;
     const notice = buildForkNotice({
-        restoreEnabled: AGENT_TASK_LIMITS.FORK_WORKSPACE_RESTORE_ENABLED, newGoal: goal !== src.goal ? goal : undefined,
+        // 로컬 실행은 턴 스냅숏 복원 경로가 없다 — '새로 시작' 안내(설계 D5)
+        restoreEnabled: AGENT_TASK_LIMITS.FORK_WORKSPACE_RESTORE_ENABLED && src.executor !== 'local', newGoal: goal !== src.goal ? goal : undefined,
     });
     const conversation = [...base.slice(0, cut), { role: 'user', content: notice }];
 
