@@ -125,20 +125,32 @@ it('임베딩 호출 실패 → 키워드 폴백', async () => {
     expect(await selectRelevantToolsEmbedding('calendar', catalog, opts)).toEqual(selectRelevantTools('calendar', catalog, opts));
 });
 
-it('기한 초과 → 키워드 폴백', async () => {
-    resolveMock.mockResolvedValue(TARGET);
-    callJsonMock.mockImplementation((_t: unknown, o: { signal?: AbortSignal }) => new Promise((_, rej) => {
-        o.signal?.addEventListener('abort', () => rej(new Error('aborted')));
-    }));
-    const catalog = [tool('calendar_create')] as never;
-    const opts = { budget: 1, costUserId: 'u1' };
-    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+it('기한 초과 → 진행 중 호출이 실제로 끊기고, 이미 성공한 호출만 원장에 1회 기록, 키워드 폴백', async () => {
+    const restore = jest.replaceProperty(AGENT_TASK_LIMITS, 'DYNAMIC_TOOLS_EMBED_TIMEOUT_MS', 50);
     try {
-        const p = selectRelevantToolsEmbedding('calendar', catalog, opts);
-        await jest.advanceTimersByTimeAsync(AGENT_TASK_LIMITS.DYNAMIC_TOOLS_EMBED_TIMEOUT_MS + 10);
-        expect(await p).toEqual(selectRelevantTools('calendar', catalog, opts));
+        resolveMock.mockResolvedValue(TARGET);
+        let aborted!: () => void;
+        const abortedP = new Promise<void>((r) => { aborted = r; });
+        const ok = okEmbed();
+        // 첫 호출(카탈로그 배치)은 성공, 둘째 호출(goal)은 신호가 끊을 때까지 걸려 있다.
+        callJsonMock
+            .mockImplementationOnce(ok)
+            .mockImplementationOnce((_t: unknown, o: { signal?: AbortSignal }) => new Promise((_, rej) => {
+                o.signal?.addEventListener('abort', () => { aborted(); rej(new Error('aborted')); });
+            }));
+        const catalog = [tool('calendar_create')] as never;
+        const opts = { budget: 1, costUserId: 'u1' };
+
+        expect(await selectRelevantToolsEmbedding('calendar', catalog, opts)).toEqual(selectRelevantTools('calendar', catalog, opts));
+        // 신호가 전달되지 않으면 둘째 호출은 끊기지 않는다 — 기다림 상한 안에 abort 가 와야 한다.
+        const wasAborted = await Promise.race([abortedP.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 1000).unref())]);
+        expect(wasAborted).toBe(true);
+        await new Promise((r) => setImmediate(r));
+        expect(callJsonMock).toHaveBeenCalledTimes(2);
+        expect(recordCostMock).toHaveBeenCalledTimes(1);
+        expect(recordCostMock.mock.calls[0][0]).toMatchObject({ userId: 'u1', kind: 'search.embed', quantity: 1 });
     } finally {
-        jest.useRealTimers();
+        restore.restore();
     }
 });
 
