@@ -10,7 +10,7 @@
  *   3. pid 가 죽었으면 읽은 token T 로 회수 권리 파일(`reclaim.<T>`)을 새로 만든다(`wx`) — 하나만 만든다.
  *   4. 잠금을 다시 읽어 token 이 여전히 T 인지 본다. 다르면 물러난다.
  *   5. `rename` 으로 잠금을 덮어쓴다(잠금이 없는 순간이 없다). 그 뒤 권리 파일을 지운다.
- * 놓을 때 띄운 Chrome 이 끝난 것을 확인하지 못했으면 잠금 pid 를 그 Chrome 으로 바꿔 둔다(releaseBrowserOwner).
+ * 놓을 때 띄운 Chrome 이 끝난 것을 확인하지 못했으면 잠금을 그 Chrome pid·새 token 으로 바꿔 둔다(releaseBrowserOwner).
  * 3~5 사이에 회수하던 프로세스가 죽으면 아무도 주인이 되지 않는다(주인이 둘이 아니라 없는 쪽으로 실패).
  */
 import * as fs from 'fs';
@@ -99,7 +99,7 @@ export function acquireBrowserOwner(dir: string, hooks: BrowserOwnerHooks = {}):
 
 /**
  * 잠금에 자기 token 이 남아 있을 때만 지운다(동기 — process 'exit' 에서 부른다).
- * 띄운 Chrome 이 끝난 것을 확인하지 못했으면(`lingeringPid`) 지우지 않고 그 pid 로 바꿔 쓴다 — 새 CLI 는
+ * 띄운 Chrome 이 끝난 것을 확인하지 못했으면(`lingeringPid`) 지우지 않고 그 pid·새 token 으로 바꿔 쓴다 — 새 CLI 는
  * 그 Chrome 이 살아 있는 동안 물러나고, 끝나면 죽은 주인으로 보고 회수한다.
  */
 export function releaseBrowserOwner(dir: string, token: string, lingeringPid?: number): void {
@@ -110,9 +110,11 @@ export function releaseBrowserOwner(dir: string, token: string, lingeringPid?: n
         try { fs.unlinkSync(lock); } catch { /* 이미 없음 */ }
         return;
     }
-    const tmp = path.join(dir, browserOwnerTmpName(token));
+    // 새 token 으로 넘긴다 — 넘기기 전에 옛 잠금을 읽은 회수자가 token 재확인을 통과하지 못하게(token 은 다시 쓰이지 않는다).
+    const next = crypto.randomUUID();
+    const tmp = path.join(dir, browserOwnerTmpName(next));
     try {
-        fs.writeFileSync(tmp, JSON.stringify({ pid: lingeringPid, token }));
+        fs.writeFileSync(tmp, JSON.stringify({ pid: lingeringPid, token: next }));
         fs.renameSync(tmp, lock);
     } catch { fs.rmSync(tmp, { force: true }); }
 }

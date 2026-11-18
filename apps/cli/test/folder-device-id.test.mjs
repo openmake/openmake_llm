@@ -104,7 +104,9 @@ test('resume refuses a task made with the old host-only id', async t => {
   const home = tempHome(t, { serverUrl: server.url, hostId: HOST });
   const { code, err } = await runCli(home, ['resume', 'task-old', '--dir', folder]);
   assert.equal(code, 1);
-  assert.match(err, /다른 디바이스/);
+  // --dir 로는 풀리지 않는 경우라 폴더 지정 안내를 하지 않는다(리뷰 r4).
+  assert.match(err, /폴더별 디바이스 id 를 쓰기 전/);
+  assert.doesNotMatch(err, /--dir/);
   assert.equal(server.hellos.length, 0);
 });
 
