@@ -251,7 +251,7 @@
       "dismiss": "关闭",
       "copyKey": "复制密钥",
       "copied": "已复制",
-      "bridgeHint": "此密钥仅用于连接 Companion 和 CLI。请在 Companion 设置或 CLI 登录(openmake-code login)中输入。它不能调用推理 API。",
+      "bridgeHint": "此密钥仅用于连接桌面应用和 CLI。请在桌面应用设置或 CLI 登录(openmake-code login)中输入。它不能调用推理 API。",
       "curlTitle": "快速开始 (curl)",
       "copyCurl": "复制 curl"
     },
@@ -965,8 +965,8 @@
     "stateLabel": "状态:",
     "turnLabel": "回合:",
     "queuePosition": "排队第 {position} 位 — 前面的任务完成后自动开始",
-    "waitingDevice": "正在等待本地设备连接 — 连接 Companion 后继续执行",
-    "waitingBrowserTakeover": "用户正在操作浏览器 — 在 Companion 中交还浏览器后继续执行",
+    "waitingDevice": "正在等待本地设备连接 — 连接桌面应用后继续执行",
+    "waitingBrowserTakeover": "用户正在操作浏览器 — 在桌面应用中交还浏览器后继续执行",
     "waitingModel": "正在等待模型服务器响应 — 恢复后将自动继续运行",
     "planLabel": "计划 ({completed}/{total})",
     "outputsLabel": "{count} 个产出",
@@ -1052,10 +1052,10 @@
         "llm_error": "请稍后重新运行。如果仍然失败，请换一个模型或联系管理员。",
         "interrupted": "可继续时请从中断的位置接着做，否则请重新运行。",
         "unknown": "请查看完整的失败原因；重新运行后仍然相同时请联系管理员。",
-        "device_wait_expired": "请连接 Companion(或 CLI)后重新运行。",
-        "browser_takeover_expired": "请在 Companion 菜单中交还浏览器后重新运行。",
+        "device_wait_expired": "请连接桌面应用(或 CLI)后重新运行。",
+        "browser_takeover_expired": "请在桌面应用菜单中交还浏览器后重新运行。",
         "sandbox_unavailable": "请稍后重新运行。同时运行的任务减少后即可获得执行环境。如果持续出现，请通知管理员。",
-        "interrupted_local_device": "请重新连接 Companion(或 CLI)，可继续时请继续运行，否则请重新运行。",
+        "interrupted_local_device": "请重新连接桌面应用(或 CLI)，可继续时请继续运行，否则请重新运行。",
         "lease_held_elsewhere": "请稍后重新运行。",
         "recovery_limit": "可以从中断处继续运行。如果再次停在同一位置，请将目标拆小后重新运行，或通知管理员。"
       }
@@ -2406,7 +2406,7 @@
   },
   "desktopApp": {
     "title": "桌面应用",
-    "subtitle": "OpenMake Companion — 让代理任务在你自己电脑的文件夹中运行的应用。",
+    "subtitle": "OpenMake 桌面应用 — 让代理任务在你自己电脑的文件夹中运行的应用。",
     "loading": "加载中…",
     "filesTitle": "安装文件",
     "os": {
@@ -2424,7 +2424,7 @@
       "title": "安装说明",
       "native": "macOS：打开 dmg，将应用移到“应用程序”文件夹。首次运行出现警告时，前往 系统设置 → 隐私与安全性 → 仍要打开。",
       "windows": "Windows：运行安装文件。出现“Windows 已保护你的电脑”画面时，点击 更多信息 → 仍要运行。",
-      "apiKey": "安装后，在应用设置中填入服务器地址（本网页的地址）和 API key — 在<link>API 访问</link>中签发 Companion·CLI 连接用密钥。"
+      "apiKey": "安装后，在应用设置中填入服务器地址（本网页的地址）和 API key — 在<link>API 访问</link>中签发桌面应用·CLI 连接用密钥。"
     }
   },
   "notFound": {
@@ -2754,7 +2754,7 @@
   },
   "adminBridgeDevices": {
     "title": "已连接设备",
-    "description": "通过 Companion 或 CLI 连接到本地执行的所有设备。仅显示文件夹名称。",
+    "description": "通过桌面应用或 CLI 连接到本地执行的所有设备。仅显示文件夹名称。",
     "loadError": "加载失败。",
     "disabled": "本地执行功能已关闭(LOCAL_EXECUTOR_ENABLED)。",
     "listTitle": "已连接设备",
