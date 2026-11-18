@@ -173,6 +173,8 @@ export class AgentTaskRepository extends AgentTaskLifecycleRepository {
         completionPath?: string;
         /** goal judge 결과(091) — 'achieved' | 'not_achieved' | 'unknown' | 'skipped' */
         judgeVerdict?: string;
+        /** 조건부 전이 — 출발 상태를 허용 표와 이 목록의 교집합으로 좁힌다. 밖이면 AgentTaskTransitionError(경쟁 전이를 덮어쓰지 않게). */
+        onlyFrom?: AgentTaskStatus[];
         /** 상태 전이 사유(124 이벤트) — 미지정 시 error 문자열을 쓴다. */
         transitionReason?: string;
         /** 큐 우선순위(131) */
@@ -269,7 +271,8 @@ export class AgentTaskRepository extends AgentTaskLifecycleRepository {
         }
         // 상태 머신 강제(124): 허용 출발 상태에서만 전이하고 이전 상태를 RETURNING 으로 받아 이벤트를
         // 남긴다. 표 밖 전이는 rowCount=0 → 현재 상태를 읽어 거부(throw). 규칙은 task-state.ts 한 곳.
-        params.push(allowedSources(updates.status));
+        const sources = allowedSources(updates.status);
+        params.push(updates.onlyFrom ? sources.filter((s) => updates.onlyFrom!.includes(s)) : sources);
         const r = await this.query<{ prev: AgentTaskStatus }>(
             `UPDATE agent_tasks t SET ${sets.join(', ')}
              FROM (SELECT id, status AS prev FROM agent_tasks WHERE id = $${paramIdx} FOR UPDATE) o
