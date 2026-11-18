@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.139.5](https://github.com/openmake/openmake_llm/compare/v1.139.4...v1.139.5) (2026-11-18)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** closeTask 는 만료 뒤 무효화, 취소 정리 중 주차 재개 claim 차단·조건부 cancelled 쓰기 ([98bcd54](https://github.com/openmake/openmake_llm/commit/98bcd54f551a6227ea90ad95a091bb57bac99dd0))
+* **agent-task:** 승인 대기 슬롯 양보 플래그를 개발 환경에서도 기본 켬 — 로컬에서 재시도 카드가 대기열을 막던 원인 ([2f7bbf3](https://github.com/openmake/openmake_llm/commit/2f7bbf3e7a4e5dfafddb9a429d6b797b4fc4dac8))
+* **agent-task:** 승인 대기 중 실행 슬롯 양보 — 재시도 카드가 대기열을 막지 않게 ([a918fe6](https://github.com/openmake/openmake_llm/commit/a918fe6c026fd5147c2063d3d5bb8c949790301d))
+* **agent-task:** 이어받기 경계 전이는 전이 이벤트와 한 문장 — 이벤트 기록 실패 시 전이도 실패 ([081f7d5](https://github.com/openmake/openmake_llm/commit/081f7d5fe435db99b06610d7c34cc387bf7ec57b))
+* **agent-task:** 이어받기 중 취소는 abort, closeTask 무효화 완료 뒤 취소 응답·재실행 ([c262d69](https://github.com/openmake/openmake_llm/commit/c262d6982bebbbff0d2d76292f4b5adb7ff3a2e1))
+* **agent-task:** 이어받기는 마지막 취소·실패 전이 전 결정을 쓰지 않는다 — 무효화 실패 fail-closed 를 재시작 뒤에도 유지 ([47c153b](https://github.com/openmake/openmake_llm/commit/47c153b0b48e660bfe0a6134503a775dbb51344a))
+* **agent-task:** 주차 has_decision 에 이어받기 경계 적용·미소비 거절 정리, 대기열에서 꺼낸 취소는 pending·queued 도 허용 ([ef7a22e](https://github.com/openmake/openmake_llm/commit/ef7a22edad242b44e0ee6811d07801eb0295f563))
+* **agent-task:** 취소는 승인 무효화 뒤 cancelled 공개, 무효화 실패 시 이어받기 차단(fail-closed) ([641ccc4](https://github.com/openmake/openmake_llm/commit/641ccc44e276d417cca9238ed4d24b2cdbbb5b87))
+* **api,web:** 기본 모델의 키가 꺼지면 서버가 판정해 자동으로 내리고, 켜면 저장한 모델로 돌아온다 ([888edd2](https://github.com/openmake/openmake_llm/commit/888edd250685265dc6a95d79e4a5c19baee5c927))
+* **api,web:** 기본 모델의 키가 꺼지면 서버가 판정해 자동으로 답하고, 켜면 저장 모델로 돌아온다 ([5e2bf63](https://github.com/openmake/openmake_llm/commit/5e2bf63765233848e467418c34bbd5ab342dc582))
+* **api:** hasa 슬롯 1, 딥리서치·웹검색 라우트 행위자 전달, 리랭킹 기한이 해석을 덮고 거절 메모에 키 지문 ([6b2bdde](https://github.com/openmake/openmake_llm/commit/6b2bdde46c2be294fdbac3d21847fd968581cceb))
+* **api:** 계획기 web 실행기·fact_check·research_topic 이 행위자를 검색에 넘긴다 ([bad2150](https://github.com/openmake/openmake_llm/commit/bad21504fe8276e97692c7b0bc8ae0b43f5f0ace))
+* **api:** 도구 선별·웹검색 리랭킹 임베딩을 text.embed 배정으로 해석 ([cef2b61](https://github.com/openmake/openmake_llm/commit/cef2b61dd1df883543e7992613b59ba7e4802111))
+* **api:** 도구 선별·웹검색 리랭킹 임베딩을 text.embed 배정으로 해석 ([211e6cc](https://github.com/openmake/openmake_llm/commit/211e6ccdf3872d5cbb3a7cdc0067f07b234f4ef4))
+* **api:** 로컬 이어가기 세그먼트가 앞 worktree 를 잇고, fork·재개 격리 안내를 실제 브랜치에 맞춘다 ([d29110a](https://github.com/openmake/openmake_llm/commit/d29110a980148c09bdeb1f52da41e308d5fdc93e))
+* **api:** 로컬 이어가기 세그먼트가 앞 worktree 를 잇고, fork·재개 격리 안내를 실제 브랜치에 맞춘다 ([fc5efa6](https://github.com/openmake/openmake_llm/commit/fc5efa69e025742593f439274931380ad062b9d0))
+* **api:** 재실행 마감이 복원된 누적 토큰을 싣고, D3 앞 행 조회 실패는 체인을 멈춘다 ([4ccaeaf](https://github.com/openmake/openmake_llm/commit/4ccaeaf1767e8a6bfa8ffc8513f73f013a41776f))
+* **api:** 재실행 이어짐 마감이 running 을 거쳐 completed 로 간다(pending·queued 전이 거부 방지) ([cdd8ca6](https://github.com/openmake/openmake_llm/commit/cdd8ca659f190c2868e08e07c24caa64e4b4da2f))
+* **web:** 기본 모델 넘기기를 기록한 사용자에 묶고, 로그아웃 때 selectedModel 을 자동으로 되돌린다 ([8f47949](https://github.com/openmake/openmake_llm/commit/8f47949be04525dab5f115e20d43a0992aadd811))
+* **web:** 새 로그인이면 소유자 없는 구 버전 selectedModel 을 그 자리에서 버린다 ([72e2354](https://github.com/openmake/openmake_llm/commit/72e2354e2d8b7208120298810576d75e34fa5d09))
+
 ## [1.139.4](https://github.com/openmake/openmake_llm/compare/v1.139.3...v1.139.4) (2026-11-18)
 
 
