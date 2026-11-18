@@ -4,7 +4,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { BRIDGE_KINDS, BROWSER_KIND, SANDBOX_ENABLED, sbq } from '../constants';
+import { BRIDGE_KINDS, BROWSER_KIND, SANDBOX_ENABLED, sbq, WORKTREE_KEEP_IGNORED_CAPABILITY } from '../constants';
 import { BridgeCore } from '../core';
 import { buildSandboxProfile } from '../sandbox';
 import type { BridgeMsg, BridgeResult, ConfirmFn } from '../types';
@@ -233,7 +233,8 @@ describe('BridgeCore', () => {
 
     it('전용 프로필을 주지 않으면 브라우저를 알리지도 처리하지도 않는다', async () => {
         const core = makeCore(base);
-        expect(core.capabilities()).toEqual([...BRIDGE_KINDS]);
+        // 요청 종류 뒤에 기능 값 — 무시 파일만 남은 작업 폴더를 보존한다(옛 기기 보완 판정에 서버가 쓴다).
+        expect(core.capabilities()).toEqual([...BRIDGE_KINDS, WORKTREE_KEEP_IGNORED_CAPABILITY]);
         const r = await run(core, { kind: 'browser', actions: [{ type: 'goto', url: 'https://example.com' }] });
         expect(r.ok).toBe(false);
         expect(r.error).toContain('브라우저를 쓸 수 없습니다');

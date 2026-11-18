@@ -641,11 +641,13 @@ public enum ExpiresAt: Codable {
 ///
 /// worktree : 작업 폴더(`worktreeRel`, 실행 폴더(연결 폴더 + folder_rel) 기준 상대경로)·브랜치에서 격리
 /// 실행.              outcome 은 작업이 끝난 뒤(종료 상태에서만) 정리 결과 — kept = 변경이 남아 보존, removed = 변경 없어
-/// 정리.   direct   : 격리 없이 연결 폴더에서 직접 작업. reason —              not_repo = git 저장소가 아님,
-/// disabled = 서버 설정으로 꺼짐, unavailable = 격리를 시도했으나 실패.
+/// 정리.              ignoredOnly 는 kept 일 때만 — git 이 무시하는 파일만 남아 보존했다(기기가 알려 준 경우만,
+/// 2026-11-18).   direct   : 격리 없이 연결 폴더에서 직접 작업. reason —              not_repo = git 저장소가
+/// 아님, disabled = 서버 설정으로 꺼짐, unavailable = 격리를 시도했으나 실패.
 // MARK: - AgentTaskIsolation
 public struct AgentTaskIsolation: Codable {
     public let branch: String?
+    public let ignoredOnly: Bool?
     public let outcome: AgentTaskIsolationOutcome?
     public let state: AgentTaskIsolationState
     public let worktreeRel: String?
@@ -653,14 +655,16 @@ public struct AgentTaskIsolation: Codable {
 
     public enum CodingKeys: String, CodingKey {
         case branch = "branch"
+        case ignoredOnly = "ignoredOnly"
         case outcome = "outcome"
         case state = "state"
         case worktreeRel = "worktreeRel"
         case reason = "reason"
     }
 
-    public init(branch: String?, outcome: AgentTaskIsolationOutcome?, state: AgentTaskIsolationState, worktreeRel: String?, reason: AgentTaskIsolationDirectReason?) {
+    public init(branch: String?, ignoredOnly: Bool?, outcome: AgentTaskIsolationOutcome?, state: AgentTaskIsolationState, worktreeRel: String?, reason: AgentTaskIsolationDirectReason?) {
         self.branch = branch
+        self.ignoredOnly = ignoredOnly
         self.outcome = outcome
         self.state = state
         self.worktreeRel = worktreeRel
@@ -688,6 +692,7 @@ public extension AgentTaskIsolation {
 
     func with(
         branch: String?? = nil,
+        ignoredOnly: Bool?? = nil,
         outcome: AgentTaskIsolationOutcome?? = nil,
         state: AgentTaskIsolationState? = nil,
         worktreeRel: String?? = nil,
@@ -695,6 +700,7 @@ public extension AgentTaskIsolation {
     ) -> AgentTaskIsolation {
         return AgentTaskIsolation(
             branch: branch ?? self.branch,
+            ignoredOnly: ignoredOnly ?? self.ignoredOnly,
             outcome: outcome ?? self.outcome,
             state: state ?? self.state,
             worktreeRel: worktreeRel ?? self.worktreeRel,

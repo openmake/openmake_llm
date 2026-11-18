@@ -79,6 +79,8 @@ export interface BridgeResult {
     worktreeRel?: string;
     branch?: string;
     kept?: boolean;
+    /** worktree remove — git 이 무시하는 파일만 남아 보존했다(그 밖에는 키가 없다, 설계 2026-11-18 ignored-cleanup K5). */
+    ignoredOnly?: boolean;
     /** folders·lsp_diagnostics: 상한에서 잘랐다. exec: 출력 상한으로 자식을 끊었다(종료 코드 1 은 명령의 코드가 아니다). */
     truncated?: boolean;
     /** exec — 시간 제한으로 직접 자식을 끊었다. 아니면 키가 없다(설계 2026-11-16 §8 F2). */

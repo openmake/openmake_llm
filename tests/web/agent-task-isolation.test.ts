@@ -12,6 +12,9 @@ test('값 6종 → 문구 키·색', () => {
   assert.deepEqual(isolationLabel(WT), { key: 'worktree', params: { branch: 'omk-task/abcd1234' }, tone: 'accent' });
   assert.deepEqual(isolationLabel({ ...WT, outcome: 'kept' }), { key: 'worktreeKept', params: { branch: 'omk-task/abcd1234', path: '.openmake/worktrees/t1' }, tone: 'accent' });
   assert.deepEqual(isolationLabel({ ...WT, outcome: 'removed' }), { key: 'worktreeRemoved', params: {}, tone: 'neutral' });
+  // 무시 파일만 남아 보존(2026-11-18) — 서버가 실은 ignoredOnly 로 키만 고른다.
+  assert.deepEqual(isolationLabel({ ...WT, outcome: 'kept', ignoredOnly: true }), { key: 'worktreeKeptIgnored', params: { branch: 'omk-task/abcd1234', path: '.openmake/worktrees/t1' }, tone: 'accent' });
+  assert.equal(isolationLabel({ ...WT, outcome: 'removed', ignoredOnly: true })?.key, 'worktreeRemoved');
   assert.deepEqual(isolationLabel({ state: 'direct', reason: 'not_repo' }), { key: 'notRepo', params: {}, tone: 'neutral' });
   assert.deepEqual(isolationLabel({ state: 'direct', reason: 'disabled' }), { key: 'disabled', params: {}, tone: 'neutral' });
   assert.deepEqual(isolationLabel({ state: 'direct', reason: 'unavailable' }), { key: 'unavailable', params: {}, tone: 'warn' });
@@ -27,7 +30,7 @@ test('없음·모르는 state·reason·outcome 은 null', () => {
 
 test('문구 키는 ko 원본에 모두 있다', () => {
   const iso = (ko as { agentTasks: { isolation: Record<string, string> } }).agentTasks.isolation;
-  for (const k of ['worktree', 'worktreeKept', 'worktreeRemoved', 'notRepo', 'disabled', 'unavailable']) assert.ok(iso[k], k);
+  for (const k of ['worktree', 'worktreeKept', 'worktreeKeptIgnored', 'worktreeRemoved', 'notRepo', 'disabled', 'unavailable']) assert.ok(iso[k], k);
 });
 
 test('작업 응답 병합 — 값은 넣고, null 은 비우고, 없으면(옛 서버) 건드리지 않는다', () => {

@@ -85,6 +85,8 @@ export class RemoteExecutor implements TaskExecutor {
     /** worktree 작업 브랜치명 — 사용자 안내·결과 보고용. */
     private worktreeBranch: string | null = null;
     private isolationState: AgentTaskIsolation | null = null;
+    /** 서버가 아는 파일 생성(write·browser 성공)이 있었는가 — 옛 기기의 무시 파일 정리를 막는 데 쓴다(cleanup). */
+    private mayHaveFiles = false;
     private deviceLoss: DeviceLoss | null = null;
 
     /**
@@ -341,6 +343,7 @@ export class RemoteExecutor implements TaskExecutor {
             userStopped = isBrowserUserStoppedError(out.error)
                 || (Array.isArray(out.results) && out.results.some((x) => isBrowserUserStoppedError((x as { error?: unknown } | null)?.error)));
         } catch { /* 결과가 JSON 이 아니다(전송 실패 등) — 주소는 그대로 둔다 */ }
+        if (r.ok) this.mayHaveFiles = true; // 다운로드가 작업 폴더에 놓였을 수 있다
         const result = toExecResult(r);
         // 사용자가 기기에서 직접 중지했다 — 거절과 같은 수준으로 재시도를 막는 안내를 붙인다(stdout 은 JSON 그대로 둔다).
         if (userStopped) result.stderr = `${result.stderr ? `${result.stderr}\n` : ''}${getBrowserUserStoppedNotice()}`;
@@ -354,6 +357,7 @@ export class RemoteExecutor implements TaskExecutor {
         }
         const r = await this.req({ kind: 'write', path: this.scoped(relPath), contentB64: buf.toString('base64') });
         if (!r.ok) throw new Error(r.error ?? '로컬 파일 쓰기 실패');
+        this.mayHaveFiles = true;
     }
 
     /** 호스트 파일(입력 첨부 스풀)을 읽어 브리지로 전송 — 캡 초과는 거부. */
@@ -396,15 +400,25 @@ export class RemoteExecutor implements TaskExecutor {
      * 종료 통지 + worktree 정리 — 사용자 폴더는 절대 삭제하지 않는다(removeWorkspace 무시).
      * worktree 도 **변경분이 없을 때만** 제거한다(디바이스가 판단). 변경이 남아 있으면 브랜치와
      * 함께 보존해 사용자가 검토·머지할 수 있게 한다.
+     * 무시 파일 보존(worktree_keep_ignored)을 모르는 옛 기기는 .gitignore 대상 파일만 만든 작업도 지운다 — 서버가 파일을
+     * 만든 것을 아는 작업(write·browser 성공)이면 remove 를 보내지 않는다(설계 2026-11-18 ignored-cleanup K6).
      */
     async cleanup(): Promise<void> {
-        if (this.worktreeRel) {
+        const reg = getLocalBridgeRegistry();
+        const legacyKeep = this.mayHaveFiles && !!reg.getDevice(this.userId, this.deviceId)
+            && !reg.supports(this.userId, this.deviceId, 'worktree_keep_ignored');
+        if (this.worktreeRel && legacyKeep) {
+            logger.info(`[${this.taskId}] worktree 보존 — 옛 기기라 무시 파일 정리를 피함 (branch=${this.worktreeBranch})`);
+            if (this.isolationState?.state === 'worktree') this.isolationState = { ...this.isolationState, outcome: 'kept' };
+        } else if (this.worktreeRel) {
             const r = await this.req({ kind: 'worktree', op: 'remove', taskId: this.taskId })
                 .catch(() => ({ ok: false } as BridgeResult));
             if (r.ok) {
-                logger.info(`[${this.taskId}] worktree ${r.kept ? `보존 (branch=${this.worktreeBranch})` : '정리 완료'}`);
+                logger.info(`[${this.taskId}] worktree ${r.kept ? `보존 (branch=${this.worktreeBranch}${r.ignoredOnly === true ? ', 무시 파일만' : ''})` : '정리 완료'}`);
                 // 정리 결과(200) — 실패·무응답이면 모르므로 채우지 않는다.
-                if (this.isolationState?.state === 'worktree') this.isolationState = { ...this.isolationState, outcome: r.kept ? 'kept' : 'removed' };
+                if (this.isolationState?.state === 'worktree') {
+                    this.isolationState = { ...this.isolationState, outcome: r.kept ? 'kept' : 'removed', ...(r.kept && r.ignoredOnly === true ? { ignoredOnly: true } : {}) };
+                }
             }
         }
         // taskId 포함 — 디바이스가 이 작업의 일괄 승인을 즉시 회수한다.
