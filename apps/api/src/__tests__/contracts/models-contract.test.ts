@@ -1,6 +1,7 @@
 /**
  * Models 응답 계약 테스트 — 실핸들러(model.routes GET /api/models) 응답을 openapi.v1.json 으로 검증.
- * 무DB — 모델 카탈로그/역할/능력 config 는 mock, 비인증 요청이라 외부 provider 경로는 스킵된다.
+ * 무DB — 모델 카탈로그/역할/능력 config 는 mock. `x-test-user` 헤더가 있으면 인증 사용자로 보고
+ * 외부 키·선호 조회(mock)를 거친다 — 저장된 기본 모델 판정(defaultModelSelection, 2026-11-18).
  */
 import express, { type Request, type Response, type NextFunction } from 'express';
 import request from 'supertest';
@@ -9,7 +10,11 @@ import { expectContract } from './contract-validator';
 jest.mock('../../auth', () => ({
     requireAuth: (_req: Request, _res: Response, next: NextFunction) => next(),
     requireAdmin: (_req: Request, _res: Response, next: NextFunction) => next(),
-    optionalAuth: (_req: Request, _res: Response, next: NextFunction) => next(),
+    optionalAuth: (req: Request, _res: Response, next: NextFunction) => {
+        const id = req.header('x-test-user');
+        if (id) Object.assign(req, { user: { id } });
+        next();
+    },
 }));
 
 jest.mock('../../config/model-roles', () => ({
@@ -37,8 +42,29 @@ jest.mock('../../config/model-defaults', () => ({
 jest.mock('../../services/model-health-monitor', () => ({
     getModelHealthMonitor: () => ({}),
 }));
+// 사용자 키 행 — enabled 를 테스트가 바꾼다. 서버는 켜진 키만 목록에 싣는다.
+const geminiKey = { providerId: 'gemini', sdkType: 'openai-compatible', baseUrl: 'https://gemini.test/v1', enabled: false };
+const mockListByUser = jest.fn(async (_userId: string, opts?: { includeDisabled?: boolean }) =>
+    [geminiKey].filter((k) => opts?.includeDisabled || k.enabled));
 jest.mock('../../data/repositories/external-keys-repo', () => ({
-    ExternalKeysRepository: class {},
+    ExternalKeysRepository: class {
+        listByUser = mockListByUser;
+        listUnusableModels = async () => new Set<string>();
+    },
+}));
+const mockGetPreferences = jest.fn(async (_userId: string): Promise<Record<string, unknown>> => ({ defaultModel: 'gemini:gemini-2.5-flash' }));
+jest.mock('../../data/repositories/user-repository', () => ({
+    UserRepository: class {
+        getPreferences = mockGetPreferences;
+    },
+}));
+jest.mock('../../services/external-models-catalog', () => ({
+    resolveExternalModels: async () => [
+        { id: 'gemini-2.5-flash', fullId: 'gemini:gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', capabilities: { streaming: true } },
+    ],
+}));
+jest.mock('../../services/orchestrator/capability-resolver', () => ({
+    resolveCapabilityTarget: async () => { throw new Error('미배정'); },
 }));
 jest.mock('../../data/models/unified-database', () => ({
     getPool: () => ({}),
@@ -99,5 +125,53 @@ describe('Models 응답 계약', () => {
         const usable = await request(app).get('/api/models').query({ usableOnly: '1' });
         expect(ids(usable)).not.toContain('local-llm:bge-m3');
         expect(ids(usable)).not.toContain('local-llm:acestep-v15-xl-turbo');
+    });
+
+    test('비인증 → defaultModelSelection 은 auto', async () => {
+        const r = await request(app).get('/api/models');
+        expect(r.body.data.defaultModelSelection).toEqual({ saved: null, effective: 'default', status: 'auto' });
+    });
+
+    describe('인증 — 저장된 기본 모델의 키를 끄고 켠다', () => {
+        beforeEach(() => {
+            mockListByUser.mockClear();
+            mockGetPreferences.mockClear();
+        });
+        const ids = (r: { body: { data: { models: Array<{ modelId: string }> } } }) => r.body.data.models.map((m) => m.modelId);
+
+        test('키 꺼짐 → key_disabled, 목록에 gemini 없음, 꺼진 키까지 한 번에 읽는다', async () => {
+            geminiKey.enabled = false;
+            const r = await request(app).get('/api/models').query({ chatOnly: '1' }).set('x-test-user', 'u1');
+            expect(r.status).toBe(200);
+            expect(r.body.data.defaultModelSelection).toEqual({
+                saved: 'gemini:gemini-2.5-flash', effective: 'default', status: 'key_disabled',
+            });
+            expect(ids(r)).not.toContain('gemini:gemini-2.5-flash');
+            expect(mockListByUser).toHaveBeenCalledTimes(1);
+            expect(mockListByUser).toHaveBeenCalledWith('u1', { includeDisabled: true });
+            expectContract('/api/models', 'get', '200', r.body);
+        });
+
+        test('같은 사용자 키를 다시 켜면 서버 캐시 없이 바로 ok·saved 로 돌아온다', async () => {
+            geminiKey.enabled = false;
+            await request(app).get('/api/models').set('x-test-user', 'u1');
+            geminiKey.enabled = true;
+            const r = await request(app).get('/api/models').set('x-test-user', 'u1');
+            expect(r.body.data.defaultModelSelection).toEqual({
+                saved: 'gemini:gemini-2.5-flash', effective: 'gemini:gemini-2.5-flash', status: 'ok',
+            });
+            expect(ids(r)).toContain('gemini:gemini-2.5-flash');
+            expectContract('/api/models', 'get', '200', r.body);
+        });
+
+        test('선호 조회 실패 → 필드 null, 응답 200·목록 그대로', async () => {
+            geminiKey.enabled = true;
+            mockGetPreferences.mockRejectedValueOnce(new Error('db down'));
+            const r = await request(app).get('/api/models').set('x-test-user', 'u1');
+            expect(r.status).toBe(200);
+            expect(r.body.data.defaultModelSelection).toBeNull();
+            expect(ids(r)).toContain('gemini:gemini-2.5-flash');
+            expectContract('/api/models', 'get', '200', r.body);
+        });
     });
 });
