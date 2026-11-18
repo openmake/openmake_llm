@@ -38,7 +38,7 @@ bash ../../scripts/publish-desktop-windows.sh     # 서버 배포 폴더에 복�
 - **설치 파일(NSIS)은 Windows 나 x64 장비에서 만든다.** Apple Silicon Mac 에서는 앱 폴더(`release/win-unpacked`)까지만 만들어지고, 번들된 `makensis` 가 x64 실행 파일이라 마지막 단계가 실패한다(Rosetta 없음, 2026-10-04 확인).
 - 사용자용 설치 안내는 `INSTALL.md`.
 
-## 아직 하지 않은 것
+## 검증
 
-- **실제 Windows 에서 실행해 보지 않았다.** 기동 검증(`npm run smoke`)은 macOS 의 Electron 으로 돌렸다.
-- 설치 파일을 실제로 만들어 설치·업데이트해 보지 않았다. 정식 아이콘도 없다(트레이는 임시 점 아이콘).
+- **실제 Windows 에서 설치·동작을 확인했다(2026-11-19, 0.1.10).** CI 의 기동 검증(`npm run smoke`)은 따로 계속 돈다.
+- 트레이·설치 파일 아이콘은 `assets/icon.png` 다.
