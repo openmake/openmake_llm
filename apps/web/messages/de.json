@@ -165,6 +165,7 @@
     },
     "pushNotSupported": "Dieser Browser unterstützt keine Push-Benachrichtigungen.",
     "pushSwNotReady": "Der Service Worker ist nicht registriert, daher sind Push-Benachrichtigungen nicht verfügbar.",
+    "pushToggleFailed": "Die Push-Benachrichtigungseinstellung konnte nicht gespeichert werden.",
     "memoryLearning": {
       "title": "Langzeit-Erinnerungen verwenden",
       "description": "Verweist in der Unterhaltung auf Ihre gespeicherten Langzeit-Erinnerungen. Deaktivieren Sie dies, um gespeicherte Erinnerungen aus diesem Chat auszuschließen."

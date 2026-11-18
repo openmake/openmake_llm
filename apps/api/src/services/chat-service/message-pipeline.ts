@@ -35,7 +35,7 @@ import { QuotaExceededError } from '../../errors/quota-exceeded.error';
 import { resolveDegradeMap, resolveDegradeTarget } from '../../config/quota-degrade-policy';
 import { getActiveChatTurnIntegrations, isSessionMemoryIsolated } from './turn-integrations';
 import { ensureAddonStates } from '../addon/addon-state';
-import { applyAgentModelOverride } from './agent-model-override';
+import { runGateWithAgentModel } from './agent-model-override';
 import { resolveModeExternalClient } from './mode-external-client';
 import { buildUserContextBlocks } from './user-context-blocks';
 import { autoFormMemories } from './memory-extraction';
@@ -108,15 +108,10 @@ export async function runMessagePipeline(svc: ChatService,
         throw new Error('ProviderRouter 미주입 — ChatService 생성 시 providerRouter 를 전달해야 합니다');
     }
 
-    // Custom Agent 모델 배정 (Phase C) — 상세는 agent-model-override (요청 model 자동일 때만 적용)
-    const gateRequestedModel = await applyAgentModelOverride(
-        executionPlan?.requestedModel, req.userAgentId, req.userId,
-    );
-
-    let externalResolved = await runProviderGate(svc.providerRouter, {
-        requestedModel: gateRequestedModel,
-        fallbackModel: svc.client.model,
-        ctx: { userId: req.userId, userRole: req.userRole },
+    // Custom Agent 모델 배정 (Phase C) + 게이트 — 상세는 agent-model-override (요청 model 자동일 때만 배정 적용, 거절 시 고지 후 기본)
+    let externalResolved = await runGateWithAgentModel(svc.providerRouter, {
+        requestedModel: executionPlan?.requestedModel, userAgentId: req.userAgentId, userId: req.userId,
+        userRole: req.userRole, fallbackModel: svc.client.model, onSystemEvent: _onSystemEvent,
     });
     // 로컬 쿼터 초과 시 강등(F25 PR-3a) — QUOTA_EXCEEDED_ACTION=degrade 면 맵의 대체 모델로 재해석하고 고지한다.
     // 대체가 없거나 정책에 막히면 종전대로 QuotaExceededError(429).
