@@ -17,7 +17,7 @@ const limits = AGENT_TASK_LIMITS as { QUEUE_YIELD_ON_APPROVAL: boolean };
 interface Job { started: boolean; finish: () => Promise<void> }
 
 function harness(globalMax = 2, userMax = 1) {
-    const q = new AgentTaskQueue(globalMax, userMax);
+    const q = new AgentTaskQueue(globalMax, userMax, undefined, () => 1_000); // 고정 시계 — stats().wait.oldestPendingMs 가 밀리초 경과로 바뀌지 않게
     const jobs = new Map<string, Job>();
     const submit = (taskId: string, userId: string): 'started' | 'queued' | 'duplicate' => {
         const job: Job = { started: false, finish: async () => undefined };

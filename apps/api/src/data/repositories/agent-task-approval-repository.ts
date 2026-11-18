@@ -10,6 +10,7 @@
  * @module data/repositories/agent-task-approval-repository
  */
 import { BaseRepository } from './base-repository';
+import { decidedAfterTakeoverBoundarySql } from './agent-task-event-sql';
 import { hashToolArgs } from '../../utils/args-hash';
 
 export type ApprovalRowStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'aborted' | 'revoked';
@@ -149,12 +150,10 @@ export class AgentTaskApprovalRepository extends BaseRepository {
                  SELECT approval_id FROM agent_task_approvals
                  WHERE task_id = $1 AND tool_name = $2 AND args_hash = $3
                    AND status IN ('approved', 'rejected') AND consumed_at IS NULL
-                   AND decided_at > COALESCE((SELECT MAX(e.created_at) FROM agent_task_events e
-                       WHERE e.task_id = $1 AND (e.to_status = 'cancelled' OR (e.to_status = 'failed' AND e.reason IS DISTINCT FROM $4))),
-                       '-infinity'::timestamptz)
+                   AND ${decidedAfterTakeoverBoundarySql('agent_task_approvals', '$1')}
                  ORDER BY decided_at DESC LIMIT 1)
              RETURNING *`,
-            [taskId, toolName, argsHash, 'server restarted'],
+            [taskId, toolName, argsHash],
         );
         if (decided.rows[0]) return decided.rows[0];
         const pending = await this.query<ApprovalRow>(
@@ -187,12 +186,16 @@ export class AgentTaskApprovalRepository extends BaseRepository {
     }
 
     /**
-     * 작업 종료 시 아직 쓰지 않은 승인을 무효화 — 자리가 없어 주차로 넘긴 승인(미소비)이 취소된 작업의 재실행에서 쓰이지 않게.
-     * 이미 소비된 행·거절·pending 은 그대로다.
+     * 작업 종료 시 아직 쓰지 않은 결정을 닫는다 — 자리가 없어 주차로 넘긴 결정(미소비)이 취소된 작업의 재실행에서 쓰이지 않게.
+     * 미소비 승인은 aborted, 미소비 거절은 상태를 둔 채 소비 표시(완료 판정의 listRejectedForTask 에는 남는다, Fable r4 P2).
+     * 이미 소비된 행·pending 은 그대로다.
      */
     async voidUnconsumedForTask(taskId: string): Promise<void> {
         await this.query(
-            `UPDATE agent_task_approvals SET status = 'aborted' WHERE task_id = $1 AND status = 'approved' AND consumed_at IS NULL`,
+            `UPDATE agent_task_approvals
+                SET status = CASE WHEN status = 'approved' THEN 'aborted' ELSE status END,
+                    consumed_at = CASE WHEN status = 'rejected' THEN NOW() ELSE consumed_at END
+              WHERE task_id = $1 AND status IN ('approved', 'rejected') AND consumed_at IS NULL`,
             [taskId],
         );
     }

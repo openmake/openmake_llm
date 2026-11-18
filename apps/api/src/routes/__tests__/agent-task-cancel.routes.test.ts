@@ -153,8 +153,23 @@ describe('POST /:taskId/cancel — 미소비 승인 무효화', () => {
         cancelPending.mockReturnValueOnce(true);
         const res = await request(app).post('/api/agent-tasks/q/cancel');
         expect(res.status).toBe(200);
-        expect(updateAgentTask).toHaveBeenCalledWith('q', { status: 'cancelled', onlyFrom: ['queued'] });
+        expect(updateAgentTask).toHaveBeenCalledWith('q', { status: 'cancelled', onlyFrom: expect.arrayContaining(['queued']) });
         expect(closeTask).toHaveBeenCalledWith('q');
+    });
+    it('대기열에서 꺼냈으면(dequeued) 읽은 뒤 바뀐 pending·queued 에서도 취소한다 — 꺼낸 항목 없는 고아 queued 행을 남기지 않게(Fable r4 P3)', async () => {
+        // 읽은 시점은 paused, 그 뒤 주차 재개가 claim(pending)·dispatch(queued)해 대기열에 넣은 것을 이 요청이 꺼냈다
+        rows.p = { id: 'p', status: 'paused', user_id: 'u1' };
+        cancelPending.mockReturnValueOnce(true);
+        const res = await request(app).post('/api/agent-tasks/p/cancel');
+        expect(res.status).toBe(200);
+        const opts = updateAgentTask.mock.calls[0][1] as { onlyFrom: string[] };
+        expect([...opts.onlyFrom].sort()).toEqual(['paused', 'pending', 'queued']);
+    });
+    it('대기열에서 꺼내지 않았으면 읽은 상태에서만 취소한다(종전)', async () => {
+        rows.p = { id: 'p', status: 'paused', user_id: 'u1' };
+        const res = await request(app).post('/api/agent-tasks/p/cancel');
+        expect(res.status).toBe(200);
+        expect(updateAgentTask).toHaveBeenCalledWith('p', { status: 'cancelled', onlyFrom: ['paused'] });
     });
     it('주차(paused) 작업 취소는 종전대로 closeTask', async () => {
         rows.p = { id: 'p', status: 'paused', user_id: 'u1' };
