@@ -41,6 +41,21 @@ describe('syncWorktreeIsolationNote', () => {
     });
 });
 
+describe('syncWorktreeIsolationNote — 작업 폴더 경로', () => {
+    const W = '.openmake/worktrees/new';
+    it('같은 브랜치라도 경로가 다르면 현재 경로로 바꾼다', () => {
+        const out = syncWorktreeIsolationNote(`기본 지침${getWorktreeIsolationNote('omk-task/a', '.openmake/worktrees/old')}`, 'omk-task/a', W);
+        expect(out).toBe(`기본 지침${getWorktreeIsolationNote('omk-task/a', W)}`);
+    });
+    it('경로 없는 옛 안내는 경로 있는 안내로 바뀐다', () => {
+        expect(syncWorktreeIsolationNote(sys('omk-task/a'), 'omk-task/a', W)).toBe(`기본 지침${getWorktreeIsolationNote('omk-task/a', W)}`);
+    });
+    it('브랜치·경로가 같으면 문자열이 그대로다(캐시 유지)', () => {
+        const s = `기본 지침${getWorktreeIsolationNote('omk-task/a', W)}`;
+        expect(syncWorktreeIsolationNote(s, 'omk-task/a', W)).toBe(s);
+    });
+});
+
 const P = 'ws-git/sub/.openmake/worktrees/task-abcdef12/sub';
 
 describe('격리 안내 — 작업 폴더 경로', () => {
