@@ -252,6 +252,13 @@ class LocalBridgeRegistry {
     private readonly pending = new Map<string, Pending>();
     /** 기기(userId+deviceId)별 진행 중인 생존 확인 — 하나만 둔다. 다른 hello 는 그 결과를 기다린 뒤 처음부터 다시 판정한다. */
     private readonly probing = new Map<string, Probing>();
+    /**
+     * 등록 판정을 기다리는 소켓(확인 중이거나 다른 확인의 결과를 기다림) — 키 폐기·계정 해제가 이 소켓도 닫는다.
+     * 등록된 세션만 닫으면 대기 소켓이 확인 뒤 빈 자리에 폐기된 키로 등록된다(리뷰 r3).
+     */
+    private readonly waiting = new Map<WebSocket, DeviceSession>();
+    /** 대기 중에 폐기·해제된 소켓 — 등록 직전에 다시 확인한다(닫기가 readyState 를 곧바로 바꾸지 않아도 막는다). */
+    private readonly revokedWaiting = new WeakSet<WebSocket>();
     /** 기기별 최근 무응답 대체 시각 — 창(BRIDGE_SILENT_REPLACE_WINDOW_MS) 안의 횟수를 경고에 붙인다. */
     private readonly silentReplaces = new Map<string, number[]>();
     /** 기기별 마지막 거절 경고 시각 — BRIDGE_CONFLICT_LOG_INTERVAL_MS 에 한 줄만. */
@@ -264,11 +271,25 @@ class LocalBridgeRegistry {
      * 기다리는 동안 기존 세션이 해제·대체되면 남은 시간을 기다리지 않고 1번부터 다시 판정한다.
      */
     async registerChecked(session: DeviceSession): Promise<RegisterCheckedResult> {
+        this.waiting.set(session.ws, session);
+        try {
+            return await this.decideRegister(session);
+        } finally {
+            this.waiting.delete(session.ws);
+        }
+    }
+
+    /** 대기 중 폐기·해제됐거나 닫혔으면 true — 등록하지 않는다. */
+    private isGone(ws: WebSocket): boolean {
+        return this.revokedWaiting.has(ws) || ws.readyState !== ws.OPEN;
+    }
+
+    private async decideRegister(session: DeviceSession): Promise<RegisterCheckedResult> {
         const key = `${session.userId}\0${session.deviceId}`;
         for (;;) {
             const inflight = this.probing.get(key);
             if (inflight) { await inflight.done; continue; }
-            if (session.ws.readyState !== session.ws.OPEN) return 'closed';
+            if (this.isGone(session.ws)) return 'closed';
             const prev = this.devices.get(session.userId)?.get(session.deviceId);
             if (!prev || prev.ws === session.ws || prev.ws.readyState !== prev.ws.OPEN
                 || (prev.instanceId !== undefined && prev.instanceId === session.instanceId)) {
@@ -291,7 +312,7 @@ class LocalBridgeRegistry {
                 this.logConflict(key, prev, session);
                 return 'conflict';
             }
-            if (session.ws.readyState !== session.ws.OPEN) return 'closed';
+            if (this.isGone(session.ws)) return 'closed';
             this.logSilentReplace(key, prev, session);
             return this.register(session) ? 'ok' : 'limit';
         }
@@ -420,16 +441,30 @@ class LocalBridgeRegistry {
     disconnectByApiKey(apiKeyId: string): number {
         const targets = this.listAllDevices().filter((s) => s.apiKeyId === apiKeyId);
         for (const s of targets) this.disconnectDevice(s.userId, s.deviceId, 'api_key_revoked');
-        if (targets.length > 0) logger.info(`[Bridge] API key 폐기로 연결 ${targets.length}개 종료: key=${apiKeyId}`);
-        return targets.length;
+        const total = targets.length + this.closeWaiting((s) => s.apiKeyId === apiKeyId, 'api_key_revoked');
+        if (total > 0) logger.info(`[Bridge] API key 폐기로 연결 ${total}개 종료: key=${apiKeyId}`);
+        return total;
     }
 
     /** 이 사용자의 브리지 연결을 모두 닫는다(계정 비활성화·삭제 — 관리자 강제 해제와 사유를 나눈다). 닫은 수를 돌려준다. */
     disconnectByUser(userId: string, reason: 'account_disabled' | 'account_deleted'): number {
         const targets = this.getDevices(userId);
         for (const s of targets) this.disconnectDevice(s.userId, s.deviceId, reason);
-        if (targets.length > 0) logger.info(`[Bridge] 계정 상태 변경(${reason})으로 연결 ${targets.length}개 종료: user=${userId}`);
-        return targets.length;
+        const total = targets.length + this.closeWaiting((s) => s.userId === userId, reason);
+        if (total > 0) logger.info(`[Bridge] 계정 상태 변경(${reason})으로 연결 ${total}개 종료: user=${userId}`);
+        return total;
+    }
+
+    /** 등록 판정을 기다리는 소켓 중 조건에 맞는 것을 폐기 표시하고 닫는다. 닫은 수를 돌려준다. */
+    private closeWaiting(match: (s: DeviceSession) => boolean, reason: string): number {
+        let n = 0;
+        for (const [ws, s] of this.waiting) {
+            if (!match(s) || this.revokedWaiting.has(ws)) continue;
+            this.revokedWaiting.add(ws);
+            try { ws.close(1008, reason); } catch { /* already closing */ }
+            n++;
+        }
+        return n;
     }
 
     /**
@@ -437,7 +472,7 @@ class LocalBridgeRegistry {
      * 하트비트(sockets/handler.ts)가 그 값이 지난 연결을 닫으므로, 바뀐 값을 넣어 두면 새 만료 시각에 닫힌다. 바꾼 수를 돌려준다.
      */
     updateApiKeyExpiry(apiKeyId: string, expiresAtMs: number | null): number {
-        const targets = this.listAllDevices().filter((s) => s.apiKeyId === apiKeyId);
+        const targets = [...this.listAllDevices(), ...this.waiting.values()].filter((s) => s.apiKeyId === apiKeyId);
         for (const s of targets) (s.ws as ExtendedWebSocket)._authTokenExpiresAtMs = expiresAtMs;
         return targets.length;
     }
