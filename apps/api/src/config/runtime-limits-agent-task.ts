@@ -398,6 +398,9 @@ export const AGENT_TASK_LIMITS = {
     QUEUE_GLOBAL_MAX: parseInt(process.env.AGENT_TASK_QUEUE_GLOBAL_MAX || '4', 10),
     /** 유저별 동시 실행 상한. AGENT_TASK_QUEUE_USER_MAX 로 오버라이드(기본 2). */
     QUEUE_USER_MAX: parseInt(process.env.AGENT_TASK_QUEUE_USER_MAX || '2', 10),
+    /** 재개 가능한 승인 대기 중에는 실행 슬롯을 양보한다(결정 때 자리가 없으면 주차 경로). false 면 종전처럼 슬롯을 든 채 기다린다.
+     *  AGENT_TASK_QUEUE_YIELD_ON_APPROVAL(기본 true — 운영·개발 모두. 개발 기본이 false 면 로컬에서 양보가 꺼져 라이브가 종전 동작을 본다, r8) */
+    QUEUE_YIELD_ON_APPROVAL: boolEnvDefault(process.env.AGENT_TASK_QUEUE_YIELD_ON_APPROVAL, true, true),
     /** 큐 우선순위(F16.6, 131) — 대기열은 높을수록 먼저, 같으면 등록순. 예약 실행은 SCHEDULED, 사용자 실행은 DEFAULT,
      *  관리자만 DEFAULT 초과(상한은 system_settings AGENT_TASK_QUEUE_PRIORITY_MAX). */
     QUEUE_PRIORITY_SCHEDULED: -1,
