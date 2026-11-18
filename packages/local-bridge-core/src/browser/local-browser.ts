@@ -31,7 +31,7 @@ import {
 } from '../constants';
 import { condExpression, runBrowserFlow } from './browser-flow';
 import { CdpClient } from './cdp';
-import { launchChrome, readDevToolsEndpoint } from './chrome';
+import { killAndWaitSync, launchChrome, readDevToolsEndpoint } from './chrome';
 import { DownloadTracker, downloadTaskOf, popupTaskOf } from './downloads';
 import { BrowserScheduler } from './local-browser-scheduler';
 import { browserPolicyBlockOf, uploadRejectedPolicyBlock, userControlPolicyBlock } from './policy-block';
@@ -175,8 +175,9 @@ export class LocalBrowser {
             }
             this.proc = launched.proc;
             // 호스트 프로세스가 끝나면 띄운 Chrome 도 끈다 — 자식 프로세스는 저절로 끝나지 않는다.
+            // 호스트의 다른 종료 훅보다 먼저 돌고 Chrome 이 끝날 때까지 기다린다 — CLI 는 그 뒤에 브라우저 주인 잠금을 놓는다.
             const proc = launched.proc;
-            process.once('exit', () => { try { proc.kill(); } catch { /* noop */ } });
+            process.prependOnceListener('exit', () => killAndWaitSync(proc, BROWSER_EXIT_WAIT_MS));
             cdp = await CdpClient.connect(launched.wsUrl);
         }
         cdp.on('Page.javascriptDialogOpening', (params, sessionId) => { void this.onDialog(cdp!, params, sessionId); });

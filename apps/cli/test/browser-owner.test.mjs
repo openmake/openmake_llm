@@ -147,3 +147,55 @@ test('the bridge asks for the browser only when OMK_BRIDGE_BROWSER=1 and it owns
   assert.deepEqual(browserOption({ OMK_BRIDGE_BROWSER: '1' }, free), { browserProfileDir: join(free, 'browser-profile') });
   assert.equal(readLock(free).pid, process.pid);
 });
+
+test('a lock left with our own pid (pid reused after a restart) is reclaimed', t => {
+  const dir = tempDir(t);
+  const old = writeLock(dir, process.pid);
+  const r = owner().acquireBrowserOwner(dir);
+  assert.equal(r.owned, true);
+  assert.notEqual(r.token, old);
+  assert.deepEqual(readLock(dir), { pid: process.pid, token: r.token });
+  assert.deepEqual(leftovers(dir), []);
+});
+
+test('the owner lets go between our link and our read: we take the lock instead of giving up', t => {
+  const dir = tempDir(t);
+  const other = owner().acquireBrowserOwner(dir);
+  let released = false;
+  const r = owner().acquireBrowserOwner(dir, { beforeRead: () => { if (!released) { released = true; owner().releaseBrowserOwner(dir, other.token); } } });
+  assert.equal(r.owned, true, r.message);
+  assert.deepEqual(readLock(dir), { pid: process.pid, token: r.token });
+  assert.deepEqual(leftovers(dir), []);
+});
+
+// A fake Chrome that, when told to stop, takes a moment and then records whether the lock was still held.
+// The exiting owner must keep the lock until its Chrome is gone, or a new CLI can attach to a Chrome that is being killed.
+test('on exit the owner keeps the lock until the Chrome it launched has exited', { skip: process.platform === 'win32' && 'POSIX shell fake' }, async t => {
+  const home = tempHome(t);
+  const dir = join(home, '.openmake');
+  const out = join(home, 'lock-at-chrome-exit');
+  const bin = join(home, 'fake-chrome');
+  writeFileSync(bin, [
+    '#!/bin/sh',
+    'for a in "$@"; do case "$a" in --user-data-dir=*) d="${a#--user-data-dir=}";; esac; done',
+    `trap 'sleep 0.3; if [ -e "${join(dir, LOCK)}" ]; then echo held > "${out}"; else echo free > "${out}"; fi; kill $s 2>/dev/null; exit 0' TERM`,
+    'printf \'1\\n/devtools/browser/x\\n\' > "$d/DevToolsActivePort"',
+    'sleep 60 & s=$!',
+    'wait $s',
+  ].join('\n'), { mode: 0o755 });
+  const core = require.resolve('@openmake/local-bridge-core', { paths: [DIST] });
+  const script = `const { browserOption } = require(${JSON.stringify(join(DIST, 'bridge.js'))});
+const { LocalBrowser } = require(${JSON.stringify(core)});
+const o = browserOption(process.env, process.argv[1]);
+if (!o.browserProfileDir) process.exit(2);
+LocalBrowser.forProfile(o.browserProfileDir)
+  .run({ actions: [{ type: 'wait', ms: 0 }], sitePolicy: { allow: [], deny: [] } }, { taskId: 'A', saveFile: async () => undefined })
+  .then(() => process.exit(0));`;
+  const child = spawn(process.execPath, ['-e', script, dir], { stdio: 'inherit', env: { ...process.env, OMK_BRIDGE_BROWSER: '1', OMK_BRIDGE_CHROME: bin } });
+  const code = await new Promise(r => child.on('exit', r));
+  assert.equal(code, 0);
+  assert.equal(existsSync(join(dir, LOCK)), false, 'released after Chrome exited');
+  const end = Date.now() + 3000;
+  while (!existsSync(out) && Date.now() < end) await new Promise(r => setTimeout(r, 20));
+  assert.equal(readFileSync(out, 'utf8').trim(), 'held');
+});

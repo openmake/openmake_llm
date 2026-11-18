@@ -5,7 +5,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { spawn, type ChildProcess } from 'child_process';
+import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import { BROWSER_HEADLESS, BROWSER_LAUNCH_TIMEOUT_MS, BROWSER_POLL_MS, BROWSER_PROFILE_DIRECTORY } from '../constants';
 
 /** 플랫폼별 Chromium 계열 실행 파일 후보 — 앞의 것부터 찾는다. */
@@ -86,4 +86,26 @@ export async function launchChrome(profileDir: string, signal?: AbortSignal): Pr
     }
     try { proc.kill(); } catch { /* noop */ }
     throw new Error('Chrome 디버깅 포트가 열리지 않았습니다(시간 초과)');
+}
+
+/** 끝났는지 — POSIX 에서는 거둬지지 않은 좀비도 끝난 것으로 본다('exit' 훅에서는 이벤트 루프가 돌지 않아 자식을 거두지 않는다). */
+function exitedSync(pid: number): boolean {
+    try { process.kill(pid, 0); } catch { return true; }
+    if (process.platform === 'win32') return false;
+    const r = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
+    if (r.error) return true; // 알 수 없으면 기다리지 않는다
+    const stat = r.stdout.trim();
+    return stat === '' || stat.startsWith('Z');
+}
+
+/**
+ * 띄운 Chrome 을 끄고 끝날 때까지(상한 `ms`) 동기로 기다린다 — 호스트 프로세스의 'exit' 훅에서 부른다.
+ * 기다려야 호스트가 그 뒤에 놓는 자원(CLI 의 브라우저 주인 잠금)을 넘겨받은 쪽이 꺼지는 중인 Chrome 에 붙지 않는다.
+ */
+export function killAndWaitSync(proc: ChildProcess, ms: number): void {
+    if (proc.exitCode !== null || proc.signalCode !== null || proc.pid === undefined) return;
+    try { proc.kill(); } catch { return; }
+    const pause = new Int32Array(new SharedArrayBuffer(4));
+    const end = Date.now() + ms;
+    while (!exitedSync(proc.pid) && Date.now() < end) Atomics.wait(pause, 0, 0, 20);
 }
