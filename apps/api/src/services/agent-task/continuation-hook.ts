@@ -140,10 +140,12 @@ export async function prepareSegmentWorkspace(runtime: TaskRuntime, preTask: Age
  * 로컬 실행은 후속과 같은 worktree 를 쓰므로, 턴 중간 체크포인트의 남은 호출을 먼저 실행하면 후속과 같은 폴더를 동시에 고친다.
  * 후속이 없거나 따를 수 없으면(실패·취소) false — 호출부는 종전대로 재개한다(겹칠 실행이 없다).
  */
-export async function finishIfAlreadyContinued(p: { preTask: AgentTask | undefined; userRole: ContinueInput['userRole']; update: FinishInput['update'] }): Promise<boolean> {
+export async function finishIfAlreadyContinued(p: { preTask: AgentTask | undefined; userRole: ContinueInput['userRole']; update: (u: { status: 'running' } | Parameters<FinishInput['update']>[0]) => Promise<void> }): Promise<boolean> {
     if (!p.preTask?.continued_by_task_id) return false;
     const outcome = await followExistingSuccessor(p.preTask.id, { userRole: p.userRole });
     if ('skipped' in outcome) { logger.info(`[Continuation] 재실행 — 후속을 따를 수 없어 종전대로 재개: ${p.preTask.id} — ${outcome.skipped}`); return false; }
+    // 재실행 행은 pending(주차 재개·부팅 복구 claim)·queued(/resume claim·큐 대기)다 — 전이표(task-state)가 completed 로 바로 가는 것을 막으므로 running 을 먼저 거친다
+    await p.update({ status: 'running' });
     await p.update({ status: 'completed', completionPath: 'continued', progress: 100, result: `이어가기: 후속 작업 ${outcome.successorId} 에서 계속합니다 (재실행 — 이미 이어졌음).` });
     return true;
 }
