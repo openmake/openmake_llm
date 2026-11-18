@@ -21,9 +21,10 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::{HeaderName, HeaderValue};
 
 use crate::constants::{
-    AUTH_CLOSE_CODE, AUTH_RETRY_MS, AuthCloseReason, HANDSHAKE_TIMEOUT_MS, LIVENESS_PING_MS,
-    LIVENESS_TIMEOUT_MS, RECONNECT_MAX_MS, RECONNECT_MS,
+    AUTH_CLOSE_CODE, AUTH_RETRY_MS, AuthCloseReason, DEVICE_CONFLICT_REASON, DEVICE_CONFLICT_TEXT,
+    HANDSHAKE_TIMEOUT_MS, LIVENESS_PING_MS, LIVENESS_TIMEOUT_MS, RECONNECT_MAX_MS, RECONNECT_MS,
 };
+use crate::device_id::uuid_v4;
 use crate::endpoints::invalid_address;
 use crate::frames::{self, ServerFrame};
 use crate::notice::Notice;
@@ -31,6 +32,13 @@ use crate::reconnect::reconnect_delay_ms;
 use crate::session::{ABNORMAL_CLOSE, Session, SessionEvent, Ws};
 use crate::status::{Status, StatusCode};
 use crate::transport::{Connector, ws_target, ws_url};
+
+/// 이 프로세스의 난수 — `bridge_hello.instanceId`(TS `PROCESS_INSTANCE_ID`). 처음 쓸 때 한 번 만들고 재연결해도 같다.
+/// 난수를 만들지 못하면 싣지 않는다(서버는 옛 기기처럼 확인 ping 으로 판정한다).
+pub fn process_instance_id() -> Option<&'static str> {
+    static ID: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    ID.get_or_init(|| uuid_v4().ok()).as_deref()
+}
 
 pub type HeadersFn = Box<dyn Fn() -> Result<Vec<(String, String)>, String> + Send + Sync>;
 pub type StatusFn = Box<dyn Fn(&Status) + Send + Sync>;
@@ -346,6 +354,7 @@ impl Actor {
             &self.opts.label,
             &self.folder_name(),
             self.opts.host_id.as_deref(),
+            process_instance_id(),
             &caps,
         );
         self.phase = Phase::Open(Box::new(Session::new(
@@ -440,10 +449,17 @@ impl Actor {
         } else {
             None
         };
+        // 같은 기기 id 로 다른 프로세스가 붙어 있어 거절됐다 — 그쪽을 끄면 1분 안에 붙도록 상한 간격으로만 다시 시도한다.
+        let conflict =
+            auth.is_none() && code == AUTH_CLOSE_CODE && reason == DEVICE_CONFLICT_REASON;
         let delay = match auth {
             Some(r) => {
                 self.status(r.text(), StatusCode::Auth(r), None);
                 self.opts.auth_retry_ms
+            }
+            None if conflict => {
+                self.status(DEVICE_CONFLICT_TEXT, StatusCode::DeviceConflict, None);
+                self.opts.reconnect_max_ms
             }
             None => {
                 self.status("끊김 — 재연결 대기", StatusCode::Reconnecting, None);

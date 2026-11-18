@@ -131,7 +131,7 @@ export interface BridgeNotice {
  * 연결 상태 코드 — onStatus 의 두 번째 인자. 상태 텍스트는 한국어 고정이라 호스트가 다국어로
  * 보여 줄 때 이 코드를 쓴다(세 번째 인자 arg = 폴더명·서버 메시지 등 치환값).
  */
-export type BridgeStatusCode = 'connecting' | 'connected' | 'server_error' | 'reconnecting' | 'closed' | 'idle' | 'auth_error' | BridgeAuthCloseReason;
+export type BridgeStatusCode = 'connecting' | 'connected' | 'server_error' | 'reconnecting' | 'closed' | 'idle' | 'auth_error' | 'device_conflict' | BridgeAuthCloseReason;
 
 /**
  * 서버가 인증 문제로 연결을 닫은 사유(닫는 코드 1008 의 reason) — 상태 코드로도 그대로 쓴다(2026-10-06).

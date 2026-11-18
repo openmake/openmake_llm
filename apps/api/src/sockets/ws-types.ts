@@ -56,6 +56,8 @@ export interface WSMessage {
     capabilities?: unknown;
     /** bridge_hello — 인증 실패 시 사유를 실어 닫아도 되는 새 코어(2026-10-06). 없으면 종전대로 오류만 보낸다 */
     authClose?: boolean;
+    /** bridge_hello — 연결한 프로세스의 난수(재연결해도 같다, 2026-11-19). 서버가 64자 이하 문자열만 받는다 */
+    instanceId?: unknown;
     /** Local Bridge — bridge_event(기기→서버 단방향 알림) 종류·값. browser_control 의 user=true 는 사용자가 브라우저를 넘겨받음 */
     kind?: string;
     user?: boolean;

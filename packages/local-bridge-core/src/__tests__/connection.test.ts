@@ -9,7 +9,7 @@ import * as path from 'path';
 import { WebSocket, WebSocketServer, type WebSocket as ServerWs } from 'ws';
 import { BridgeConnection, parseNotice } from '../connection';
 import { BridgeCore } from '../core';
-import { AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, BRIDGE_KINDS, EXPIRY_SKEW_TOLERANCE_MS, HANDSHAKE_TIMEOUT_MS, HELLO_DELAY_MS, NOTICE_TOOL_NAME_MAX, WORKTREE_KEEP_IGNORED_CAPABILITY } from '../constants';
+import { AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, BRIDGE_KINDS, DEVICE_CONFLICT_REASON, DEVICE_CONFLICT_TEXT, RECONNECT_MAX_MS, EXPIRY_SKEW_TOLERANCE_MS, HANDSHAKE_TIMEOUT_MS, HELLO_DELAY_MS, NOTICE_TOOL_NAME_MAX, WORKTREE_KEEP_IGNORED_CAPABILITY } from '../constants';
 import type { BridgeNotice } from '../types';
 
 interface Frame { type?: string; reqId?: string; result?: Record<string, unknown>; deviceId?: string; label?: string; folderName?: string }
@@ -475,6 +475,21 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
         });
     });
 
+    it('hello 에 프로세스 instanceId(UUID)를 싣고 재연결해도 같은 값이다', async () => {
+        await withFakeClock(async () => {
+            await makeConn().connect();
+            await openAndHello(1);
+            server.dropAll();
+            await until('끊김', () => statuses.includes('끊김 — 재연결 대기'));
+            await jest.advanceTimersByTimeAsync(100);
+            await openAndHello(2);
+            const ids = server.received.filter((f) => f.type === 'bridge_hello').map((f) => (f as { instanceId?: string }).instanceId);
+            expect(ids).toHaveLength(2);
+            expect(ids[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+            expect(ids[1]).toBe(ids[0]);
+        });
+    });
+
     it('hello 에 authClose 를 싣는다 — 서버가 인증 실패를 사유와 함께 닫아도 된다는 표시', async () => {
         await withFakeClock(async () => {
             await makeConn().connect();
@@ -514,6 +529,16 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
             expect(codes[codes.length - 1]).toEqual([reason, undefined]);
             expect(statuses[statuses.length - 1]).toBe(AUTH_CLOSE_TEXT[reason]);
             expect(delays).toEqual([7777]);
+        });
+    });
+
+    it('같은 기기 id 충돌(1008 device_conflict)은 상태 device_conflict 로 알리고 재연결 상한 간격으로만 다시 시도한다', async () => {
+        await withFakeClock(async () => {
+            const { codes, delays } = await closedWith(1008, DEVICE_CONFLICT_REASON);
+            expect(DEVICE_CONFLICT_REASON).toBe('device_conflict');
+            expect(codes[codes.length - 1]).toEqual(['device_conflict', undefined]);
+            expect(statuses[statuses.length - 1]).toBe(DEVICE_CONFLICT_TEXT);
+            expect(delays).toEqual([RECONNECT_MAX_MS]); // 인증 사유(7777)와 다르고 일반 끊김(100)과도 다르다
         });
     });
 

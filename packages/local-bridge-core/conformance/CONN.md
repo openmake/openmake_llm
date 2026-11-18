@@ -34,11 +34,12 @@ TS 러너는 헬퍼(`apps/desktop-native/helper/src/helper.mjs`)를 가져올 �
 - 사례 키: `id` · `opts` · `steps` · `expect`, 선택 `setup`(`{{TMP}}` 기준) · `root`(연결 폴더의 `{{TMP}}` 기준 이름, 기본 `root` — 러너가 만든다) · `after`(`[{absent}]`·`[{exists, content}]`).
 - `opts`: `deviceId` · `label`, 선택 `hostId` · `reconnectMs` · `authRetryMs` · `shouldReconnect`(`false` 면 항상 거짓) · `headersError`(접속 헤더 함수가 이 문구로 실패). 러너는 `random` 을 항상 1 로 준다(재연결 대기 = 기준 간격). 헤더는 `Authorization: Bearer omk_test`.
 - 가짜 서버는 `bridge_hello` 를 받으면 `bridge_ready` 로 답한다. 러너는 연결 뒤 상태 `connected` 까지 기다리고(`headersError` 면 기다리지 않는다) `steps` 를 차례로 한다.
+- 끝 상태 코드에는 `device_conflict`(같은 기기 id 충돌로 닫힘, 2026-11-19)도 든다.
 - `steps`: `{"server": {…}}`(텍스트 프레임) · `{"serverText": "…"}`(JSON 이 아닐 수 있는 텍스트) · `{"serverBinary": "…"}`(바이너리 프레임) · `{"serverClose": {"code", "reason"}}`(빈 객체면 코드 없이 닫는다) · `{"serverDrop": true}`(닫기 절차 없이 끊는다) · `{"client": "browserControl", "user": bool}` · `{"client": "disconnect"}`.
   - `bridge_exec` 를 보내면 그 결과 프레임이 올 때까지, `browserControl` 은 그 프레임이 올 때까지, 닫힘·끊김·`disconnect` 는 끝 상태(`reconnecting`·`idle`·`closed`·인증 사유)가 나올 때까지 기다린다(연결이 없으면 기다리지 않는다).
   - 끝나고 연결이 살아 있으면 **끝 표지**(만료된 `bridge_exec` — 코어를 거치지 않고 바로 거절된다)를 보내 그 응답까지 기다린다. 끝 표지 응답은 `frames` 에서 뺀다.
 - `expect`: `frames`(서버가 받은 프레임 전체, 순서대로, 객체 전체 일치) · `statuses`(`[글, 코드, arg]`, 없으면 `null`) · `notices` · `delays`(재연결 대기 ms).
-- 자리표시: `"{{CAPABILITIES}}"` = 그 구현의 `core.capabilities()`(옮기는 도중이라 TS 와 Rust 의 목록이 다르다) · `"{{DURATION}}"` = 0 이상의 정수인지만 본다 · `{"{{NOW}}": 차이}`(서버 프레임 안) = 지금 시각(ms) + 차이.
+- 자리표시: `"{{CAPABILITIES}}"` = 그 구현의 `core.capabilities()`(옮기는 도중이라 TS 와 Rust 의 목록이 다르다) · `"{{INSTANCE_ID}}"` = 그 사례에서 서버가 처음 받은 `bridge_hello` 의 `instanceId`(UUID v4 일 때만 — 프로세스 난수라 값은 대조하지 않고, 사례 안의 모든 hello 가 같은 값인지 본다) · `"{{DURATION}}"` = 0 이상의 정수인지만 본다 · `{"{{NOW}}": 차이}`(서버 프레임 안) = 지금 시각(ms) + 차이.
 - `exec` 등 Rust 코어가 아직 거절하는 kind 는 넣지 않는다.
 
 ## fixture 에 넣지 않는 차이 (Rust 단위 테스트로 고정)

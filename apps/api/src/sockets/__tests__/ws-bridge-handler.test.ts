@@ -15,7 +15,7 @@ jest.mock('../../services/agent-task/browser-takeover', () => ({ resumeBrowserTa
 jest.mock('../../services/local-bridge/registry', () => ({
     normalizeCapabilities: jest.requireActual('../../services/local-bridge/registry').normalizeCapabilities,
     getLocalBridgeRegistry: () => ({
-        register: (...a: unknown[]) => mockRegister(...(a as [])),
+        registerChecked: async (...a: unknown[]) => (mockRegister(...(a as [])) ? 'ok' : 'limit'),
         handleResult: (...a: unknown[]) => mockHandleResult(...(a as [])),
         getDeviceIdByWs: (...a: unknown[]) => mockGetDeviceIdByWs(...a),
         setBrowserUserControl: (...a: unknown[]) => mockSetControl(...a),
