@@ -12,7 +12,7 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const manifest = JSON.parse(readFileSync(new URL('./feature-checks.manifest.json', import.meta.url)));
 // Jest bootstrap files are imported by no test, yet every apps/api suite runs through them: a change selects every suite.
 // The dependency extractor decides which tests are "related" at all, so it is bootstrap too.
-const JEST_BOOTSTRAP = ['apps/api/jest.config.js', 'apps/api/jest.setup.ts', 'apps/api/jest.setup-after-env.ts', 'apps/api/jest.dependency-extractor.mjs'];
+const JEST_BOOTSTRAP = ['apps/api/jest.config.js', 'apps/api/jest.setup.ts', 'apps/api/jest.setup-after-env.ts', 'apps/api/jest.dependency-extractor.mjs', 'apps/api/__mocks__/web-push.js'];
 export function selectFeatures(files) {
   const result = { api: [], web: false, pipeline: false, infra: false, bridge: false, discordBot: false, desktopWindows: false, desktopHelper: false, desktopBuild: false, cli: false, hostSetup: false, e2e: selectE2E(files) };
   for (const file of files) {
