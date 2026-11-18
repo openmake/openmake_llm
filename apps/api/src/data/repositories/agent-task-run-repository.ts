@@ -8,6 +8,7 @@ import { BaseRepository } from './base-repository';
 import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { reclaimableOrphanSql } from './agent-task-lease-sql';
+import { withTransitionEventSql } from './agent-task-event-sql';
 
 /** claimForExecute 가 잡은 실행 시작 claim — 디스패치가 거절되면 revertClaim 이 이것으로 되돌린다. */
 export interface ExecuteClaim {
@@ -99,17 +100,15 @@ export class AgentTaskRunRepository extends BaseRepository {
      * 보고 다시 실행할 수 있게 한다 — 그 사이 다른 서버가 running 으로 올렸거나 취소됐으면 0행(false)이고 건드리지 않는다.
      */
     async failUnstartedClaim(taskId: string, error: string): Promise<boolean> {
-        const r = await this.query<{ prev: string }>(
+        // 실패 전이는 이어받기 경계 — 이벤트와 한 문장(r6, 이벤트를 못 남기면 전이도 실패)
+        const r = await this.query<{ prev: string }>(withTransitionEventSql(
             `UPDATE agent_tasks t SET status = 'failed', error = $2, failure_class = $3, completed_at = NOW(), updated_at = NOW(), terminal_notify_pending = TRUE
              FROM (SELECT id, status AS prev FROM agent_tasks WHERE id = $1 FOR UPDATE) o
              WHERE t.id = o.id AND o.prev IN ('queued', 'pending')
-             RETURNING o.prev`,
+             RETURNING o.prev`, { taskId: '$1', to: "'failed'", reason: '$2' }),
             [taskId, error, classifyAgentTaskFailure(error)],
         );
-        const row = r.rows[0];
-        if ((r.rowCount ?? 0) === 0 || !row) return false;
-        await this.recordEvent(taskId, row.prev, 'failed', error);
-        return true;
+        return (r.rowCount ?? 0) > 0 && !!r.rows[0];
     }
 
     /**
@@ -138,17 +137,14 @@ export class AgentTaskRunRepository extends BaseRepository {
         // (2026-10-22 R2) 소유권 있는 pending 은 claim 중 죽은 행 — pending 을 읽었을 때만 소유권 컬럼을 본다(176 적용 전 폴백은 pending 을 넘기지 않는다)
         // (#1473) 지났거나 내 것일 때만 — 목록을 읽은 뒤 다른 서버가 claim 해 간 pending 은 닫지 않는다. owner 가 없으면 pending 을 맞추지 않는다.
         const leased = expectedPrev === 'pending' && leaseOwner !== undefined;
-        const r = await this.query<{ prev: string }>(
+        const r = await this.query<{ prev: string }>(withTransitionEventSql(
             `UPDATE agent_tasks t SET status = 'failed', error = $2, failure_class = $3, completed_at = NOW(), updated_at = NOW(), terminal_notify_pending = TRUE
              FROM (SELECT id, status AS prev, error AS prev_error${leased ? ', lease_until, lease_owner' : ''} FROM agent_tasks WHERE id = $1 FOR UPDATE) o
              WHERE t.id = o.id AND o.prev = $4 AND (o.prev IN ('running', 'paused') OR (o.prev = 'failed' AND o.prev_error = $5)${leased ? ` OR ${reclaimableOrphanSql('o.prev', 'o.lease_until', 'o.lease_owner', '$6')}` : ''})
-             RETURNING o.prev`,
+             RETURNING o.prev`, { taskId: '$1', to: "'failed'", reason: '$2' }), // 실패 전이 = 이어받기 경계, 이벤트와 한 문장(r6)
             [taskId, AGENT_TASK_RECOVERY_LIMIT_ERROR, classifyAgentTaskFailure(AGENT_TASK_RECOVERY_LIMIT_ERROR), expectedPrev, 'server restarted', ...(leased ? [leaseOwner] : [])],
         );
-        const row = r.rows[0];
-        if ((r.rowCount ?? 0) === 0 || !row) return false;
-        await this.recordEvent(taskId, row.prev, 'failed', AGENT_TASK_RECOVERY_LIMIT_ERROR);
-        return true;
+        return (r.rowCount ?? 0) > 0 && !!r.rows[0];
     }
 
     private async recordEvent(taskId: string, from: string | null, to: string, reason: string): Promise<void> {

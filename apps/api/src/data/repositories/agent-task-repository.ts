@@ -17,6 +17,7 @@ import { allowedSources, AgentTaskTransitionError } from '../../services/agent-t
 import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
 import { chainCreateColumns, CLAIM_CONTINUATION_SQL, type AgentTaskChainCreateParams } from './agent-task-chain-repository';
 import { AgentTaskLifecycleRepository } from './agent-task-lifecycle-repository';
+import { isTakeoverBoundary, withTransitionEventSql } from './agent-task-event-sql';
 import type { AgentTaskIsolation } from '@openmake/shared-types';
 
 // 이벤트·주차·복구 claim·실패 큐 뷰는 agent-task-lifecycle-repository.ts (max-lines 가드로 분리, 상속)
@@ -186,6 +187,7 @@ export class AgentTaskRepository extends AgentTaskLifecycleRepository {
         const params: QueryParam[] = [];
         let paramIdx = 1;
 
+        const statusParam = `$${paramIdx}`;
         if (updates.status) {
             sets.push(`status = $${paramIdx++}`);
             params.push(updates.status);
@@ -273,11 +275,16 @@ export class AgentTaskRepository extends AgentTaskLifecycleRepository {
         // 남긴다. 표 밖 전이는 rowCount=0 → 현재 상태를 읽어 거부(throw). 규칙은 task-state.ts 한 곳.
         const sources = allowedSources(updates.status);
         params.push(updates.onlyFrom ? sources.filter((s) => updates.onlyFrom!.includes(s)) : sources);
-        const r = await this.query<{ prev: AgentTaskStatus }>(
-            `UPDATE agent_tasks t SET ${sets.join(', ')}
+        const reason = updates.transitionReason ?? updates.error ?? undefined;
+        // 이어받기 경계(취소·재시작 중단이 아닌 실패)는 이벤트와 한 문장 — 이벤트를 못 남기면 전이도 실패한다(r6)
+        const boundary = isTakeoverBoundary(updates.status, reason);
+        const update = `UPDATE agent_tasks t SET ${sets.join(', ')}
              FROM (SELECT id, status AS prev FROM agent_tasks WHERE id = $${paramIdx} FOR UPDATE) o
              WHERE t.id = o.id AND o.prev = ANY($${paramIdx + 1}::text[])
-             RETURNING o.prev`,
+             RETURNING o.prev`;
+        if (boundary) params.push(reason ?? null);
+        const r = await this.query<{ prev: AgentTaskStatus }>(
+            boundary ? withTransitionEventSql(update, { taskId: `$${paramIdx}`, to: statusParam, reason: `$${paramIdx + 2}` }) : update,
             params,
         );
         if ((r.rowCount ?? 0) === 0) {
@@ -286,7 +293,7 @@ export class AgentTaskRepository extends AgentTaskLifecycleRepository {
             throw new AgentTaskTransitionError(taskId, cur.rows[0].status, updates.status);
         }
         const prev = r.rows[0]?.prev;
-        if (prev !== updates.status) await this.recordEvent(taskId, prev, updates.status, updates.transitionReason ?? updates.error ?? undefined);
+        if (!boundary && prev !== updates.status) await this.recordEvent(taskId, prev, updates.status, reason);
     }
 
     /** fork 표시(141) — 새 작업에 원 작업·턴을 기록. */

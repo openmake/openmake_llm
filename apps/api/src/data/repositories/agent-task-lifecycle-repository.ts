@@ -55,7 +55,7 @@ export class AgentTaskLifecycleRepository extends BaseRepository {
         return result.rows;
     }
 
-    /** 상태 전이 이벤트 1행(124) — 관측용이라 실패해도 전이를 되돌리지 않는다(fail-open). */
+    /** 상태 전이 이벤트 1행(124) — 관측용이라 실패해도 전이를 되돌리지 않는다(fail-open). 이어받기 경계 전이는 withTransitionEventSql(실패 시 전이도 실패). */
     async recordEvent(taskId: string, from: string | null | undefined, to: string, reason?: string): Promise<void> {
         await this.query(
             'INSERT INTO agent_task_events (task_id, from_status, to_status, reason) VALUES ($1, $2, $3, $4)',
