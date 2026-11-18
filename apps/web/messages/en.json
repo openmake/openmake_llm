@@ -165,6 +165,7 @@
     },
     "pushNotSupported": "This browser does not support push notifications.",
     "pushSwNotReady": "The service worker is not registered, so push notifications are unavailable.",
+    "pushToggleFailed": "Could not update push notification settings.",
     "memoryLearning": {
       "title": "Use long-term memory",
       "description": "References your saved long-term memories in the conversation. Turn off to exclude saved memories from this chat."

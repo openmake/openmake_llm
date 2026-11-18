@@ -165,6 +165,7 @@
     },
     "pushNotSupported": "이 브라우저는 푸시 알림을 지원하지 않습니다.",
     "pushSwNotReady": "서비스 워커가 등록되지 않아 푸시 알림을 사용할 수 없습니다.",
+    "pushToggleFailed": "푸시 알림 설정을 저장하지 못했습니다.",
     "memoryLearning": {
       "title": "장기 기억 활용",
       "description": "저장된 장기 기억을 대화에 참고합니다. 끄면 이번 대화에서 저장된 기억을 사용하지 않습니다."
