@@ -22,7 +22,7 @@ const DIRECT: Record<string, Pick<IsolationLabel, "key" | "tone">> = {
 export function isolationLabel(isolation: AgentTaskIsolation | null | undefined): IsolationLabel | null {
   if (!isolation) return null;
   if (isolation.state === "worktree") {
-    if (isolation.outcome === "kept") return { key: "worktreeKept", params: { branch: isolation.branch, path: isolation.worktreeRel }, tone: "accent" };
+    if (isolation.outcome === "kept") return { key: "worktreeKept", params: { branch: isolation.branch, path: isolation.rootRel ?? isolation.worktreeRel }, tone: "accent" };
     if (isolation.outcome === "removed") return { key: "worktreeRemoved", params: {}, tone: "neutral" };
     if (isolation.outcome === undefined) return { key: "worktree", params: { branch: isolation.branch }, tone: "accent" };
     return null;
