@@ -25,3 +25,11 @@ export function getApprovalRejectedNotice(toolName: string, reason?: string, use
     const said = userReason?.trim() ? ` 사용자가 밝힌 사유: "${userReason.trim()}".` : '';
     return `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${toolName}).${said} 사용자는 이 동작에 동의하지 않았습니다 — 같은 호출을 되풀이하거나 인자만 바꿔 다시 요청하지 말고, 같은 결과를 다른 경로(다른 도구·명령)로 얻으려 하지도 마세요. 이 동작 없이 할 수 있는 범위에서 이어가고, 더 진행할 수 없으면 지금까지의 결과로 마무리하세요.`;
 }
+
+/**
+ * 사용자가 기기에서 브라우저 작업을 직접 중지한 호출의 결과 끝에 붙이는 안내 — 거절 안내와 같은 수준으로 재시도를 막는다.
+ * 안내가 없으면 모델이 같은 주소·다른 액션으로 다시 호출해 승인 카드가 되풀이된다(재시도 카드).
+ */
+export function getBrowserUserStoppedNotice(): string {
+    return '사용자가 이 브라우저 작업을 직접 중지했습니다 — 같은 호출을 다시 요청하거나 다른 경로(다른 액션·도구)로 같은 결과를 얻으려 하지 마세요. 지금까지의 결과로 마무리하고, 꼭 필요하면 ask_human 으로 사용자에게 물어보세요.';
+}
