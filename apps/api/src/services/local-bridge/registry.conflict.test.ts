@@ -319,3 +319,89 @@ describe('registerChecked — 확인의 의미(r2·r3)', () => {
         expect(jest.getTimerCount()).toBe(0);
     });
 });
+
+describe('registerChecked — 확인 대기 중 키 폐기·계정 해제 (리뷰 r3)', () => {
+    function keyed(userId: string, ws: FakeWs, instanceId: string, apiKeyId: string): DeviceSession {
+        return { ...session(userId, ws, instanceId), apiKeyId };
+    }
+
+    test('확인 대기 중 그 키를 폐기하면 대기 소켓도 닫히고 등록되지 않는다', async () => {
+        const a = fakeWs({ pongs: false }), b = fakeWs({ pongs: true });
+        await reg.registerChecked(keyed('c-k1', a, 'A', 'key-1'));
+        const pb = reg.registerChecked(keyed('c-k1', b, 'B', 'key-1'));
+        await Promise.resolve();
+        expect(reg.disconnectByApiKey('key-1')).toBe(2);
+        expect(await pb).toBe('closed');
+        expect(b.closed).toBe(true);
+        expect(reg.getDevice('c-k1', 'dev-1')).toBeNull();
+    });
+
+    test('닫기가 곧바로 상태를 바꾸지 않아도 폐기된 대기 소켓은 등록 직전 재검증에서 걸러진다', async () => {
+        const a = fakeWs({ pongs: false }), b = fakeWs({ pongs: true });
+        b.close = () => { b.closed = true; }; // readyState 는 OPEN 그대로
+        await reg.registerChecked(keyed('c-k2', a, 'A', 'key-2'));
+        const pb = reg.registerChecked(keyed('c-k2', b, 'B', 'key-2'));
+        await Promise.resolve();
+        reg.disconnectByApiKey('key-2');
+        expect(await pb).toBe('closed');
+        expect(reg.getDevice('c-k2', 'dev-1')).toBeNull();
+    });
+
+    test('확인 시간이 끝난 뒤 등록 직전에도 폐기를 확인한다(기존 연결 무응답 → 대체 경로)', async () => {
+        const a = fakeWs({ pongs: false }), b = fakeWs({ pongs: true });
+        b.close = () => { b.closed = true; };
+        await reg.registerChecked(keyed('c-k3', a, 'A', 'key-a'));
+        const pb = reg.registerChecked(keyed('c-k3', b, 'B', 'key-b'));
+        await Promise.resolve();
+        reg.disconnectByApiKey('key-b'); // A 는 다른 키라 그대로 — 확인은 계속된다
+        expect(a.closed).toBe(false);
+        await passProbe();
+        expect(await pb).toBe('closed');
+        expect(reg.getDevice('c-k3', 'dev-1')!.ws).toBe(a);
+    });
+
+    test('다른 키의 대기 소켓은 건드리지 않는다', async () => {
+        const a = fakeWs({ pongs: false }), b = fakeWs({ pongs: true });
+        await reg.registerChecked(keyed('c-k4', a, 'A', 'key-old'));
+        const pb = reg.registerChecked(keyed('c-k4', b, 'B', 'key-new'));
+        await Promise.resolve();
+        expect(reg.disconnectByApiKey('key-old')).toBe(1);
+        expect(await pb).toBe('ok');
+        expect(b.closed).toBe(false);
+        expect(reg.getDevice('c-k4', 'dev-1')!.ws).toBe(b);
+    });
+
+    test('확인 대기 중 계정을 비활성화하면 대기 소켓도 닫히고 등록되지 않는다', async () => {
+        const a = fakeWs({ pongs: false }), b = fakeWs({ pongs: true });
+        await reg.registerChecked(keyed('c-k5', a, 'A', 'key-5'));
+        const pb = reg.registerChecked(keyed('c-k5', b, 'B', 'key-5'));
+        await Promise.resolve();
+        expect(reg.disconnectByUser('c-k5', 'account_disabled')).toBe(2);
+        expect(await pb).toBe('closed');
+        expect(b.closed).toBe(true);
+        expect(reg.getDevice('c-k5', 'dev-1')).toBeNull();
+    });
+
+    test('확인 대기 중 키 만료일을 바꾸면 대기 소켓의 만료 시각도 바뀐다', async () => {
+        const a = fakeWs({ pongs: false }), b = fakeWs({ pongs: true });
+        await reg.registerChecked(keyed('c-k7', a, 'A', 'key-7'));
+        const pb = reg.registerChecked(keyed('c-k7', b, 'B', 'key-7'));
+        await Promise.resolve();
+        expect(reg.updateApiKeyExpiry('key-7', 12345)).toBe(2);
+        expect((b as unknown as { _authTokenExpiresAtMs?: number | null })._authTokenExpiresAtMs).toBe(12345);
+        await passProbe();
+        expect(await pb).toBe('ok');
+    });
+
+    test('다른 확인의 결과를 기다리던 세 번째 소켓도 폐기 대상이다', async () => {
+        const a = fakeWs({ pongs: false }), b = fakeWs({ pongs: true }), c = fakeWs({ pongs: true });
+        await reg.registerChecked(keyed('c-k6', a, 'A', 'key-6'));
+        const pb = reg.registerChecked(keyed('c-k6', b, 'B', 'key-6'));
+        const pc = reg.registerChecked(keyed('c-k6', c, 'C', 'key-6'));
+        await Promise.resolve();
+        expect(reg.disconnectByApiKey('key-6')).toBe(3);
+        expect(await pb).toBe('closed');
+        expect(await pc).toBe('closed');
+        expect(reg.getDevice('c-k6', 'dev-1')).toBeNull();
+    });
+});
