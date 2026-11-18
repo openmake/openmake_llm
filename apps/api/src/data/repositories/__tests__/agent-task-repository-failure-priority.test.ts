@@ -37,6 +37,18 @@ describe('AgentTaskRepository — 실패 분류·우선순위(131)', () => {
         expect(setParam(calls[0], 'progress')).toBe(0);
     });
 
+    it('onlyFrom — 출발 상태를 허용 표와 교집합으로 좁힌다(취소 정리 중 다른 경로가 claim 했으면 덮어쓰지 않게)', async () => {
+        const { pool, calls } = fakePool([{ rows: [{ prev: 'paused' }], rowCount: 1 }]);
+        await new AgentTaskRepository(pool).updateAgentTask('t1', { status: 'cancelled', onlyFrom: ['paused', 'completed'] });
+        expect(calls[0].params[calls[0].params.length - 1]).toEqual(['paused']);   // completed→cancelled 는 표 밖이라 빠진다
+    });
+
+    it('onlyFrom 밖이면 전이 거부(throw)', async () => {
+        const { pool } = fakePool([{ rows: [], rowCount: 0 }, { rows: [{ status: 'pending' }] }]);
+        await expect(new AgentTaskRepository(pool).updateAgentTask('t1', { status: 'cancelled', onlyFrom: ['paused'] }))
+            .rejects.toMatchObject({ name: 'AgentTaskTransitionError', from: 'pending', to: 'cancelled' });
+    });
+
     it('상태 없는 갱신은 분류를 건드리지 않고 priority 만 쓴다', async () => {
         const { pool, calls } = fakePool([{ rows: [], rowCount: 1 }]);
         await new AgentTaskRepository(pool).updateAgentTask('t1', { priority: -1 });

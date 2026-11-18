@@ -482,14 +482,19 @@ export class ApprovalRegistry {
     /** 작업 종료 시 저장소에 남은 pending 정리(124) — 메모리 waiter 는 signal abort 가 이미 해소했다.
      *  정리가 끝나야 풀린다. 그동안 같은 작업의 이어받기는 기다린다. 실패는 삼킨다 — pending 은 이어받아도 다시 묻고,
      *  무효화되지 못한 미소비 승인은 이어받기(takeoverForCall)가 마지막 취소·실패 전이보다 앞선 결정이라 쓰지 않는다(fail-closed, 영속 기준). */
+    /** closeTask 정리가 진행 중인지 — 취소 정리 중 주차 재개(resumeParkedTask)가 claim 하지 않게 */
+    isClosing(taskId: string): boolean {
+        return this.closing.has(taskId);
+    }
+
     closeTask(taskId: string): Promise<void> {
         this.autoApproveTasks.delete(taskId);
         this.unattendedTasks.delete(taskId);
-        const done = Promise.all([
-            this.persist((s) => s.expirePendingForTask(taskId)),
+        // 만료 → 무효화 순서(동시 실행 금지) — 만료 뒤에는 markDecided(status='pending' 조건)가 실패하므로, 두 문장 사이에 도착한 결정도 무효화가 잡는다
+        const done = this.persist((s) => s.expirePendingForTask(taskId))
             // 자리가 없어 주차로 넘긴 미소비 승인 — 취소·종료된 작업을 다시 실행해도 옛 승인이 쓰이지 않게(주차·서버 종료는 closeTask 를 타지 않는다)
-            this.persist((s) => s.voidUnconsumedForTask?.(taskId) ?? Promise.resolve()),
-        ]).then(() => undefined);
+            .then(() => this.persist((s) => s.voidUnconsumedForTask?.(taskId) ?? Promise.resolve()))
+            .then(() => undefined);
         this.closing.set(taskId, done);
         void done.then(() => { if (this.closing.get(taskId) === done) this.closing.delete(taskId); });
         return done;

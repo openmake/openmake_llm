@@ -21,6 +21,7 @@ jest.mock('../../auth/ownership', () => ({ assertResourceOwnerOrAdmin: jest.fn()
 
 import { cancelRouter } from '../agent-task-cancel.routes';
 import { resolveCancelTarget } from '../agent-task-chain';
+import { AgentTaskTransitionError } from '../../services/agent-task/task-state';
 
 const app = express().use((req, _res, next) => { (req as unknown as { user: unknown }).user = { id: 'u1', role: 'user' }; next(); }).use('/api/agent-tasks', cancelRouter);
 type Segs = Parameters<typeof resolveCancelTarget>[1];
@@ -69,9 +70,37 @@ describe('POST /:taskId/cancel — 승인 정리 순서', () => {
         expect(updateAgentTask).not.toHaveBeenCalled();   // 무효화 전에는 재실행 가능한 상태(cancelled)가 공개되지 않는다
         release();
         await new Promise((r) => setTimeout(r, 30));
-        expect(updateAgentTask).toHaveBeenCalledWith('p', { status: 'cancelled' });
+        expect(updateAgentTask).toHaveBeenCalledWith('p', { status: 'cancelled', onlyFrom: ['paused'] });   // 조건부 — 정리 중 claim 됐으면 덮어쓰지 않는다
         saveCancelled();
         expect((await pending).status).toBe(200);
+    });
+});
+
+describe('POST /:taskId/cancel — 정리 중 재개 claim 과의 경쟁(Fable r3 P3)', () => {
+    beforeEach(() => { jest.clearAllMocks(); for (const k of Object.keys(rows)) delete rows[k]; });
+    const claimedMeanwhile = () => updateAgentTask.mockRejectedValueOnce(new AgentTaskTransitionError('p', 'pending', 'cancelled'));
+    it('정리 중 다른 경로가 claim 해 실행됐으면 cancelled 로 덮어쓰지 않고 실행 중 작업에 취소 신호를 보낸다', async () => {
+        rows.p = { id: 'p', status: 'paused', user_id: 'u1' };
+        cancel.mockReturnValueOnce(false).mockReturnValueOnce(true);
+        claimedMeanwhile();
+        const res = await request(app).post('/api/agent-tasks/p/cancel');
+        expect(res.status).toBe(200);
+        expect(cancel).toHaveBeenCalledTimes(2);
+        expect(res.body.data.message).toBe('작업 취소를 요청했습니다.');
+    });
+    it('claim 됐지만 아직 실행이 등록되지 않았으면 409 — 다시 취소하게', async () => {
+        rows.p = { id: 'p', status: 'paused', user_id: 'u1' };
+        cancel.mockReturnValue(false);
+        claimedMeanwhile();
+        const res = await request(app).post('/api/agent-tasks/p/cancel');
+        expect(res.status).toBe(409);
+    });
+    it('전이 거부가 아닌 저장 실패는 그대로 오류', async () => {
+        rows.p = { id: 'p', status: 'paused', user_id: 'u1' };
+        cancel.mockReturnValue(false);
+        updateAgentTask.mockRejectedValueOnce(new Error('db down'));
+        const res = await request(app).post('/api/agent-tasks/p/cancel');
+        expect(res.status).toBe(500);
     });
 });
 
@@ -95,7 +124,7 @@ describe('POST /:taskId/cancel — 체인', () => {
         const res = await request(app).post('/api/agent-tasks/s1/cancel');
         expect(res.status).toBe(200);
         expect(cancelPending).toHaveBeenCalledWith('s2');
-        expect(updateAgentTask).toHaveBeenCalledWith('s2', { status: 'cancelled' });
+        expect(updateAgentTask).toHaveBeenCalledWith('s2', { status: 'cancelled', onlyFrom: ['running'] });
         expect(updateAgentTask).not.toHaveBeenCalledWith('root', expect.anything());
     });
     it('체인이 이미 끝났으면(끝나지 않은 세그먼트 없음) 종전처럼 400', async () => {
@@ -124,7 +153,7 @@ describe('POST /:taskId/cancel — 미소비 승인 무효화', () => {
         cancelPending.mockReturnValueOnce(true);
         const res = await request(app).post('/api/agent-tasks/q/cancel');
         expect(res.status).toBe(200);
-        expect(updateAgentTask).toHaveBeenCalledWith('q', { status: 'cancelled' });
+        expect(updateAgentTask).toHaveBeenCalledWith('q', { status: 'cancelled', onlyFrom: ['queued'] });
         expect(closeTask).toHaveBeenCalledWith('q');
     });
     it('주차(paused) 작업 취소는 종전대로 closeTask', async () => {

@@ -15,6 +15,8 @@ jest.mock('../../AgentTaskService', () => ({ AgentTaskService: jest.fn().mockImp
 const dispatchAgentTask = jest.fn(async (e: { run: () => Promise<void> }) => { await e.run(); return 'started'; });
 const queueHas = jest.fn((_id: string) => false);
 jest.mock('../task-queue', () => ({ dispatchAgentTask: (e: { run: () => Promise<void> }) => dispatchAgentTask(e), getAgentTaskQueue: () => ({ has: queueHas, retryAfterRelease: jest.fn() }) }));
+const isClosing = jest.fn((_id: string) => false);
+jest.mock('../../task-sandbox/approval-gate', () => ({ getApprovalRegistry: () => ({ isClosing }) }));
 jest.mock('../boot-recovery', () => ({ resolveUserRole: async () => 'user' }));
 let bridgeEnabled = true;
 jest.mock('../../../config/local-bridge', () => ({ LOCAL_BRIDGE: { get ENABLED() { return bridgeEnabled; }, DEVICE_WAIT_ENABLED: true, DEVICE_WAIT_MAX_MS: 60_000, TAKEOVER_WAIT_MAX_MS: 30_000 } }));
@@ -34,7 +36,7 @@ const parkedTask = {
     input_files: null, input_images: null,
 };
 
-beforeEach(() => { jest.clearAllMocks(); bridgeEnabled = true; claimParkedTask.mockResolvedValue(true); queueHas.mockReturnValue(false); });
+beforeEach(() => { jest.clearAllMocks(); bridgeEnabled = true; claimParkedTask.mockResolvedValue(true); queueHas.mockReturnValue(false); isClosing.mockReturnValue(false); });
 
 describe('resumeParkedTask', () => {
     it('주차 작업을 claim 하고 체크포인트 다음 턴부터 같은 우선순위로 재개한다', async () => {
@@ -76,6 +78,15 @@ describe('resumeParkedTask', () => {
         queueHas.mockReturnValue(true);
         await expect(resumeParkedTask('t1')).resolves.toBe(false);
         expect(queueHas).toHaveBeenCalledWith('t1');
+        expect(claimParkedTask).not.toHaveBeenCalled();
+        expect(dispatchAgentTask).not.toHaveBeenCalled();
+    });
+
+    it('취소 라우트가 승인 정리(closeTask)를 기다리는 동안에는 claim 하지 않는다 — 취소된 작업이 다시 돌지 않게', async () => {
+        getAgentTask.mockResolvedValue(parkedTask);
+        isClosing.mockReturnValue(true);
+        await expect(resumeParkedTask('t1')).resolves.toBe(false);
+        expect(isClosing).toHaveBeenCalledWith('t1');
         expect(claimParkedTask).not.toHaveBeenCalled();
         expect(dispatchAgentTask).not.toHaveBeenCalled();
     });

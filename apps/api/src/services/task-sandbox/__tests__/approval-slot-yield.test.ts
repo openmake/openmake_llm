@@ -228,6 +228,41 @@ describe('ApprovalRegistry — closeTask 무효화와 재실행 순서', () => {
         expect(a.id()).not.toBe('apv_prior');
     });
 
+    it('closeTask 는 pending 만료를 먼저 끝낸 뒤 미소비 무효화를 한다 — 두 문장 사이에 도착한 결정도 무효화가 잡게', async () => {
+        // 동시 실행이면 "void → markDecided(pending→approved) → expire" 순으로 끼어든 승인이 둘 다 빠져나간다(Fable r3 P2)
+        const s = store();
+        const expiring = deferred<undefined>();
+        s.expirePendingForTask.mockReturnValueOnce(expiring.promise);
+        const reg = new ApprovalRegistry(s, slots(true).port);
+        void reg.closeTask('t1');
+        await flush();
+        expect(s.expirePendingForTask).toHaveBeenCalledWith('t1');
+        expect(s.voidUnconsumedForTask).not.toHaveBeenCalled();
+        expiring.resolve(undefined);
+        await flush();
+        expect(s.voidUnconsumedForTask).toHaveBeenCalledWith('t1');
+    });
+
+    it('pending 만료가 실패해도 미소비 무효화는 한다', async () => {
+        const s = store();
+        s.expirePendingForTask.mockRejectedValueOnce(new Error('db down'));
+        await new ApprovalRegistry(s, slots(true).port).closeTask('t1');
+        expect(s.voidUnconsumedForTask).toHaveBeenCalledWith('t1');
+    });
+
+    it('isClosing — closeTask 정리가 끝날 때까지만 true', async () => {
+        const s = store();
+        const voiding = deferred<undefined>();
+        s.voidUnconsumedForTask.mockReturnValueOnce(voiding.promise);
+        const reg = new ApprovalRegistry(s, slots(true).port);
+        expect(reg.isClosing('t1')).toBe(false);
+        const done = reg.closeTask('t1');
+        expect(reg.isClosing('t1')).toBe(true);
+        voiding.resolve(undefined);
+        await done;
+        expect(reg.isClosing('t1')).toBe(false);
+    });
+
     const priorApproved = () => ({ approval_id: 'apv_prior', status: 'approved', decided_at: new Date().toISOString(), created_at: new Date().toISOString(), answer_text: null });
 
     it('무효화 실패는 메모리에 남기지 않는다 — closeTask 는 풀리고, 이어받기 판단은 저장소(마지막 취소·실패 전이 기준, 재시작 뒤에도 유지)가 한다', async () => {

@@ -6,12 +6,13 @@
  * @module routes/agent-task-cancel
  */
 import { Router, Request, Response } from 'express';
-import { success, badRequest } from '../utils/api-response';
+import { success, badRequest, conflict } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AgentTaskService } from '../services/AgentTaskService';
 import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
 import { getAgentTaskQueue } from '../services/agent-task/task-queue';
+import { AgentTaskTransitionError } from '../services/agent-task/task-state';
 import { loadOwnedTask } from './agent-task.helpers';
 import { cancelChainIfAny, cancelTargetOf } from './agent-task-chain';
 
@@ -41,7 +42,14 @@ cancelRouter.post('/:taskId/cancel', asyncHandler(async (req: Request, res: Resp
         // 질문 대기 주차(paused)의 남은 pending 과, 자리가 없어 주차로 넘긴 뒤 재개 대기열(queued)에 든 작업의 미소비 승인을 먼저 닫는다 —
         // 재실행 가능한 상태(cancelled)는 무효화가 끝난 뒤 공개한다(저장이 늦는 사이 병렬 /resume 이 옛 승인을 이어받지 않게)
         await getApprovalRegistry().closeTask(task.id);
-        await getUnifiedDatabase().updateAgentTask(task.id, { status: 'cancelled' });
+        // 조건부 쓰기 — 정리를 기다리는 사이 승인 라우트·자리 반납 재시도·스윕이 주차 행을 claim 해 실행했으면 덮어쓰지 않고(화면만 취소로 보이는 실행 방지) 그 실행에 취소 신호를 보낸다
+        try {
+            await getUnifiedDatabase().updateAgentTask(task.id, { status: 'cancelled', onlyFrom: [task.status] });
+        } catch (e) {
+            if (!(e instanceof AgentTaskTransitionError)) throw e;
+            if (AgentTaskService.cancel(task.id)) return res.json(success({ message: '작업 취소를 요청했습니다.', taskId: task.id }));
+            return res.status(409).json(conflict('작업 상태가 바뀌었습니다. 다시 취소해 주세요.'));
+        }
         return res.json(success({ message: '작업이 취소되었습니다.', taskId: task.id }));
     }
     return res.status(400).json(badRequest('실행 중이거나 대기 중인 작업이 아닙니다.'));
