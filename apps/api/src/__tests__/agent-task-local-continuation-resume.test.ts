@@ -119,9 +119,22 @@ describe('로컬 이어가기 세그먼트 재개 — 서비스 배선', () => {
         expect(adds).toEqual([expect.objectContaining({ taskId: 'root-key' })]);
         const system = String(mockChat.mock.calls[0][0][0].content);
         expect(system.startsWith('OLD SYSTEM')).toBe(true);
-        expect(system).toContain(getWorktreeIsolationNote(BRANCH));
+        expect(system).toContain(getWorktreeIsolationNote(BRANCH, WT_REL));
         expect(system).not.toContain('omk-task/stale000');
         expect(updates().pop()).toMatchObject({ status: 'completed' });
+    });
+
+    // 재개 입력의 system 이 다른 폴더를 말할 때 — 모델은 "서버가 확인한 경로" 를 믿으므로 실제 작업 폴더(WT_REL)로 바뀌어야 한다
+    it.each([
+        ['fork(새 worktree, 부모 폴더 안내)', {}, getWorktreeIsolationNote('omk-task/parent00', '.openmake/worktrees/parent')],
+        ['이어가기(물려받은 worktree, 옛 경로 안내)', { continuation: { fromTaskId: 'seg1', worktreeKey: 'root-key' } }, getWorktreeIsolationNote(BRANCH, '.openmake/worktrees/other')],
+        ['옛 체크포인트(같은 브랜치, 경로 없는 안내)', {}, getWorktreeIsolationNote(BRANCH)],
+    ])('재개 — %s 면 system 의 격리 안내가 현재 작업 폴더 경로로 바뀐다', async (_n, row, oldNote) => {
+        rows.set('seg2', { id: 'seg2', status: 'pending', executor: 'local', ...row });
+        await run({ resume: resumeOf(`OLD SYSTEM${oldNote}`) });
+
+        const system = String(mockChat.mock.calls[0][0][0].content);
+        expect(system).toBe(`OLD SYSTEM${getWorktreeIsolationNote(BRANCH, WT_REL)}`);
     });
 
     // 재실행의 시작 상태: 주차 재개·부팅 복구 claim 은 pending, /resume claim·큐 대기는 queued — 둘 다 completed 로 바로 갈 수 없다(task-state)

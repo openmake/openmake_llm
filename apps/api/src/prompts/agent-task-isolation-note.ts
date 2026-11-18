@@ -6,11 +6,11 @@
 import { getWorktreeIsolationNote, WORKTREE_ISOLATION_HEADING } from './agent-task-prompt';
 
 /**
- * PURE: 격리 안내 구획(빈 줄 + 제목 줄부터 다음 `## ` 제목 줄 앞 또는 끝까지)을 branch 에 맞춘다.
- * 같은 브랜치를 말하면 그대로 돌려준다(프롬프트 캐시 유지). 아니면 옛 구획을 빼고, branch 가 있으면 새 안내를 끝에 붙인다.
+ * PURE: 격리 안내 구획(빈 줄 + 제목 줄부터 다음 `## ` 제목 줄 앞 또는 끝까지)을 branch·path(작업 폴더)에 맞춘다.
+ * 같은 브랜치·경로를 말하면 그대로 돌려준다(프롬프트 캐시 유지). fork·옛 체크포인트처럼 경로가 다르거나 없으면 바꾼다. 아니면 옛 구획을 빼고, branch 가 있으면 새 안내를 끝에 붙인다.
  */
-export function syncWorktreeIsolationNote(system: string, branch: string | null): string {
-    const note = branch ? getWorktreeIsolationNote(branch) : '';
+export function syncWorktreeIsolationNote(system: string, branch: string | null, path?: string | null): string {
+    const note = branch ? getWorktreeIsolationNote(branch, path) : '';
     const start = system.indexOf(`\n${WORKTREE_ISOLATION_HEADING}`);
     if (start < 0) return system + note;
     const next = system.indexOf('\n## ', start + 1);
