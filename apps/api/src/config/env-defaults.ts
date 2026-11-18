@@ -66,7 +66,6 @@ export const DEFAULT_CONFIG: EnvConfig = {
     tailRouting2bEnabled: false,
     searchSemanticRerankShadow: false,
     searchSemanticRerankEnabled: false,
-    searchRerankEmbedModel: 'bge-m3',
     llmGatewayProviders: [] as string[],
 
     // Log

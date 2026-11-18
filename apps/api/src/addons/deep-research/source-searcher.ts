@@ -90,7 +90,10 @@ export async function searchSubTopics(params: {
                     performWebSearch(query, {
                         maxResults: resultsPerQuery,
                         language: config.language,
-                        signal: abortSignal
+                        signal: abortSignal,
+                        // 행위자 = 요청 사용자: 리랭킹 text.embed 를 개인 배정으로 해석하고, 원장
+                        // tool.web_search 도 web_search 도구와 같은 규칙으로 이 사용자에게 귀속한다.
+                        costUserId: config.userId
                     }),
                     RESEARCH_TAVILY.MAX_RESULTS > 0
                         ? searchContentProviders(query, RESEARCH_TAVILY.MAX_RESULTS, RESEARCH_TAVILY.SEARCH_DEPTH, abortSignal)

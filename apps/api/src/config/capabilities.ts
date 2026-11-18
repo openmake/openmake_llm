@@ -213,6 +213,8 @@ export const CAPABILITY_LIMITS = {
      *  넘으면 실패 — 영상과 달리 job 을 다음 턴으로 넘기지 않는다. */
     MUSIC_WAIT_MS: parseInt(process.env.CAPABILITY_MUSIC_WAIT_MS || '300000', 10),
     MUSIC_LYRICS_MAX_CHARS: parseInt(process.env.CAPABILITY_MUSIC_LYRICS_MAX_CHARS || '4000', 10),
+    /** text.embed(도구 선별·검색 리랭킹) 사용자 키 거절 메모 TTL — 그동안 같은 (사용자, 공급자) 로 호출하지 않는다 */
+    EMBED_KEY_REJECT_MEMO_MS: parseInt(process.env.CAPABILITY_EMBED_KEY_REJECT_MEMO_MS || '600000', 10),
     /** audio.analyze·music.analyze·video.analyze — 네이티브 콘텐츠 파트를 chat/completions 로 보내는 비스트림 1회. */
     MEDIA_ANALYZE_TIMEOUT_MS: parseInt(process.env.CAPABILITY_MEDIA_ANALYZE_TIMEOUT_MS || '180000', 10),
     MEDIA_ANALYZE_MAX_TOKENS: parseInt(process.env.CAPABILITY_MEDIA_ANALYZE_MAX_TOKENS || '1500', 10),
