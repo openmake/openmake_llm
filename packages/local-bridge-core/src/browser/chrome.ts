@@ -88,14 +88,17 @@ export async function launchChrome(profileDir: string, signal?: AbortSignal): Pr
     throw new Error('Chrome 디버깅 포트가 열리지 않았습니다(시간 초과)');
 }
 
-/** 끝났는지 — POSIX 에서는 거둬지지 않은 좀비도 끝난 것으로 본다('exit' 훅에서는 이벤트 루프가 돌지 않아 자식을 거두지 않는다). */
+/**
+ * 끝났는지 — POSIX 에서는 거둬지지 않은 좀비도 끝난 것으로 본다('exit' 훅에서는 이벤트 루프가 돌지 않아 자식을 거두지 않는다).
+ * ps 를 실행하지 못했거나 실패·빈 출력이면 끝났다고 보지 않는다 — 확인하지 못한 Chrome 은 SIGKILL·lingeringPid 보호를 거친다.
+ * (ps 직전에 끝나 목록에서 빠진 경우는 다음 확인에서 kill(pid, 0) 이 잡는다.)
+ */
 function exitedSync(pid: number): boolean {
     try { process.kill(pid, 0); } catch { return true; }
     if (process.platform === 'win32') return false;
     const r = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
-    if (r.error) return true; // 알 수 없으면 기다리지 않는다
-    const stat = r.stdout.trim();
-    return stat === '' || stat.startsWith('Z');
+    if (r.error || r.status !== 0) return false;
+    return r.stdout.trim().startsWith('Z');
 }
 
 /**
