@@ -305,19 +305,29 @@ function fillNow(v: unknown, now: number): unknown {
     }
     return v;
 }
-/** 기대값의 자리표시를 채운다 — `{{CAPABILITIES}}` 는 이 구현의 능력 목록, `{{DURATION}}` 은 실제 값이 0 이상의 정수일 때만 그 값. */
-function fillExpect(e: unknown, actual: unknown, caps: string[]): unknown {
+const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+/** `{{INSTANCE_ID}}` 의 값 — 서버가 처음 받은 hello 의 instanceId 가 UUID v4 일 때만 그 값. */
+function instanceIdOf(frames: Obj[]): string {
+    const v = frames.find((f) => f.type === 'bridge_hello')?.instanceId;
+    return typeof v === 'string' && UUID_V4_RE.test(v) ? v : '{{INSTANCE_ID}} 이 UUID v4 가 아님';
+}
+/**
+ * 기대값의 자리표시를 채운다 — `{{CAPABILITIES}}` 는 이 구현의 능력 목록, `{{DURATION}}` 은 실제 값이 0 이상의 정수일 때만 그 값,
+ * `{{INSTANCE_ID}}` 는 그 사례의 첫 hello 의 instanceId(사례 안의 hello 가 모두 같은 값이어야 맞는다).
+ */
+function fillExpect(e: unknown, actual: unknown, caps: string[], instanceId = ''): unknown {
     if (e === '{{CAPABILITIES}}') return caps;
+    if (e === '{{INSTANCE_ID}}') return instanceId;
     if (e === '{{DURATION}}') return Number.isInteger(actual) && (actual as number) >= 0 ? actual : '{{DURATION}} 이 0 이상의 정수가 아님';
-    if (Array.isArray(e)) return e.map((x, i) => fillExpect(x, Array.isArray(actual) ? actual[i] : undefined, caps));
+    if (Array.isArray(e)) return e.map((x, i) => fillExpect(x, Array.isArray(actual) ? actual[i] : undefined, caps, instanceId));
     if (e && typeof e === 'object') {
         const a = actual && typeof actual === 'object' ? (actual as Obj) : {};
-        return Object.fromEntries(Object.entries(e as Obj).map(([k, x]) => [k, fillExpect(x, a[k], caps)]));
+        return Object.fromEntries(Object.entries(e as Obj).map(([k, x]) => [k, fillExpect(x, a[k], caps, instanceId)]));
     }
     return e;
 }
 const SENTINEL_ID = '__conformance_end__';
-const ENDING_CODES = new Set<string>(['reconnecting', 'idle', 'closed', ...constants.AUTH_CLOSE_REASONS]);
+const ENDING_CODES = new Set<string>(['reconnecting', 'idle', 'closed', 'device_conflict', ...constants.AUTH_CLOSE_REASONS]);
 
 async function runFramesCase(c: FramesCase): Promise<void> {
     const tmp = tmpDir();
@@ -394,7 +404,7 @@ async function runFramesCase(c: FramesCase): Promise<void> {
         }
         const frames = server.frames.filter((f) => f.reqId !== SENTINEL_ID);
         const caps = core.capabilities();
-        expect({ frames, statuses, notices, delays }).toEqual(fillExpect(c.expect, { frames, statuses, notices, delays }, caps));
+        expect({ frames, statuses, notices, delays }).toEqual(fillExpect(c.expect, { frames, statuses, notices, delays }, caps, instanceIdOf(frames)));
         expect(opts.headersError === undefined ? server.connections : 0).toBe(server.connections);
         for (const a of c.after ?? []) {
             if ('absent' in a) expect({ absent: a.absent, exists: fs.existsSync(path.join(tmp, a.absent)) }).toEqual({ absent: a.absent, exists: false });

@@ -20,8 +20,9 @@
 import { randomUUID } from 'crypto';
 import type { WebSocket } from 'ws';
 import type { ExtendedWebSocket } from '../../sockets/ws-types';
-import { LOCAL_BRIDGE } from '../../config/local-bridge';
+import { LOCAL_BRIDGE, BRIDGE_CONFLICT_LOG_INTERVAL_MS, BRIDGE_SILENT_REPLACE_WINDOW_MS } from '../../config/local-bridge';
 import { createLogger } from '../../utils/logger';
+import { probeAlive } from './reregister-probe';
 
 const logger = createLogger('LocalBridge');
 
@@ -201,6 +202,11 @@ export interface DeviceSession {
      * 구버전 기기는 보내지 않으므로 register 가 deviceId 로 채운다(현행 계산과 동일).
      */
     hostId?: string;
+    /**
+     * 연결한 프로세스의 난수(bridge_hello.instanceId, 2026-11-19) — 재연결해도 같다. 같으면 같은 프로세스의 재연결로 보고
+     * 확인 없이 대체한다. 판정 자체는 확인 ping 이 한다. 옛 기기는 보내지 않는다.
+     */
+    instanceId?: string;
     /** 기기가 지원한다고 알린 요청 종류. undefined = 구버전(LEGACY_BRIDGE_KINDS). */
     capabilities?: Set<BridgeCapability>;
     ws: WebSocket;
@@ -220,6 +226,16 @@ export interface DeviceSession {
     enumeratedFolders?: Set<string>;
 }
 
+/** registerChecked 결과 — closed: 확인을 기다리는 동안 새 소켓이 닫혀 등록하지 않았다(응답할 곳이 없다). */
+export type RegisterCheckedResult = 'ok' | 'limit' | 'conflict' | 'closed';
+
+interface Probing {
+    /** 확인 중인 기존 소켓 — 그 세션이 해제·대체되면 확인을 취소한다. */
+    prevWs: WebSocket;
+    controller: AbortController;
+    done: Promise<void>;
+}
+
 interface Pending {
     resolve: (r: BridgeResult) => void;
     timer: NodeJS.Timeout;
@@ -234,6 +250,97 @@ class LocalBridgeRegistry {
      */
     private readonly devices = new Map<string, Map<string, DeviceSession>>();
     private readonly pending = new Map<string, Pending>();
+    /** 기기(userId+deviceId)별 진행 중인 생존 확인 — 하나만 둔다. 다른 hello 는 그 결과를 기다린 뒤 처음부터 다시 판정한다. */
+    private readonly probing = new Map<string, Probing>();
+    /**
+     * 등록 판정을 기다리는 소켓(확인 중이거나 다른 확인의 결과를 기다림) — 키 폐기·계정 해제가 이 소켓도 닫는다.
+     * 등록된 세션만 닫으면 대기 소켓이 확인 뒤 빈 자리에 폐기된 키로 등록된다(리뷰 r3).
+     */
+    private readonly waiting = new Map<WebSocket, DeviceSession>();
+    /** 대기 중에 폐기·해제된 소켓 — 등록 직전에 다시 확인한다(닫기가 readyState 를 곧바로 바꾸지 않아도 막는다). */
+    private readonly revokedWaiting = new WeakSet<WebSocket>();
+    /** 기기별 최근 무응답 대체 시각 — 창(BRIDGE_SILENT_REPLACE_WINDOW_MS) 안의 횟수를 경고에 붙인다. */
+    private readonly silentReplaces = new Map<string, number[]>();
+    /** 기기별 마지막 거절 경고 시각 — BRIDGE_CONFLICT_LOG_INTERVAL_MS 에 한 줄만. */
+    private readonly conflictLoggedAt = new Map<string, number>();
+
+    /**
+     * 확인을 거치는 등록(설계 2026-11-19 §3.2) — 같은 deviceId 의 기존 세션이 다른 소켓이면:
+     *   1. 기존 소켓이 OPEN 이 아니면 즉시 대체  2. instanceId 가 둘 다 있고 같으면 즉시 대체(같은 프로세스)
+     *   3. 그 밖에는 기존 소켓에 확인 ping — 맞는 pong 이면 'conflict'(기존 세션·요청은 그대로), 시간 안에 없으면 대체.
+     * 기다리는 동안 기존 세션이 해제·대체되면 남은 시간을 기다리지 않고 1번부터 다시 판정한다.
+     */
+    async registerChecked(session: DeviceSession): Promise<RegisterCheckedResult> {
+        this.waiting.set(session.ws, session);
+        try {
+            return await this.decideRegister(session);
+        } finally {
+            this.waiting.delete(session.ws);
+        }
+    }
+
+    /** 대기 중 폐기·해제됐거나 닫혔으면 true — 등록하지 않는다. */
+    private isGone(ws: WebSocket): boolean {
+        return this.revokedWaiting.has(ws) || ws.readyState !== ws.OPEN;
+    }
+
+    private async decideRegister(session: DeviceSession): Promise<RegisterCheckedResult> {
+        const key = `${session.userId}\0${session.deviceId}`;
+        for (;;) {
+            const inflight = this.probing.get(key);
+            if (inflight) { await inflight.done; continue; }
+            if (this.isGone(session.ws)) return 'closed';
+            const prev = this.devices.get(session.userId)?.get(session.deviceId);
+            if (!prev || prev.ws === session.ws || prev.ws.readyState !== prev.ws.OPEN
+                || (prev.instanceId !== undefined && prev.instanceId === session.instanceId)) {
+                return this.register(session) ? 'ok' : 'limit';
+            }
+            const controller = new AbortController();
+            let release!: () => void;
+            const done = new Promise<void>((r) => { release = r; });
+            this.probing.set(key, { prevWs: prev.ws, controller, done });
+            let outcome;
+            try {
+                outcome = await probeAlive(prev.ws, LOCAL_BRIDGE.REREGISTER_PROBE_MS, controller.signal);
+            } finally {
+                this.probing.delete(key);
+                release();
+            }
+            // 기다리는 동안 그 자리의 세션이 바뀌었으면(해제·강제 해제·다른 세션) 지금 세션으로 다시 판정한다.
+            if (outcome === 'closed' || this.devices.get(session.userId)?.get(session.deviceId) !== prev) continue;
+            if (outcome === 'alive') {
+                this.logConflict(key, prev, session);
+                return 'conflict';
+            }
+            if (this.isGone(session.ws)) return 'closed';
+            this.logSilentReplace(key, prev, session);
+            return this.register(session) ? 'ok' : 'limit';
+        }
+    }
+
+    private logConflict(key: string, prev: DeviceSession, next: DeviceSession): void {
+        const now = Date.now();
+        const last = this.conflictLoggedAt.get(key);
+        if (last !== undefined && now - last < BRIDGE_CONFLICT_LOG_INTERVAL_MS) return;
+        this.conflictLoggedAt.set(key, now);
+        logger.warn(`[Bridge] 같은 기기 id 충돌 — 기존 연결이 응답해 새 연결 거절: user=${next.userId} device=${next.deviceId} `
+            + `existing="${prev.label}" incoming="${next.label}" instance=${prev.instanceId ? 'y' : 'n'}/${next.instanceId ? 'y' : 'n'}`);
+    }
+
+    private logSilentReplace(key: string, prev: DeviceSession, next: DeviceSession): void {
+        const now = Date.now();
+        const recent = (this.silentReplaces.get(key) ?? []).filter((t) => now - t < BRIDGE_SILENT_REPLACE_WINDOW_MS);
+        recent.push(now);
+        this.silentReplaces.set(key, recent);
+        logger.warn(`[Bridge] 기존 연결 무응답(${LOCAL_BRIDGE.REREGISTER_PROBE_MS}ms) — 새 연결로 대체: user=${next.userId} device=${next.deviceId} `
+            + `instance=${prev.instanceId ? 'y' : 'n'}/${next.instanceId ? 'y' : 'n'} recent=${recent.length}`);
+    }
+
+    /** 이 기기 자리의 세션이 해제·대체됐다 — 그 세션을 확인하던 중이면 취소한다(registerChecked 가 다시 판정). */
+    private abortProbe(userId: string, deviceId: string, ws: WebSocket): void {
+        const p = this.probing.get(`${userId}\0${deviceId}`);
+        if (p && p.prevWs === ws) p.controller.abort();
+    }
 
     /** 등록. 디바이스 상한 초과 시 false (호출부가 오류 응답). */
     register(session: DeviceSession): boolean {
@@ -259,7 +366,9 @@ class LocalBridgeRegistry {
             }
         }
         if (prev && prev.ws !== session.ws) {
-            logger.info(`[Bridge] 동일 디바이스 재등록 대체: user=${session.userId} ${prev.label} → ${session.label}`);
+            this.abortProbe(session.userId, session.deviceId, prev.ws);
+            const instance = !prev.instanceId || !session.instanceId ? 'unknown' : prev.instanceId === session.instanceId ? 'same' : 'changed';
+            logger.info(`[Bridge] 동일 디바이스 재등록 대체: user=${session.userId} ${prev.label} → ${session.label} instance=${instance}`);
             this.rejectPendingFor(session.userId, session.deviceId, '디바이스가 재연결되어 세션이 대체되었습니다');
             // 구 소켓을 능동 종료 — 방치하면 unregister 가 새 ws 만 매칭해 구 ws 는 유휴로 남는다.
             try { prev.ws.close(1000, 'device_reregistered'); } catch { /* already closing */ }
@@ -279,6 +388,7 @@ class LocalBridgeRegistry {
                     byDevice.delete(deviceId);
                     if (byDevice.size === 0) this.devices.delete(userId);
                     this.rejectPendingFor(userId, deviceId, '디바이스 연결이 끊어졌습니다');
+                    this.abortProbe(userId, deviceId, ws);
                     logger.info(`[Bridge] 디바이스 해제: user=${userId} device=${deviceId} label="${s.label}"`);
                     return;
                 }
@@ -331,16 +441,30 @@ class LocalBridgeRegistry {
     disconnectByApiKey(apiKeyId: string): number {
         const targets = this.listAllDevices().filter((s) => s.apiKeyId === apiKeyId);
         for (const s of targets) this.disconnectDevice(s.userId, s.deviceId, 'api_key_revoked');
-        if (targets.length > 0) logger.info(`[Bridge] API key 폐기로 연결 ${targets.length}개 종료: key=${apiKeyId}`);
-        return targets.length;
+        const total = targets.length + this.closeWaiting((s) => s.apiKeyId === apiKeyId, 'api_key_revoked');
+        if (total > 0) logger.info(`[Bridge] API key 폐기로 연결 ${total}개 종료: key=${apiKeyId}`);
+        return total;
     }
 
     /** 이 사용자의 브리지 연결을 모두 닫는다(계정 비활성화·삭제 — 관리자 강제 해제와 사유를 나눈다). 닫은 수를 돌려준다. */
     disconnectByUser(userId: string, reason: 'account_disabled' | 'account_deleted'): number {
         const targets = this.getDevices(userId);
         for (const s of targets) this.disconnectDevice(s.userId, s.deviceId, reason);
-        if (targets.length > 0) logger.info(`[Bridge] 계정 상태 변경(${reason})으로 연결 ${targets.length}개 종료: user=${userId}`);
-        return targets.length;
+        const total = targets.length + this.closeWaiting((s) => s.userId === userId, reason);
+        if (total > 0) logger.info(`[Bridge] 계정 상태 변경(${reason})으로 연결 ${total}개 종료: user=${userId}`);
+        return total;
+    }
+
+    /** 등록 판정을 기다리는 소켓 중 조건에 맞는 것을 폐기 표시하고 닫는다. 닫은 수를 돌려준다. */
+    private closeWaiting(match: (s: DeviceSession) => boolean, reason: string): number {
+        let n = 0;
+        for (const [ws, s] of this.waiting) {
+            if (!match(s) || this.revokedWaiting.has(ws)) continue;
+            this.revokedWaiting.add(ws);
+            try { ws.close(1008, reason); } catch { /* already closing */ }
+            n++;
+        }
+        return n;
     }
 
     /**
@@ -348,7 +472,7 @@ class LocalBridgeRegistry {
      * 하트비트(sockets/handler.ts)가 그 값이 지난 연결을 닫으므로, 바뀐 값을 넣어 두면 새 만료 시각에 닫힌다. 바꾼 수를 돌려준다.
      */
     updateApiKeyExpiry(apiKeyId: string, expiresAtMs: number | null): number {
-        const targets = this.listAllDevices().filter((s) => s.apiKeyId === apiKeyId);
+        const targets = [...this.listAllDevices(), ...this.waiting.values()].filter((s) => s.apiKeyId === apiKeyId);
         for (const s of targets) (s.ws as ExtendedWebSocket)._authTokenExpiresAtMs = expiresAtMs;
         return targets.length;
     }

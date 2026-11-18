@@ -50,6 +50,7 @@
 "status.auth.accountDisabled" = "Your account has been deactivated — contact your administrator";
 "status.auth.accountDeleted" = "Your account has been deleted — contact your administrator";
 "status.auth.scopeRequired" = "This API key lacks the bridge scope — create a key with the bridge scope and enter it in Settings";
+"status.deviceConflict" = "Another app is already connected with the same device id — quit the other OpenMake Companion or CLI that is running";
 
 /* Folder picker */
 "panel.title" = "Choose a folder for agent tasks (you can add several folders one at a time)";
