@@ -214,3 +214,41 @@ test('Windows 줄의 복사 버튼은 Windows 해시를 한 번 복사한다', a
     assert.deepEqual(writes, [SHA_WIN]);
   });
 });
+
+// macOS 새 정체성(OpenMake Code) — macos 블록이 있으면 macOS 줄은 그것 하나만 그린다(native 는 옛 앱 업데이터 전용 다리 파일)
+const SHA_CODE = `5b7d${'00112233445566778899'.repeat(3)}`;
+const code: DesktopReleaseBlock = {
+  version: '0.5.0', file: 'OpenMake-Code-0.5.0-arm64.dmg', sha256: SHA_CODE, url: '/api/desktop/download/OpenMake-Code-0.5.0-arm64.dmg',
+};
+
+test('macos·native·windows 게시: macOS 줄은 1개이고 macos 블록을 그린다 — native 파일명은 화면에 없다', async () => {
+  await withPage([ok({ ...mac, native: mac, macos: code, windows: win })], async ({ text, downloads, osRows }) => {
+    assert.equal(osRows('macOS'), 1);
+    assert.equal(osRows('Windows'), 1);
+    assert.deepEqual(downloads().map((a) => a.getAttribute('href')), [code.url, win.url]);
+    assert.ok(text().includes(code.file));
+    assert.ok(text().includes(SHA_CODE));
+    assert.ok(text().includes(`버전 ${code.version}`));
+    assert.ok(!text().includes(mac.file));
+    assert.ok(!text().includes(SHA_MAC));
+  });
+});
+
+test('macos 만 게시(최상위·native 없음): macOS 줄 1개, macOS 설치 안내 1개', async () => {
+  await withPage([ok({ macos: code })], async ({ text, downloads, osRows }) => {
+    assert.equal(osRows('macOS'), 1);
+    assert.equal(osRows('Windows'), 0);
+    assert.deepEqual(downloads().map((a) => a.getAttribute('href')), [code.url]);
+    assert.equal(text().split(messages.desktopApp.install.native).length - 1, 1);
+    assert.ok(!text().includes(messages.desktopApp.install.windows));
+  });
+});
+
+test('macos 가 있을 때 macOS 복사 버튼은 macos 해시를 복사한다', async () => {
+  await withPage([ok({ ...mac, native: mac, macos: code })], async ({ button, click, writes }) => {
+    const copyMac = button(copyLabel('macOS'));
+    assert.ok(copyMac);
+    await click(copyMac);
+    assert.deepEqual(writes, [SHA_CODE]);
+  });
+});
