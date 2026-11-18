@@ -18,6 +18,8 @@ jest.mock('../../local-bridge/registry', () => ({ getLocalBridgeRegistry: () => 
 
 import { AgentTaskQueue, getAgentTaskQueue } from '../task-queue';
 import { resumeParkedTask } from '../hitl-park';
+import { queueApprovalSlotPort } from '../approval-slot-port';
+import { AGENT_TASK_LIMITS } from '../../../config/runtime-limits';
 
 function job() {
     let finish = (): void => undefined;
@@ -136,5 +138,39 @@ describe('resumeParkedTask — 자리 반납 뒤 자동 재개', () => {
         const again = job();
         expect(getAgentTaskQueue().runDirect({ taskId: 't1', userId: 'u1', run: again.run })).toBe('started');
         await again.finish();
+    });
+});
+
+describe('승인 결정 뒤 자리 없음 → 주차 재개(approval-slot-port)', () => {
+    const limits = AGENT_TASK_LIMITS as { QUEUE_ENABLED: boolean; QUEUE_YIELD_ON_APPROVAL: boolean };
+    const original = { enabled: limits.QUEUE_ENABLED, yieldOn: limits.QUEUE_YIELD_ON_APPROVAL };
+    beforeEach(() => { limits.QUEUE_ENABLED = true; limits.QUEUE_YIELD_ON_APPROVAL = true; });
+    afterAll(() => { limits.QUEUE_ENABLED = original.enabled; limits.QUEUE_YIELD_ON_APPROVAL = original.yieldOn; });
+
+    it('미소비 결정이 있는 주차 작업은 자리 반납 직후 재시도로 재개돼 대기열에 들어가고, 차례가 오면 실행된다', async () => {
+        getAgentTask.mockResolvedValue(parkedTask);
+        const q = getAgentTaskQueue();
+        const parked = job();
+        expect(q.submit({ taskId: 't1', userId: 'u1', run: parked.run })).toBe('started');
+        queueApprovalSlotPort.yieldSlot('t1'); // 승인 카드 — 슬롯 양보
+        const others = Array.from({ length: AGENT_TASK_LIMITS.QUEUE_USER_MAX }, (_v, i) => {
+            const j = job();
+            expect(q.submit({ taskId: `o${i}`, userId: 'u1', run: j.run })).toBe('started');
+            return j;
+        });
+        expect(queueApprovalSlotPort.tryReclaimSlot('t1')).toBe(false); // 결정 — 자리 없음
+        queueApprovalSlotPort.resumeAfterRelease('t1'); // 레지스트리가 결정 저장 뒤 등록
+        expect(claimParkedTask).not.toHaveBeenCalled();
+        await parked.finish(); // 호출부가 주차하고 실행이 끝난다 — 양보 상태라 카운터는 그대로
+        expect(claimParkedTask).toHaveBeenCalledTimes(1);
+        expect(updateAgentTask).toHaveBeenCalledWith('t1', { status: 'queued' });
+        expect(q.position('t1')).toBe(1);
+        expect(execute).not.toHaveBeenCalled();
+        await others[0].finish();
+        expect(execute).toHaveBeenCalledWith(expect.objectContaining({ taskId: 't1', resume: expect.objectContaining({ fromTurn: 4 }) }));
+        for (const o of others.slice(1)) await o.finish();
+        await flush();
+        expect(q.has('t1')).toBe(false);
+        expect(q.stats().globalActive).toBe(0);
     });
 });

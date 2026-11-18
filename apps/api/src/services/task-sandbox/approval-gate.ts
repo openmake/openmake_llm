@@ -27,6 +27,7 @@ import { AGENT_TASK_LIMITS, APPROVAL_RECENT_WINDOW_MS } from '../../config/runti
 import { UNATTENDED_APPROVAL_OUTCOME, resolveUnattendedOutcome } from '../../config/agent-task-approval';
 import { auditSecurityEvent } from '../../security/security-audit';
 import { hashToolArgs } from '../../utils/args-hash';
+import type { ApprovalSlotPort } from '../agent-task/approval-slot-port';
 
 const logger = createLogger('TaskApprovalGate');
 
@@ -151,12 +152,19 @@ interface Waiter {
     timer: NodeJS.Timeout;
     /** 자동승인에서도 묻는 바닥 호출(approval-floor) — 요청 시점의 원래 인자로 판정해 둔다. */
     floor: boolean;
+    /** 자리가 없어 결정을 저장하는 중 — 그동안 온 두 번째 결정·중단·타이머는 무시한다(waiter 는 남아 철회는 consumed). */
+    saving?: boolean;
 }
 
 /** 영속 저장소 계약(124) — 테스트는 생략(메모리만), 운영은 AgentTaskApprovalRepository. */
 export type ApprovalStore = Pick<AgentTaskApprovalRepository,
     'insertPending' | 'markDecided' | 'listPending' | 'getPending' | 'takeoverForCall' | 'expirePendingForTask'>
-    & Partial<Pick<AgentTaskApprovalRepository, 'revokeUnconsumed' | 'listRecentDecisions' | 'recordEvent' | 'reassign' | 'extendPending'>>;
+    & Partial<Pick<AgentTaskApprovalRepository, 'revokeUnconsumed' | 'listRecentDecisions' | 'recordEvent' | 'reassign' | 'extendPending' | 'voidUnconsumedForTask'>>;
+
+/** 기본 슬롯 포트 — 동시성 큐. 첫 사용 때 불러온다(테스트·채팅 경로가 큐 모듈을 끌어오지 않게). */
+function defaultSlotPort(): ApprovalSlotPort {
+    return (require('../agent-task/approval-slot-port') as typeof import('../agent-task/approval-slot-port')).queueApprovalSlotPort;
+}
 
 function rowToPending(r: ApprovalRow): PendingApproval {
     const args = r.args ?? {};
@@ -183,8 +191,13 @@ export class ApprovalRegistry {
     private autoApproveTasks = new Set<string>();
     /** 무인 작업(예약 실행) — 승인할 사람이 없어 승인 요청을 기다리지 않고 설정된 결론으로 끝낸다. 메모리뿐이라 재시작 뒤 재개분은 종전처럼 기다린다. */
     private unattendedTasks = new Set<string>();
+    /** 진행 중인 closeTask 정리 — 같은 작업의 이어받기는 이게 끝난 뒤에만 한다(취소 직후 재실행이 취소 전 승인을 소비하지 않게). */
+    private closing = new Map<string, Promise<void>>();
 
-    constructor(private readonly store?: ApprovalStore) {}
+    /** slots — 승인 대기 중 실행 슬롯 양보·되찾기(기본은 동시성 큐). 테스트는 가짜를 넣는다. */
+    constructor(private readonly store?: ApprovalStore, private readonly slots?: ApprovalSlotPort) {}
+
+    private get slotPort(): ApprovalSlotPort { return this.slots ?? defaultSlotPort(); }
 
     private async persist<T>(fn: (s: ApprovalStore) => Promise<T>): Promise<T | undefined> {
         if (!this.store) return undefined;
@@ -270,7 +283,8 @@ export class ApprovalRegistry {
         input: { taskId: string; userId: string; toolName: string; args: Record<string, unknown>; preview?: string },
         /** parkable — 부모 작업의 턴 실행 경로처럼 주차 후 같은 호출로 재개할 수 있는 대기(유예 후 주차 대상). */
         /** policy — 이 호출을 승인 대상으로 올린 정책. 요청 이벤트에 남겨 "왜 물었는지"를 나중에 되짚는다(정책은 env·작업별로 달라진다). */
-        opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void; parkable?: boolean; policy?: TaskSandboxApprovalPolicy },
+        /** parkDeferred — parked 를 받아도 곧바로 주차하지 못하는 대기(mcp_elicit: 도구 호출이 끝난 뒤 주차). 슬롯을 양보하지 않는다. */
+        opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void; parkable?: boolean; parkDeferred?: boolean; policy?: TaskSandboxApprovalPolicy },
     ): Promise<ApprovalResult> {
         if (this.autoApproves(input.taskId, input.toolName, input.args)) {
             return { decision: 'approved', waitedMs: 0 };
@@ -294,6 +308,8 @@ export class ApprovalRegistry {
         // 살아 있는 pending 이 있으면 그 id 를 그대로 써서 승인함의 항목이 바뀌지 않게 한다.
         const argsHash = hashApprovalArgs(input.args);
         // 저장소가 없으면(테스트·비영속) 대기 등록까지 동기적으로 끝낸다 — 호출 직후 list() 가 보이도록.
+        if (this.store) await this.closing.get(input.taskId);
+        // 취소 때 무효화가 실패해 남은 취소 전 결정은 이어받기가 스스로 거른다(저장소의 마지막 취소 전이 기준 — 재시작 뒤에도 유지)
         let prior = this.store ? await this.persist((s) => s.takeoverForCall(input.taskId, input.toolName, argsHash)) : undefined;
         // 오래된 미소비 승인은 쓰지 않고 다시 묻는다 — 승인함 "최근 결정" 창을 벗어나면 사용자가 볼 수도 철회할 수도 없다.
         // 질문 도구의 답은 권한이 아니라 사용자의 답이라 그대로 이어받는다. 이어받기가 이미 소비 표시를 했으므로 행은 다시 쓰이지 않는다.
@@ -303,6 +319,8 @@ export class ApprovalRegistry {
             prior = undefined;
         }
         if (prior && prior.status !== 'pending') {
+            // abort 우선 — 이어받기를 기다리는 사이 취소됐으면 결정과 무관하게 abort(호출부는 승인 뒤 중단 신호를 다시 보지 않는다)
+            if (opts.signal?.aborted) return { decision: 'rejected', reason: 'abort', waitedMs: 0 };
             logger.info(`[${input.taskId}] 재시작 전 결정 이어받음(${prior.status}): ${input.toolName}`);
             return prior.status === 'approved'
                 ? { decision: 'approved', waitedMs: 0, ...(prior.answer_text ? { text: prior.answer_text } : {}) }
@@ -322,11 +340,20 @@ export class ApprovalRegistry {
             await this.persist((s) => s.insertPending({ approvalId, ...core, argsHash, riskClass, timeoutMs: opts.timeoutMs, preview }));
             void this.event(approvalId, 'requested', null, { toolName: input.toolName, riskClass, ...(opts.policy ? { policy: opts.policy } : {}) });
         }
+        // 슬롯 양보(재시도 카드가 대기열을 막는 문제) — parked 를 받으면 그 자리에서 주차하는 재개 가능한 대기만.
+        // 결정 때 자리가 없으면 결정을 미소비로 저장하고 주차로 넘기므로, 넘길 곳(대기 연장 저장소)이 있어야 한다.
+        const yieldable = !!opts.parkable && !opts.parkDeferred && !!this.store?.extendPending;
         return new Promise<ApprovalResult>((resolvePromise) => {
             const settle = ({ decidedBy, ...r }: ApprovalDecisionInput) => {
                 const w = this.waiters.get(approvalId);
-                if (!w) return;
+                if (!w || w.saving) return;
                 clearTimeout(w.timer);
+                if (yieldable && r.reason !== 'abort' && r.reason !== 'parked' && !this.slotPort.tryReclaimSlot(input.taskId)) {
+                    w.saving = true;
+                    void this.saveForPark(approvalId, input.taskId, r, decidedBy, opts.signal,
+                        (res) => resolvePromise({ ...res, waitedMs: Date.now() - pending.createdAt }));
+                    return;
+                }
                 this.waiters.delete(approvalId);
                 if (r.decision === 'rejected') logger.info(`[${input.taskId}] 승인 거절/만료(${r.reason}): ${input.toolName}`);
                 // 주차(F16.7) — 결정이 아니라 대기 연장: 행은 pending 으로 남아 승인함에 계속 보이고, 답은 재개된 작업이 소비한다
@@ -346,8 +373,43 @@ export class ApprovalRegistry {
                 if (opts.signal.aborted) { settle({ decision: 'rejected', reason: 'abort' }); return; }
                 opts.signal.addEventListener('abort', () => settle({ decision: 'rejected', reason: 'abort' }), { once: true });
             }
+            if (yieldable) this.slotPort.yieldSlot(input.taskId);
             opts.onPending?.(pending);
         });
+    }
+
+    /**
+     * 자리 없이 결정이 온 양보 대기 — 결정을 미소비로 저장하고(무응답 만료는 대기 연장) **성공을 확인한 뒤에만** 주차로 답한다.
+     * 저장된 행이 결정의 유일한 사본이라 persist()(실패를 삼킨다)를 쓰지 않는다. 저장 뒤에는 중단 신호를 결과보다 먼저 본다:
+     * 저장 중 온 중단은 settle 이 무시했고 listener 는 once 라 다시 오지 않는다 — 중단이면 저장 성공·실패와 무관하게 abort
+     * (남은 행은 취소 정리 closeTask 가 닫고, 서버 종료면 남겨 복구가 다시 묻거나 이어받는다). 저장이 실패하면 결정이 메모리에만
+     * 있으므로 상한을 넘겨 슬롯을 되찾고 원래 결정을 돌려준다(레지스트리의 fail-open 과 같은 쪽).
+     * 판정부터 호출부 해제까지 await 가 없다 — 그 사이에 중단이 끼어들 수 없다.
+     */
+    private async saveForPark(
+        approvalId: string, taskId: string, r: Omit<ApprovalDecisionInput, 'decidedBy'>, decidedBy: string | undefined, signal: AbortSignal | undefined,
+        answer: (res: Omit<ApprovalResult, 'waitedMs'>) => void,
+    ): Promise<void> {
+        const timedOut = r.reason === 'timeout';
+        let saved = false;
+        try {
+            saved = timedOut
+                ? (await this.store!.extendPending!(approvalId, AGENT_TASK_LIMITS.HITL_PARK_MAX_MS)) === true
+                : (await this.store!.markDecided(approvalId, r.decision === 'approved' ? 'approved' : 'rejected', r.text, decidedBy, false)) === true;
+            if (!saved) logger.warn(`[${taskId}] 승인 결정 저장 실패(행이 pending 아님): ${approvalId}`);
+        } catch (e) {
+            logger.warn(`[${taskId}] 승인 결정 저장 실패: ${approvalId} — ${e instanceof Error ? e.message : e}`);
+        }
+        this.waiters.delete(approvalId);
+        if (signal?.aborted) { answer({ decision: 'rejected', reason: 'abort' }); return; }
+        if (saved) {
+            if (!timedOut) this.slotPort.resumeAfterRelease(taskId);
+            logger.info(`[${taskId}] 승인 결정 뒤 실행 자리 없음 — 결정을 남기고 주차: ${approvalId}`);
+            answer({ decision: 'rejected', reason: 'parked' });
+            return;
+        }
+        this.slotPort.forceReclaimSlot(taskId);
+        answer(r);
     }
 
     /** 메모리 waiter 가 없으면(프로세스 재시작으로 작업이 내려간 상태) 저장소 pending 행에 결정만 남긴다 —
@@ -417,11 +479,25 @@ export class ApprovalRegistry {
         return this.settleOrPersist(approvalId, { decision: 'approved', text, decidedBy: actorId });
     }
 
-    /** 작업 종료 시 저장소에 남은 pending 정리(124) — 메모리 waiter 는 signal abort 가 이미 해소했다. */
-    closeTask(taskId: string): void {
+    /** 작업 종료 시 저장소에 남은 pending 정리(124) — 메모리 waiter 는 signal abort 가 이미 해소했다.
+     *  정리가 끝나야 풀린다. 그동안 같은 작업의 이어받기는 기다린다. 실패는 삼킨다 — pending 은 이어받아도 다시 묻고,
+     *  무효화되지 못한 미소비 승인은 이어받기(takeoverForCall)가 마지막 취소·실패 전이보다 앞선 결정이라 쓰지 않는다(fail-closed, 영속 기준). */
+    /** closeTask 정리가 진행 중인지 — 취소 정리 중 주차 재개(resumeParkedTask)가 claim 하지 않게 */
+    isClosing(taskId: string): boolean {
+        return this.closing.has(taskId);
+    }
+
+    closeTask(taskId: string): Promise<void> {
         this.autoApproveTasks.delete(taskId);
         this.unattendedTasks.delete(taskId);
-        void this.persist((s) => s.expirePendingForTask(taskId));
+        // 만료 → 무효화 순서(동시 실행 금지) — 만료 뒤에는 markDecided(status='pending' 조건)가 실패하므로, 두 문장 사이에 도착한 결정도 무효화가 잡는다
+        const done = this.persist((s) => s.expirePendingForTask(taskId))
+            // 자리가 없어 주차로 넘긴 미소비 승인 — 취소·종료된 작업을 다시 실행해도 옛 승인이 쓰이지 않게(주차·서버 종료는 closeTask 를 타지 않는다)
+            .then(() => this.persist((s) => s.voidUnconsumedForTask?.(taskId) ?? Promise.resolve()))
+            .then(() => undefined);
+        this.closing.set(taskId, done);
+        void done.then(() => { if (this.closing.get(taskId) === done) this.closing.delete(taskId); });
+        return done;
     }
 }
 
@@ -443,6 +519,7 @@ export function getApprovalRegistry(): ApprovalRegistry {
             recordEvent: (id, k, a, d) => lazy().recordEvent(id, k, a, d),
             reassign: (id, to, o) => lazy().reassign(id, to, o),
             extendPending: (id, ms) => lazy().extendPending(id, ms),
+            voidUnconsumedForTask: (t) => lazy().voidUnconsumedForTask(t),
         });
     }
     return registry;

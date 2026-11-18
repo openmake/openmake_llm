@@ -259,6 +259,21 @@ describe('사용자 취소 — 종전 동작 그대로', () => {
         expect(leaseEnd).toHaveBeenCalledTimes(1);
     });
 
+    it('cancelled 를 쓰기 전에 승인 정리(closeTask)를 끝낸다 — 곧바로 온 재실행이 취소 전 승인을 쓰지 않게', async () => {
+        const gate = deferred();
+        mockChat.mockImplementationOnce(async () => { await gate.promise; return toolCallTurn(); });
+        const done = run();
+        await waitFor(() => mockChat.mock.calls.length === 1);
+
+        AgentTaskService.cancel('t1');
+        gate.resolve();
+        await done;
+
+        const cancelledAt = updateAgentTask.mock.calls.findIndex(([, u]) => (u as Update).status === 'cancelled');
+        expect(cancelledAt).toBeGreaterThanOrEqual(0);
+        expect(closeTask.mock.invocationCallOrder[0]).toBeLessThan(updateAgentTask.mock.invocationCallOrder[cancelledAt]);
+    });
+
     it('먼저 취소된 작업은 뒤이은 종료 신호에도 cancelled 로 남는다', async () => {
         const gate = deferred();
         mockChat.mockImplementationOnce(async () => { await gate.promise; return toolCallTurn(); });

@@ -9,6 +9,8 @@ import { RemoteExecutor } from './remote-executor';
 import { getLocalBridgeRegistry } from './registry';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { getAuditService } from '../AuditService';
+import { BROWSER_USER_STOPPED_ERROR } from './device-errors';
+import { getBrowserUserStoppedNotice } from '../../prompts/agent-task-approval';
 
 describe('RemoteExecutor 경로 — 컨테이너 표기(/workspace) 정규화', () => {
     afterEach(() => jest.restoreAllMocks());
@@ -424,6 +426,34 @@ describe('RemoteExecutor 브라우저 넘겨받기 신호 — 넘겨받기 주�
         const ex = new RemoteExecutor('task-1', 'user-1');
         await ex.runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] });
         expect(ex.consumeDeviceLoss()).toBeNull();
+    });
+});
+
+describe('RemoteExecutor 브라우저 사용자 중지 — 재시도하지 말라는 안내', () => {
+    afterEach(() => jest.restoreAllMocks());
+    const reply = (r: Record<string, unknown>) => jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue(r as never);
+    const stopped = (body: Record<string, unknown>) => ({ ok: true, exitCode: 1, stdout: JSON.stringify({ ok: false, finalUrl: 'https://a.example.com/', ...body }) });
+
+    it.each([
+        ['액션 결과', { results: [{ i: 0, type: 'goto', ok: false, error: BROWSER_USER_STOPPED_ERROR }] }],
+        ['흐름 오류', { results: [], error: BROWSER_USER_STOPPED_ERROR }],
+    ])('중지 결과(%s)에는 안내가 붙고 stdout(JSON)은 그대로다', async (_n, body) => {
+        reply(stopped(body));
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        const r = await ex.runBrowserSpec({ actions: [{ type: 'goto', url: 'https://a.example.com/' }], approvedHosts: [] });
+        expect(r.stderr).toContain(getBrowserUserStoppedNotice());
+        expect(() => JSON.parse(r.stdout)).not.toThrow();
+    });
+
+    it('일반 오류·넘겨받기 거절·성공에는 붙지 않는다', async () => {
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        reply(stopped({ results: [{ i: 0, type: 'click', ok: false, error: '요소를 찾지 못했습니다: #a' }] }));
+        expect((await ex.runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] })).stderr).not.toContain(getBrowserUserStoppedNotice());
+        jest.spyOn(getAuditService(), 'logAudit').mockResolvedValue(undefined);
+        reply({ ...stopped({ results: [], error: '사용자가 브라우저를 직접 조작하는 중이라 실행하지 않았습니다.', userControl: true }), userControl: true });
+        expect((await ex.runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] })).stderr).not.toContain(getBrowserUserStoppedNotice());
+        reply({ ok: true, exitCode: 0, stdout: JSON.stringify({ ok: true, results: [] }) });
+        expect((await ex.runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] })).stderr).toBe('');
     });
 });
 
