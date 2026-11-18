@@ -25,6 +25,7 @@ import { EXTERNAL_LINKS } from "@/lib/external-links";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { appendAnonSessionId } from "@/lib/anon-session";
 import { syncAuthFromServer, clearHadSession } from "@/lib/auth-sync";
+import { clearDefaultModelOnLogout } from "@/lib/default-model-sync";
 import { onAgentTaskChange } from "@/lib/agent-task-change";
 import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
@@ -187,6 +188,7 @@ export function Sidebar() {
       /* 실패해도 진행 */
     }
     clearHadSession(); // 로그인 흔적 제거 — 다음 마운트의 refresh 선시도 방지
+    clearDefaultModelOnLogout(); // 다음에 로그인하는 계정에 이 선택이 넘어가지 않게
     setAuth({ currentUser: null, isGuestMode: true });
     router.push("/login");
   };

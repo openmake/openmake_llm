@@ -10,6 +10,7 @@
  * @module data/repositories/agent-task-approval-repository
  */
 import { BaseRepository } from './base-repository';
+import { decidedAfterTakeoverBoundarySql } from './agent-task-event-sql';
 import { hashToolArgs } from '../../utils/args-hash';
 
 export type ApprovalRowStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'aborted' | 'revoked';
@@ -138,6 +139,9 @@ export class AgentTaskApprovalRepository extends BaseRepository {
     /**
      * 재시작 후 이어받기 — 같은 호출(task+tool+args)의 가장 최근 행 중 ① 미소비 결정(approved/
      * rejected) 또는 ② 아직 살아 있는 pending 을 돌려준다. 결정 행은 소비 표시해 1회만 쓴다.
+     * 작업의 마지막 취소·실패 전이(agent_task_events)보다 앞서 내린 결정은 쓰지 않는다 — 그 실행이 끝나며 closeTask 가 무효화했어야 할
+     * 결정이라, 무효화가 실패하고 재시작돼도 재실행이 재승인 없이 쓰지 않게 한다(fail-closed, 영속 기준). 서버 재시작으로 끊긴 실패
+     * ('server restarted' — 좀비 정리·종료 중단 기록)는 경계가 아니다: 그 결정은 재개가 이어받는다(124).
      */
     async takeoverForCall(taskId: string, toolName: string, argsHash: string): Promise<ApprovalRow | undefined> {
         const decided = await this.query<ApprovalRow>(
@@ -146,6 +150,7 @@ export class AgentTaskApprovalRepository extends BaseRepository {
                  SELECT approval_id FROM agent_task_approvals
                  WHERE task_id = $1 AND tool_name = $2 AND args_hash = $3
                    AND status IN ('approved', 'rejected') AND consumed_at IS NULL
+                   AND ${decidedAfterTakeoverBoundarySql('agent_task_approvals', '$1')}
                  ORDER BY decided_at DESC LIMIT 1)
              RETURNING *`,
             [taskId, toolName, argsHash],
@@ -178,6 +183,21 @@ export class AgentTaskApprovalRepository extends BaseRepository {
             [taskId, limit],
         );
         return r.rows;
+    }
+
+    /**
+     * 작업 종료 시 아직 쓰지 않은 결정을 닫는다 — 자리가 없어 주차로 넘긴 결정(미소비)이 취소된 작업의 재실행에서 쓰이지 않게.
+     * 미소비 승인은 aborted, 미소비 거절은 상태를 둔 채 소비 표시(완료 판정의 listRejectedForTask 에는 남는다, Fable r4 P2).
+     * 이미 소비된 행·pending 은 그대로다.
+     */
+    async voidUnconsumedForTask(taskId: string): Promise<void> {
+        await this.query(
+            `UPDATE agent_task_approvals
+                SET status = CASE WHEN status = 'approved' THEN 'aborted' ELSE status END,
+                    consumed_at = CASE WHEN status = 'rejected' THEN NOW() ELSE consumed_at END
+              WHERE task_id = $1 AND status IN ('approved', 'rejected') AND consumed_at IS NULL`,
+            [taskId],
+        );
     }
 
     /** 작업 종료 시 남은 pending 을 정리 — 승인함에 죽은 요청이 남지 않게. */

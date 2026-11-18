@@ -4,7 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { BRIDGE_UNSUPPORTED_KIND_PREFIX, BRIDGE_INVALID_REGEX_PREFIX, isUnsupportedKindError, isNotARepoError } from './device-errors';
+import { BRIDGE_UNSUPPORTED_KIND_PREFIX, BRIDGE_INVALID_REGEX_PREFIX, BROWSER_USER_STOPPED_ERROR, isUnsupportedKindError, isNotARepoError, isBrowserUserStoppedError } from './device-errors';
 
 interface FixtureRequest { msg: { kind?: unknown; folder?: string }; expect: { ok: boolean; error?: string } }
 interface Fixture { cases: { id: string; requests: FixtureRequest[] }[] }
@@ -12,6 +12,7 @@ interface Fixture { cases: { id: string; requests: FixtureRequest[] }[] }
 const FIXTURE = resolve(__dirname, '../../../../../packages/local-bridge-core/conformance/file-kinds.json');
 const WORKTREE_FIXTURE = resolve(__dirname, '../../../../../packages/local-bridge-core/conformance/worktree.json');
 const CODE_NAV_FIXTURE = resolve(__dirname, '../../../../../packages/local-bridge-core/conformance/code-nav.json');
+const BROWSER_FIXTURE = resolve(__dirname, '../../../../../packages/local-bridge-core/conformance/browser-constants.json');
 
 describe('isUnsupportedKindError', () => {
     it('적합성 fixture 의 미지원 kind 응답은 모두 이 접두로 시작한다', () => {
@@ -60,5 +61,20 @@ describe('isNotARepoError', () => {
         expect(isNotARepoError('git 디렉터리가 연결할 때와 달라 worktree 연산을 거부했습니다(폴더 재연결 필요).')).toBe(false);
         expect(isNotARepoError('worktree add 실패')).toBe(false);
         expect(isNotARepoError('')).toBe(false);
+    });
+});
+
+describe('isBrowserUserStoppedError', () => {
+    it('사용자 중지 문구가 브라우저 적합성 fixture 의 STOPPED_ERROR 와 같다', () => {
+        const fixture = JSON.parse(readFileSync(BROWSER_FIXTURE, 'utf8')) as { messages: Record<string, string> };
+        expect(BROWSER_USER_STOPPED_ERROR).toBe(fixture.messages.STOPPED_ERROR);
+        expect(isBrowserUserStoppedError(fixture.messages.STOPPED_ERROR)).toBe(true);
+    });
+
+    it('넘겨받기·일반 오류·문자열이 아닌 값은 중지로 보지 않는다', () => {
+        const fixture = JSON.parse(readFileSync(BROWSER_FIXTURE, 'utf8')) as { messages: Record<string, string> };
+        expect(isBrowserUserStoppedError(fixture.messages.BROWSER_USER_CONTROL_ERROR)).toBe(false);
+        expect(isBrowserUserStoppedError('요소를 찾지 못했습니다: #a')).toBe(false);
+        expect(isBrowserUserStoppedError(undefined)).toBe(false);
     });
 });

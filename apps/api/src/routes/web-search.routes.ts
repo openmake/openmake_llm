@@ -60,7 +60,9 @@ router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(
 
      // 1. 실제 웹 검색 수행
      const { performWebSearch } = await import('../tools/web-search');
-     const searchResults = await performWebSearch(query, { maxResults: 5 });
+     // 행위자 = 인증 사용자: 리랭킹 text.embed 를 개인 배정으로 해석하고, 원장 tool.web_search 도
+     // web_search 도구와 같은 규칙으로 이 사용자에게 귀속한다(2026-11-18).
+     const searchResults = await performWebSearch(query, { maxResults: 5, costUserId: req.user ? String(req.user.id) : undefined });
 
       logger.info(`[WebSearch] ${searchResults.length}개 결과 찾음`);
 

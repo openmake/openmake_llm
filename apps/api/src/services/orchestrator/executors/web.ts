@@ -1,7 +1,8 @@
 /**
  * @module services/orchestrator/executors/web
  * @description web.search — 기존 검색 오케스트레이터(SearXNG·네이버·구글 등)를 함수로 호출해 결과 요약 텍스트를 만든다.
- * 모델 배정 없음(model_assignments 대상 아님).
+ * 모델 배정 없음(model_assignments 대상 아님). 요청 사용자를 costUserId 로 넘긴다 — 원장 귀속이자
+ * 의미 리랭킹 임베딩의 행위자(text.embed 개인 배정·BYOK 의 주인).
  */
 import { ORCHESTRATOR } from '../../../config/capabilities';
 import { performWebSearch } from '../../../tools/web-search/search-orchestrator';
@@ -15,7 +16,7 @@ export const webSearchExecutor: CapabilityExecutor = async (task, ctx) => {
     const instruction = (task.instruction || '').trim();
     const query = instruction ? searchQueryFromInstruction(instruction) : cleanSearchQuery(ctx.userMessage);
     if (!query) throw new Error('web.search: 검색어가 없습니다');
-    const results = await performWebSearch(query, { maxResults: MAX_RESULTS, language: ctx.lang, signal: ctx.signal, preferRecent: true });
+    const results = await performWebSearch(query, { maxResults: MAX_RESULTS, language: ctx.lang, signal: ctx.signal, preferRecent: true, costUserId: ctx.userId });
     if (results.length === 0) {
         return { ok: true, text: ctx.lang === 'ko' ? `"${query}" 검색 결과 없음` : `No results for "${query}"`, media: [] };
     }

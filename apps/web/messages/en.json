@@ -134,7 +134,13 @@
     },
     "defaultModel": {
       "title": "Default model",
-      "description": "The model used for new conversations. Choose between 🏠 local vLLM and 🌐 external LLMs (OpenRouter, BYOK)."
+      "description": "The model used for new conversations. Choose between 🏠 local vLLM and 🌐 external LLMs (OpenRouter, BYOK).",
+      "status": {
+        "key_disabled": "This model's provider key is turned off, so replies use Auto (server default) for now. Turn the key back on to use this model again.",
+        "key_missing": "No provider key is registered for this model, so replies use Auto (server default) for now. Register a key to use this model again.",
+        "unusable": "This model was found to be unavailable for your account, so replies use Auto (server default). Choose another model.",
+        "not_listed": "This model can't be found, so replies use Auto (server default) for now. Choose another model."
+      }
     },
     "externalLlmHint": {
       "prefix": "To add an external LLM (OpenRouter),",
