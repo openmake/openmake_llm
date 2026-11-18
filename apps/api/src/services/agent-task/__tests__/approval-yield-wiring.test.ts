@@ -38,7 +38,7 @@ export {}; // 모듈 범위(다른 테스트의 전역 이름과 겹치지 않�
 
 const tick = () => new Promise((r) => setImmediate(r));
 const ENV_KEYS = ['NODE_ENV', 'AGENT_TASK_QUEUE_ENABLED', 'AGENT_TASK_QUEUE_USER_MAX', 'AGENT_TASK_QUEUE_GLOBAL_MAX',
-    'AGENT_TASK_HITL_PARK_GRACE_MS', 'AGENT_TASK_QUEUE_YIELD_ON_APPROVAL'] as const;
+    'AGENT_TASK_HITL_PARK_GRACE_MS', 'AGENT_TASK_QUEUE_YIELD_ON_APPROVAL', 'JWT_SECRET'] as const;
 const saved: Record<string, string | undefined> = {};
 
 beforeAll(() => {
@@ -50,6 +50,8 @@ beforeAll(() => {
     process.env.AGENT_TASK_QUEUE_GLOBAL_MAX = '4';
     process.env.AGENT_TASK_HITL_PARK_GRACE_MS = '60000';
     delete process.env.AGENT_TASK_QUEUE_YIELD_ON_APPROVAL;
+    // NODE_ENV≠test 면 env-validate 가 JWT_SECRET 32자 이상을 요구한다 — 바깥 env(.env 유무·CI 값 31자)에 기대지 않고 더미를 직접 둔다
+    process.env.JWT_SECRET = 'approval-yield-wiring-test-dummy-jwt-secret-0123456789';
 });
 
 afterAll(() => {
