@@ -146,7 +146,7 @@ describe('worktree 격리 상태(isolation, 200)', () => {
     });
 
     it('격리 성공 → worktree + 기기가 준 branch·worktreeRel', async () => {
-        expect((await created()).isolation).toEqual({ state: 'worktree', branch: BRANCH, worktreeRel: WT_REL });
+        expect((await created()).isolation).toEqual({ state: 'worktree', branch: BRANCH, worktreeRel: WT_REL, rootRel: WT_REL });
     });
 
     it('ok·worktreeRel 은 있는데 branch 가 없으면 null(격리는 걸린다)', async () => {
@@ -194,7 +194,7 @@ describe('worktree 격리 상태(isolation, 200)', () => {
         respond = (p) => (p.kind === 'worktree' && p.op === 'remove' ? { ok: true, kept: true } : okResponder(p));
         const kept = await created();
         await kept.cleanup();
-        expect(kept.isolation).toEqual({ state: 'worktree', branch: BRANCH, worktreeRel: WT_REL, outcome: 'kept' });
+        expect(kept.isolation).toEqual({ state: 'worktree', branch: BRANCH, worktreeRel: WT_REL, rootRel: WT_REL, outcome: 'kept' });
         respond = okResponder;
         const removed = await created();
         await removed.cleanup();
@@ -205,7 +205,7 @@ describe('worktree 격리 상태(isolation, 200)', () => {
         respond = (p) => (p.kind === 'worktree' && p.op === 'remove' ? { ok: false, error: 'x' } : okResponder(p));
         const failed = await created();
         await failed.cleanup();
-        expect(failed.isolation).toEqual({ state: 'worktree', branch: BRANCH, worktreeRel: WT_REL });
+        expect(failed.isolation).toEqual({ state: 'worktree', branch: BRANCH, worktreeRel: WT_REL, rootRel: WT_REL });
         respond = (p) => { if (p.kind === 'worktree' && p.op === 'remove') throw new Error('boom'); return okResponder(p); };
         const thrown = await created();
         await thrown.cleanup();
@@ -238,6 +238,36 @@ describe('이어받은 세그먼트의 worktree (worktreeKey)', () => {
         const ex = await isolated();
         await ex.cleanup(false, { handover: true });
         expect(requests.map((r) => `${r.kind}:${r.op ?? ''}`)).toEqual(['task_end:']);
-        expect(ex.isolation).toEqual({ state: 'worktree', branch: BRANCH, worktreeRel: WT_REL });
+        expect(ex.isolation).toEqual({ state: 'worktree', branch: BRANCH, worktreeRel: WT_REL, rootRel: WT_REL });
+    });
+});
+
+describe('작업 폴더 위치(rootRel·isolatedPath) — 연결 폴더 기준', () => {
+    it('격리 상태·isolatedPath 가 연결 폴더 기준 작업 폴더 경로를 싣는다(하위 폴더 선택)', async () => {
+        respond = (p) => (p.kind === 'worktree' && p.op === 'add'
+            ? { ok: true, worktreeRel: `${WT_REL}/sub`, branch: BRANCH } : okResponder(p));
+        const ex = new RemoteExecutor('task-abcdef12', 'user-1', undefined, 'ws-git/sub');
+        await ex.create();
+        expect(ex.isolatedPath).toBe(`ws-git/sub/${WT_REL}/sub`);
+        expect(ex.isolation).toEqual({ state: 'worktree', branch: BRANCH, worktreeRel: `${WT_REL}/sub`, rootRel: `ws-git/sub/${WT_REL}/sub` });
+    });
+
+    it('하위 폴더가 없으면 rootRel 은 worktreeRel 과 같다', async () => {
+        const ex = await isolated();
+        expect(ex.isolatedPath).toBe(WT_REL);
+    });
+
+    it('격리가 없으면 isolatedPath 는 null 이다', async () => {
+        respond = (p) => (p.kind === 'worktree' ? { ok: false, error: 'git 레포가 아닙니다' } : okResponder(p));
+        const ex = new RemoteExecutor('task-abcdef12', 'user-1', undefined, 'ws-plain');
+        await ex.create();
+        expect(ex.isolatedPath).toBeNull();
+    });
+
+    it('정리 뒤에도 rootRel 이 남는다(outcome 만 더해진다)', async () => {
+        respond = (p) => (p.kind === 'worktree' && p.op === 'remove' ? { ok: true, kept: true } : okResponder(p));
+        const ex = await isolated();
+        await ex.cleanup();
+        expect(ex.isolation).toMatchObject({ rootRel: WT_REL, outcome: 'kept' });
     });
 });
