@@ -10,7 +10,7 @@
  */
 import * as os from 'os';
 import * as path from 'path';
-import { BridgeConnection, BridgeCore, type ConfirmFn as CoreConfirmFn } from '@openmake/local-bridge-core';
+import { BridgeConnection, BridgeCore, LocalBrowser, type ConfirmFn as CoreConfirmFn } from '@openmake/local-bridge-core';
 import { CONFIG_DIR, deviceIdFor, hostId } from './config';
 import { acquireBrowserOwner, releaseBrowserOwner } from './browser-owner';
 
@@ -32,13 +32,15 @@ interface BridgeOptions {
  * 전용 프로필(`dir/browser-profile`, 평소 Chrome 프로필이 아니다)을 넘긴다. 못 잡으면 브라우저 없이 시작한다
  * (능력 목록에서 빠져 서버가 브라우저 요청을 보내지 않는다). 잡았으면 끝날 때 자기 잠금만 놓는다 —
  * 코어의 Chrome 종료 훅은 나중에 등록돼도 앞에 끼워져(prependOnceListener) Chrome 이 끝난 뒤에 놓는다.
+ * 강제로 꺼도 끝난 것을 확인하지 못했으면 놓지 않고 잠금을 그 Chrome pid 에 넘긴다(끝나면 다음 CLI 가 회수).
  */
 export function browserOption(env: NodeJS.ProcessEnv, dir: string): { browserProfileDir?: string } {
     if (env.OMK_BRIDGE_BROWSER !== '1') return {};
     const owner = acquireBrowserOwner(dir);
     if (!owner.owned) { console.warn(`\x1b[33m${owner.message}\x1b[0m`); return {}; }
-    process.on('exit', () => releaseBrowserOwner(dir, owner.token));
-    return { browserProfileDir: path.join(dir, 'browser-profile') };
+    const browserProfileDir = path.join(dir, 'browser-profile');
+    process.on('exit', () => releaseBrowserOwner(dir, owner.token, LocalBrowser.lingeringPid(browserProfileDir)));
+    return { browserProfileDir };
 }
 
 export class CliBridge {

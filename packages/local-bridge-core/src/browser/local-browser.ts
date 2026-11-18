@@ -61,6 +61,13 @@ export class LocalBrowser {
         return b;
     }
 
+    private static readonly lingering = new Map<string, number>();
+
+    /** 호스트 종료 훅에서 강제로 꺼도 끝난 것을 확인하지 못한 그 프로필의 Chrome pid — 호스트의 나중 'exit' 훅이 본다. */
+    static lingeringPid(profileDir: string): number | undefined {
+        return LocalBrowser.lingering.get(profileDir);
+    }
+
     private cdp: CdpClient | null = null;
     private proc: ChildProcess | null = null;
     private readonly tabs = new Map<string, Tab>();
@@ -177,7 +184,11 @@ export class LocalBrowser {
             // 호스트 프로세스가 끝나면 띄운 Chrome 도 끈다 — 자식 프로세스는 저절로 끝나지 않는다.
             // 호스트의 다른 종료 훅보다 먼저 돌고 Chrome 이 끝날 때까지 기다린다 — CLI 는 그 뒤에 브라우저 주인 잠금을 놓는다.
             const proc = launched.proc;
-            process.prependOnceListener('exit', () => killAndWaitSync(proc, BROWSER_EXIT_WAIT_MS));
+            // 강제로 꺼도 끝난 것을 확인하지 못하면 그 pid 를 남긴다 — 호스트가 프로필을 넘기지 않게(lingeringPid).
+            const profileDir = this.profileDir;
+            process.prependOnceListener('exit', () => {
+                if (!killAndWaitSync(proc, BROWSER_EXIT_WAIT_MS) && proc.pid !== undefined) LocalBrowser.lingering.set(profileDir, proc.pid);
+            });
             cdp = await CdpClient.connect(launched.wsUrl);
         }
         cdp.on('Page.javascriptDialogOpening', (params, sessionId) => { void this.onDialog(cdp!, params, sessionId); });
