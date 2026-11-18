@@ -136,7 +136,8 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             waitingForUser++;
             const r = await getApprovalRegistry().request(
                 { taskId, userId, toolName: TOOL_USER_INPUT_APPROVAL_NAME, args },
-                { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName), parkable: true },
+                // parkDeferred — parked 뒤에도 도구 호출(병렬 선실행 전부)이 끝나야 주차하므로 슬롯을 양보하지 않는다
+                { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName), parkable: true, parkDeferred: true },
             ).finally(() => { waitingForUser--; });
             pausedMs += r.waitedMs;
             if (r.reason === 'parked') { parkRequested = true; return r; } // 서버엔 cancel, 도구가 끝나면 주차

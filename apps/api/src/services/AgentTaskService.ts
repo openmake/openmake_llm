@@ -521,6 +521,8 @@ export class AgentTaskService {
             const aborted = signal.aborted || (err instanceof AgentTaskAbort && err.kind === 'aborted');
             const kind = aborted ? 'aborted' : (err instanceof AgentTaskAbort ? err.kind : 'failed');
             const msg = err instanceof Error ? err.message : String(err);
+            // 다시 실행할 수 있는 상태(cancelled·failed)를 쓰기 전에 미소비 승인을 닫는다 — 곧바로 온 재실행이 옛 승인을 쓰지 않게
+            await getApprovalRegistry().closeTask(taskId);
             // 시간 예산으로 끊긴 마무리 턴의 부분 본문은 결과로 남긴다(turn-call 의 partialResultOf).
             await update({ status: aborted ? 'cancelled' : 'failed', error: aborted ? kind : msg, ...partialResultOf(err) })
                 .catch((e) => logger.warn(`[AgentTask] 상태 갱신 실패: ${e}`));

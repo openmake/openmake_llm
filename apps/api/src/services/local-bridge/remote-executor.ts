@@ -16,7 +16,8 @@ import type { TaskExecutor, ExecResult, CodeNavSpec, CodeNavData } from '../task
 import { stripWorkspacePrefix } from '../task-sandbox/workspace-path';
 import { getLocalBridgeRegistry, type BridgeKind, type BridgeResult, type BridgeRequestPayload } from './registry';
 import { getLocalBridgeUnknownOutcomeNotice } from '../../prompts/agent-task-prompt';
-import { LocalDeviceUnavailableError, isUnsupportedKindError, isNotARepoError, type DeviceLoss } from './device-errors';
+import { getBrowserUserStoppedNotice } from '../../prompts/agent-task-approval';
+import { LocalDeviceUnavailableError, isUnsupportedKindError, isNotARepoError, isBrowserUserStoppedError, type DeviceLoss } from './device-errors';
 import type { AgentTaskIsolation } from '@openmake/shared-types';
 import { classifyBrowserAction, planBrowserActions, type BrowserSitePlan, type BrowserUploadApproval } from '@openmake/config';
 import { resolveEffectivePolicy } from '../org/effective-policy';
@@ -337,11 +338,17 @@ export class RemoteExecutor implements TaskExecutor {
             deviceId: getLocalBridgeRegistry().getDevice(this.userId, this.deviceId)?.deviceId ?? this.deviceId ?? null,
         });
         // 기기가 돌려준 현재 주소를 기억한다 — 실패·차단으로 끝나도 주소는 온다.
+        let userStopped = false;
         try {
-            const out = JSON.parse(r.stdout ?? '') as { finalUrl?: unknown };
+            const out = JSON.parse(r.stdout ?? '') as { finalUrl?: unknown; error?: unknown; results?: unknown };
             if (typeof out.finalUrl === 'string') this.lastBrowserUrl = out.finalUrl;
+            userStopped = isBrowserUserStoppedError(out.error)
+                || (Array.isArray(out.results) && out.results.some((x) => isBrowserUserStoppedError((x as { error?: unknown } | null)?.error)));
         } catch { /* 결과가 JSON 이 아니다(전송 실패 등) — 주소는 그대로 둔다 */ }
-        return toExecResult(r);
+        const result = toExecResult(r);
+        // 사용자가 기기에서 직접 중지했다 — 거절과 같은 수준으로 재시도를 막는 안내를 붙인다(stdout 은 JSON 그대로 둔다).
+        if (userStopped) result.stderr = `${result.stderr ? `${result.stderr}\n` : ''}${getBrowserUserStoppedNotice()}`;
+        return result;
     }
 
     async writeFile(relPath: string, content: string | Buffer): Promise<void> {

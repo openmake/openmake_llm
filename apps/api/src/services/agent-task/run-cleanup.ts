@@ -42,7 +42,7 @@ export async function cleanupTaskRun(opts: {
     const { taskId, taskRuntime, stepNumber } = opts;
     const parked = opts.parked || !!opts.interrupted || !!opts.keepWorkspace;
     if (parked) getApprovalRegistry().clearAutoApprove(taskId);
-    else getApprovalRegistry().closeTask(taskId);
+    else await getApprovalRegistry().closeTask(taskId);
     getSteeringRegistry().clear(taskId);
     clearSandboxUnavailable(taskId);
     if (!taskRuntime) return;
