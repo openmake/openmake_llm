@@ -36,6 +36,8 @@
     "GITFILE_MAX_BYTES": 4096,
     "WORKTREE_DIR": ".openmake/worktrees",
     "WORKTREE_BRANCH_PREFIX": "omk-task/",
+    "WORKTREE_DISPOSABLE_DIRS": ["node_modules", ".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"],
+    "WORKTREE_KEEP_IGNORED_CAPABILITY": "worktree_keep_ignored",
     "CODE_NAV_TIMEOUT_MS": 15000,
     "CODE_NAV_MAX_FILES": 4000,
     "CODE_NAV_MAX_FILE_BYTES": 524288,

@@ -10,6 +10,7 @@ use omk_bridge_core::git_trust::detect_git;
 use omk_bridge_core::msg::BridgeMsg;
 use omk_bridge_core::platform::Platform;
 use omk_bridge_core::timed_fs::FsGate;
+use omk_bridge_core::worktree_status::{Verdict, remove_verdict};
 use serde_json::{Value, json};
 
 use super::exec_gate::{host, new_tmp};
@@ -27,6 +28,7 @@ fn worktree_shapes() {
         "cases",
         "taskId",
         "gitDir",
+        "statusVerdict",
     ];
     shape(&doc, &top, &[], "worktree");
     for c in non_empty(&doc["cases"], "worktree/cases") {
@@ -60,6 +62,25 @@ fn worktree_shapes() {
     for c in non_empty(&doc["gitDir"], "worktree/gitDir") {
         let at = format!("worktree/gitDir/{}", c["id"].as_str().unwrap_or("?"));
         shape(c, &["id", "setup", "input", "expect"], &[], &at);
+    }
+    for c in non_empty(&doc["statusVerdict"], "worktree/statusVerdict") {
+        let at = format!("worktree/statusVerdict/{}", c["id"].as_str().unwrap_or("?"));
+        shape(c, &["id", "input", "expect"], &[], &at);
+        shape(&c["input"], &["stdout"], &[], &format!("{at}/input"));
+    }
+}
+
+/// remove 판정(설계 2026-11-18 ignored-cleanup §2.1) — git 없이 `status --porcelain --ignored=matching -z` 출력만 본다.
+#[test]
+fn worktree_status_verdict() {
+    let doc = load("worktree");
+    for (ctx, c) in case_list(&doc, "worktree", "statusVerdict") {
+        let got = match remove_verdict(c["input"]["stdout"].as_str().unwrap()) {
+            Verdict::Changes => "changes",
+            Verdict::Ignored => "ignored",
+            Verdict::Clean => "clean",
+        };
+        assert_eq!(got, c["expect"], "{ctx}");
     }
 }
 

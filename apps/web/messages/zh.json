@@ -1020,6 +1020,7 @@
     "isolation": {
       "worktree": "隔离执行 · 任务分支 {branch}",
       "worktreeKept": "隔离执行 · 更改保留在任务文件夹 {path}（分支 {branch}）",
+      "worktreeKeptIgnored": "隔离执行 · 被 git 忽略的文件保留在任务文件夹 {path}（分支 {branch}）",
       "worktreeRemoved": "隔离执行 · 无更改（任务文件夹和分支已清理）",
       "notRepo": "未隔离 · 不是 git 仓库，直接在文件夹中工作",
       "disabled": "未隔离 · 服务器设置已关闭，直接在文件夹中工作",

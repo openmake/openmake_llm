@@ -178,6 +178,12 @@ export const WORKTREE_DIR = '.openmake/worktrees';
 export const WORKTREE_BRANCH_PREFIX = 'omk-task/';
 /** taskId 재검증 — 경로·브랜치명에 들어가므로 UUID 문자만 허용(디렉토리 탈출·옵션 주입 차단). */
 export const TASK_ID_RE = /^[a-zA-Z0-9-]{8,64}$/;
+/**
+ * 종료 정리 때 무시 항목이어도 지워도 되는 폴더 이름 — 설치 명령·도구가 다시 만들 수 있고 요청한 산출물이 놓일 일이 없는 것만
+ * (설계 2026-11-18 ignored-cleanup K3). 빌드 산출물 폴더(dist·build·out·target·.next)는 산출물이 놓이는 자리라 넣지 않는다.
+ * 서버가 보내지 않는다 — 지울지는 기기가 정한다. 단일 원본은 적합성 `constants.json`.
+ */
+export const WORKTREE_DISPOSABLE_DIRS: readonly string[] = ['node_modules', '.venv', 'venv', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache'];
 
 /**
  * 서버→디바이스 단방향 알림(bridge_notice) — 종류 화이트리스트와 표시 텍스트 상한.
@@ -202,6 +208,11 @@ export const BROWSER_KIND = 'browser';
  * 이 값을 알리지 않는 구버전 기기에는 서버가 업로드를 보내지 않고 모델에 "이 기기는 업로드를 지원하지 않는다"고 돌려준다.
  */
 export const BROWSER_UPLOAD_CAPABILITY = 'browser_upload';
+/**
+ * 무시(.gitignore) 파일만 만든 작업 폴더를 종료 정리 때 지우지 않는다는 능력(설계 2026-11-18 ignored-cleanup K6).
+ * 이 값을 알리지 않는 옛 기기에는 서버가 파일을 만든 것을 아는 작업(write·browser 성공)의 remove 를 보내지 않는다.
+ */
+export const WORKTREE_KEEP_IGNORED_CAPABILITY = 'worktree_keep_ignored';
 
 /** 요청 만료 판정의 시계 오차 허용(ms) — 서버와 PC 의 시계가 이만큼 어긋나도 정상 요청을 버리지 않는다. */
 export const EXPIRY_SKEW_TOLERANCE_MS = 120000;
