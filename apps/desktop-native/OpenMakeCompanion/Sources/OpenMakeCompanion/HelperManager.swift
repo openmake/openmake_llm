@@ -110,6 +110,8 @@ final class HelperManager: NSObject, ObservableObject {
         "account_disabled": "status.auth.accountDisabled",
         "account_deleted": "status.auth.accountDeleted",
         "bridge_scope_required": "status.auth.scopeRequired",
+        // 같은 기기 id 로 다른 앱이 이미 연결돼 있어 서버가 거절함(코어 DEVICE_CONFLICT_REASON) — 코어는 1분 간격으로 다시 시도한다
+        "device_conflict": "status.deviceConflict",
     ]
 
     // ── 헬퍼 프로세스 lifecycle ──

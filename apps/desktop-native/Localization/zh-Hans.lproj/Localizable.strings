@@ -47,6 +47,7 @@
 "status.auth.accountDisabled" = "账户已被停用 — 请联系管理员";
 "status.auth.accountDeleted" = "账户已被删除 — 请联系管理员";
 "status.auth.scopeRequired" = "此 API key 没有 bridge 范围 — 请生成具有 bridge 范围的密钥并在设置中输入";
+"status.deviceConflict" = "另一个应用已使用相同的设备 id 连接 — 请退出正在运行的其他 OpenMake Companion 或 CLI";
 
 /* 选择文件夹 */
 "panel.title" = "选择要连接到智能体任务的文件夹（可以逐个添加多个文件夹）";

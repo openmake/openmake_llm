@@ -47,6 +47,7 @@
 "status.auth.accountDisabled" = "Ihr Konto wurde deaktiviert – wenden Sie sich an Ihren Administrator";
 "status.auth.accountDeleted" = "Ihr Konto wurde gelöscht – wenden Sie sich an Ihren Administrator";
 "status.auth.scopeRequired" = "Dieser API key hat keinen bridge-Bereich – Schlüssel mit bridge-Bereich erstellen und in den Einstellungen eingeben";
+"status.deviceConflict" = "Eine andere App ist bereits mit derselben Geräte-ID verbunden – beenden Sie die andere laufende OpenMake Companion- oder CLI-Instanz";
 
 /* Folder picker */
 "panel.title" = "Ordner für Agentenaufgaben auswählen (Sie können nacheinander mehrere Ordner hinzufügen)";
