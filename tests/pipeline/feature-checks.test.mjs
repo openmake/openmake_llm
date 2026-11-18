@@ -35,6 +35,10 @@ test('the root eslint config selects the pipeline suite', () => {
   const r = selectFeatures(['eslint.config.mjs']);
   assert.equal(r.pipeline, true); assert.deepEqual(r.api, []); assert.equal(r.web, false);
 });
+test('the desktop publish scripts select the pipeline suite', () => {
+  const r = selectFeatures(['scripts/publish-desktop.sh', 'scripts/publish-desktop-windows.sh']);
+  assert.equal(r.pipeline, true); assert.deepEqual(r.api, []); assert.equal(r.web, false);
+});
 test('the contract export script selects the pipeline suite', () => {
   const r = selectFeatures(['scripts/export-openapi.ts']);
   assert.equal(r.pipeline, true); assert.deepEqual(r.api, []); assert.equal(r.web, false);
