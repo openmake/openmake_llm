@@ -9,6 +9,10 @@
  */
 export const DEFAULT_PUSH_ENDPOINT_HOSTS: readonly string[] = [
     'fcm.googleapis.com',            // Chrome/Android (FCM)
+    // Chrome 계열 신규 FCM endpoint(https://jmt17.google.com/fcm/send/...) — 2026-11-18 로컬 라이브 #1853.
+    // google.com 접미사 전체 허용은 범위가 넓어 이 샤드만 둔다(다른 항목과 같은 접미사 규칙이라 *.jmt17.google.com 도 허용 — Google 소유 범위).
+    // 다른 샤드가 필요하면 PUSH_ENDPOINT_HOST_ALLOWLIST 를 쓰되, 이 env 는 기본값을 통째로 교체하므로 기본값을 포함한 전체 목록을 적는다.
+    'jmt17.google.com',
     'android.googleapis.com',        // 구 GCM endpoint
     'push.services.mozilla.com',     // Firefox autopush (updates.push.services.mozilla.com 포함)
     'notify.windows.com',            // Edge (WNS, wns2-*.notify.windows.com)

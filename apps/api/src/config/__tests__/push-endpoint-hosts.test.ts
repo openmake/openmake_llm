@@ -15,6 +15,16 @@ describe('isPushEndpointHostAllowed', () => {
         expect(isPushEndpointHostAllowed('fcm.googleapis.com.evil.example')).toBe(false);
         expect(isPushEndpointHostAllowed('notfcm.googleapis.com')).toBe(false);
     });
+    it('Chrome FCM 샤드 jmt17.google.com 은 기본 허용, 유사·상위 도메인은 거부 (2026-11-18 로컬 라이브 #1853)', () => {
+        delete process.env.PUSH_ENDPOINT_HOST_ALLOWLIST;
+        expect(isPushEndpointHostAllowed('jmt17.google.com')).toBe(true);
+        // 다른 기본 호스트와 같은 접미사 규칙 — 하위 도메인도 Google 소유 범위라 허용(의도 고정)
+        expect(isPushEndpointHostAllowed('a.jmt17.google.com')).toBe(true);
+        expect(isPushEndpointHostAllowed('evil.jmt17.google.com.attacker')).toBe(false);
+        expect(isPushEndpointHostAllowed('google.com')).toBe(false);
+        expect(isPushEndpointHostAllowed('jmt18.google.com')).toBe(false);
+        expect(isPushEndpointHostAllowed('xjmt17.google.com')).toBe(false);
+    });
     it('env 로 교체·비활성(*) 가능', () => {
         process.env.PUSH_ENDPOINT_HOST_ALLOWLIST = 'push.corp.internal, Other.Example';
         expect(getPushEndpointHostAllowlist()).toEqual(['push.corp.internal', 'other.example']);
