@@ -30,6 +30,7 @@ use crate::node_path;
 use crate::scope;
 use crate::timed_fs::FsGate;
 use crate::tool_env::{NO_HOST, ToolEnv, exists, tool_failure};
+use crate::worktree_status::{REMOVE_STATUS_ARGS, Verdict, remove_verdict};
 
 const NOT_A_REPO: &str = "git 레포가 아닙니다";
 const LABEL: &str = "worktree";
@@ -503,6 +504,7 @@ async fn diff(
 }
 
 /// 변경(미커밋 또는 에이전트 커밋)이 남아 있으면 지우지 않는다 — 사용자 디스크의 작업 결과를 임의로 지우지 않는다.
+/// git 이 무시하는 파일만 남았어도 보존하고(의존성·캐시 폴더만이면 정리), status 가 실패하면 보존한다(설계 2026-11-18 ignored-cleanup §2.1).
 async fn remove(
     cx: &Ctx<'_>,
     base: &str,
@@ -525,11 +527,23 @@ async fn remove(
             o.branch = Some(branch);
         })
     };
-    let status = git(cx, &["status", "--porcelain"], abs).await?;
+    let status = git(cx, REMOVE_STATUS_ARGS, abs).await?;
     let head = git(cx, &["rev-parse", "HEAD"], abs).await?;
     let moved = head.ok && js_trim(&head.stdout) != read_base_sha(cx, abs, &repo, gate).await?;
-    if (status.ok && !js_trim(&status.stdout).is_empty()) || moved {
+    let verdict = if status.ok {
+        remove_verdict(&status.stdout)
+    } else {
+        Verdict::Changes
+    };
+    if verdict == Verdict::Changes || moved {
         return Ok(kept(branch));
+    }
+    if verdict == Verdict::Ignored {
+        return Ok(ok_with(|o| {
+            o.kept = Some(true);
+            o.ignored_only = Some(true);
+            o.branch = Some(branch);
+        }));
     }
     check_scope(base, rel, gate).await?; // 첫 검사 뒤 git 여러 번이 끼었다 — 바로 앞에서 다시 본다(TS 같음).
     let r = git(cx, &["worktree", "remove", "--force", abs], base).await?;

@@ -549,7 +549,8 @@
       "SUBSCRIPTION_REQUIRED": "구독 필요",
       "INVALID_API_KEY": "인증 오류",
       "MISSING_API_KEY": "인증 오류",
-      "UPSTREAM_ERROR": "업스트림 오류"
+      "UPSTREAM_ERROR": "업스트림 오류",
+      "UPSTREAM_TIMEOUT": "응답 시간 초과"
     },
     "verification": {
       "title": "검증에서 지적된 사항"
@@ -1019,6 +1020,7 @@
     "isolation": {
       "worktree": "격리 실행 · 작업 브랜치 {branch}",
       "worktreeKept": "격리 실행 · 변경이 작업 폴더 {path} 에 남아 있음 (브랜치 {branch})",
+      "worktreeKeptIgnored": "격리 실행 · git 이 무시하는 파일이 작업 폴더 {path} 에 남아 있음 (브랜치 {branch})",
       "worktreeRemoved": "격리 실행 · 변경 없음(작업 폴더·브랜치 정리됨)",
       "notRepo": "격리 없음 · git 저장소가 아니어서 폴더에서 직접 작업",
       "disabled": "격리 없음 · 서버 설정으로 꺼져 있어 폴더에서 직접 작업",

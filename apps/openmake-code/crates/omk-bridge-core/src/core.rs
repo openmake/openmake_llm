@@ -17,7 +17,7 @@ use crate::browser::local_browser::LocalBrowser;
 use crate::code_nav;
 use crate::constants::{
     BRIDGE_KINDS, BROWSER_KIND, CODE_NAV_MAX_CONCURRENT, CODE_NAV_TIMEOUT_MS, DIAG_TIMEOUT_MS,
-    code_nav_budget_ms,
+    WORKTREE_KEEP_IGNORED_CAPABILITY, code_nav_budget_ms,
 };
 use crate::diagnostics;
 use crate::exec::{self, ExecHost, ExecState};
@@ -168,14 +168,15 @@ impl BridgeCore {
         &self.folder_root
     }
 
-    /// 서버에 알리는 능력 목록 — 실제로 처리하는 kind 만, `BRIDGE_KINDS` 순서로. 브라우저가 있으면 끝에 `browser`·`browser_upload`
-    /// (TS `[...BRIDGE_KINDS, BROWSER_KIND, BROWSER_UPLOAD_CAPABILITY]`).
+    /// 서버에 알리는 능력 목록 — 실제로 처리하는 kind 만 `BRIDGE_KINDS` 순서로, 그 뒤 `worktree_keep_ignored`. 브라우저가 있으면
+    /// 끝에 `browser`·`browser_upload`(TS `[...BRIDGE_KINDS, WORKTREE_KEEP_IGNORED_CAPABILITY, BROWSER_KIND, BROWSER_UPLOAD_CAPABILITY]`).
     pub fn capabilities(&self) -> Vec<&'static str> {
         let mut caps: Vec<&'static str> = BRIDGE_KINDS
             .iter()
             .copied()
             .filter(|k| Kind::parse(k).is_some_and(handles))
             .collect();
+        caps.push(WORKTREE_KEEP_IGNORED_CAPABILITY);
         if self.browser.is_some() {
             caps.extend([BROWSER_KIND, BROWSER_UPLOAD_CAPABILITY]);
         }
@@ -394,11 +395,13 @@ mod tests {
             .to_json()
     }
 
-    /// 브라우저가 없는 코어의 능력 목록은 BRIDGE_KINDS 12종 그대로(브라우저 있는 코어는 tests/browser_core.rs).
+    /// 브라우저가 없는 코어의 능력 목록은 BRIDGE_KINDS 12종 + `worktree_keep_ignored`(브라우저 있는 코어는 tests/browser_core.rs).
     #[test]
     fn capabilities_are_all_bridge_kinds() {
         let c = core(None);
-        assert_eq!(c.capabilities(), BRIDGE_KINDS);
+        let mut want = BRIDGE_KINDS.to_vec();
+        want.push("worktree_keep_ignored");
+        assert_eq!(c.capabilities(), want);
         assert!(!handles(Kind::Browser));
     }
 

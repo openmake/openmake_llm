@@ -17,7 +17,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import {
-    BRIDGE_KINDS, BROWSER_KIND, BROWSER_UPLOAD_CAPABILITY, DIAG_MAX_TOTAL, EXEC_TIMEOUT_MS, execStopNotice, FOLDERS_MAX_ENTRIES, FS_OP_TIMEOUT_MS, LIST_ALL_MAX, MAX_BUFFER,
+    BRIDGE_KINDS, BROWSER_KIND, BROWSER_UPLOAD_CAPABILITY, WORKTREE_KEEP_IGNORED_CAPABILITY, DIAG_MAX_TOTAL, EXEC_TIMEOUT_MS, execStopNotice, FOLDERS_MAX_ENTRIES, FS_OP_TIMEOUT_MS, LIST_ALL_MAX, MAX_BUFFER,
     EXEC_NO_COMMAND_ERROR, SANDBOX_BIN, SANDBOX_ENABLED, SANDBOX_PROFILE_MISSING_ERROR,
 } from './constants';
 import { collectDiagnostics } from './diagnostics';
@@ -68,7 +68,8 @@ export class BridgeCore {
 
     /** 서버에 알리는 능력 목록 — 브라우저는 전용 프로필과 Chrome 이 있을 때만 넣는다. */
     capabilities(): string[] {
-        return this.browser ? [...BRIDGE_KINDS, BROWSER_KIND, BROWSER_UPLOAD_CAPABILITY] : [...BRIDGE_KINDS];
+        const base = [...BRIDGE_KINDS, WORKTREE_KEEP_IGNORED_CAPABILITY];
+        return this.browser ? [...base, BROWSER_KIND, BROWSER_UPLOAD_CAPABILITY] : base;
     }
 
     /** 브라우저 제어권 — 사용자가 넘겨받은 동안 에이전트의 브라우저 요청은 실행하지 않는다. */

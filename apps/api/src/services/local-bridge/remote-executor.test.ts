@@ -329,8 +329,10 @@ describe('RemoteExecutor 로컬 브라우저 (Companion P2)', () => {
         /** worktree add 에 worktreeRel 을 돌려주는(또는 격리 실패) 기기를 흉내 내고 create() 까지 마친 실행기. */
         const setup = async (worktreeRel: string | null, folderRel?: string) => {
             jest.replaceProperty(LOCAL_BRIDGE, 'WORKTREE_ENABLED', true);
+            // 새 기기(무시 파일 보존을 안다) — 옛 기기의 remove 생략(K6)은 worktree.test.ts 가 본다.
             jest.spyOn(getLocalBridgeRegistry(), 'getDevice').mockReturnValue({
                 userId: 'user-1', deviceId: 'dev-1', label: 'mac · repo', folderName: 'repo', ws: {} as WebSocket, connectedAt: 0,
+                capabilities: new Set(['worktree_keep_ignored']),
             });
             const spy = jest.spyOn(getLocalBridgeRegistry(), 'request').mockImplementation(async (_userId, payload) => {
                 if (payload.kind === 'worktree' && payload.op === 'add') {

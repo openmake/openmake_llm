@@ -9,7 +9,7 @@ import * as path from 'path';
 import { WebSocket, WebSocketServer, type WebSocket as ServerWs } from 'ws';
 import { BridgeConnection, parseNotice } from '../connection';
 import { BridgeCore } from '../core';
-import { AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, BRIDGE_KINDS, EXPIRY_SKEW_TOLERANCE_MS, HANDSHAKE_TIMEOUT_MS, HELLO_DELAY_MS, NOTICE_TOOL_NAME_MAX } from '../constants';
+import { AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, BRIDGE_KINDS, EXPIRY_SKEW_TOLERANCE_MS, HANDSHAKE_TIMEOUT_MS, HELLO_DELAY_MS, NOTICE_TOOL_NAME_MAX, WORKTREE_KEEP_IGNORED_CAPABILITY } from '../constants';
 import type { BridgeNotice } from '../types';
 
 interface Frame { type?: string; reqId?: string; result?: Record<string, unknown>; deviceId?: string; label?: string; folderName?: string }
@@ -152,7 +152,7 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
             await openAndHello(1);
             const hello = await server.waitFor((f) => f.type === 'bridge_hello') as Frame & { capabilities?: string[]; hostId?: string };
             expect(hello.hostId).toBe('pc-1');
-            expect(hello.capabilities).toEqual([...BRIDGE_KINDS]);
+            expect(hello.capabilities).toEqual([...BRIDGE_KINDS, WORKTREE_KEEP_IGNORED_CAPABILITY]);
         });
     });
 

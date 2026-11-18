@@ -8,7 +8,7 @@ export type IsolationTone = "accent" | "neutral" | "warn";
 
 export interface IsolationLabel {
   /** `agentTasks.isolation.*` 아래 키 */
-  key: "worktree" | "worktreeKept" | "worktreeRemoved" | "notRepo" | "disabled" | "unavailable";
+  key: "worktree" | "worktreeKept" | "worktreeKeptIgnored" | "worktreeRemoved" | "notRepo" | "disabled" | "unavailable";
   params: { branch?: string; path?: string };
   tone: IsolationTone;
 }
@@ -22,7 +22,8 @@ const DIRECT: Record<string, Pick<IsolationLabel, "key" | "tone">> = {
 export function isolationLabel(isolation: AgentTaskIsolation | null | undefined): IsolationLabel | null {
   if (!isolation) return null;
   if (isolation.state === "worktree") {
-    if (isolation.outcome === "kept") return { key: "worktreeKept", params: { branch: isolation.branch, path: isolation.rootRel ?? isolation.worktreeRel }, tone: "accent" };
+    // ignoredOnly — git 이 무시하는 파일만 남아 보존했다(서버가 기기 답을 옮긴 값, 2026-11-18).
+    if (isolation.outcome === "kept") return { key: isolation.ignoredOnly === true ? "worktreeKeptIgnored" : "worktreeKept", params: { branch: isolation.branch, path: isolation.rootRel ?? isolation.worktreeRel }, tone: "accent" };
     if (isolation.outcome === "removed") return { key: "worktreeRemoved", params: {}, tone: "neutral" };
     if (isolation.outcome === undefined) return { key: "worktree", params: { branch: isolation.branch }, tone: "accent" };
     return null;
