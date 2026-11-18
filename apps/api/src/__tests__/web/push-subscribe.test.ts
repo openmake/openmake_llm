@@ -9,9 +9,10 @@ interface Deps {
     createSubscription: () => Promise<Sub>;
     register: (body: { endpoint: string; keys?: Record<string, string> }) => Promise<unknown>;
 }
-const { enablePushSubscription, syncExistingPushSubscription } = require('../../../../web/lib/push-subscribe') as {
+const { enablePushSubscription, syncExistingPushSubscription, isPushRegistrationRejected } = require('../../../../web/lib/push-subscribe') as {
     enablePushSubscription: (deps: Deps) => Promise<void>;
     syncExistingPushSubscription: (deps: Pick<Deps, 'getSubscription' | 'register'>) => Promise<boolean>;
+    isPushRegistrationRejected: (err: unknown) => boolean;
 };
 
 function makeSub(endpoint = 'https://jmt17.google.com/fcm/send/abc'): Sub & { unsubscribe: jest.Mock } {
@@ -83,5 +84,20 @@ describe('web push-subscribe syncExistingPushSubscription (설정 화면 진입 
             register: jest.fn().mockRejectedValue(err),
         })).rejects.toBe(err);
         expect(sub.unsubscribe).not.toHaveBeenCalled();
+    });
+});
+
+describe('web push-subscribe isPushRegistrationRejected (초기 재등록 실패 구분)', () => {
+    const httpErr = (status: number) => Object.assign(new Error(`요청 실패 (${status})`), { name: 'ApiError', status });
+    it.each([400, 422])('서버 검증 거부 %d 는 거부(꺼짐+오류 문구)', (status) => {
+        expect(isPushRegistrationRejected(httpErr(status))).toBe(true);
+    });
+    it.each([401, 403, 404, 429, 500, 502, 503])('%d 는 일시 오류(켜짐 유지)', (status) => {
+        expect(isPushRegistrationRejected(httpErr(status))).toBe(false);
+    });
+    it('status 없는 오류(네트워크 TypeError 등)·비 Error 값은 일시 오류', () => {
+        expect(isPushRegistrationRejected(new TypeError('Failed to fetch'))).toBe(false);
+        expect(isPushRegistrationRejected(undefined)).toBe(false);
+        expect(isPushRegistrationRejected({ status: '400' })).toBe(false);
     });
 });
