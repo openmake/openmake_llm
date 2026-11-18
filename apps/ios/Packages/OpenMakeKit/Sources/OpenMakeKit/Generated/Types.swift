@@ -7154,25 +7154,81 @@ public enum Operations {
                             ///
                             /// - Remark: Generated from `#/paths/api/models/GET/responses/200/content/json/data/imageModel`.
                             public var imageModel: Swift.String?
+                            /// 저장된 기본 모델 판정 — 비로그인은 auto, 로그인 사용자의 선호·키 조회 실패 시 null
+                            ///
+                            /// - Remark: Generated from `#/paths/api/models/GET/responses/200/content/json/data/defaultModelSelection`.
+                            public struct defaultModelSelectionPayload: Codable, Hashable, Sendable {
+                                /// 선호 defaultModel 원문 (저장한 적 없으면 null)
+                                ///
+                                /// - Remark: Generated from `#/paths/api/models/GET/responses/200/content/json/data/defaultModelSelection/saved`.
+                                public var saved: Swift.String?
+                                /// 지금 보낼 값 — saved 또는 'default'(자동)
+                                ///
+                                /// - Remark: Generated from `#/paths/api/models/GET/responses/200/content/json/data/defaultModelSelection/effective`.
+                                public var effective: Swift.String
+                                /// auto·ok 외에는 저장한 모델을 못 써 자동으로 답한다(사유)
+                                ///
+                                /// - Remark: Generated from `#/paths/api/models/GET/responses/200/content/json/data/defaultModelSelection/status`.
+                                @frozen public enum statusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                                    case auto = "auto"
+                                    case ok = "ok"
+                                    case key_disabled = "key_disabled"
+                                    case key_missing = "key_missing"
+                                    case unusable = "unusable"
+                                    case not_listed = "not_listed"
+                                }
+                                /// auto·ok 외에는 저장한 모델을 못 써 자동으로 답한다(사유)
+                                ///
+                                /// - Remark: Generated from `#/paths/api/models/GET/responses/200/content/json/data/defaultModelSelection/status`.
+                                public var status: Operations.get_sol_api_sol_models.Output.Ok.Body.jsonPayload.dataPayload.defaultModelSelectionPayload.statusPayload
+                                /// Creates a new `defaultModelSelectionPayload`.
+                                ///
+                                /// - Parameters:
+                                ///   - saved: 선호 defaultModel 원문 (저장한 적 없으면 null)
+                                ///   - effective: 지금 보낼 값 — saved 또는 'default'(자동)
+                                ///   - status: auto·ok 외에는 저장한 모델을 못 써 자동으로 답한다(사유)
+                                public init(
+                                    saved: Swift.String? = nil,
+                                    effective: Swift.String,
+                                    status: Operations.get_sol_api_sol_models.Output.Ok.Body.jsonPayload.dataPayload.defaultModelSelectionPayload.statusPayload
+                                ) {
+                                    self.saved = saved
+                                    self.effective = effective
+                                    self.status = status
+                                }
+                                public enum CodingKeys: String, CodingKey {
+                                    case saved
+                                    case effective
+                                    case status
+                                }
+                            }
+                            /// 저장된 기본 모델 판정 — 비로그인은 auto, 로그인 사용자의 선호·키 조회 실패 시 null
+                            ///
+                            /// - Remark: Generated from `#/paths/api/models/GET/responses/200/content/json/data/defaultModelSelection`.
+                            public var defaultModelSelection: Operations.get_sol_api_sol_models.Output.Ok.Body.jsonPayload.dataPayload.defaultModelSelectionPayload?
                             /// Creates a new `dataPayload`.
                             ///
                             /// - Parameters:
                             ///   - defaultModel: 기본 chat 모델 full id
                             ///   - models:
                             ///   - imageModel: 이미지 생성 모델 id (미설정 시 null)
+                            ///   - defaultModelSelection: 저장된 기본 모델 판정 — 비로그인은 auto, 로그인 사용자의 선호·키 조회 실패 시 null
                             public init(
                                 defaultModel: Swift.String,
                                 models: [Components.Schemas.ModelEntry],
-                                imageModel: Swift.String? = nil
+                                imageModel: Swift.String? = nil,
+                                defaultModelSelection: Operations.get_sol_api_sol_models.Output.Ok.Body.jsonPayload.dataPayload.defaultModelSelectionPayload? = nil
                             ) {
                                 self.defaultModel = defaultModel
                                 self.models = models
                                 self.imageModel = imageModel
+                                self.defaultModelSelection = defaultModelSelection
                             }
                             public enum CodingKeys: String, CodingKey {
                                 case defaultModel
                                 case models
                                 case imageModel
+                                case defaultModelSelection
                             }
                         }
                         /// - Remark: Generated from `#/paths/api/models/GET/responses/200/content/json/data`.
