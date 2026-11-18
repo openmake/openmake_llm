@@ -35,7 +35,7 @@ export async function handleBridgeMessage(ws: WebSocket, msg: WSMessage): Promis
     // 스코프 배열을 싣는다: 미지정 키는 ['*']). JWT/쿠키 연결(_apiKeyScopes=undefined)로 등록하던 것은
     // 구 Electron 데스크톱 앱뿐이었고, macOS 는 네이티브 컴패니언만 지원하므로(2026-09-11) 거부한다.
     if (extWs._apiKeyScopes === undefined) {
-        ws.send(JSON.stringify({ type: 'error', message: '로컬 실행은 OpenMake Companion 또는 CLI 로만 연결할 수 있습니다 — bridge 스코프 API key 로 접속하세요' }));
+        ws.send(JSON.stringify({ type: 'error', message: '로컬 실행은 OpenMake 데스크톱 앱 또는 CLI 로만 연결할 수 있습니다 — bridge 스코프 API key 로 접속하세요' }));
         try { ws.close(1008, 'bridge_api_key_required'); } catch { /* already closing */ }
         return;
     }
