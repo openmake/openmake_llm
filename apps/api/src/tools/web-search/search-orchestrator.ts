@@ -206,7 +206,7 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         SEARCH_RELIABILITY.MAX_PER_DOMAIN,
     );
 
-    // 의미 리랭킹 — bge-m3 임베딩으로 상위 소스 순서를 재정렬한다.
+    // 의미 리랭킹 — text.embed 배정 모델 임베딩으로 상위 소스 순서를 재정렬한다.
     //  · ENABLED: 실제 적용(동기, 실패 시 기존 랭킹 fallback). critical-path 지연 +0.2~1.4s.
     //  · SHADOW(ENABLED off 시): fire-and-forget 로깅만(실행 무변경) — 개선폭 측정용.
     const rerankCfg = getConfig();

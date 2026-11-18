@@ -14,9 +14,9 @@ describe('throttleExternalClient', () => {
     beforeEach(() => { __resetExternalThrottleForTest(); Object.assign(mutable, original, { RETRY_429_BASE_MS: 5, RETRY_429_MAX_MS: 20, RETRY_429_MAX: 3 }); });
     afterEach(() => Object.assign(mutable, original));
 
-    it('카탈로그 힌트가 동시성을 정한다 (bai=1, hasa=2, 미지정=DEFAULT)', () => {
+    it('카탈로그 힌트가 동시성을 정한다 (bai=1, hasa=1, 미지정=DEFAULT)', () => {
         expect(providerConcurrency('bai')).toBe(1);
-        expect(providerConcurrency('hasa')).toBe(2);
+        expect(providerConcurrency('hasa')).toBe(1);
         expect(providerConcurrency('nvidia')).toBe(EXTERNAL_PROVIDER_THROTTLE.DEFAULT_CONCURRENCY);
     });
 
@@ -28,11 +28,11 @@ describe('throttleExternalClient', () => {
         expect(peak).toBe(1);
     });
 
-    it('hasa 는 동시 2개까지', async () => {
+    it('hasa 는 동시 1개까지 (2026-11-18 동시 요청 경고로 2→1)', async () => {
         let inFlight = 0, peak = 0;
         const client = throttleExternalClient(fakeClient(async () => { inFlight++; peak = Math.max(peak, inFlight); await new Promise((r) => setTimeout(r, 10)); inFlight--; return 'ok'; }), 'hasa');
         await Promise.all(Array.from({ length: 5 }, () => client.chat([], undefined)));
-        expect(peak).toBe(2);
+        expect(peak).toBe(1);
     });
 
     it('429 는 백오프 후 재시도해 성공을 돌려준다', async () => {

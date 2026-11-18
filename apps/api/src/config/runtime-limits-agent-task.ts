@@ -486,13 +486,15 @@ export const AGENT_TASK_LIMITS = {
     /** 서브에이전트 라벨 상한(자) — role/agentId 가 없을 때 서브목표 앞부분을 라벨로 쓴다.
      *  진행 목록에서 한 줄로 읽히는 길이. AGENT_TASK_SUBAGENT_LABEL_MAX. */
     SUBAGENT_LABEL_MAX_CHARS: parseInt(process.env.AGENT_TASK_SUBAGENT_LABEL_MAX || '60', 10),
-    /** 동적 도구 선별 방식(Phase 5-4): 'keyword'(기본 — 무-LLM 오버랩) | 'embedding'(bge-m3 코사인,
+    /** 동적 도구 선별 방식(Phase 5-4): 'keyword'(기본 — 무-LLM 오버랩) | 'embedding'(text.embed 배정 모델 코사인,
      *  어휘가 달라도 의미 매칭. 실패 시 키워드 폴백). AGENT_TASK_DYNAMIC_TOOLS_MODE. */
     DYNAMIC_TOOLS_MODE: (process.env.AGENT_TASK_DYNAMIC_TOOLS_MODE === 'embedding' ? 'embedding' : 'keyword') as 'keyword' | 'embedding',
     /** 임베딩 모드 유사도 임계 — 미만은 예산이 남아도 제외(무관 도구 미주입, 기본 0.35). */
     DYNAMIC_TOOLS_EMBED_MIN_SIM: parseFloat(process.env.AGENT_TASK_DYNAMIC_TOOLS_EMBED_MIN_SIM || '0.35'),
     /** 임베딩 선별 전체 타임아웃(ms) — 초과 시 키워드 폴백(기본 3000). */
     DYNAMIC_TOOLS_EMBED_TIMEOUT_MS: parseInt(process.env.AGENT_TASK_DYNAMIC_TOOLS_EMBED_TIMEOUT_MS || '3000', 10),
+    /** 도구 벡터 캐시에 둘 임베딩 모델(배정·차원) 수 상한 — 넘으면 가장 먼저 들어온 모델을 버린다(기본 4). */
+    DYNAMIC_TOOLS_EMBED_CACHE_MODELS: parseInt(process.env.AGENT_TASK_DYNAMIC_TOOLS_EMBED_CACHE_MODELS || '4', 10),
     /** 턴 중간 체크포인트(Phase 6-4) — 도구 결과 단위로도 checkpoint 저장. 재시작이 턴 중간에
      *  일어나도 이미 실행된 도구를 재실행하지 않고 재개한다(write 도구 재실행 방지 강화).
      *  기본 ON(124) — 턴 중간 재개(turn-reentry)와 도구 호출 저널은 이 체크포인트가 있어야 남은

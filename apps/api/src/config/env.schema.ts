@@ -183,7 +183,6 @@ export const envSchema = z
         TAIL_ROUTING_STAGE2B_ENABLED: z.string().default('false'),
         SEARCH_SEMANTIC_RERANK_SHADOW: z.string().default('false'),
         SEARCH_SEMANTIC_RERANK_ENABLED: z.string().default('false'),
-        SEARCH_RERANK_EMBED_MODEL: z.string().optional(),
         /**
          * LiteLLM 통합 게이트웨이로 inference 를 라우팅할 외부 provider id 콤마 목록
          * (예: 'openrouter,ollama-cloud,nvidia'). 빈값(기본) = 전부 direct.

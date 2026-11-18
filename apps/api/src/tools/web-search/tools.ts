@@ -77,9 +77,9 @@ const factCheckTool: MCPToolDefinition = {
             required: ['claim']
         }
     },
-    handler: async (args): Promise<MCPToolResult> => {
+    handler: async (args, context): Promise<MCPToolResult> => {
         const claim = args.claim as string;
-        const results = await performWebSearch(claim, { maxResults: WEB_SEARCH_TOOL_LIMITS.FACT_CHECK_MAX_RESULTS });
+        const results = await performWebSearch(claim, { maxResults: WEB_SEARCH_TOOL_LIMITS.FACT_CHECK_MAX_RESULTS, costUserId: context?.userId !== undefined ? String(context.userId) : undefined });
 
         let output = `사실 검증: "${claim}"\n\n`;
         for (const r of results) {
@@ -151,9 +151,9 @@ const researchTopicTool: MCPToolDefinition = {
             required: ['topic']
         }
     },
-    handler: async (args): Promise<MCPToolResult> => {
+    handler: async (args, context): Promise<MCPToolResult> => {
         const topic = args.topic as string;
-        const results = await performWebSearch(topic);
+        const results = await performWebSearch(topic, { costUserId: context?.userId !== undefined ? String(context.userId) : undefined });
 
         let output = `연구: "${topic}"\n\n`;
         for (const r of results) {
