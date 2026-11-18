@@ -101,11 +101,23 @@ function exitedSync(pid: number): boolean {
 /**
  * 띄운 Chrome 을 끄고 끝날 때까지(상한 `ms`) 동기로 기다린다 — 호스트 프로세스의 'exit' 훅에서 부른다.
  * 기다려야 호스트가 그 뒤에 놓는 자원(CLI 의 브라우저 주인 잠금)을 넘겨받은 쪽이 꺼지는 중인 Chrome 에 붙지 않는다.
+ * 상한 안에 끝나지 않으면 강제로 끄고(SIGKILL) 한 번 더 상한까지 기다린다. 끝난 것을 확인했으면 true.
  */
-export function killAndWaitSync(proc: ChildProcess, ms: number): void {
-    if (proc.exitCode !== null || proc.signalCode !== null || proc.pid === undefined) return;
-    try { proc.kill(); } catch { return; }
+export function killAndWaitSync(proc: ChildProcess, ms: number): boolean {
+    if (proc.exitCode !== null || proc.signalCode !== null || proc.pid === undefined) return true;
+    const pid = proc.pid;
     const pause = new Int32Array(new SharedArrayBuffer(4));
-    const end = Date.now() + ms;
-    while (!exitedSync(proc.pid) && Date.now() < end) Atomics.wait(pause, 0, 0, 20);
+    const waitExit = (): boolean => {
+        const end = Date.now() + ms;
+        while (Date.now() < end) {
+            if (exitedSync(pid)) return true;
+            Atomics.wait(pause, 0, 0, 20);
+        }
+        return exitedSync(pid);
+    };
+    for (const signal of ['SIGTERM', 'SIGKILL'] as const) {
+        try { proc.kill(signal); } catch { /* 아래에서 끝났는지 본다 */ }
+        if (waitExit()) return true;
+    }
+    return false;
 }

@@ -199,3 +199,58 @@ LocalBrowser.forProfile(o.browserProfileDir)
   while (!existsSync(out) && Date.now() < end) await new Promise(r => setTimeout(r, 20));
   assert.equal(readFileSync(out, 'utf8').trim(), 'held');
 });
+
+// r3: Chrome that has not been seen to exit must not hand the profile over. The exiting owner leaves the lock
+// to that Chrome's pid, so a new CLI backs off while it lives and reclaims the lock once it is gone.
+test('releasing while our Chrome is still running hands the lock to that Chrome instead of freeing it', async t => {
+  const dir = tempDir(t);
+  const mine = owner().acquireBrowserOwner(dir);
+  const chrome = spawn('sleep', ['60']);
+  t.after(() => chrome.kill('SIGKILL'));
+  owner().releaseBrowserOwner(dir, mine.token, chrome.pid);
+  assert.deepEqual(readLock(dir), { pid: chrome.pid, token: mine.token });
+  assert.deepEqual(leftovers(dir), []);
+  const blocked = owner().acquireBrowserOwner(dir);
+  assert.equal(blocked.owned, false);
+  assert.ok(blocked.message.includes(`pid ${chrome.pid}`), blocked.message);
+  chrome.kill('SIGKILL');
+  await new Promise(r => chrome.once('exit', r));
+  assert.equal(owner().acquireBrowserOwner(dir).owned, true);
+});
+
+// A fake Chrome that ignores SIGTERM: the exit wait runs out, so the host must force it down (SIGKILL) and
+// see it gone before letting go of the lock — never free the lock while that Chrome is still alive.
+test('on exit a Chrome that ignores SIGTERM is killed before the lock is let go', { skip: process.platform === 'win32' && 'POSIX shell fake', timeout: 30000 }, async t => {
+  const home = tempHome(t);
+  const dir = join(home, '.openmake');
+  const pidFile = join(home, 'chrome-pid');
+  const bin = join(home, 'fake-chrome');
+  writeFileSync(bin, [
+    '#!/bin/sh',
+    'for a in "$@"; do case "$a" in --user-data-dir=*) d="${a#--user-data-dir=}";; esac; done',
+    "trap '' TERM",
+    `echo $$ > "${pidFile}"`,
+    'printf \'1\\n/devtools/browser/x\\n\' > "$d/DevToolsActivePort"',
+    'exec sleep 60',
+  ].join('\n'), { mode: 0o755 });
+  const core = require.resolve('@openmake/local-bridge-core', { paths: [DIST] });
+  const script = `const { browserOption } = require(${JSON.stringify(join(DIST, 'bridge.js'))});
+const { LocalBrowser } = require(${JSON.stringify(core)});
+const o = browserOption(process.env, process.argv[1]);
+if (!o.browserProfileDir) process.exit(2);
+LocalBrowser.forProfile(o.browserProfileDir)
+  .run({ actions: [{ type: 'wait', ms: 0 }], sitePolicy: { allow: [], deny: [] } }, { taskId: 'A', saveFile: async () => undefined })
+  .then(() => process.exit(0), () => process.exit(0));`;
+  const child = spawn(process.execPath, ['-e', script, dir], { stdio: 'inherit', env: { ...process.env, OMK_BRIDGE_BROWSER: '1', OMK_BRIDGE_CHROME: bin } });
+  const code = await new Promise(r => child.on('exit', r));
+  assert.equal(code, 0);
+  const pid = Number(readFileSync(pidFile, 'utf8').trim());
+  t.after(() => { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } });
+  const lockLeft = existsSync(join(dir, LOCK));
+  let chromeAlive = true;
+  try { process.kill(pid, 0); } catch { chromeAlive = false; }
+  // Either Chrome is gone and the lock is free, or the lock still points at the living Chrome — never free while it lives.
+  if (chromeAlive) assert.equal(readLock(dir).pid, pid, 'lock must stay with the still-running Chrome');
+  else assert.equal(lockLeft, false, 'released after Chrome was killed');
+  assert.equal(chromeAlive, false, 'a Chrome ignoring SIGTERM is force-killed on exit');
+});
