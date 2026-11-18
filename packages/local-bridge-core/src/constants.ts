@@ -56,6 +56,14 @@ export const AUTH_CLOSE_TEXT: Record<BridgeAuthCloseReason, string> = {
     account_deleted: '계정이 삭제되었습니다 — 관리자에게 문의하세요',
     bridge_scope_required: "이 API key 에는 'bridge' 스코프가 없습니다 — bridge 스코프 키를 발급해 설정에 넣으세요",
 };
+/**
+ * 같은 기기 id 로 다른 프로세스가 이미 연결돼 있어 서버가 새 연결을 거절한 사유(1008 의 reason, 2026-11-19) — 서버
+ * config/local-bridge.ts BRIDGE_DEVICE_CONFLICT_REASON 과 1:1. 상태 코드로도 그대로 쓴다. 다른 쪽을 끄면 붙도록
+ * RECONNECT_MAX_MS 간격으로만 다시 시도한다.
+ */
+export const DEVICE_CONFLICT_REASON = 'device_conflict';
+/** 충돌 상태 문구(한국어 원문 — CLI 가 그대로 쓰고, 앱은 상태 코드로 다국어 문구를 고른다). */
+export const DEVICE_CONFLICT_TEXT = '같은 기기 id 로 다른 앱이 이미 연결돼 있습니다 — 실행 중인 다른 OpenMake Companion·CLI 를 종료하세요';
 export const PATH_PROBE_TIMEOUT_MS = 5000;
 /** git 디렉터리 탐지(rev-parse) 프로브 타임아웃(ms). */
 export const GIT_PROBE_TIMEOUT_MS = 5000;

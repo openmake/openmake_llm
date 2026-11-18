@@ -10,8 +10,10 @@
  */
 import * as os from 'os';
 import * as path from 'path';
-import { BridgeConnection, BridgeCore, type ConfirmFn as CoreConfirmFn } from '@openmake/local-bridge-core';
-import { deviceId } from './config';
+import { BridgeConnection, BridgeCore, LocalBrowser, type ConfirmFn as CoreConfirmFn } from '@openmake/local-bridge-core';
+import { CONFIG_DIR, deviceIdFor, hostId } from './config';
+import { acquireBrowserOwner, releaseBrowserOwner } from './browser-owner';
+import { RegistrationWatch, type RegisterOutcome } from './register-wait';
 
 /** 터미널 confirm 어댑터 시그니처 — 코어 계약을 그대로 재노출 (index.ts 하위호환). */
 export type ConfirmFn = CoreConfirmFn;
@@ -26,30 +28,52 @@ interface BridgeOptions {
     autoApproveAll?: boolean; // 테스트/비대화형 훅
 }
 
+/**
+ * 로컬 브라우저(P2) 옵션 — OMK_BRIDGE_BROWSER=1 이고 이 프로세스가 PC 의 브라우저 주인 잠금을 잡았을 때만
+ * 전용 프로필(`dir/browser-profile`, 평소 Chrome 프로필이 아니다)을 넘긴다. 못 잡으면 브라우저 없이 시작한다
+ * (능력 목록에서 빠져 서버가 브라우저 요청을 보내지 않는다). 잡았으면 끝날 때 자기 잠금만 놓는다 —
+ * 코어의 Chrome 종료 훅은 나중에 등록돼도 앞에 끼워져(prependOnceListener) Chrome 이 끝난 뒤에 놓는다.
+ * 강제로 꺼도 끝난 것을 확인하지 못했으면 놓지 않고 잠금을 그 Chrome pid 에 넘긴다(끝나면 다음 CLI 가 회수).
+ */
+export function browserOption(env: NodeJS.ProcessEnv, dir: string): { browserProfileDir?: string } {
+    if (env.OMK_BRIDGE_BROWSER !== '1') return {};
+    const owner = acquireBrowserOwner(dir);
+    if (!owner.owned) { console.warn(`\x1b[33m${owner.message}\x1b[0m`); return {}; }
+    const browserProfileDir = path.join(dir, 'browser-profile');
+    process.on('exit', () => releaseBrowserOwner(dir, owner.token, LocalBrowser.lingeringPid(browserProfileDir)));
+    return { browserProfileDir };
+}
+
 export class CliBridge {
     private readonly connection: BridgeConnection;
+    /** 자기 소켓의 등록 결과 — 연결을 시작하기 전부터 상태를 받아 둔다(run·resume 의 성공 판정, 2026-11-19). */
+    private readonly registration = new RegistrationWatch();
 
     constructor(opts: BridgeOptions) {
+        // 폴더별 id + PC id — Companion 과 같은 규칙이라 서버 상한(PC 단위·PC 당 폴더 수)이 그대로 맞는다.
+        // 브라우저 잠금보다 먼저 정한다(id 파일을 못 만들면 아무것도 잡지 않고 끝난다).
+        const ids = { deviceId: deviceIdFor(opts.folder), hostId: hostId() };
         const core = new BridgeCore({
             folder: opts.folder,
             confirm: opts.confirm,
             sandboxProfileDir: os.tmpdir(),
-            // 로컬 브라우저(P2) — OMK_BRIDGE_BROWSER=1 로 켠다. 전용 프로필은 ~/.openmake 아래(평소 Chrome 프로필이 아니다).
-            ...(process.env.OMK_BRIDGE_BROWSER === '1' ? { browserProfileDir: path.join(os.homedir(), '.openmake', 'browser-profile') } : {}),
+            ...browserOption(process.env, CONFIG_DIR),
             ...(opts.autoApproveAll !== undefined ? { autoApproveAll: opts.autoApproveAll } : {}),
         });
         this.connection = new BridgeConnection({
             serverUrl: opts.serverUrl,
             core,
-            deviceId: deviceId(),
+            ...ids,
             label: `${os.hostname()} · ${path.basename(core.folderRoot)}`,
             // 네이티브 클라이언트라 Origin 헤더를 보내지 않는다 — 인증은 API key(헤더). 서버는
             // API key 요청에 한해 Origin 검증을 면제한다(CSWSH 는 쿠키 기반 브라우저 공격).
             headers: () => ({ Authorization: `Bearer ${opts.apiKey}` }),
-            ...(opts.onStatus ? { onStatus: opts.onStatus } : {}),
+            onStatus: (s, code, arg) => { this.registration.note(s, code, arg); opts.onStatus?.(s); },
         });
     }
 
     connect(): void { void this.connection.connect(); }
+    /** 자기 소켓이 bridge_ready 를 받을 때까지(또는 충돌·인증 실패) 기다린다. 시간이 다 되면 timeout. */
+    waitRegistered(timeoutMs: number): Promise<RegisterOutcome> { return this.registration.wait(timeoutMs); }
     disconnect(): void { this.connection.disconnect(); }
 }

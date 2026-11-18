@@ -61,7 +61,7 @@ openmake-code login              # 서버 URL·API key 저장 (~/.openmake/confi
 openmake-code connect [dir]      # 폴더 상주 연결 — 웹에서 작업을 시작할 수 있게 된다
 openmake-code status             # 연결 상태·디바이스 조회
 openmake-code "목표" [--dir .] [--yes]   # 로컬 에이전트 작업 1회 실행
-openmake-code tasks [--all]      # 이 디바이스의 로컬 작업 목록 (종료 작업은 --all)
+openmake-code tasks [--all] [--dir .]   # 이 폴더의 로컬 작업 목록 (종료 작업은 --all)
 openmake-code show <taskId> [--steps] [--diff]     # 작업 결과 다시 보기 (조회 전용)
 openmake-code resume <taskId> [--dir .] [--yes]   # checkpoint 에서 이어하기
 openmake-code "목표" --resume    # 재개 가능한 최근 작업이 있으면 그것을 이어감
@@ -85,6 +85,17 @@ openmake-code "목표" --resume    # 재개 가능한 최근 작업이 있으면
 
 - `connect` 는 **전경 데몬**이다. 종료는 `Ctrl+C`.
 - 디바이스당 폴더는 **하나**다. 여러 폴더가 필요하면 터미널을 여러 개 띄워 각각 `connect` 한다.
+- 디바이스 id 는 **폴더별**이다: `<~/.openmake/device-id 값>-r-<폴더 realpath 의 sha256 앞 12자>`(Companion 과
+  같은 규칙). PC id(파일 값)는 `hostId` 로 함께 보내 서버가 기기 상한을 PC 단위로 센다. 그래서 서로 다른 폴더의
+  CLI 는 함께 붙어 있고, 같은 폴더를 두 번 띄우면 서버가 뒤의 연결을 거절한다. `tasks`·`resume`·`--resume` 은
+  그 명령의 폴더(`--dir`, 없으면 현재 폴더) 기준이다.
+  - ⚠️ 이 규칙 전(폴더와 무관한 PC id 하나)에 만든 작업은 새 id 와 달라 `resume` 의 "다른 디바이스" 검사에
+    걸리고, 기기 대기 중이던 작업은 상한(24시간) 뒤 실패로 끝난다. 웹이 기억한 기기 선택도 한 번 풀린다.
+  - `~/.openmake/device-id` 는 처음 한 번만 원자적으로 만든다. 만들거나 읽지 못하면(권한·빈 파일) 연결하지
+    않고 오류로 끝난다.
+- `OMK_BRIDGE_BROWSER=1` 의 로컬 브라우저는 PC 에서 **CLI 프로세스 하나만** 맡는다(`~/.openmake/browser-owner.lock`).
+  잠금을 못 잡은 CLI 는 브라우저 없이 시작하고 그 사유를 한 번 보인다. 주인이 끝난 뒤 다른 CLI 가 브라우저를
+  맡으려면 다시 띄운다. 강제 종료로 남은 잠금은 다음 실행이 회수한다.
 - `--yes` 는 파일 쓰기류의 **서버측 승인**만 자동화한다. 셸 명령은 별개로 아래 실행 확인이 계속 걸린다.
 - 비대화형(비-TTY) 실행에서는 셸 확인에 답할 수 없으므로 명령이 **자동 거부**된다(fail-safe).
 

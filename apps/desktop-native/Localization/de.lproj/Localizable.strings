@@ -13,6 +13,7 @@
 "menu.checkUpdates" = "Nach Updates suchen …";
 "menu.settings" = "Einstellungen …";
 "menu.quit" = "Beenden";
+"menu.retry" = "Erneut versuchen";
 
 /* Settings */
 "settings.auth" = "Authentifizierung";
@@ -36,6 +37,8 @@
 "status.closed" = "Geschlossen";
 "status.apiKeyRequired" = "API-Schlüssel erforderlich – bitte in den Einstellungen eingeben";
 "status.folderOpenFailed" = "Ordner konnte nicht geöffnet werden: %@";
+"status.instance_conflict" = "Ein anderer OpenMake Companion läuft bereits (%@)";
+"status.instance_lock_failed" = "Der App-Datenordner konnte nicht gesperrt werden – es wurde keine Verbindung hergestellt";
 "status.helperMissing" = "Hilfsressourcen fehlen (Neuinstallation erforderlich)";
 "status.helperExited" = "Hilfsprozess beendet – bitte erneut verbinden";
 "status.helperLaunchFailed" = "Hilfsprozess konnte nicht gestartet werden: %@";
@@ -47,6 +50,7 @@
 "status.auth.accountDisabled" = "Ihr Konto wurde deaktiviert – wenden Sie sich an Ihren Administrator";
 "status.auth.accountDeleted" = "Ihr Konto wurde gelöscht – wenden Sie sich an Ihren Administrator";
 "status.auth.scopeRequired" = "Dieser API key hat keinen bridge-Bereich – Schlüssel mit bridge-Bereich erstellen und in den Einstellungen eingeben";
+"status.deviceConflict" = "Eine andere App ist bereits mit derselben Geräte-ID verbunden – beenden Sie die andere laufende OpenMake Companion- oder CLI-Instanz";
 
 /* Folder picker */
 "panel.title" = "Ordner für Agentenaufgaben auswählen (Sie können nacheinander mehrere Ordner hinzufügen)";

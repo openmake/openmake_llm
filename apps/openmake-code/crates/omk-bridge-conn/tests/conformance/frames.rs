@@ -15,7 +15,7 @@ use crate::support::{make_core, paused_runtime};
 const SENTINEL_ID: &str = "__conformance_end__";
 
 fn ending(code: &str) -> bool {
-    matches!(code, "reconnecting" | "idle" | "closed")
+    matches!(code, "reconnecting" | "idle" | "closed" | "device_conflict")
         || AUTH_CLOSE_REASONS.iter().any(|r| r.as_str() == code)
 }
 
@@ -39,10 +39,39 @@ fn fill_now(v: &Value, now: u64) -> Value {
     }
 }
 
-/// 기대값의 자리표시를 채운다 — `{{CAPABILITIES}}` 는 이 구현의 능력 목록, `{{DURATION}}` 은 0 이상의 정수일 때만 그 값.
-fn fill_expect(e: &Value, actual: Option<&Value>, caps: &Value) -> Value {
+/// `{{INSTANCE_ID}}` 의 값 — 서버가 처음 받은 hello 의 instanceId 가 UUID v4 일 때만 그 값(TS `instanceIdOf`).
+fn instance_id_of(frames: &Value) -> Value {
+    let v = frames
+        .as_array()
+        .and_then(|a| a.iter().find(|f| f["type"] == "bridge_hello"))
+        .and_then(|f| f["instanceId"].as_str());
+    match v {
+        Some(s) if is_uuid_v4(s) => json!(s),
+        _ => json!("{{INSTANCE_ID}} 이 UUID v4 가 아님"),
+    }
+}
+
+fn is_uuid_v4(s: &str) -> bool {
+    let b = s.as_bytes();
+    let hex = |c: &u8| c.is_ascii_digit() || (b'a'..=b'f').contains(c);
+    b.len() == 36
+        && b.iter().enumerate().all(|(i, c)| {
+            if [8, 13, 18, 23].contains(&i) {
+                *c == b'-'
+            } else {
+                hex(c)
+            }
+        })
+        && b[14] == b'4'
+        && matches!(b[19], b'8' | b'9' | b'a' | b'b')
+}
+
+/// 기대값의 자리표시를 채운다 — `{{CAPABILITIES}}` 는 이 구현의 능력 목록, `{{DURATION}}` 은 0 이상의 정수일 때만 그 값,
+/// `{{INSTANCE_ID}}` 는 그 사례의 첫 hello 의 instanceId.
+fn fill_expect(e: &Value, actual: Option<&Value>, caps: &Value, instance: &Value) -> Value {
     match e {
         Value::String(s) if s == "{{CAPABILITIES}}" => caps.clone(),
+        Value::String(s) if s == "{{INSTANCE_ID}}" => instance.clone(),
         Value::String(s) if s == "{{DURATION}}" => match actual {
             Some(v) if v.is_u64() => v.clone(),
             _ => json!("{{DURATION}} 이 0 이상의 정수가 아님"),
@@ -50,7 +79,7 @@ fn fill_expect(e: &Value, actual: Option<&Value>, caps: &Value) -> Value {
         Value::Array(a) => Value::Array(
             a.iter()
                 .enumerate()
-                .map(|(i, x)| fill_expect(x, actual.and_then(|v| v.get(i)), caps))
+                .map(|(i, x)| fill_expect(x, actual.and_then(|v| v.get(i)), caps, instance))
                 .collect(),
         ),
         Value::Object(o) => Value::Object(
@@ -58,7 +87,7 @@ fn fill_expect(e: &Value, actual: Option<&Value>, caps: &Value) -> Value {
                 .map(|(k, x)| {
                     (
                         k.clone(),
-                        fill_expect(x, actual.and_then(|v| v.get(k)), caps),
+                        fill_expect(x, actual.and_then(|v| v.get(k)), caps, instance),
                     )
                 })
                 .collect::<Map<_, _>>(),
@@ -209,7 +238,8 @@ async fn run(c: &Value) {
             .collect();
         json!({"frames": frames, "statuses": statuses, "notices": r.notices, "delays": r.delays})
     });
-    let expected = fill_expect(&c["expect"], Some(&actual), &caps);
+    let instance = instance_id_of(&actual["frames"]);
+    let expected = fill_expect(&c["expect"], Some(&actual), &caps, &instance);
     assert_eq!(actual, expected, "conn-frames/cases/{id}");
     if headers_error.is_some() {
         assert_eq!(

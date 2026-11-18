@@ -13,6 +13,7 @@
 "menu.checkUpdates" = "检查更新…";
 "menu.settings" = "设置…";
 "menu.quit" = "退出";
+"menu.retry" = "重试";
 
 /* 设置 */
 "settings.auth" = "认证";
@@ -36,6 +37,8 @@
 "status.closed" = "已关闭";
 "status.apiKeyRequired" = "需要 API 密钥 — 请在设置中输入";
 "status.folderOpenFailed" = "无法打开文件夹：%@";
+"status.instance_conflict" = "另一个 OpenMake Companion 已在运行（%@）";
+"status.instance_lock_failed" = "无法锁定应用数据文件夹，因此未连接";
 "status.helperMissing" = "缺少辅助程序资源（需要重新安装）";
 "status.helperExited" = "辅助程序已停止 — 请重新连接";
 "status.helperLaunchFailed" = "无法启动辅助程序：%@";
@@ -47,6 +50,7 @@
 "status.auth.accountDisabled" = "账户已被停用 — 请联系管理员";
 "status.auth.accountDeleted" = "账户已被删除 — 请联系管理员";
 "status.auth.scopeRequired" = "此 API key 没有 bridge 范围 — 请生成具有 bridge 范围的密钥并在设置中输入";
+"status.deviceConflict" = "另一个应用已使用相同的设备 id 连接 — 请退出正在运行的其他 OpenMake Companion 或 CLI";
 
 /* 选择文件夹 */
 "panel.title" = "选择要连接到智能体任务的文件夹（可以逐个添加多个文件夹）";

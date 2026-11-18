@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.140.0](https://github.com/openmake/openmake_llm/compare/v1.139.6...v1.140.0) (2026-11-18)
+
+
+### ✨ 기능
+
+* **api,web:** 데스크톱 매니페스트에 macos 블록(OpenMake-Code)을 더한다 — openmake_code PR-2.3 ([c22c976](https://github.com/openmake/openmake_llm/commit/c22c97602afe3b3f45f096fd439bbcfa487f2c32))
+* **companion:** 헬퍼 지원 폴더 잠금으로 한 PC 한 헬퍼 보장 (device-id 충돌 PR 2) ([96000b8](https://github.com/openmake/openmake_llm/commit/96000b84d9990985465a8dcc7fdca6429754b0db))
+
+
+### 🐛 버그 수정
+
+* **companion:** 헬퍼 잠금으로 한 PC 한 헬퍼 보장 — 같은 기기 id 충돌 PR 2 ([0315ab6](https://github.com/openmake/openmake_llm/commit/0315ab6d21d51626f441429f2bb2aa9a3e307107))
+* **companion:** 헬퍼 잠금을 런타임 정리 뒤 해제, 지원 폴더 실패도 instance_lock_failed (리뷰 r2) ([252915f](https://github.com/openmake/openmake_llm/commit/252915ff10e75d791696a90fbd21c888149ee8d8))
+* **local-bridge:** 같은 기기 id 의 살아 있는 연결을 지키고 새 연결을 거절한다 — 기기 id 충돌 PR 1 ([8d87237](https://github.com/openmake/openmake_llm/commit/8d872374cdcea97b4fd660c1d8d46a562e2af3ed))
+* **local-bridge:** 같은 기기 id 의 살아 있는 연결을 지키고 새 연결을 거절한다 (device-id-conflict PR 1) ([b4c41f3](https://github.com/openmake/openmake_llm/commit/b4c41f3d8550d6d30bcd69accd2fdde3c1d599ac))
+* **local-bridge:** 생존 확인 대기 중 소켓도 키 폐기·계정 해제 대상으로 관리 (리뷰 r3) ([020074a](https://github.com/openmake/openmake_llm/commit/020074a0584907040b592b5c6cd20be24b04e6da))
+
+## [1.139.6](https://github.com/openmake/openmake_llm/compare/v1.139.5...v1.139.6) (2026-11-18)
+
+
+### 🐛 버그 수정
+
+* **api:** 외부 스트리밍 채팅에 첫 청크·유휴 무응답 시한과 진단 로그를 둔다 ([ffdffd2](https://github.com/openmake/openmake_llm/commit/ffdffd2c975f108c0e1aea8ee753781b875f21df))
+* **local-bridge:** 무시(.gitignore) 파일만 만든 격리 작업 폴더를 종료 정리 때 지우지 않는다 ([aabe233](https://github.com/openmake/openmake_llm/commit/aabe2336dc92c43b967062eb612493b03b3cf2e3))
+
+
+### ♻️ 리팩터링
+
+* **api:** 외부 스트림 시한·진단 로그를 external-stream-monitor 로 분리해 파일 크기 관문(600줄)을 맞춘다 ([a118ca2](https://github.com/openmake/openmake_llm/commit/a118ca262a3932636fef069e67c33f65363ae373))
+
 ## [1.139.5](https://github.com/openmake/openmake_llm/compare/v1.139.4...v1.139.5) (2026-11-18)
 
 
