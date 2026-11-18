@@ -37,7 +37,7 @@ build.sh                 # omk-helper 릴리스 빌드(cargo) → 하네스(--he
 - **헬퍼 키 전달 경로(0.3.4)**: API key 를 헬퍼의 환경변수가 아니라 stdin 첫 줄(`{cmd:'auth',apiKey}`)로 준다. 프로세스 시작 환경은 같은 사용자의 다른 프로세스가 읽을 수 있어(`sysctl KERN_PROCARGS2`), 샌드박스 안에서 승인된 명령이 헬퍼의 키를 읽어 낼 수 있었다 — 헬퍼가 읽은 뒤 `process.env` 에서 지워도 시작 환경은 남는다.
 - **업로드·정책 차단 표식(0.3.3)**: 코어가 로컬 브라우저 파일 업로드 액션 `uploadFile`(연결된 허용 폴더 안의 파일만, 매번 사용자 승인)을 지원하고 능력 `browser_upload` 를 알린다. 정책·사용자 제어로 막은 호출에는 결과에 `policyBlock` 표식을 실어 서버가 감사 기록을 남긴다(#1177 · #1178).
 - **인증 사유 표시(0.3.2)**: 서버가 키 폐기·만료·비활성, 계정 비활성·삭제, bridge 스코프 없음으로 연결을 닫으면(1008 + 사유) 그 폴더의 상태에 사유를 보여 준다("API key 가 폐기되었습니다 — 새 키를 발급해 설정에 넣으세요" 등, 5개 언어). 코어는 이 사유로 닫힌 뒤 10분 간격으로만 다시 시도하고(`AUTH_RETRY_MS`), 설정에서 API key 를 바꾸면 헬퍼를 다시 띄워 새 키로 바로 붙는다. hello 의 `authClose` 로 새 코어임을 알려야 서버가 게스트 연결을 사유와 함께 닫으므로, 구버전 서버에서는 종전처럼 "서버 오류" 로 보인다.
-- 업데이트: `GET /api/desktop/latest` 의 `native` 블록 — sha256 검증 후 분리 스크립트가 교체·재실행 (구 Electron updater.js 에서 이식). **macOS 는 네이티브 컴패니언만 배포한다(2026-09-11)** — 매니페스트의 macOS 블록은 `native`(이 앱, 옛 정체성)와 `macos`(새 정체성 OpenMake Code `OpenMake-Code-*.dmg`) 둘이고, 이 앱의 업데이터는 `native` 만 읽는다. 최상위(기본) 값은 `native` 를 따르며, 구 Electron dmg 는 게시·다운로드에서 제거됐다. 서버 브리지 등록도 API key(bridge 스코프) 연결만 받는다(쿠키 로그인 연결 = 구 Electron 앱 경로 차단).
+- 업데이트: `GET /api/desktop/latest` 의 `native` 블록 — sha256 검증 후 분리 스크립트가 교체·재실행 (구 Electron updater.js 에서 이식). **macOS 는 네이티브 컴패니언만 배포한다(2026-09-11)** — 매니페스트의 macOS 블록은 `native`(이 앱, 옛 정체성)와 `macos`(새 정체성 OpenMake Code `OpenMake-Code-*.dmg`) 둘이고, 이 앱의 업데이터는 0.4.4(다리)부터 `macos` 블록이 온전하고 현재보다 높으면 OpenMake Code 로 갈아타고, 아니면 종전대로 `native` 를 읽는다. 최상위(기본) 값은 `native` 를 따르며, 구 Electron dmg 는 게시·다운로드에서 제거됐다. 서버 브리지 등록도 API key(bridge 스코프) 연결만 받는다(쿠키 로그인 연결 = 구 Electron 앱 경로 차단).
 
 ## 빌드 / 게시
 
