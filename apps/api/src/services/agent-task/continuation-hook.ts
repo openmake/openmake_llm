@@ -126,9 +126,10 @@ export async function prepareSegmentWorkspace(runtime: TaskRuntime, preTask: Age
     if (!continued || restored) return;
     if (executor === 'local') {
         const fromId = preTask?.continuation?.fromTaskId;
-        const prev = fromId ? await getUnifiedDatabase().getAgentTask(fromId).catch(() => undefined) : undefined;
-        if (sameSegmentWorkspace(prev?.isolation, runtime.isolation)) return;
-        logger.warn(`[Continuation] 앞 세그먼트와 작업 자리가 다르다 — 체인을 멈춘다: ${preTask?.id} (앞 ${JSON.stringify(prev?.isolation)}, 이번 ${JSON.stringify(runtime.isolation)})`);
+        // 조회 실패(DB 오류)는 '기록 없음' 이 아니다 — 확인할 수 없으면 멈춘다(닫힌 실패). 행 없음·앞 id 없음은 종전대로 기록 없음으로 본다.
+        const prev = fromId ? await getUnifiedDatabase().getAgentTask(fromId).then((r) => ({ row: r }), () => null) : { row: undefined };
+        if (prev && sameSegmentWorkspace(prev.row?.isolation, runtime.isolation)) return;
+        logger.warn(`[Continuation] 앞 세그먼트와 작업 자리가 다르다 — 체인을 멈춘다: ${preTask?.id} (앞 ${prev ? JSON.stringify(prev.row?.isolation) : '조회 실패'}, 이번 ${JSON.stringify(runtime.isolation)})`);
     }
     if (preTask?.chain_root_task_id) await new AgentTaskChainRepository(getPool()).markChainCancelled(preTask.chain_root_task_id).catch(() => { /* 표식 실패 무시 */ });
     throw new Error('이어받은 작업 공간을 복원하지 못했습니다(workspace_restore_failed) — 체인을 멈춥니다');

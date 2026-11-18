@@ -285,9 +285,10 @@ describe('prepareSegmentWorkspace — 로컬 worktree 자리 비교(D3)', () => 
         else await expect(run).rejects.toThrow('workspace_restore_failed');
         expect(markChainCancelled).toHaveBeenCalledTimes(pass ? 0 : 1);
     });
-    it('앞 행을 읽지 못하면(판단 근거 없음) 통과', async () => {
+    it('앞 행 조회가 실패하면(DB 오류) 확인할 수 없으므로 멈춘다(닫힌 실패)', async () => {
         db.getAgentTask.mockRejectedValue(new Error('db'));
-        await expect(prepareSegmentWorkspace(runtimeWith(prevIso), seg2, false, 'local')).resolves.toBeUndefined();
+        await expect(prepareSegmentWorkspace(runtimeWith(prevIso), seg2, false, 'local')).rejects.toThrow('workspace_restore_failed');
+        expect(markChainCancelled).toHaveBeenCalledWith('root');
     });
 });
 

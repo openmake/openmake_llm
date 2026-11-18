@@ -196,11 +196,11 @@ export class AgentTaskService {
             const preTask = await db.getAgentTask(taskId);
             if (signal.aborted || preTask?.status === 'cancelled') throw new AgentTaskAbort('aborted');
             let chainCtx = await loadChainContext(taskId, preTask); // 장기 실행 체인(188)이면 현재·루트 행 — 아니면 null(종전과 같다)
-            // 이미 후속을 만든 로컬 세그먼트의 재실행은 같은 worktree 를 후속과 함께 고치지 않게 곧바로 후속을 따른다(continuation-hook)
-            if (input.resume && input.executor === 'local' && await finishIfAlreadyContinued({ preTask, userRole, update })) { continuedToSuccessor = true; return; }
             // resume: 이전 실행분 토큰을 이어서 누적(4-4) — runaway 토큰 가드도 통산 기준으로 동작.
             // "나머지 모두 승인" 도 함께 복원(124) — 종전엔 메모리뿐이라 재시작 후 다시 물었다.
             if (input.resume) { totalTokens = Number(preTask?.total_tokens ?? 0); cacheUsage.restore(preTask); }
+            // 이미 후속을 만든 로컬 세그먼트의 재실행은 같은 worktree 를 후속과 함께 고치지 않게 곧바로 후속을 따른다(continuation-hook) — 토큰 복원 뒤: 마감 update 가 누적값을 싣는다
+            if (input.resume && input.executor === 'local' && await finishIfAlreadyContinued({ preTask, userRole, update })) { continuedToSuccessor = true; return; }
             if (input.resume && preTask?.auto_approve) getApprovalRegistry().setAutoApprove(taskId, true);
             // 승인 정책(183) — 처음 시작이면 남기고, 재개면 남긴 값으로 되살린다(주차 재개는 요청 본문이 없다).
             const approvalPolicy = effectiveApprovalPolicy(input, preTask?.approval_policy);
