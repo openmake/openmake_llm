@@ -279,7 +279,8 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         id: 'hasa',
         displayName: 'Open AI Service Hub (HASA)',
         sdkType: 'openai-compatible',
-        maxConcurrentRequests: 2,
+        // 2026-11-18: 동시 2건에서 403 security_policy_blocked('동시 요청 한도') 경고 실측 → 1
+        maxConcurrentRequests: 1,
         defaultBaseUrl: 'https://open.hasa.re.kr/v1',
         keyPrefixPattern: 'sk-',
         validatePath: '/models',
