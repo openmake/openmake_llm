@@ -8,6 +8,7 @@ OpenMake Companion 헬퍼 실행 파일 — Node 헬퍼(`apps/desktop-native/hel
 | `src/main.rs` | 인자 → `run` → 종료 코드, 패닉 훅 |
 | `src/lib.rs` | `run`(기동·`--resolve`·stdout 비우기), stderr 고정 문구 |
 | `src/args.rs` · `src/commands.rs` · `src/events.rs` | 인자·명령 해석·이벤트 줄(순수 함수) |
+| `src/instance.rs` | 지원 폴더 잠금(`instance.lock`, `flock`) — 한 지원 폴더를 헬퍼 하나만 쓴다 |
 | `src/host.rs` | 호스트 값(지원 폴더·호스트 이름·환경 사본·샌드박스·시간 제한·브라우저) → 코어 조립 |
 | `src/stdio.rs` | stdin 읽기 스레드·stdout 쓰기 스레드 |
 | `src/app/` | 주 actor — 루트 표·확인 대기·connect/disconnect·종료 |
@@ -46,3 +47,8 @@ OpenMake Companion 헬퍼 실행 파일 — Node 헬퍼(`apps/desktop-native/hel
 14. 주소 찾기가 끝난 **뒤**의 명령은 받은 순서대로 처리한다 — Node 는 `connect` 마다 `await endpointsReady` 라 같은 읽기 조각의 뒷줄보다 늦게 돈다
     (한 번에 쓴 `auth`·`connect`·`disconnect` → Node 는 연결 유지, 여기는 해제 / `connect`·`auth` → Node 는 연결, 여기는 `api_key_required`). 둘 다 덜 붙는 쪽
     이고, 앱은 `auth` 를 먼저 보내고 명령마다 따로 쓴다(`stdio_roots` `after_discovery_commands_run_in_order`).
+15. 지원 폴더 잠금(device-id 충돌 설계 §3.3) — 일반 실행은 `device-id` 를 읽기 전에 `<지원 폴더>/instance.lock` 을 잡고 런타임 정리(남은 Chrome·exec 자식·FS 작업)가 끝날 때까지 쥔다. 다른 헬퍼가
+    쥐고 있으면 처음 한 번 `status connecting`(폴더 없음)을 내고 `OMK_HELPER_LOCK_WAIT_MS`(기본 15000) 동안 다시 시도한다. 끝내 못 잡으면
+    `status instance_conflict`(`arg` = 주인의 실행 경로), 지원 폴더를 만들지 못하거나 잠금 파일을 열지 못하거나 잠금이 안 되면 곧바로 `status instance_lock_failed` 를 내고
+    exit 3 — 어느 쪽도 `idle`·`endpoints`·연결·`device-id`·브라우저 프로필에 닿지 않는다. `--resolve` 는 잠금과 무관하다. Node 헬퍼에는 잠금이 없다
+    (`stdio_instance_lock`).
