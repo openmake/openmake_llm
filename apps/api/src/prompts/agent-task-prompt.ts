@@ -114,18 +114,32 @@ export function getAgentTaskDeliverableNudge(): string {
  * 영속 샌드박스(Manus화) 활성 시 system 에 덧붙이는 안내 — 작업 환경(셸+파일시스템) 인지 +
  * 구조화 플랜 도구 사용 유도(G3). 샌드박스 비활성 시 미주입.
  */
+/** 격리 안내에 싣는 작업 폴더 경로 상한 — 프롬프트에 끼울 글자 검사 전용(운영 설정 아님). */
+const ISOLATION_PATH_MAX = 300;
+
 /**
  * 로컬 실행기 worktree 격리 안내 — 사용자의 현재 브랜치·작업트리를 건드리지 않고 별도 브랜치에서
  * 작업 중임을 모델에게 알려, 최종 답변에 브랜치명을 명시하게 한다(사용자가 검토·머지할 지점).
+ * path(연결 폴더 기준 작업 폴더)가 있으면 파일 위치도 그 기준으로 안내하게 한다. 경로 뒤쪽은 저장소 안 폴더
+ * 이름이라 제어 문자·줄 구분자·백틱이 있거나 너무 길면 싣지 않는다(system 지시문 끼워 넣기 방지).
  */
-export function getWorktreeIsolationNote(branch: string): string {
+export const WORKTREE_ISOLATION_HEADING = '## 작업 브랜치 (격리)'; // 안내 생성과 재개 때 찾기(agent-task-isolation-note)가 같이 쓴다
+export function getWorktreeIsolationNote(branch: string, path?: string | null): string {
+    const safePath = path && path.length <= ISOLATION_PATH_MAX && !/[\u0000-\u001f\u007f-\u009f\u2028\u2029`]/.test(path) ? path : null;
     return [
         '',
-        '## 작업 브랜치 (격리)',
+        WORKTREE_ISOLATION_HEADING,
         `- 당신의 변경은 사용자 저장소의 별도 작업 브랜치 \`${branch}\` 에서만 이뤄집니다.`,
         '  사용자의 현재 브랜치·작업 중인 파일은 영향을 받지 않습니다.',
         '- 브랜치를 직접 바꾸거나(checkout/switch) 병합하지 마세요 — 검토·병합은 사용자가 합니다.',
-        `- 최종 답변에 작업 브랜치명(\`${branch}\`)을 반드시 밝히세요.`,
+        ...(safePath ? [
+            `- 작업 디렉토리는 연결 폴더 자체가 아니라 그 안의 격리 작업 폴더 \`${safePath}\` 입니다(연결 폴더 기준 상대경로).`,
+            '  도구에 쓰는 상대경로는 이 작업 폴더 기준이고, 만들거나 고치거나 내려받은 파일은 모두 이 안에 있습니다 —',
+            '  사용자가 연결한 폴더의 같은 이름 자리에는 없습니다.',
+            `- 최종 답변에 작업 브랜치명(\`${branch}\`)을 반드시 밝히고, 파일 위치는 \`${safePath}/<파일 상대경로>\` 로 안내하세요.`,
+            '  "연결 폴더(작업 디렉토리) 루트에 저장했다" 고 쓰지 마세요. 이 경로는 서버가 확인한 값이니 위치를 확인하려고',
+            '  셸(pwd 등)을 부르지 마세요.',
+        ] : [`- 최종 답변에 작업 브랜치명(\`${branch}\`)을 반드시 밝히세요.`]),
     ].join('\n');
 }
 

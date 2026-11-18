@@ -23,7 +23,7 @@ export function isolationLabel(isolation: AgentTaskIsolation | null | undefined)
   if (!isolation) return null;
   if (isolation.state === "worktree") {
     // ignoredOnly — git 이 무시하는 파일만 남아 보존했다(서버가 기기 답을 옮긴 값, 2026-11-18).
-    if (isolation.outcome === "kept") return { key: isolation.ignoredOnly === true ? "worktreeKeptIgnored" : "worktreeKept", params: { branch: isolation.branch, path: isolation.worktreeRel }, tone: "accent" };
+    if (isolation.outcome === "kept") return { key: isolation.ignoredOnly === true ? "worktreeKeptIgnored" : "worktreeKept", params: { branch: isolation.branch, path: isolation.rootRel ?? isolation.worktreeRel }, tone: "accent" };
     if (isolation.outcome === "removed") return { key: "worktreeRemoved", params: {}, tone: "neutral" };
     if (isolation.outcome === undefined) return { key: "worktree", params: { branch: isolation.branch }, tone: "accent" };
     return null;

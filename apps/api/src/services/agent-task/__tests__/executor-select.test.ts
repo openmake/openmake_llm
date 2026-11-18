@@ -39,3 +39,14 @@ describe('resolveExecutorPlan — 로컬 실행 승인 정책', () => {
         expect(plan.remoteExecutor).toBeUndefined();
     });
 });
+
+describe('resolveExecutorPlan — 이어받은 세그먼트의 worktree 키', () => {
+    it('worktreeKey 가 RemoteExecutor 로 전달된다(없으면 undefined — 실행기가 자기 taskId 를 쓴다)', () => {
+        const { RemoteExecutor } = jest.requireMock('../../local-bridge/remote-executor') as { RemoteExecutor: jest.Mock };
+        RemoteExecutor.mockClear();
+        resolveExecutorPlan({ executor: 'local', deviceId: 'd1', folderRel: 'f' }, 'seg2', 'u1', 'root');
+        expect(RemoteExecutor).toHaveBeenLastCalledWith('seg2', 'u1', 'd1', 'f', 'root');
+        resolveExecutorPlan({ executor: 'local' }, 't1', 'u1');
+        expect(RemoteExecutor).toHaveBeenLastCalledWith('t1', 'u1', undefined, undefined, undefined);
+    });
+});

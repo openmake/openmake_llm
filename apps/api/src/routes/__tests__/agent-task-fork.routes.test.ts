@@ -189,3 +189,25 @@ describe('POST /:taskId/fork', () => {
         expect(upd[1].checkpoint.conversation.map((m) => m.content)).toEqual(['원래 목표', '정리 중', FORK_WORKSPACE_NOTICE]);
     });
 });
+
+describe('POST /:taskId/fork — 로컬 원 작업의 작업 공간 안내(D5)', () => {
+    const limits = jest.requireMock('../../config/runtime-limits').AGENT_TASK_LIMITS as Record<string, unknown>;
+    beforeEach(() => { limits.FORK_WORKSPACE_RESTORE_ENABLED = true; getCheckpoint.mockResolvedValue({ conversation: [{ role: 'user', content: 'hi' }], plan: null }); });
+    afterEach(() => { limits.FORK_WORKSPACE_RESTORE_ENABLED = false; });
+    const lastNotice = (): unknown => {
+        const conv = (updateAgentTask.mock.calls[0] as any)[1].checkpoint.conversation;
+        return conv[conv.length - 1].content;
+    };
+    it('복원 플래그가 켜져 있어도 로컬 원 작업이면 "새로 시작" 안내(로컬은 복원 경로가 없다)', async () => {
+        const res = mockRes();
+        await handler('post', '/:taskId/fork')(req({ fromTurn: 0 }), res, jest.fn());
+        expect(res.statusCode).toBe(201);
+        expect(lastNotice()).toBe(FORK_WORKSPACE_NOTICE);
+    });
+    it('샌드박스 원 작업은 종전대로 복원 안내', async () => {
+        getAgentTask.mockResolvedValue({ ...src, executor: 'sandbox' });
+        const res = mockRes();
+        await handler('post', '/:taskId/fork')(req({ fromTurn: 0 }), res, jest.fn());
+        expect(lastNotice()).toBe(buildForkNotice({ restoreEnabled: true }));
+    });
+});

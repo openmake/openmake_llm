@@ -20,6 +20,14 @@ test('값 6종 → 문구 키·색', () => {
   assert.deepEqual(isolationLabel({ state: 'direct', reason: 'unavailable' }), { key: 'unavailable', params: {}, tone: 'warn' });
 });
 
+test('kept 문구의 경로는 서버가 정한 rootRel(연결 폴더 기준)이다', () => {
+  assert.equal(isolationLabel({ ...WT, worktreeRel: 'w/sub', rootRel: 'ws-git/sub/w/sub', outcome: 'kept' })?.params.path, 'ws-git/sub/w/sub');
+});
+
+test('rootRel 이 없는 옛 값은 worktreeRel 을 쓴다', () => {
+  assert.equal(isolationLabel({ ...WT, worktreeRel: 'w', outcome: 'kept' })?.params.path, 'w');
+});
+
 test('없음·모르는 state·reason·outcome 은 null', () => {
   assert.equal(isolationLabel(null), null);
   assert.equal(isolationLabel(undefined), null);

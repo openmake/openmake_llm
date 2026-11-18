@@ -95,8 +95,12 @@ export class RemoteExecutor implements TaskExecutor {
      */
     private readonly folderRel?: string;
 
-    constructor(taskId: string, userId: string, deviceId?: string, folderRel?: string) {
+    /** worktree add·diff·remove 요청의 taskId 자리 — 이어받은 세그먼트는 앞 세그먼트의 키(기본 = taskId). */
+    private readonly worktreeKey: string;
+
+    constructor(taskId: string, userId: string, deviceId?: string, folderRel?: string, worktreeKey?: string) {
         this.taskId = taskId;
+        this.worktreeKey = worktreeKey ?? taskId;
         this.userId = userId;
         this.deviceId = deviceId;
         this.folderRel = folderRel;
@@ -106,6 +110,15 @@ export class RemoteExecutor implements TaskExecutor {
 
     /** worktree 격리가 실제로 적용됐는지(호출부 안내·diff 캡처 판단용). */
     get isolatedBranch(): string | null { return this.worktreeBranch; }
+
+    /**
+     * 격리 작업 폴더의 연결 폴더 기준 상대경로(folderRel/worktreeRel) — 모델 안내·화면 카드가 같은 값을 쓴다.
+     * worktreeRel 은 기기의 base(folderRel 적용 뒤) 기준이라 연결 폴더 기준으로는 앞에 folderRel 을 붙인다. 격리 없으면 null.
+     */
+    get isolatedPath(): string | null {
+        if (!this.worktreeRel) return null;
+        return this.folderRel ? `${this.folderRel}/${this.worktreeRel}` : this.worktreeRel;
+    }
 
     /**
      * 실행 준비 = 디바이스 연결 확인 + worktree 격리 시도.
@@ -120,14 +133,14 @@ export class RemoteExecutor implements TaskExecutor {
         logger.info(`[${this.taskId}] 로컬 실행기 준비 (device=${dev.deviceId}, folder="${dev.folderName}"${this.folderRel ? `/${this.folderRel}` : ''})`);
 
         if (!LOCAL_BRIDGE.WORKTREE_ENABLED) { this.isolationState = { state: 'direct', reason: 'disabled' }; return; }
-        const r = await this.req({ kind: 'worktree', op: 'add', taskId: this.taskId });
+        const r = await this.req({ kind: 'worktree', op: 'add', taskId: this.worktreeKey });
         if (r.ok && r.worktreeRel) {
             this.worktreeRel = r.worktreeRel;
             this.worktreeBranch = r.branch ?? null;
             // 브랜치 없는 ok(현 기기에는 없다)는 격리는 걸린 채 화면용 상태를 남기지 않는다.
             // 기기 응답은 런타임 검증이 없으므로 문자열이 아닌 값도 같은 경로(null)로 본다.
             this.isolationState = typeof r.branch === 'string' && r.branch && typeof r.worktreeRel === 'string'
-                ? { state: 'worktree', branch: r.branch, worktreeRel: r.worktreeRel } : null;
+                ? { state: 'worktree', branch: r.branch, worktreeRel: r.worktreeRel, rootRel: this.isolatedPath ?? r.worktreeRel } : null;
             logger.info(`[${this.taskId}] worktree 격리 활성 (${r.worktreeRel}, branch=${r.branch})`);
         } else {
             // git 레포가 아니거나 생성 실패 — 격리 없이 진행한다(기존 동작 유지). 전송 실패·능력 미지원은 문구를 보지 않는다.
@@ -282,7 +295,7 @@ export class RemoteExecutor implements TaskExecutor {
      */
     async captureDiff(): Promise<string | null> {
         if (!this.worktreeRel) return null;
-        const r = await this.req({ kind: 'worktree', op: 'diff', taskId: this.taskId });
+        const r = await this.req({ kind: 'worktree', op: 'diff', taskId: this.worktreeKey });
         if (!r.ok) {
             logger.warn(`[${this.taskId}] worktree diff 실패: ${r.error}`);
             return null;
@@ -310,12 +323,11 @@ export class RemoteExecutor implements TaskExecutor {
 
     /**
      * browser 요청의 실행 폴더 — 기기는 이 폴더를 다운로드·스크린샷 저장·업로드 파일 해석의 기준으로 쓴다.
-     * 격리 중이면 에이전트가 보는 /workspace(worktree)와 맞춘다. worktreeRel 은 기기의 base(folderRel 적용 뒤)
-     * 기준이라 루트 기준으로는 folderRel/worktreeRel 이다. exec·파일 도구는 경로 쪽(cd·scoped)으로 옮기므로 그대로 둔다.
+     * 격리 중이면 에이전트가 보는 /workspace(worktree)와 맞춘다(isolatedPath = 루트 기준 folderRel/worktreeRel).
+     * exec·파일 도구는 경로 쪽(cd·scoped)으로 옮기므로 그대로 둔다.
      */
     private browserFolder(): string | undefined {
-        if (!this.worktreeRel) return this.folderRel;
-        return this.folderRel ? `${this.folderRel}/${this.worktreeRel}` : this.worktreeRel;
+        return this.isolatedPath ?? this.folderRel;
     }
 
     async runBrowserSpec(spec: { actions: unknown[]; approvedHosts: string[]; approvedUploads?: BrowserUploadApproval[] }): Promise<ExecResult> {
@@ -399,19 +411,22 @@ export class RemoteExecutor implements TaskExecutor {
     /**
      * 종료 통지 + worktree 정리 — 사용자 폴더는 절대 삭제하지 않는다(removeWorkspace 무시).
      * worktree 도 **변경분이 없을 때만** 제거한다(디바이스가 판단). 변경이 남아 있으면 브랜치와
-     * 함께 보존해 사용자가 검토·머지할 수 있게 한다.
+     * 함께 보존해 사용자가 검토·머지할 수 있게 한다. 이어가기로 넘겨준 세그먼트(handover)는 후속이 같은 worktree 를
+     * 쓰므로 remove 를 보내지 않는다 — 후속이 먼저 디스패치되므로 지우면 후속의 작업 폴더가 사라질 수 있다.
      * 무시 파일 보존(worktree_keep_ignored)을 모르는 옛 기기는 .gitignore 대상 파일만 만든 작업도 지운다 — 서버가 파일을
      * 만든 것을 아는 작업(write·browser 성공)이면 remove 를 보내지 않는다(설계 2026-11-18 ignored-cleanup K6).
      */
-    async cleanup(): Promise<void> {
+    async cleanup(_removeWorkspace?: boolean, opts?: { handover?: boolean }): Promise<void> {
         const reg = getLocalBridgeRegistry();
         const legacyKeep = this.mayHaveFiles && !!reg.getDevice(this.userId, this.deviceId)
             && !reg.supports(this.userId, this.deviceId, 'worktree_keep_ignored');
-        if (this.worktreeRel && legacyKeep) {
+        if (this.worktreeRel && opts?.handover) {
+            // 후속 세그먼트가 같은 worktree 를 이어 쓴다 — 정리하지 않는다.
+        } else if (this.worktreeRel && legacyKeep) {
             logger.info(`[${this.taskId}] worktree 보존 — 옛 기기라 무시 파일 정리를 피함 (branch=${this.worktreeBranch})`);
             if (this.isolationState?.state === 'worktree') this.isolationState = { ...this.isolationState, outcome: 'kept' };
         } else if (this.worktreeRel) {
-            const r = await this.req({ kind: 'worktree', op: 'remove', taskId: this.taskId })
+            const r = await this.req({ kind: 'worktree', op: 'remove', taskId: this.worktreeKey })
                 .catch(() => ({ ok: false } as BridgeResult));
             if (r.ok) {
                 logger.info(`[${this.taskId}] worktree ${r.kept ? `보존 (branch=${this.worktreeBranch}${r.ignoredOnly === true ? ', 무시 파일만' : ''})` : '정리 완료'}`);

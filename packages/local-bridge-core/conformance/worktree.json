@@ -21,6 +21,24 @@
       ]
     },
     {
+      "id": "add-reuse-keeps-uncommitted",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtadd010-reuse"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtadd010-reuse","branch":"omk-task/wtadd010"}},
+        {"file":"repo/.openmake/worktrees/wtadd010-reuse/seg1.txt","content":"from segment 1\n"},
+        {"file":"repo/.openmake/worktrees/wtadd010-reuse/a.txt","content":"edited\n"},
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtadd010-reuse"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtadd010-reuse","branch":"omk-task/wtadd010"},"after":[{"exists":"repo/.openmake/worktrees/wtadd010-reuse/seg1.txt","content":"from segment 1\n"},{"exists":"repo/.openmake/worktrees/wtadd010-reuse/a.txt","content":"edited\n"}]},
+        {"git":["branch","--list","--format=%(refname:short)","omk-task/*"],"cwd":"repo","stdout":"omk-task/wtadd010\n"}
+      ]
+    },
+    {
       "id": "add-exclude-without-trailing-newline",
       "setup": [
         {"dir":"repo"},
