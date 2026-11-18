@@ -10,6 +10,7 @@ pub mod args;
 pub mod commands;
 pub mod events;
 pub mod host;
+pub mod instance;
 pub mod stdio;
 
 use std::time::Duration;
@@ -23,6 +24,8 @@ pub const STDOUT_FLUSH_MS: u64 = 500;
 pub const RUNTIME_SHUTDOWN_MS: u64 = 1000;
 /// 패닉 종료 코드(Rust 기본과 같다).
 pub const PANIC_EXIT: i32 = 101;
+/// 잠금을 못 잡아 끝남(`instance_conflict`·`instance_lock_failed`).
+pub const INSTANCE_EXIT: i32 = 3;
 
 /// stderr 고정 문구 ① — 입력·경로·오류 원문을 싣지 않는다.
 fn start_failed() -> i32 {
@@ -64,11 +67,35 @@ pub fn run(argv: &[String]) -> i32 {
         emit.emit(events::resolve_line(&e));
         0
     } else {
-        let Ok(identity) = DeviceIdentity::load_or_create(&support) else {
-            return start_failed();
-        };
-        let host = host::Host::from_env(home, &support, identity);
-        rt.block_on(app::run(args.server, host, emit.clone()))
+        // 잠금 → id → 호스트 → 연결(설계 §3.3). 잠그기 전에는 id 파일·브라우저 프로필을 읽지도 쓰지도 않는다.
+        match instance::acquire(&support, || {
+            emit.emit(events::status_global(events::LOCK_WAIT_TEXT, "connecting"));
+        }) {
+            instance::Outcome::Held(lock) => {
+                let Ok(identity) = DeviceIdentity::load_or_create(&support) else {
+                    return start_failed();
+                };
+                let host = host::Host::from_env(home, &support, identity);
+                let code = rt.block_on(app::run(args.server, host, emit.clone()));
+                drop(lock);
+                code
+            }
+            instance::Outcome::Conflict(owner) => {
+                emit.emit(events::status_global_arg(
+                    events::INSTANCE_CONFLICT_TEXT,
+                    "instance_conflict",
+                    &owner,
+                ));
+                INSTANCE_EXIT
+            }
+            instance::Outcome::Failed => {
+                emit.emit(events::status_global(
+                    events::INSTANCE_LOCK_FAILED_TEXT,
+                    "instance_lock_failed",
+                ));
+                INSTANCE_EXIT
+            }
+        }
     };
     emit.flush(Duration::from_millis(STDOUT_FLUSH_MS));
     // 남은 태스크를 버린다 — 띄우는 중인 Chrome·실행 중인 exec 자식은 `kill_on_drop` 으로 꺼진다. `shutdown_background` 는
