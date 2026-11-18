@@ -225,3 +225,43 @@ test('구 버전 값(소유자 없음) + 새 로그인(로그인 흔적 없음) 
     await m.cleanup();
   }
 });
+
+// Fable 리뷰 r2 Medium: 새 로그인이 흔적을 심은 뒤, 판정이 적용되기 전에 동기화가 한 번 더 돌면 continued=true 가 되어
+// 다른 계정이 남긴 구 버전 값을 B 소유로 채택하고 B 선호에 PUT 했다. 새 로그인이면 그 자리에서 버린다.
+test('구 버전 값 + 새 로그인 → 판정 전(선호 조회 실패) 동기화가 한 번 더 돌아도 B 선호로 넘기지 않는다', async () => {
+  const server: Server = { selection: null, puts: [], modelsGets: 0 };
+  const m = await mount(server, { signedIn: true, userId: 8, startModel: GEMINI, owner: null, hadSession: false });
+  try {
+    await act(async () => { await syncAuthFromServer(); });
+    await m.flush();
+    await act(async () => { await syncAuthFromServer(); });
+    await m.flush();
+    server.selection = { saved: null, effective: 'default', status: 'auto' };
+    await act(async () => { await m.queryClient.invalidateQueries({ queryKey: ['models'] }); });
+    await m.flush();
+    assert.deepEqual(server.puts, [], 'A 의 구 버전 값을 B 의 선호에 저장하면 안 된다');
+    assert.equal(useAppStore.getState().selectedModel, 'default');
+  } finally {
+    await m.cleanup();
+  }
+});
+
+test('구 버전 값 + 새 로그인 → 목록 응답 전 동기화가 한 번 더 돌아도 B 선호로 넘기지 않는다', async () => {
+  const models = gate();
+  const server: Server = { selection: { saved: null, effective: 'default', status: 'auto' }, holdModels: models.p, puts: [], modelsGets: 0 };
+  const m = await mount(server, { signedIn: true, userId: 8, startModel: GEMINI, owner: null, hadSession: false });
+  try {
+    await act(async () => { await syncAuthFromServer(); });
+    await m.flush();
+    await act(async () => { await syncAuthFromServer(); });
+    await m.flush();
+    models.release();
+    await m.flush();
+    assert.deepEqual(server.puts, [], 'A 의 구 버전 값을 B 의 선호에 저장하면 안 된다');
+    assert.equal(useAppStore.getState().selectedModel, 'default');
+  } finally {
+    models.release();
+    await m.flush();
+    await m.cleanup();
+  }
+});
