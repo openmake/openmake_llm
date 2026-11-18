@@ -8,16 +8,22 @@
  */
 const requests: Array<Record<string, unknown>> = [];
 let respond: (p: Record<string, unknown>) => Record<string, unknown>;
+/** 기기가 알린 기능 값 — 기본은 새 기기(무시 파일 보존을 안다). */
+let deviceCaps = new Set<string>(['worktree_keep_ignored']);
 
 jest.mock('./registry', () => ({
     getLocalBridgeRegistry: () => ({
         getDevice: () => ({ deviceId: 'dev-1', label: 'MacBook', folderName: 'proj' }),
+        supports: (_u: string, _d: string | undefined, cap: string) => deviceCaps.has(cap),
         request: async (_userId: string, payload: Record<string, unknown>) => {
             requests.push(payload);
             return respond(payload);
         },
     }),
 }));
+
+jest.mock('../org/effective-policy', () => ({ resolveEffectivePolicy: async () => ({ browserSite: undefined }) }));
+jest.mock('./browser-policy-audit', () => ({ auditBrowserPolicyBlock: async () => undefined }));
 
 import { RemoteExecutor } from './remote-executor';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
@@ -37,6 +43,7 @@ const okResponder = (p: Record<string, unknown>): Record<string, unknown> => {
 beforeEach(() => {
     requests.length = 0;
     respond = okResponder;
+    deviceCaps = new Set<string>(['worktree_keep_ignored']);
 });
 
 async function isolated(): Promise<RemoteExecutor> {
@@ -199,6 +206,68 @@ describe('worktree 격리 상태(isolation, 200)', () => {
         const removed = await created();
         await removed.cleanup();
         expect(removed.isolation).toMatchObject({ state: 'worktree', outcome: 'removed' });
+    });
+
+    it('cleanup: 무시 파일만 남아 보존(kept + ignoredOnly) → isolation 에 ignoredOnly 를 싣는다', async () => {
+        respond = (p) => (p.kind === 'worktree' && p.op === 'remove' ? { ok: true, kept: true, ignoredOnly: true } : okResponder(p));
+        const ex = await created();
+        await ex.cleanup();
+        expect(ex.isolation).toEqual({ state: 'worktree', branch: BRANCH, worktreeRel: WT_REL, rootRel: WT_REL, outcome: 'kept', ignoredOnly: true });
+    });
+
+    it('cleanup: kept 만이면 ignoredOnly 를 싣지 않는다', async () => {
+        respond = (p) => (p.kind === 'worktree' && p.op === 'remove' ? { ok: true, kept: true } : okResponder(p));
+        const ex = await created();
+        await ex.cleanup();
+        expect(ex.isolation).not.toHaveProperty('ignoredOnly');
+    });
+
+    describe('옛 기기 보완(worktree_keep_ignored 없음, 설계 2026-11-18 ignored-cleanup K6)', () => {
+        const removeSent = (): boolean => requests.some((r) => r.kind === 'worktree' && r.op === 'remove');
+        const taskEndSent = (): boolean => requests.some((r) => r.kind === 'task_end');
+
+        it('파일을 쓴 작업은 remove 를 보내지 않고 kept 로 기록한다(task_end 는 보낸다)', async () => {
+            deviceCaps = new Set();
+            const ex = await created();
+            await ex.writeFile('out/report.md', 'r');
+            await ex.cleanup();
+            expect(removeSent()).toBe(false);
+            expect(taskEndSent()).toBe(true);
+            expect(ex.isolation).toEqual({ state: 'worktree', branch: BRANCH, worktreeRel: WT_REL, rootRel: WT_REL, outcome: 'kept' });
+        });
+
+        it('쓰기가 없으면 지금처럼 remove 를 보낸다', async () => {
+            deviceCaps = new Set();
+            const ex = await created();
+            await ex.cleanup();
+            expect(removeSent()).toBe(true);
+            expect(ex.isolation).toMatchObject({ outcome: 'removed' });
+        });
+
+        it('쓰기가 실패했으면 파일이 없으므로 remove 를 보낸다', async () => {
+            deviceCaps = new Set();
+            respond = (p) => (p.kind === 'write' ? { ok: false, error: 'x' } : okResponder(p));
+            const ex = await created();
+            await expect(ex.writeFile('a.txt', 'x')).rejects.toThrow();
+            await ex.cleanup();
+            expect(removeSent()).toBe(true);
+        });
+
+        it('능력을 알린 새 기기는 쓰기가 있어도 remove 를 보낸다(판단은 기기)', async () => {
+            const ex = await created();
+            await ex.writeFile('a.txt', 'x');
+            await ex.cleanup();
+            expect(removeSent()).toBe(true);
+        });
+
+        it('브라우저 요청이 성공한 작업도 remove 를 보내지 않는다', async () => {
+            deviceCaps = new Set(['browser']);
+            const ex = await created();
+            await ex.runBrowserSpec({ actions: [{ type: 'goto', url: 'https://example.com' }], approvedHosts: [] });
+            await ex.cleanup();
+            expect(removeSent()).toBe(false);
+            expect(ex.isolation).toMatchObject({ outcome: 'kept' });
+        });
     });
 
     it('cleanup: remove 실패·예외면 outcome 을 채우지 않는다', async () => {

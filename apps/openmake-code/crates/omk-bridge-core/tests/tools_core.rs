@@ -162,7 +162,9 @@ fn core_without_host() {
             "폴더 스코프 밖 경로 거부: ../x"
         );
     }
-    assert_eq!(c.capabilities(), BRIDGE_KINDS);
+    let mut want = BRIDGE_KINDS.to_vec();
+    want.push("worktree_keep_ignored");
+    assert_eq!(c.capabilities(), want);
     assert_eq!(
         send(&c, json!({"kind": "browser"})),
         json!({

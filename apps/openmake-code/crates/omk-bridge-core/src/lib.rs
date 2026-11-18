@@ -26,6 +26,7 @@ pub mod sandbox_profile;
 pub mod scope;
 pub mod timed_fs;
 pub mod worktree;
+pub mod worktree_status;
 // 읽기 전용 도구 (PR-1.4)
 pub mod code_nav;
 pub mod diagnostics;

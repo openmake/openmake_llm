@@ -114,5 +114,7 @@ describe('normalizeCapabilities', () => {
     test('browser 는 능력 목록으로 알린 기기만 지원한다 — 구버전 기본 목록에는 없다', () => {
         expect(LEGACY_BRIDGE_KINDS).not.toContain('browser');
         expect(normalizeCapabilities(['read', 'browser'])?.has('browser')).toBe(true);
+        // 기능 값 — 무시 파일만 남은 작업 폴더 보존(2026-11-18). 서버가 아는 값이라 남긴다.
+        expect(normalizeCapabilities(['worktree', 'worktree_keep_ignored'])?.has('worktree_keep_ignored')).toBe(true);
     });
 });

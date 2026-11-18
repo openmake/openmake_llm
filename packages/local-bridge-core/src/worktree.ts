@@ -27,6 +27,7 @@ import { absPathEntries } from './exec-path';
 import { readRegularFile, type GitPaths } from './git-trust';
 import { SandboxProfileMissingError, SandboxSpawnError, sandboxExecError, sandboxExecFailed, wrapInSandbox } from './sandbox';
 import { safeFrom, safeFromAsync } from './scope';
+import { REMOVE_STATUS_ARGS, removeVerdict } from './worktree-status';
 import type { BridgeMsg, BridgeResult } from './types';
 
 const NOT_A_REPO = 'git 레포가 아닙니다';
@@ -258,10 +259,14 @@ export async function handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => vo
         if (!(await worktreeTrusted(git, abs, repo))) { done({ ok: false, error: GIT_DIR_MISMATCH_ERROR }); return; }
         // 변경분이 남아 있으면 **지우지 않는다** — 사용자 디스크의 작업 결과를 임의 삭제하지 않는다.
         // 미커밋 변경뿐 아니라 **에이전트가 만든 커밋**도 보존 대상이다(HEAD 가 기준점에서 움직였는지).
-        const st = await git(['status', '--porcelain'], abs);
+        // git 이 무시하는 파일만 남았어도 보존한다(의존성·캐시 폴더만이면 정리). status 가 실패하면 모르는 것이라 보존한다
+        // (설계 2026-11-18 ignored-cleanup §2.1).
+        const st = await git(REMOVE_STATUS_ARGS, abs);
         const head = await git(['rev-parse', 'HEAD'], abs);
         const moved = head.code === 0 && head.stdout.trim() !== (await readBaseSha(git, abs, repo));
-        if ((st.code === 0 && st.stdout.trim() !== '') || moved) { done({ ok: true, kept: true, branch }); return; }
+        const verdict = st.code === 0 ? removeVerdict(st.stdout) : 'changes';
+        if (verdict === 'changes' || moved) { done({ ok: true, kept: true, branch }); return; }
+        if (verdict === 'ignored') { done({ ok: true, kept: true, ignoredOnly: true, branch }); return; }
         const late = await scopeError(base, rel); // 첫 검사 뒤 git 여러 번이 끼었다 — 바로 앞에서 다시 본다.
         if (late) { done({ ok: false, error: late }); return; }
         const r = await git(['worktree', 'remove', '--force', abs], base);

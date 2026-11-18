@@ -273,6 +273,7 @@ function spawnHelper(args, opts = {}) {
     assert.equal(hello2.hostId, hello.hostId, '루트가 달라도 hostId 는 같다');
     assert.ok(Array.isArray(hello.capabilities) && hello.capabilities.includes('exec') && hello.capabilities.includes('read'), 'hello 에 지원 요청 종류');
     assert.ok(!hello.capabilities.includes('browser'), '브라우저를 켜지 않으면 능력 목록에 browser 가 없다');
+    assert.ok(hello.capabilities.includes('worktree_keep_ignored'), 'hello 에 무시 파일 보존 능력(worktree_keep_ignored)');
     await waitEv((e) => e.ev === 'connected' && e.folder === realFolder2);
     assert.equal((await execVia(dev2, { kind: 'read', path: 'other.txt' })).content, 'other-root', '루트2 read');
     // 루트 간 상호 격리 — 루트2 연결이 루트1 파일에 닿지 못한다
