@@ -38,10 +38,10 @@ cancelRouter.post('/:taskId/cancel', asyncHandler(async (req: Request, res: Resp
 
     // 레지스트리에 없음: DB 상 running/queued/pending·paused(질문 응답 대기 주차 F16.7 — 남은 질문 승인도 만료) 이면 상태 정리
     if (dequeued || ['running', 'pending', 'queued', 'paused'].includes(task.status)) {
-        const db = getUnifiedDatabase();
-        await db.updateAgentTask(task.id, { status: 'cancelled' });
-        // 질문 대기 주차(paused)의 남은 pending 과, 자리가 없어 주차로 넘긴 뒤 재개 대기열(queued)에 든 작업의 미소비 승인을 함께 닫는다
-        await getApprovalRegistry().closeTask(task.id); // 무효화가 끝난 뒤 답한다 — 취소 직후 재실행이 옛 승인을 쓰지 않게
+        // 질문 대기 주차(paused)의 남은 pending 과, 자리가 없어 주차로 넘긴 뒤 재개 대기열(queued)에 든 작업의 미소비 승인을 먼저 닫는다 —
+        // 재실행 가능한 상태(cancelled)는 무효화가 끝난 뒤 공개한다(저장이 늦는 사이 병렬 /resume 이 옛 승인을 이어받지 않게)
+        await getApprovalRegistry().closeTask(task.id);
+        await getUnifiedDatabase().updateAgentTask(task.id, { status: 'cancelled' });
         return res.json(success({ message: '작업이 취소되었습니다.', taskId: task.id }));
     }
     return res.status(400).json(badRequest('실행 중이거나 대기 중인 작업이 아닙니다.'));

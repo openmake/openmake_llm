@@ -55,6 +55,24 @@ describe('POST /:taskId/cancel — 승인 정리 순서', () => {
         expect(res.status).toBe(200);
         expect(closedAtResponse).toBe(true);
     });
+    it('closeTask(미소비 승인 무효화)가 끝나기 전에는 cancelled 를 저장하지 않는다 — 저장이 늦어도 병렬 /resume 이 옛 승인을 이어받지 않게', async () => {
+        rows.p = { id: 'p', status: 'paused', user_id: 'u1' };
+        cancel.mockReturnValue(false);
+        let release!: () => void;
+        closeTask.mockImplementationOnce(() => new Promise<void>((r) => { release = r; }));
+        let saveCancelled!: () => void;
+        updateAgentTask.mockImplementationOnce(() => new Promise<void>((r) => { saveCancelled = r; }));
+        const pending = request(app).post('/api/agent-tasks/p/cancel');
+        void pending.then(() => undefined);
+        await new Promise((r) => setTimeout(r, 30));
+        expect(closeTask).toHaveBeenCalledWith('p');
+        expect(updateAgentTask).not.toHaveBeenCalled();   // 무효화 전에는 재실행 가능한 상태(cancelled)가 공개되지 않는다
+        release();
+        await new Promise((r) => setTimeout(r, 30));
+        expect(updateAgentTask).toHaveBeenCalledWith('p', { status: 'cancelled' });
+        saveCancelled();
+        expect((await pending).status).toBe(200);
+    });
 });
 
 describe('POST /:taskId/cancel — 체인', () => {
