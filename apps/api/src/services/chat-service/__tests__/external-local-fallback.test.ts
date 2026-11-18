@@ -89,6 +89,35 @@ describe('streamFromExternalProvider — 외부 실패 시 로컬 폴백', () =>
         expect(tokens).toEqual(['외부일부']); // 로컬 응답이 이어붙지 않아야 한다
     });
 
+    // 무응답 시한(providers/stream-stall-watchdog) — 첫 청크 전 시한이면 보이는 토큰이 0 이라 폴백, 고지 사유 코드도 남는다.
+    it('무응답 시한(UPSTREAM_TIMEOUT)이 첫 토큰 전이면 로컬로 폴백하고 고지 코드에 남긴다', async () => {
+        const failing = makeResolved('gemini', 'gemini-3.8-flash', async () => {
+            throw new ProviderError('UPSTREAM_TIMEOUT', '외부 모델 무응답 시한 초과 (first_chunk, 120000ms)');
+        });
+        const local = makeResolved('local-llm', 'qwen3.6-35b-a3b', okStream);
+        const events: Array<{ type: string; metadata?: { code?: string } }> = [];
+        const deps = { ...(makeDeps(local) as object), onSystemEvent: (e: { type: string; metadata?: { code?: string } }) => events.push(e) };
+
+        const out = await streamFromExternalProvider(deps as never, failing, baseReq as never, () => {});
+
+        expect(out).toContain('로컬응답');
+        expect(events.find((e) => e.type === 'model_fallback')?.metadata?.code).toBe('UPSTREAM_TIMEOUT');
+    });
+
+    it('토큰이 나간 뒤 무응답 시한(유휴)이면 폴백하지 않고 전파한다', async () => {
+        const failing = makeResolved('gemini', 'gemini-3.8-flash', async (_o, cb) => {
+            cb.onToken?.('외부일부');
+            throw new ProviderError('UPSTREAM_TIMEOUT', '외부 모델 무응답 시한 초과 (idle, 120000ms)');
+        });
+        const local = makeResolved('local-llm', 'qwen3.6-35b-a3b', okStream);
+        const tokens: string[] = [];
+
+        const err = await streamFromExternalProvider(makeDeps(local), failing, baseReq as never, (t) => { if (t) tokens.push(t); })
+            .then(() => null, (e: unknown) => e);
+        expect((err as ProviderError).code).toBe('UPSTREAM_TIMEOUT');
+        expect(tokens).toEqual(['외부일부']);
+    });
+
     it('로컬 provider 실패는 폴백하지 않고 그대로 전파', async () => {
         const failing = makeResolved('local-llm', 'qwen3.6-35b-a3b', async () => {
             throw new ProviderError('UPSTREAM_ERROR', '로컬 다운');

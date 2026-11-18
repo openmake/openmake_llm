@@ -549,7 +549,8 @@
       "SUBSCRIPTION_REQUIRED": "구독 필요",
       "INVALID_API_KEY": "인증 오류",
       "MISSING_API_KEY": "인증 오류",
-      "UPSTREAM_ERROR": "업스트림 오류"
+      "UPSTREAM_ERROR": "업스트림 오류",
+      "UPSTREAM_TIMEOUT": "응답 시간 초과"
     },
     "verification": {
       "title": "검증에서 지적된 사항"
