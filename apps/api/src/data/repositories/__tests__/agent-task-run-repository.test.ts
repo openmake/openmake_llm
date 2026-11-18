@@ -126,7 +126,7 @@ describe('AgentTaskRunRepository.revertClaim', () => {
 
 describe('AgentTaskRunRepository.failUnstartedClaim', () => {
     it('아직 claim 상태(queued·pending)일 때만 failed 로 닫고 종료 알림 표식·분류·이벤트를 남긴다', async () => {
-        const { pool, calls } = fakePool([{ rows: [{ prev: 'queued' }], rowCount: 1 }, { rows: [], rowCount: 1 }]);
+        const { pool, calls } = fakePool([{ rows: [{ prev: 'queued' }], rowCount: 1 }]);
         await expect(new AgentTaskRunRepository(pool).failUnstartedClaim('t1', 'lease_held_elsewhere')).resolves.toBe(true);
         expect(calls[0].sql).toContain("SET status = 'failed'");
         expect(calls[0].sql).toContain("o.prev IN ('queued', 'pending')");
@@ -134,7 +134,15 @@ describe('AgentTaskRunRepository.failUnstartedClaim', () => {
         expect(calls[0].sql).toContain('terminal_notify_pending = TRUE');
         expect(calls[0].sql).toContain('completed_at = NOW()');
         expect(calls[0].params).toEqual(['t1', 'lease_held_elsewhere', 'interrupted']);
-        expect(calls[1].params).toEqual(['t1', 'queued', 'failed', 'lease_held_elsewhere']);
+        // r6 — 이어받기 경계(실패 전이)라 이벤트를 같은 문장에서 쓴다(사유 = error, $2)
+        expect(calls).toHaveLength(1);
+        expect(calls[0].sql).toContain('INSERT INTO agent_task_events');
+    });
+
+    it('이벤트 기록이 실패하면(문장 실패) 오류로 끝난다 — 삼키지 않는다', async () => {
+        const pool = { query: jest.fn(async () => { throw new Error('events insert failed'); }) } as unknown as Pool;
+        await expect(new AgentTaskRunRepository(pool).failUnstartedClaim('t1', 'x')).rejects.toThrow('events insert failed');
+        await expect(new AgentTaskRunRepository(pool).failRecoveryLimit('t1', 'running')).rejects.toThrow('events insert failed');
     });
 
     it('0행(다른 서버가 이미 running 으로 올림·취소됨)이면 false 이고 이벤트를 남기지 않는다', async () => {
@@ -163,14 +171,17 @@ describe('AgentTaskRunRepository.countRecoveriesWithoutProgress', () => {
 
 describe('AgentTaskRunRepository.failRecoveryLimit', () => {
     it('읽을 때의 상태 그대로인 중단 작업만 failed(recovery_limit)로 닫고 알림 표식·이벤트를 남긴다 — 체크포인트는 건드리지 않는다', async () => {
-        const { pool, calls } = fakePool([{ rows: [{ prev: 'failed' }], rowCount: 1 }, { rows: [], rowCount: 1 }]);
+        const { pool, calls } = fakePool([{ rows: [{ prev: 'failed' }], rowCount: 1 }]);
         await expect(new AgentTaskRunRepository(pool).failRecoveryLimit('t1', 'failed')).resolves.toBe(true);
         expect(calls[0].sql).toContain("SET status = 'failed'");
         expect(calls[0].sql).toContain('terminal_notify_pending = TRUE');
         expect(calls[0].sql).toContain('FOR UPDATE');
         expect(calls[0].sql).not.toContain('checkpoint');
         expect(calls[0].params).toEqual(['t1', 'recovery_limit', 'interrupted', 'failed', 'server restarted']);
-        expect(calls[1].params).toEqual(['t1', 'failed', 'failed', 'recovery_limit']);
+        expect(calls).toHaveLength(1);   // r6 — 이벤트는 같은 문장(사유 = $2)
+        expect(calls[0].sql).toContain('INSERT INTO agent_task_events');
+        // failed('server restarted') → failed(recovery_limit) 도 종전처럼 이벤트를 남긴다(복구 횟수 초기화·이어받기 경계)
+        expect(calls[0].sql).not.toContain('IS DISTINCT FROM');
     });
 
     it('그 사이 다른 요청이 잡았으면(0행) false 이고 이벤트를 남기지 않는다', async () => {
@@ -181,17 +192,16 @@ describe('AgentTaskRunRepository.failRecoveryLimit', () => {
 
     // (2026-10-22 R2) claim 과 running 사이에서 죽은 행 — 소유권 있는 pending 만, 소유권 없는(실행한 적 없는) pending 은 아니다
     it('소유권 있는 pending(claim 고아)도 닫는다 — 그 상태를 읽었을 때만 소유권 컬럼을 본다', async () => {
-        const { pool, calls } = fakePool([{ rows: [{ prev: 'pending' }], rowCount: 1 }, { rows: [], rowCount: 1 }, { rows: [], rowCount: 0 }]);
+        const { pool, calls } = fakePool([{ rows: [{ prev: 'pending' }], rowCount: 1 }, { rows: [], rowCount: 0 }]);
         const repo = new AgentTaskRunRepository(pool);
         await expect(repo.failRecoveryLimit('t1', 'pending', 'host:0')).resolves.toBe(true);
         // (#1473) 지났거나 내 것일 때만 — 목록을 읽은 뒤 다른 서버가 claim 해 간 pending 은 닫지 않는다
         expect(calls[0].sql).toContain("((o.prev = 'pending' AND o.lease_until IS NOT NULL) AND (o.lease_until < NOW() OR o.lease_owner = $6))");
         expect(calls[0].sql).toContain('SELECT id, status AS prev, error AS prev_error, lease_until, lease_owner FROM agent_tasks');
         expect(calls[0].params).toEqual(['t1', 'recovery_limit', 'interrupted', 'pending', 'server restarted', 'host:0']);
-        expect(calls[1].params).toEqual(['t1', 'pending', 'failed', 'recovery_limit']);
         await repo.failRecoveryLimit('t1', 'running', 'host:0');
-        expect(calls[2].sql).not.toContain('lease_'); // pending 이 아니면 종전 문장 그대로
-        expect(calls[2].params).toEqual(['t1', 'recovery_limit', 'interrupted', 'running', 'server restarted']);
+        expect(calls[1].sql).not.toContain('lease_'); // pending 이 아니면 종전 문장 그대로
+        expect(calls[1].params).toEqual(['t1', 'recovery_limit', 'interrupted', 'running', 'server restarted']);
     });
 
     it('소유권 owner 없이 pending 을 넘기면 pending 행을 맞추지 않는다(안전한 기본 — 남의 claim 을 닫지 않게)', async () => {

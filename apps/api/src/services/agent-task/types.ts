@@ -132,4 +132,6 @@ export interface ContinuationInfo {
     summary: string;
     chainUsedMs: number;
     chainUsedTokens: number;
+    /** 로컬 실행 worktree 요청에 쓸 키 — 앞 세그먼트의 키를 물려받는다(없으면 자기 id). 체인이 worktree 하나를 잇는다. */
+    worktreeKey?: string;
 }

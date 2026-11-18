@@ -398,6 +398,9 @@ export const AGENT_TASK_LIMITS = {
     QUEUE_GLOBAL_MAX: parseInt(process.env.AGENT_TASK_QUEUE_GLOBAL_MAX || '4', 10),
     /** 유저별 동시 실행 상한. AGENT_TASK_QUEUE_USER_MAX 로 오버라이드(기본 2). */
     QUEUE_USER_MAX: parseInt(process.env.AGENT_TASK_QUEUE_USER_MAX || '2', 10),
+    /** 재개 가능한 승인 대기 중에는 실행 슬롯을 양보한다(결정 때 자리가 없으면 주차 경로). false 면 종전처럼 슬롯을 든 채 기다린다.
+     *  AGENT_TASK_QUEUE_YIELD_ON_APPROVAL(기본 true — 운영·개발 모두. 개발 기본이 false 면 로컬에서 양보가 꺼져 라이브가 종전 동작을 본다, r8) */
+    QUEUE_YIELD_ON_APPROVAL: boolEnvDefault(process.env.AGENT_TASK_QUEUE_YIELD_ON_APPROVAL, true, true),
     /** 큐 우선순위(F16.6, 131) — 대기열은 높을수록 먼저, 같으면 등록순. 예약 실행은 SCHEDULED, 사용자 실행은 DEFAULT,
      *  관리자만 DEFAULT 초과(상한은 system_settings AGENT_TASK_QUEUE_PRIORITY_MAX). */
     QUEUE_PRIORITY_SCHEDULED: -1,
@@ -483,13 +486,15 @@ export const AGENT_TASK_LIMITS = {
     /** 서브에이전트 라벨 상한(자) — role/agentId 가 없을 때 서브목표 앞부분을 라벨로 쓴다.
      *  진행 목록에서 한 줄로 읽히는 길이. AGENT_TASK_SUBAGENT_LABEL_MAX. */
     SUBAGENT_LABEL_MAX_CHARS: parseInt(process.env.AGENT_TASK_SUBAGENT_LABEL_MAX || '60', 10),
-    /** 동적 도구 선별 방식(Phase 5-4): 'keyword'(기본 — 무-LLM 오버랩) | 'embedding'(bge-m3 코사인,
+    /** 동적 도구 선별 방식(Phase 5-4): 'keyword'(기본 — 무-LLM 오버랩) | 'embedding'(text.embed 배정 모델 코사인,
      *  어휘가 달라도 의미 매칭. 실패 시 키워드 폴백). AGENT_TASK_DYNAMIC_TOOLS_MODE. */
     DYNAMIC_TOOLS_MODE: (process.env.AGENT_TASK_DYNAMIC_TOOLS_MODE === 'embedding' ? 'embedding' : 'keyword') as 'keyword' | 'embedding',
     /** 임베딩 모드 유사도 임계 — 미만은 예산이 남아도 제외(무관 도구 미주입, 기본 0.35). */
     DYNAMIC_TOOLS_EMBED_MIN_SIM: parseFloat(process.env.AGENT_TASK_DYNAMIC_TOOLS_EMBED_MIN_SIM || '0.35'),
     /** 임베딩 선별 전체 타임아웃(ms) — 초과 시 키워드 폴백(기본 3000). */
     DYNAMIC_TOOLS_EMBED_TIMEOUT_MS: parseInt(process.env.AGENT_TASK_DYNAMIC_TOOLS_EMBED_TIMEOUT_MS || '3000', 10),
+    /** 도구 벡터 캐시에 둘 임베딩 모델(배정·차원) 수 상한 — 넘으면 가장 먼저 들어온 모델을 버린다(기본 4). */
+    DYNAMIC_TOOLS_EMBED_CACHE_MODELS: parseInt(process.env.AGENT_TASK_DYNAMIC_TOOLS_EMBED_CACHE_MODELS || '4', 10),
     /** 턴 중간 체크포인트(Phase 6-4) — 도구 결과 단위로도 checkpoint 저장. 재시작이 턴 중간에
      *  일어나도 이미 실행된 도구를 재실행하지 않고 재개한다(write 도구 재실행 방지 강화).
      *  기본 ON(124) — 턴 중간 재개(turn-reentry)와 도구 호출 저널은 이 체크포인트가 있어야 남은

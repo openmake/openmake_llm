@@ -53,6 +53,12 @@ export class AgentTaskQueue {
     private readonly releaseRetries = new Map<string, () => unknown>();
     /** 최근 시작 건의 대기 시간(ms) — 오래된 것부터 버린다. */
     private readonly recentWaits: number[] = [];
+    /** 실행 슬롯을 든 작업(taskId → userId) — submit 경로로 시작한 작업만. 종료 때 이 안에 있을 때만 카운터를 줄인다. */
+    private readonly holders = new Map<string, string>();
+    /** 승인 대기로 슬롯을 양보한 작업(taskId → userId) — active 에는 남는다(has·duplicate 는 종전과 같다). */
+    private readonly yielded = new Map<string, string>();
+    /** 작업별 양보 대상 승인 대기 수 — 0→1 에서만 양보하고, 겹친 대기는 첫 결정에서 되찾는다. */
+    private readonly approvalWaits = new Map<string, number>();
 
     constructor(
         private readonly globalMax: number = AGENT_TASK_LIMITS.QUEUE_GLOBAL_MAX,
@@ -163,23 +169,76 @@ export class AgentTaskQueue {
         return { globalActive: this.globalActive, pending: this.pending.length, byPriority, wait: { recent: summarizeQueueWaits(this.recentWaits), oldestPendingMs } };
     }
 
+    /**
+     * 재개 가능한 승인 대기에 들어간 작업의 슬롯을 내놓는다(대기 수 0→1 이고 보유 중일 때만) — 사람을 기다리는 동안은
+     * 추론을 쓰지 않으므로 대기열의 다음 작업을 시작한다. 큐에 없는 taskId(runDirect·채팅 승인)·플래그 OFF 는 무시.
+     */
+    yieldSlot(taskId: string): void {
+        if (!AGENT_TASK_LIMITS.QUEUE_YIELD_ON_APPROVAL) return;
+        const userId = this.holders.get(taskId);
+        if (userId === undefined && !this.yielded.has(taskId)) return;
+        const waits = (this.approvalWaits.get(taskId) ?? 0) + 1;
+        this.approvalWaits.set(taskId, waits);
+        if (waits !== 1 || userId === undefined) return;
+        this.releaseCounters(userId);
+        this.holders.delete(taskId);
+        this.yielded.set(taskId, userId);
+        logger.info(`[Queue] 승인 대기 — 실행 슬롯 양보: ${taskId} (실행 ${this.globalActive}, 대기 ${this.pending.length})`);
+        this.drain();
+    }
+
+    /**
+     * 승인 결정 때 슬롯을 되찾는다 — 동기 판정 한 번(기다리지 않는다). 양보 상태가 아니면(큐에 없음·이미 보유) true.
+     * 자리가 없으면 false 로 양보 상태를 유지한다 — 호출부가 결정을 저장하고 주차해 대기열로 돌아간다.
+     */
+    tryReclaimSlot(taskId: string): boolean {
+        const waits = (this.approvalWaits.get(taskId) ?? 0) - 1;
+        if (waits > 0) this.approvalWaits.set(taskId, waits); else this.approvalWaits.delete(taskId);
+        const userId = this.yielded.get(taskId);
+        if (userId === undefined) return true;
+        if (!this.canRun(userId)) return false;
+        this.hold(taskId, userId);
+        return true;
+    }
+
+    /** 상한을 보지 않고 되찾는다 — 결정 저장이 실패해 주차할 수 없을 때만(결정이 메모리에만 있다). 양보 상태가 아니면 무시. */
+    forceReclaimSlot(taskId: string): void {
+        const userId = this.yielded.get(taskId);
+        if (userId === undefined) return;
+        this.hold(taskId, userId);
+        logger.warn(`[Queue] 결정 저장 실패 — 상한을 넘겨 슬롯 되찾음: ${taskId} (실행 ${this.globalActive})`);
+    }
+
+    private hold(taskId: string, userId: string): void {
+        this.yielded.delete(taskId);
+        this.holders.set(taskId, userId);
+        this.globalActive++;
+        this.userActive.set(userId, (this.userActive.get(userId) ?? 0) + 1);
+    }
+
+    private releaseCounters(userId: string): void {
+        this.globalActive = Math.max(0, this.globalActive - 1);
+        const next = (this.userActive.get(userId) ?? 1) - 1;
+        if (next <= 0) this.userActive.delete(userId);
+        else this.userActive.set(userId, next);
+    }
+
     private canRun(userId: string): boolean {
         return this.globalActive < this.globalMax && (this.userActive.get(userId) ?? 0) < this.userMax;
     }
 
     private start(entry: QueueEntry): void {
         this.recordWait(Math.max(0, this.now() - (entry.enqueuedAt ?? this.now())));
-        this.globalActive++;
         this.active.add(entry.taskId);
-        this.userActive.set(entry.userId, (this.userActive.get(entry.userId) ?? 0) + 1);
+        this.hold(entry.taskId, entry.userId);
         void entry.run()
             .catch((e) => logger.warn(`[Queue] 실행 thunk 예외(무시): ${entry.taskId} — ${e instanceof Error ? e.message : e}`))
             .finally(() => {
                 this.active.delete(entry.taskId);
-                this.globalActive = Math.max(0, this.globalActive - 1);
-                const next = (this.userActive.get(entry.userId) ?? 1) - 1;
-                if (next <= 0) this.userActive.delete(entry.userId);
-                else this.userActive.set(entry.userId, next);
+                // 양보 상태로 끝나면 이미 반납했다 — 보유 중일 때만 줄인다(이중 감소 방지)
+                if (this.holders.delete(entry.taskId)) this.releaseCounters(entry.userId);
+                this.yielded.delete(entry.taskId);
+                this.approvalWaits.delete(entry.taskId);
                 this.drain();
                 this.runReleaseRetry(entry.taskId);
             });

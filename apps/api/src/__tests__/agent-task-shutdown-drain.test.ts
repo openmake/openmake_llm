@@ -259,6 +259,21 @@ describe('사용자 취소 — 종전 동작 그대로', () => {
         expect(leaseEnd).toHaveBeenCalledTimes(1);
     });
 
+    it('cancelled 를 쓰기 전에 승인 정리(closeTask)를 끝낸다 — 곧바로 온 재실행이 취소 전 승인을 쓰지 않게', async () => {
+        const gate = deferred();
+        mockChat.mockImplementationOnce(async () => { await gate.promise; return toolCallTurn(); });
+        const done = run();
+        await waitFor(() => mockChat.mock.calls.length === 1);
+
+        AgentTaskService.cancel('t1');
+        gate.resolve();
+        await done;
+
+        const cancelledAt = updateAgentTask.mock.calls.findIndex(([, u]) => (u as Update).status === 'cancelled');
+        expect(cancelledAt).toBeGreaterThanOrEqual(0);
+        expect(closeTask.mock.invocationCallOrder[0]).toBeLessThan(updateAgentTask.mock.invocationCallOrder[cancelledAt]);
+    });
+
     it('먼저 취소된 작업은 뒤이은 종료 신호에도 cancelled 로 남는다', async () => {
         const gate = deferred();
         mockChat.mockImplementationOnce(async () => { await gate.promise; return toolCallTurn(); });
@@ -281,7 +296,7 @@ describe('종료 정리(run-cleanup) — 종료로 끊긴 실행', () => {
     it('작업 공간과 대기 중 승인을 남긴다(부팅 복구가 이어받는다) — 컨테이너만 내린다', async () => {
         const rt = runtime();
         await cleanupTaskRun({ taskId: 't1', userId: 'u1', progress: 0, currentTurn: 0, taskRuntime: rt as never, status: 'running', parked: false, stepNumber: 0, interrupted: true });
-        expect(rt.cleanup).toHaveBeenCalledWith(false);
+        expect(rt.cleanup).toHaveBeenCalledWith(false, { handover: false });
         expect(closeTask).not.toHaveBeenCalled();
         expect(clearAutoApprove).toHaveBeenCalledWith('t1');
     });

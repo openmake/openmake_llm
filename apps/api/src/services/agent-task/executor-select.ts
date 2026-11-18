@@ -29,6 +29,8 @@ export function resolveExecutorPlan(
     input: Pick<AgentTaskRunInput, 'executor' | 'approvalPolicy' | 'deviceId' | 'folderRel'>,
     taskId: string,
     userId: string,
+    /** 이어받은 세그먼트의 worktree 키(ContinuationInfo.worktreeKey) — 없으면 실행기가 자기 taskId 를 쓴다 */
+    worktreeKey?: string,
 ): ExecutorPlan {
     const isLocal = input.executor === 'local' && LOCAL_BRIDGE.ENABLED;
     // 로컬: 파일/기타 도구는 서버 승인 유지(디바이스는 파일에 다이얼로그 없음)하되, 코드 실행
@@ -41,6 +43,6 @@ export function resolveExecutorPlan(
     return {
         sandboxCfg,
         runtimeEnabled: sandboxCfg.enabled || isLocal,
-        remoteExecutor: isLocal ? new RemoteExecutor(taskId, userId, input.deviceId, input.folderRel) : undefined,
+        remoteExecutor: isLocal ? new RemoteExecutor(taskId, userId, input.deviceId, input.folderRel, worktreeKey) : undefined,
     };
 }

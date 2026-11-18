@@ -42,13 +42,13 @@ export async function cleanupTaskRun(opts: {
     const { taskId, taskRuntime, stepNumber } = opts;
     const parked = opts.parked || !!opts.interrupted || !!opts.keepWorkspace;
     if (parked) getApprovalRegistry().clearAutoApprove(taskId);
-    else getApprovalRegistry().closeTask(taskId);
+    else await getApprovalRegistry().closeTask(taskId);
     getSteeringRegistry().clear(taskId);
     clearSandboxUnavailable(taskId);
     if (!taskRuntime) return;
     const keepWorkspace = opts.status === 'completed' || opts.status === 'failed' || parked;
     if (opts.status !== 'completed' && !parked) await captureDiffOnCleanup(taskRuntime, taskId, stepNumber).catch(() => { /* fail-open */ });
-    await taskRuntime.cleanup(!keepWorkspace).catch((e) => logger.warn(`[AgentTask] 샌드박스 정리 실패: ${taskId} — ${e}`));
+    await taskRuntime.cleanup(!keepWorkspace, { handover: !!opts.keepWorkspace }).catch((e) => logger.warn(`[AgentTask] 샌드박스 정리 실패: ${taskId} — ${e}`));
     await recordIsolationOutcome({
         taskId, userId: opts.userId, status: opts.status, progress: opts.progress, currentTurn: opts.currentTurn,
         parked: opts.parked || !!opts.interrupted, isolation: taskRuntime.isolation,
