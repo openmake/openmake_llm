@@ -95,6 +95,15 @@
 "update.script.replace" = "无法替换现有应用。";
 "update.script.rollback" = "新版本安装失败，已恢复为之前的版本。";
 "update.script.reopen" = "更新已完成，但无法重新打开应用。";
+"update.successor.title" = "OpenMake Companion 将变为 OpenMake Code v%1$@（当前 v%2$@）";
+"update.successor.body" = "新应用 OpenMake Code 将安装到同一文件夹，确认新应用正常启动后再删除此应用。服务器地址、已连接文件夹和 API key 会保留。由于是新应用，macOS 可能会再次询问文件夹访问权限和钥匙串访问权限。";
+"update.successor.running.title" = "OpenMake Code v%@ 已在运行";
+"update.successor.running.body" = "请退出 OpenMake Code，然后再次检查更新。";
+"update.successor.badBundleId" = "下载的映像中的应用不是 OpenMake Code（Bundle ID 不一致）。";
+"update.successor.badVersion" = "下载的映像中的应用版本与服务器公布的版本不同。";
+"update.successor.prepare" = "无法准备替换（支持文件夹不可写）。未做任何更改。";
+"update.successor.launch" = "OpenMake Code 未能正常启动，已撤销安装。可以继续使用此应用。";
+"update.successor.killFailed" = "无法结束 OpenMake Code。请手动退出 OpenMake Code，然后重新打开 OpenMake Companion。";
 "menu.browser.takeover" = "接管浏览器（暂停代理）";
 "menu.browser.release" = "交还浏览器（恢复代理）";
 "menu.browser.stop" = "停止浏览器任务";

@@ -95,6 +95,15 @@
 "update.script.replace" = "Die vorhandene App konnte nicht ersetzt werden.";
 "update.script.rollback" = "Die Installation der neuen Version ist fehlgeschlagen; die vorherige Version wurde wiederhergestellt.";
 "update.script.reopen" = "Das Update war erfolgreich, aber die App konnte nicht erneut geöffnet werden.";
+"update.successor.title" = "OpenMake Companion wird zu OpenMake Code v%1$@ (aktuell v%2$@)";
+"update.successor.body" = "Die neue App OpenMake Code wird im selben Ordner installiert; diese App wird entfernt, sobald die neue App korrekt gestartet ist. Serveradresse, verbundene Ordner und API-Key werden übernommen. Da es eine neue App ist, fragt macOS möglicherweise noch einmal nach Ordnerzugriff und Schlüsselbundzugriff.";
+"update.successor.running.title" = "OpenMake Code v%@ läuft bereits";
+"update.successor.running.body" = "Beenden Sie OpenMake Code und suchen Sie dann erneut nach Updates.";
+"update.successor.badBundleId" = "Die App im heruntergeladenen Image ist nicht OpenMake Code (Bundle-ID stimmt nicht überein).";
+"update.successor.badVersion" = "Die App-Version im heruntergeladenen Image weicht von der vom Server angekündigten Version ab.";
+"update.successor.prepare" = "Der Austausch konnte nicht vorbereitet werden (Support-Ordner nicht beschreibbar). Es wurde nichts geändert.";
+"update.successor.launch" = "OpenMake Code ist nicht korrekt gestartet, daher wurde die Installation rückgängig gemacht. Sie können diese App weiter verwenden.";
+"update.successor.killFailed" = "OpenMake Code konnte nicht beendet werden. Beenden Sie OpenMake Code selbst und öffnen Sie dann OpenMake Companion erneut.";
 "menu.browser.takeover" = "Browser übernehmen (Agent pausieren)";
 "menu.browser.release" = "Browser zurückgeben (Agent fortsetzen)";
 "menu.browser.stop" = "Browser-Aufgabe stoppen";

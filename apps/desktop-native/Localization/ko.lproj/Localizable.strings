@@ -95,6 +95,15 @@
 "update.script.replace" = "기존 앱을 교체할 수 없습니다.";
 "update.script.rollback" = "새 버전 설치에 실패해 이전 버전으로 되돌렸습니다.";
 "update.script.reopen" = "업데이트는 됐지만 앱을 다시 열지 못했습니다.";
+"update.successor.title" = "OpenMake Companion 이 OpenMake Code v%1$@ 로 바뀝니다 (현재 v%2$@)";
+"update.successor.body" = "새 앱 OpenMake Code 를 같은 폴더에 설치하고, 새 앱이 정상적으로 뜬 것을 확인한 뒤 이 앱을 지웁니다. 서버 주소·연결 폴더·API key 는 이어집니다. 새 앱이라 macOS 가 폴더 접근 권한과 키체인 접근을 한 번 다시 물을 수 있습니다.";
+"update.successor.running.title" = "OpenMake Code v%@ 가 이미 실행 중입니다";
+"update.successor.running.body" = "OpenMake Code 를 종료한 뒤 다시 업데이트를 확인하세요.";
+"update.successor.badBundleId" = "받은 이미지 안의 앱이 OpenMake Code 가 아닙니다(번들 ID 불일치).";
+"update.successor.badVersion" = "받은 이미지 안의 앱 버전이 서버가 알린 버전과 다릅니다.";
+"update.successor.prepare" = "교체를 준비하지 못했습니다(지원 폴더에 쓸 수 없음). 아무것도 바꾸지 않았습니다.";
+"update.successor.launch" = "OpenMake Code 가 정상적으로 뜨지 않아 설치를 되돌렸습니다. 이 앱을 그대로 씁니다.";
+"update.successor.killFailed" = "OpenMake Code 를 끝내지 못했습니다. OpenMake Code 를 직접 종료한 뒤 OpenMake Companion 을 다시 여세요.";
 "menu.browser.takeover" = "브라우저 넘겨받기 (에이전트 일시 정지)";
 "menu.browser.release" = "브라우저 돌려주기 (에이전트 재개)";
 "menu.browser.stop" = "브라우저 작업 중지";
