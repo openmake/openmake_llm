@@ -165,6 +165,7 @@
     },
     "pushNotSupported": "此浏览器不支持推送通知。",
     "pushSwNotReady": "服务工作线程未注册，无法使用推送通知。",
+    "pushToggleFailed": "无法保存推送通知设置。",
     "memoryLearning": {
       "title": "使用长期记忆",
       "description": "在对话中参考您已保存的长期记忆。关闭后本次对话将不使用已保存的记忆。"
