@@ -266,6 +266,8 @@ interface AppState {
 
   // 모델 / 스타일
   selectedModel: string; // 'default' = 자동
+  /** selectedModel 을 기록한 사용자 id — 저장 안 된 값 넘기기는 같은 사용자일 때만 한다(계정 전환 누수 방지). null = 모름(구 버전 값) */
+  selectedModelOwner: string | null;
   style: ChatStyle;
 
   // 인증
@@ -333,7 +335,7 @@ interface AppState {
       | "answerVerification"
       | "agentTaskMode",
   ) => void;
-  setSelectedModel: (m: string) => void;
+  setSelectedModel: (m: string, owner: string | null) => void;
   setAgentApprovalMode: (m: "all" | "high-risk" | "none") => void;
   setAgentThinkingLevel: (v: AgentThinkingLevel) => void;
   setAgentLocalExecutor: (v: boolean) => void;
@@ -413,6 +415,7 @@ export const useAppStore = create<AppState>()(
   memoryLearning: true,
 
   selectedModel: "default",
+  selectedModelOwner: null,
   style: "default",
 
   auth: { currentUser: null, isGuestMode: true },
@@ -667,7 +670,7 @@ export const useAppStore = create<AppState>()(
       }
       return { [key]: next } as Partial<AppState>;
     }),
-  setSelectedModel: (m) => set({ selectedModel: m }),
+  setSelectedModel: (m, owner) => set({ selectedModel: m, selectedModelOwner: owner }),
   setAgentApprovalMode: (m) => set({ agentApprovalMode: m }),
   setAgentThinkingLevel: (v) => set({ agentThinkingLevel: v }),
   setAgentLocalExecutor: (v) => set({ agentLocalExecutor: v }),
@@ -696,7 +699,7 @@ export const useAppStore = create<AppState>()(
         typeof window !== "undefined" ? window.localStorage : noopStorage,
       ),
       // 사용자 환경설정만 영속화 — 채팅/아티팩트 등 휘발성 세션 상태는 제외
-      partialize: (s) => ({ selectedModel: s.selectedModel, style: s.style, thinkingLevel: s.thinkingLevel, answerVerification: s.answerVerification, activeUserAgent: s.activeUserAgent }),
+      partialize: (s) => ({ selectedModel: s.selectedModel, selectedModelOwner: s.selectedModelOwner, style: s.style, thinkingLevel: s.thinkingLevel, answerVerification: s.answerVerification, activeUserAgent: s.activeUserAgent }),
     },
   ),
 );

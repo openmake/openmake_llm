@@ -481,3 +481,4 @@ export * from "./mcp-monitoring";
 export * from "./conversation-share";
 export * from "./agent-task-isolation";
 export * from "./desktop-update";
+export * from "./default-model-selection";

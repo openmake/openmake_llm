@@ -14,7 +14,7 @@ import {
   X,
   Lock,
   Plus,
-  FolderOpen, ShieldCheck, ListPlus } from "lucide-react";
+  FolderOpen, ShieldCheck, ListPlus, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -23,6 +23,7 @@ import { useAppStore } from "@/lib/store";
 import { useEnabledWebAddons } from "@/addons/registry";
 import { useChatSocket } from "@/lib/use-chat-socket";
 import { fetchModels } from "@/lib/models-api";
+import { useDefaultModelSync, isFallbackStatus } from "@/lib/default-model-sync";
 import { ApiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { canQueueFollowup, FOLLOWUP_QUEUE_MAX } from "@/lib/followup-queue";
@@ -224,7 +225,6 @@ export function Composer() {
     answerVerification,
     inputDraft,
     toggle,
-    setSelectedModel,
     setAgentApprovalMode,
     setAgentThinkingLevel,
     setAgentLocalExecutor,
@@ -339,20 +339,12 @@ export function Composer() {
     }
   };
 
-  // 모델 목록 로드 시 현재 selectedModel 이 목록에 없으면 defaultModel 로 동기화.
-  // 'default'(자동) 는 유효한 센티널 — 백엔드 ws-chat-handler 가 자동 선택으로 처리하므로
-  // 구체 모델로 강제 치환하지 않는다 (치환 시 설정의 "자동" 선택이 조용히 풀리는 버그).
-  // ⚠️ 보정은 **인증 확정 + 로그인 사용자의 목록**일 때만. 게스트/미확정 상태의 목록은 외부 모델이
-  // 빠져 있어(서버가 인증 사용자에게만 실음) 저장된 외부 모델 선택을 로컬 기본값으로 덮어쓰고
-  // localStorage 까지 갱신했다 — 설정 저장 후 재로그인하면 모델이 초기화되던 결함(2026-09-08).
-  useEffect(() => {
-    if (!modelsData || !authResolved || !currentUserId) return;
-    if (selectedModel !== "default" && !modelsData.models.some((m) => m.modelId === selectedModel)) {
-      setSelectedModel(modelsData.defaultModel);
-    }
-    // selectedModel 변동마다 재실행 불필요 — 목록 로드 시점에만 보정
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelsData, authResolved, currentUserId]);
+  // 기본 모델 — 서버 판정(defaultModelSelection.effective)만 store 에 적용한다. 저장한 모델의 키가 꺼지면
+  // 서버가 'default'(자동)로 내리고, 다시 켜면 저장한 모델로 돌려준다. 종전의 "목록에 없으면 구체 로컬 모델로
+  // 바꾸기" 는 조용한 교체·화면마다 다른 값·새로 고침 순서 경쟁을 만들어 지웠다(2026-11-18).
+  // ⚠️ 적용은 **인증 확정 + 로그인 사용자의 목록**일 때만 — 게스트/미확정 목록으로 저장된 선택을 덮지 않는다(2026-09-08).
+  useDefaultModelSync(modelsData, authResolved && !!currentUserId);
+  const fallbackStatus = modelsData?.defaultModelSelection?.status;
 
   // 재생성 요청(MessageList) 처리 — 소켓은 이 컴포넌트만 보유하므로 여기서 히스토리를
   // fromIndex 이전으로 되돌린 뒤 원 질문을 재전송한다(사용자 말풍선은 sendChat 이 다시 추가).
@@ -1068,14 +1060,20 @@ export function Composer() {
               '자동' 이면 서버 기본모델명을 병기해 실제 사용 모델을 노출한다.
               게스트는 기본 모델만 사용 가능 → 잠금 아이콘 + 고지 tooltip. */}
           {isGuest && <Lock className="h-3 w-3 shrink-0 text-faint" aria-hidden />}
+          {/* 저장한 기본 모델을 못 써(키 꺼짐 등) 자동으로 답하는 중 — 서버 판정 사유를 경고로 보인다 */}
+          {!isGuest && isFallbackStatus(fallbackStatus) && (
+            <AlertTriangle className="h-3 w-3 shrink-0 text-warning" aria-hidden />
+          )}
           <span
             className="max-w-[200px] truncate px-2 py-1.5 text-xs font-medium text-muted"
             title={
               isGuest
                 ? tSettings("guestModelNotice")
-                : selectedModel === "default" || !selectedModel
-                  ? (modelsData?.defaultModel ?? t("modelAuto"))
-                  : selectedModel
+                : isFallbackStatus(fallbackStatus)
+                  ? tSettings(`defaultModel.status.${fallbackStatus}`)
+                  : selectedModel === "default" || !selectedModel
+                    ? (modelsData?.defaultModel ?? t("modelAuto"))
+                    : selectedModel
             }
             aria-label={t("modelLabel")}
           >
