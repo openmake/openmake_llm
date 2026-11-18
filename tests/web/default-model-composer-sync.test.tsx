@@ -13,7 +13,7 @@ import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-quer
 
 import { useAppStore } from '../../apps/web/lib/store';
 import { fetchModels } from '../../apps/web/lib/models-api';
-import { useDefaultModelSync } from '../../apps/web/lib/default-model-sync';
+import { useDefaultModelSync, clearDefaultModelOnLogout } from '../../apps/web/lib/default-model-sync';
 import { syncAuthFromServer } from '../../apps/web/lib/auth-sync';
 
 const GEMINI = 'gemini:gemini-2.5-flash';
@@ -41,9 +41,10 @@ interface Server {
   modelsGets: number;
 }
 
-async function mount(server: Server, opts: { signedIn: boolean; startModel: string }) {
+async function mount(server: Server, opts: { signedIn: boolean; startModel: string; owner?: string | null; userId?: number; hadSession?: boolean }) {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost/chat' });
-  Object.assign(globalThis, { window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true });
+  Object.assign(globalThis, { window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true });
+  if (opts.hadSession ?? true) dom.window.localStorage.setItem('omk_had_session', '1');
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input), 'http://localhost');
@@ -53,7 +54,7 @@ async function mount(server: Server, opts: { signedIn: boolean; startModel: stri
       return Response.json({ success: true, data: { defaultModel: 'local-llm:qwen-test', models: [], defaultModelSelection: server.selection } });
     }
     if (url.pathname === '/api/auth/me') {
-      return Response.json({ success: true, data: { user: opts.signedIn ? { id: 7, email: 'a@test', username: 'a', role: 'user' } : null } });
+      return Response.json({ success: true, data: { user: opts.signedIn ? { id: opts.userId ?? 7, email: 'a@test', username: 'a', role: 'user' } : null } });
     }
     if (url.pathname === '/api/users/me/preferences' && init?.method === 'PUT') {
       const body = JSON.parse(String(init.body)) as Record<string, unknown>;
@@ -67,7 +68,7 @@ async function mount(server: Server, opts: { signedIn: boolean; startModel: stri
     }
     return Response.json({ success: true, data: {} });
   };
-  useAppStore.setState({ selectedModel: opts.startModel, authResolved: false, auth: { currentUser: null, isGuestMode: true } });
+  useAppStore.setState({ selectedModel: opts.startModel, selectedModelOwner: opts.owner === undefined ? '7' : opts.owner, authResolved: false, auth: { currentUser: null, isGuestMode: true } });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const root = createRoot(document.getElementById('root')!);
   const flush = async () => { for (let i = 0; i < 20; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
@@ -171,6 +172,55 @@ test('저장 안 된 기존 선택(saved=null)은 1회 PUT 으로 넘기고 그 
     await act(async () => { await m.queryClient.invalidateQueries({ queryKey: ['models'] }); });
     await m.flush();
     assert.equal(server.puts.length, 1, '저장되면 다시 돌지 않는다');
+  } finally {
+    await m.cleanup();
+  }
+});
+
+// Fable 리뷰 r1 Medium: selectedModel 은 localStorage 에 남는다 — 같은 브라우저에서 다른 계정이 로그인하면
+// A 의 선택을 B 의 서버 선호로 올렸다. 넘기기는 그 값을 기록한 사용자와 지금 사용자가 같을 때만 한다.
+test('계정 전환: A(7) 가 남긴 선택은 B(8) 의 선호로 넘기지 않고 B 는 자동으로 간다', async () => {
+  const server: Server = { selection: { saved: null, effective: 'default', status: 'auto' }, puts: [], modelsGets: 0 };
+  const m = await mount(server, { signedIn: true, userId: 8, startModel: GEMINI, owner: '7' });
+  try {
+    await act(async () => { await syncAuthFromServer(); });
+    await m.flush();
+    assert.deepEqual(server.puts, [], 'A 의 모델을 B 의 선호에 저장하면 안 된다');
+    assert.equal(useAppStore.getState().selectedModel, 'default');
+    assert.equal(useAppStore.getState().selectedModelOwner, '8');
+  } finally {
+    await m.cleanup();
+  }
+});
+
+test('계정 전환: A 가 로그아웃하면 selectedModel 이 default 로 돌아가 B 에게 넘어갈 값이 없다', async () => {
+  useAppStore.setState({ selectedModel: GEMINI, selectedModelOwner: '7' });
+  clearDefaultModelOnLogout();
+  assert.equal(useAppStore.getState().selectedModel, 'default');
+  assert.equal(useAppStore.getState().selectedModelOwner, null);
+});
+
+// 소유자 기록 전(구 버전)에 남은 값 — 로그아웃 없이 이어진 세션(로그인 흔적 있음)일 때만 그 사용자의 값으로 본다.
+test('구 버전 값(소유자 없음) + 이어진 세션 → 그 사용자 값으로 1회 넘긴다', async () => {
+  const server: Server = { selection: { saved: null, effective: 'default', status: 'auto' }, puts: [], modelsGets: 0 };
+  const m = await mount(server, { signedIn: true, startModel: 'hasa:ext-model', owner: null, hadSession: true });
+  try {
+    await act(async () => { await syncAuthFromServer(); });
+    await m.flush();
+    assert.deepEqual(server.puts, [{ defaultModel: 'hasa:ext-model' }]);
+  } finally {
+    await m.cleanup();
+  }
+});
+
+test('구 버전 값(소유자 없음) + 새 로그인(로그인 흔적 없음) → 넘기지 않는다', async () => {
+  const server: Server = { selection: { saved: null, effective: 'default', status: 'auto' }, puts: [], modelsGets: 0 };
+  const m = await mount(server, { signedIn: true, userId: 8, startModel: GEMINI, owner: null, hadSession: false });
+  try {
+    await act(async () => { await syncAuthFromServer(); });
+    await m.flush();
+    assert.deepEqual(server.puts, []);
+    assert.equal(useAppStore.getState().selectedModel, 'default');
   } finally {
     await m.cleanup();
   }

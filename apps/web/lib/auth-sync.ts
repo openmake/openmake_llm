@@ -5,6 +5,7 @@ import { isUuid } from "./local-id";
 import { flushOAuthLoginPending, gaSetVisitor } from "./analytics";
 import { useAppStore } from "./store";
 import { CLIENT_TIMING } from "./config";
+import { adoptLegacyModelOwner } from "./default-model-sync";
 
 /**
  * "이 브라우저에서 로그인한 적 있음" 흔적 — 만료된 auth_token 쿠키는 브라우저가 purge 해
@@ -111,6 +112,7 @@ async function syncAuthInner(): Promise<boolean> {
 }
 
 async function syncAuthOnce(): Promise<boolean> {
+  const continued = hadSession(); // 로그아웃 없이 이어진 세션인가 — 아래 markHadSession 전에 읽는다
   let res = await fetchMe();
   let u = res?.data?.user;
   if (!u && hadSession()) {
@@ -135,6 +137,7 @@ async function syncAuthOnce(): Promise<boolean> {
     return false;
   }
   markHadSession();
+  adoptLegacyModelOwner(String(u.id), continued);
   useAppStore.getState().setAuth({
     currentUser: {
       id: String(u.id),
