@@ -299,7 +299,7 @@ export class AgentTaskService {
                         const isolated = remoteExecutor?.isolatedBranch;
                         if (isolated) conversation[0].content += getWorktreeIsolationNote(isolated, remoteExecutor?.isolatedPath);
                     } else if (remoteExecutor && conversation[0]?.role === 'system' && typeof conversation[0].content === 'string') {
-                        conversation[0].content = syncWorktreeIsolationNote(conversation[0].content, remoteExecutor.isolatedBranch); // 재개(fork 포함): 체크포인트 system 의 안내를 실제 브랜치에 맞춘다(같으면 무변경)
+                        conversation[0].content = syncWorktreeIsolationNote(conversation[0].content, remoteExecutor.isolatedBranch, remoteExecutor.isolatedPath); // 재개(fork 포함): 체크포인트 system 의 안내를 실제 브랜치·작업 폴더에 맞춘다(같으면 무변경)
                     }
                     logger.info(`[AgentTask] 샌드박스 활성 (${taskId}, ${taskRuntime.containerName})`);
                 } catch (e) {
