@@ -251,7 +251,7 @@
       "dismiss": "Dismiss",
       "copyKey": "Copy key",
       "copied": "Copied",
-      "bridgeHint": "This key only connects Companion and the CLI. Enter it in Companion settings or in the CLI login (openmake-code login). It cannot call the inference API.",
+      "bridgeHint": "This key only connects the desktop app and the CLI. Enter it in the desktop app settings or in the CLI login (openmake-code login). It cannot call the inference API.",
       "curlTitle": "Quick start (curl)",
       "copyCurl": "Copy curl"
     },
@@ -965,8 +965,8 @@
     "stateLabel": "Status:",
     "turnLabel": "Turn:",
     "queuePosition": "Queue position {position} — starts automatically when earlier tasks finish",
-    "waitingDevice": "Waiting for your local device — connect Companion to continue",
-    "waitingBrowserTakeover": "You are controlling the browser — hand it back in Companion to continue",
+    "waitingDevice": "Waiting for your local device — connect the desktop app to continue",
+    "waitingBrowserTakeover": "You are controlling the browser — hand it back in the desktop app to continue",
     "waitingModel": "Waiting for the model server to respond — the task continues automatically once it is back",
     "planLabel": "Plan ({completed}/{total})",
     "outputsLabel": "{count} output(s)",
@@ -1052,10 +1052,10 @@
         "llm_error": "Try again in a moment. If it keeps failing, pick another model or tell your administrator.",
         "interrupted": "Resume to pick up from where it stopped if the option is available; otherwise run the task again.",
         "unknown": "Check the full failure reason. If it fails the same way again, tell your administrator.",
-        "device_wait_expired": "Connect Companion (or the CLI), then run the task again.",
-        "browser_takeover_expired": "Hand the browser back from the Companion menu, then run the task again.",
+        "device_wait_expired": "Connect the desktop app (or the CLI), then run the task again.",
+        "browser_takeover_expired": "Hand the browser back from the desktop app menu, then run the task again.",
         "sandbox_unavailable": "Run it again in a little while. An execution environment frees up once fewer tasks are running. If it keeps happening, tell your administrator.",
-        "interrupted_local_device": "Reconnect Companion (or the CLI), then resume if the option is available, or run the task again.",
+        "interrupted_local_device": "Reconnect the desktop app (or the CLI), then resume if the option is available, or run the task again.",
         "lease_held_elsewhere": "Run it again in a moment.",
         "recovery_limit": "You can resume from where it stopped. If it stops at the same point again, split the goal into smaller tasks and run it again, or tell your administrator."
       }
@@ -2406,7 +2406,7 @@
   },
   "desktopApp": {
     "title": "Desktop app",
-    "subtitle": "OpenMake Companion — an app that runs agent tasks in folders on your own PC.",
+    "subtitle": "OpenMake desktop app — an app that runs agent tasks in folders on your own PC.",
     "loading": "Loading…",
     "filesTitle": "Installers",
     "os": {
@@ -2424,7 +2424,7 @@
       "title": "Installation",
       "native": "macOS: Open the dmg and move the app to the Applications folder. If a warning appears on first launch, go to System Settings → Privacy & Security → Open Anyway.",
       "windows": "Windows: Run the installer. If the \"Windows protected your PC\" screen appears, click More info → Run anyway.",
-      "apiKey": "After installing, enter the server address (the address of this site) and an API key in the app settings — create a connection key for Companion and the CLI in <link>API Access</link>."
+      "apiKey": "After installing, enter the server address (the address of this site) and an API key in the app settings — create a connection key for the desktop app and the CLI in <link>API Access</link>."
     }
   },
   "notFound": {
@@ -2754,7 +2754,7 @@
   },
   "adminBridgeDevices": {
     "title": "Connected devices",
-    "description": "All devices connected for local execution via Companion or CLI. Only folder names are shown.",
+    "description": "All devices connected for local execution via the desktop app or CLI. Only folder names are shown.",
     "loadError": "Failed to load.",
     "disabled": "Local execution is turned off (LOCAL_EXECUTOR_ENABLED).",
     "listTitle": "Connected devices",

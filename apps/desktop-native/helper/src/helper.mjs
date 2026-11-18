@@ -33,6 +33,7 @@
 //                auth_error(arg=메시지)·api_key_required·folder_open_failed(arg=메시지)
 //                · 서버가 인증 사유로 닫음(0.3.2, 코어 AUTH_CLOSE_REASONS): api_key_revoked·api_key_invalid·api_key_expired·
 //                  api_key_inactive·account_disabled·account_deleted·bridge_scope_required
+//                · 같은 기기 id 로 다른 앱이 이미 연결돼 있어 서버가 거절함(코어 DEVICE_CONFLICT_REASON): device_conflict
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';

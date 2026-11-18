@@ -131,6 +131,8 @@ export const envSchema = z
             message: 'LLM_WARMUP_TIMEOUT_MS must be between 1 and 60000 milliseconds',
         }),
         LLM_HOURLY_TOKEN_LIMIT: nonNegativeIntWithDefault(300000),
+        /** 로컬 브리지 — 같은 deviceId 재등록 때 기존 연결의 생존 확인 대기(ms) (config/local-bridge.ts) */
+        LOCAL_BRIDGE_REREGISTER_PROBE_MS: positiveIntWithDefault(5000),
         QUOTA_FAIL_MODE: z.enum(['open', 'closed']).optional(),
         QUOTA_EXCEEDED_ACTION: z.enum(['reject', 'degrade']).optional(),
         USER_MONTHLY_COST_BUDGET_MICROS: nonNegativeIntWithDefault(0),

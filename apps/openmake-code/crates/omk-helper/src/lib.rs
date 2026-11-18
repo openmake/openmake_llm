@@ -10,6 +10,7 @@ pub mod args;
 pub mod commands;
 pub mod events;
 pub mod host;
+pub mod instance;
 pub mod stdio;
 
 use std::time::Duration;
@@ -23,6 +24,8 @@ pub const STDOUT_FLUSH_MS: u64 = 500;
 pub const RUNTIME_SHUTDOWN_MS: u64 = 1000;
 /// 패닉 종료 코드(Rust 기본과 같다).
 pub const PANIC_EXIT: i32 = 101;
+/// 잠금을 못 잡아 끝남(`instance_conflict`·`instance_lock_failed`).
+pub const INSTANCE_EXIT: i32 = 3;
 
 /// stderr 고정 문구 ① — 입력·경로·오류 원문을 싣지 않는다.
 fn start_failed() -> i32 {
@@ -54,26 +57,58 @@ pub fn run(argv: &[String]) -> i32 {
     let Ok(rt) = host_runtime() else {
         return start_failed();
     };
-    let Some((home, support)) = host::prepare_support_dir() else {
+    let support_dir = host::prepare_support_dir();
+    if args.resolve && support_dir.is_none() {
         return start_failed();
-    };
+    }
     let emit = stdio::Emitter::spawn();
+    // 잠금은 런타임 정리가 끝난 뒤에 푼다 — 정리 중인 Chrome·exec 자식·FS 작업이 남은 동안 다음 헬퍼가 같은 id·프로필을 잡지 않게.
+    let mut held_lock = None;
     let code = if args.resolve {
         // 한 줄만 — `status idle`·`endpoints` 이벤트를 섞지 않는다(앱은 stdout 전체를 JSON 하나로 읽는다). stdin 을 읽지 않는다.
         let e = rt.block_on(app::discover(&args.server));
         emit.emit(events::resolve_line(&e));
         0
     } else {
-        let Ok(identity) = DeviceIdentity::load_or_create(&support) else {
-            return start_failed();
+        // 잠금 → id → 호스트 → 연결(설계 §3.3). 잠그기 전에는 id 파일·브라우저 프로필을 읽지도 쓰지도 않는다. 지원 폴더를
+        // 못 만들면 잠금 실패와 같은 신호로 끝난다(앱이 안내와 "다시 시도" 를 보인다).
+        let outcome = match &support_dir {
+            Some((_, support)) => instance::acquire(support, || {
+                emit.emit(events::status_global(events::LOCK_WAIT_TEXT, "connecting"));
+            }),
+            None => instance::Outcome::Failed,
         };
-        let host = host::Host::from_env(home, &support, identity);
-        rt.block_on(app::run(args.server, host, emit.clone()))
+        match (outcome, support_dir) {
+            (instance::Outcome::Held(lock), Some((home, support))) => {
+                held_lock = Some(lock);
+                let Ok(identity) = DeviceIdentity::load_or_create(&support) else {
+                    return start_failed();
+                };
+                let host = host::Host::from_env(home, &support, identity);
+                rt.block_on(app::run(args.server, host, emit.clone()))
+            }
+            (instance::Outcome::Conflict(owner), _) => {
+                emit.emit(events::status_global_arg(
+                    events::INSTANCE_CONFLICT_TEXT,
+                    "instance_conflict",
+                    &owner,
+                ));
+                INSTANCE_EXIT
+            }
+            _ => {
+                emit.emit(events::status_global(
+                    events::INSTANCE_LOCK_FAILED_TEXT,
+                    "instance_lock_failed",
+                ));
+                INSTANCE_EXIT
+            }
+        }
     };
     emit.flush(Duration::from_millis(STDOUT_FLUSH_MS));
     // 남은 태스크를 버린다 — 띄우는 중인 Chrome·실행 중인 exec 자식은 `kill_on_drop` 으로 꺼진다. `shutdown_background` 는
     // 버리기 전에 프로세스가 끝나 경주였다(리뷰 r1 M-1). 블록된 FS 호출은 상한에서 포기한다. stdin 읽기는 OS 스레드라 기다리지 않는다.
     rt.shutdown_timeout(Duration::from_millis(RUNTIME_SHUTDOWN_MS));
+    drop(held_lock);
     code
 }
 

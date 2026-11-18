@@ -37,6 +37,20 @@ pub fn status_global(text: &str, code: &str) -> String {
     ev("status", vec![("text", s(text)), ("code", s(code))])
 }
 
+/// 잠금 대기 중(다른 헬퍼가 쥠) — 앱은 `연결 중…` 으로 보인다.
+pub const LOCK_WAIT_TEXT: &str = "연결 중…";
+/// 다른 헬퍼가 잠금을 끝까지 쥠 — `arg` 는 그 주인의 실행 경로.
+pub const INSTANCE_CONFLICT_TEXT: &str = "다른 OpenMake Companion 이 이미 실행 중입니다";
+pub const INSTANCE_LOCK_FAILED_TEXT: &str = "앱 데이터 폴더를 잠그지 못해 연결하지 않았습니다";
+
+/// 폴더 없는 상태 + `arg`.
+pub fn status_global_arg(text: &str, code: &str, arg: &str) -> String {
+    ev(
+        "status",
+        vec![("text", s(text)), ("code", s(code)), ("arg", s(arg))],
+    )
+}
+
 /// realpath 실패(폴더 필드 없음 — TS 그대로).
 pub fn status_folder_open_failed(message: &str) -> String {
     ev(

@@ -24,10 +24,11 @@ import { structuredQuestions, approvalQuestionText, renderQuestion, renderInputH
 import { prompt, requireConfig } from './cli-common';
 import { cmdShare } from './share';
 
-/** 브리지 등록 확인 폴링 간격(ms). */
-const BRIDGE_REGISTER_POLL_MS = 500;
-/** 브리지 등록 확인 최대 시도 횟수(간격 × 횟수 ≈ 대기 상한). */
-const BRIDGE_REGISTER_MAX_ATTEMPTS = 20;
+/**
+ * 자기 소켓의 브리지 등록(bridge_ready)을 기다리는 상한(ms) — hello 지연 0.3초 + 서버 생존 확인 5초 + 같은 기기에
+ * 진행 중인 확인 한 번(5초)을 덮는다(설계 2026-11-19 r4).
+ */
+const BRIDGE_REGISTER_WAIT_MS = 15000;
 /** 실행 확인 창에 먼저 보이는 명령 글자 수 — 넘으면 전체 보기(v)를 안내한다. */
 const CONFIRM_PREVIEW_CHARS = 800;
 /** 작업 진행 상태 폴링 간격(ms). */
@@ -129,21 +130,24 @@ function shouldAutoApprove(autoApprove: boolean): boolean {
     return autoApprove || !process.stdin.isTTY;
 }
 
-/** 폴더를 브리지로 연결하고 서버가 이 디바이스를 인지할 때까지 대기(최대 ~10s). 실패 시 종료. */
+/**
+ * 폴더를 브리지로 연결하고 **자기 소켓**이 등록될 때까지 기다린다(최대 BRIDGE_REGISTER_WAIT_MS). 서버 기기 목록은 판정에
+ * 쓰지 않는다 — 같은 id 의 다른 프로세스가 붙어 있어도 목록에 보인다(2026-11-19 r4). 충돌·인증 실패·시간 초과면 작업을
+ * 만들지 않고 종료 코드 1 로 끝낸다(호출부는 createTask·resumeTask·followTask 를 부르지 않는다).
+ */
 async function connectAndRegister(cfg: { serverUrl: string; apiKey: string }, api: ApiClient, folder: string): Promise<CliBridge> {
+    // 기능 꺼짐 확인만 — 실패하면 넘어가고 등록 대기가 판정한다.
+    try {
+        if (!(await api.bridgeStatus()).enabled) { console.error('서버에서 로컬 실행 기능이 비활성화되어 있습니다.'); process.exit(1); }
+    } catch { /* 등록 대기가 판정 */ }
     const bridge = connectBridge(cfg, folder);
-    const myId = deviceIdFor(folder);
-    let registered = false;
-    for (let i = 0; i < BRIDGE_REGISTER_MAX_ATTEMPTS; i++) {
-        await new Promise((r) => setTimeout(r, BRIDGE_REGISTER_POLL_MS));
-        try {
-            const s = await api.bridgeStatus();
-            if (!s.enabled) { console.error('서버에서 로컬 실행 기능이 비활성화되어 있습니다.'); bridge.disconnect(); process.exit(1); }
-            if ((s.devices ?? []).some((d) => d.deviceId === myId)) { registered = true; break; }
-        } catch { /* 재시도 */ }
-    }
-    if (!registered) { console.error('브리지 연결에 실패했습니다.'); bridge.disconnect(); process.exit(1); }
-    return bridge;
+    const r = await bridge.waitRegistered(BRIDGE_REGISTER_WAIT_MS);
+    if (r.kind === 'ok') return bridge;
+    bridge.disconnect();
+    if (r.kind === 'conflict') console.error('같은 기기 id 로 다른 OpenMake Companion·CLI 가 이미 연결돼 있어 작업을 시작하지 않았습니다 — 그쪽을 종료한 뒤 다시 실행하세요.');
+    else if (r.kind === 'auth') console.error(r.text);
+    else console.error(`브리지 연결에 실패했습니다.${r.serverError ? ` 서버 오류: ${r.serverError}` : ''}`);
+    process.exit(1);
 }
 
 async function cmdRun(goal: string, dir: string, autoApprove: boolean): Promise<void> {
@@ -449,7 +453,7 @@ async function main(): Promise<void> {
     const autoApprove = argv.includes('--yes') || argv.includes('-y');
     const wantResume = argv.includes('--resume');
     const goal = argv
-        .filter((a, i) => a !== '--dir' && i !== dirIdx + 1 && a !== '--yes' && a !== '-y' && a !== '--resume')
+        .filter((a, i) => a !== '--dir' && (dirIdx < 0 || i !== dirIdx + 1) && a !== '--yes' && a !== '-y' && a !== '--resume')
         .join(' ').trim();
     if (wantResume) {
         const cfg = requireConfig();
