@@ -39,6 +39,8 @@ import { pingCredential } from './credential-ping';
 import { readCachedPromptTokens } from '../llm/cached-prompt-tokens';
 import { mapOpenAIError } from './openai-compat-errors';
 import { GATEWAY_NO_RETRY_HEADERS } from '../llm/gateway-headers';
+import { createStallWatchdog } from './stream-stall-watchdog';
+import { LLM_TIMEOUTS } from '../config/timeouts';
 
 // 오류 분류는 openai-compat-errors.ts 로 분리 — 기존 import 경로 호환을 위해 re-export.
 export { mapOpenAIError };
@@ -359,6 +361,22 @@ export class OpenAICompatProvider implements IProvider {
         let aborted = false;
         opts.abortSignal?.addEventListener('abort', () => { aborted = true; });
 
+        // 무응답 감시 — 첫 청크·청크 사이 시한을 넘으면 upstream 요청을 끊는다(SDK·전송층에는 300초 상한뿐).
+        // 사용자 중지는 그대로 전파되고, aborted 플래그는 종전대로 opts.abortSignal 만 본다.
+        const via = this.modelPrefix ? 'gateway' : 'direct';
+        const tag = `provider=${this.id} model=${opts.modelId}`;
+        const sentAt = Date.now();
+        let headersMs: number | undefined;
+        let chunkCount = 0;
+        const watchdog = createStallWatchdog({
+            firstChunkMs: LLM_TIMEOUTS.EXTERNAL_FIRST_CHUNK_TIMEOUT_MS,
+            idleMs: LLM_TIMEOUTS.EXTERNAL_STREAM_IDLE_TIMEOUT_MS,
+            ...(opts.abortSignal ? { callerSignal: opts.abortSignal } : {}),
+            onWaiting: (waited) => logger.warn(
+                `[ExternalStream] waiting ${tag} waited=${Math.round(waited / 1000)}s headers=${headersMs !== undefined ? 'yes' : 'no'}`),
+        });
+        let callId: string | undefined;
+
         try {
             // OpenRouter provider routing — providerId === 'openrouter' 일 때만 body 의 provider 필드로 전달.
             // 타 OpenAI-compat endpoint (Groq/Together 등) 는 이 필드를 무시 — 안전.
@@ -408,10 +426,20 @@ export class OpenAICompatProvider implements IProvider {
                 ...buildGeminiThinkingParams(this.id, opts.thinking, !!this.modelPrefix),
             };
 
-            const stream = await this.client.chat.completions.create(
+            logger.info(`[ExternalStream] start ${tag} via=${via} msgs=${messages.length} tools=${tools?.length ?? 0} `
+                + `thinking=${opts.thinking ? 'on' : 'off'}`);
+            const pending = this.client.chat.completions.create(
                 requestParams as never,
-                { maxRetries: 0, ...(opts.abortSignal ? { signal: opts.abortSignal } : {}) }, // 게이트웨이·직결 모두 SDK 재시도 0
-            );
+                { maxRetries: 0, signal: watchdog.signal }, // 게이트웨이·직결 모두 SDK 재시도 0
+            ) as unknown as Promise<unknown> & { withResponse?: () => Promise<{ data: unknown; response: Response }> };
+            // 응답 헤더의 요청 id 는 게이트웨이·provider 로그와 맞춰 보는 값 — 헤더가 오면 SDK promise 가 풀린다.
+            const { data: stream, response } = typeof pending.withResponse === 'function'
+                ? await pending.withResponse()
+                : { data: await pending, response: undefined };
+            headersMs = Date.now() - sentAt;
+            callId = response?.headers.get('x-litellm-call-id') ?? response?.headers.get('x-request-id') ?? undefined;
+            logger.debug(`[ExternalStream] headers ${tag} headersMs=${headersMs}`
+                + ` x-request-id=${response?.headers.get('x-request-id') ?? '-'} x-litellm-call-id=${response?.headers.get('x-litellm-call-id') ?? '-'}`);
 
             let content = '';
             const pseudoGate = new PseudoToolCallGate();
@@ -466,6 +494,8 @@ export class OpenAICompatProvider implements IProvider {
                 }>;
                 usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
             }>) {
+                watchdog.touch();
+                if (++chunkCount === 1) logger.info(`[ExternalStream] first-chunk ${tag} ttfcMs=${Date.now() - sentAt} headersMs=${headersMs}`);
                 if (aborted) break;
 
                 const choice = chunk.choices?.[0];
@@ -500,6 +530,9 @@ export class OpenAICompatProvider implements IProvider {
                     cachedPromptTokens = readCachedPromptTokens(chunk.usage) ?? cachedPromptTokens;
                 }
             }
+
+            // SDK 스트림은 본문 도중 abort 를 받으면 오류 없이 끝난다 — 시한 만료면 아래 catch 에서 UPSTREAM_TIMEOUT 으로 바꾼다.
+            if (!aborted && watchdog.stalled()) throw new Error('stream stalled');
 
             // 사고 가르개 flush — 닫힘 없이 끝난 사고·미완 여는 태그 접두를 내보낸다(가짜 도구 호출 게이트보다 먼저).
             if (thoughtSplitter) {
@@ -568,7 +601,18 @@ export class OpenAICompatProvider implements IProvider {
             if (aborted) {
                 throw new ProviderError('UPSTREAM_ERROR', 'OpenAI 호환 호출 중단', err);
             }
+            const phase = watchdog.stalled();
+            if (phase) {
+                const limitMs = phase === 'first_chunk'
+                    ? LLM_TIMEOUTS.EXTERNAL_FIRST_CHUNK_TIMEOUT_MS
+                    : LLM_TIMEOUTS.EXTERNAL_STREAM_IDLE_TIMEOUT_MS;
+                logger.warn(`[ExternalStream] stall phase=${phase} waited=${watchdog.waitedMs()} chunks=${chunkCount} `
+                    + `headers=${headersMs !== undefined ? 'yes' : 'no'} ${tag} callId=${callId ?? '-'}`);
+                throw new ProviderError('UPSTREAM_TIMEOUT', `외부 모델 무응답 시한 초과 (${phase}, ${limitMs}ms)`, err);
+            }
             throw mapOpenAIError(err);
+        } finally {
+            watchdog.dispose();
         }
     }
 
