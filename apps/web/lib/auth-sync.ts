@@ -167,11 +167,8 @@ async function syncAuthOnce(): Promise<boolean> {
       if (typeof p.saveHistory === "boolean") patch.saveHistory = p.saveHistory;
       if (typeof p.memoryLearning === "boolean") patch.memoryLearning = p.memoryLearning;
       if (Object.keys(patch).length > 0) useAppStore.getState().setPrivacyPrefs(patch);
-      // 기본 모델도 서버가 SoT — 종전엔 설정 페이지를 열 때만 복원돼, 로그아웃 중 컴포저가
-      // 로컬 기본값으로 덮어쓴 selectedModel 이 재로그인 뒤에도 그대로였다(2026-09-08 신고).
-      if (typeof p.defaultModel === "string" && p.defaultModel.length > 0) {
-        useAppStore.getState().setSelectedModel(p.defaultModel);
-      }
+      // 기본 모델(selectedModel)은 여기서 쓰지 않는다 — 서버가 `GET /api/models` 의 defaultModelSelection 으로
+      // 판정하고 컴포저(lib/default-model-sync)만 적용한다. 여기서도 쓰면 목록 응답과 도착 순서 경쟁이 난다(2026-11-18).
     })
     .catch(() => {
       /* 미설정/실패 — 기본값(true) 유지 */

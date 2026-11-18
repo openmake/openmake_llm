@@ -1,3 +1,4 @@
+import type { DefaultModelSelection } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 
 /** /api/models 의 모델 1건 (로컬 vLLM 또는 등록된 외부 LLM provider). */
@@ -11,11 +12,16 @@ export interface ModelEntry {
   capabilities?: Record<string, unknown>;
 }
 
-interface ModelsPayload {
+export interface ModelsPayload {
   defaultModel: string;
   models: ModelEntry[];
   /** 기능별 배정 `image.generate` 의 해석 결과(fullId). 채팅 모델 아님. 미배정·해석 실패 시 null. */
   imageModel?: string | null;
+  /**
+   * 저장된 기본 모델 판정(서버) — 컴포저가 이 `effective` 를 store 에 적용한다(lib/default-model-sync).
+   * 로그인 사용자의 선호·키 조회 실패면 null, 구 API 면 없음 — 둘 다 store 유지.
+   */
+  defaultModelSelection?: DefaultModelSelection | null;
 }
 
 /**

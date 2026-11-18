@@ -134,7 +134,13 @@
     },
     "defaultModel": {
       "title": "기본 모델",
-      "description": "새 대화에 사용할 모델입니다. 🏠 로컬 vLLM 과 🌐 외부 LLM(OpenRouter, BYOK) 중 선택합니다."
+      "description": "새 대화에 사용할 모델입니다. 🏠 로컬 vLLM 과 🌐 외부 LLM(OpenRouter, BYOK) 중 선택합니다.",
+      "status": {
+        "key_disabled": "이 모델의 공급자 키가 꺼져 있어 지금은 자동(서버 기본값)으로 답합니다. 키를 켜면 다시 이 모델을 씁니다.",
+        "key_missing": "이 모델의 공급자 키가 등록돼 있지 않아 지금은 자동(서버 기본값)으로 답합니다. 키를 등록하면 다시 이 모델을 씁니다.",
+        "unusable": "이 모델은 지금 계정에서 쓸 수 없다고 확인돼 자동(서버 기본값)으로 답합니다. 다른 모델을 고르세요.",
+        "not_listed": "이 모델을 찾을 수 없어 지금은 자동(서버 기본값)으로 답합니다. 다른 모델을 고르세요."
+      }
     },
     "externalLlmHint": {
       "prefix": "외부 LLM(OpenRouter)을 추가하려면",

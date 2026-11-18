@@ -134,7 +134,13 @@
     },
     "defaultModel": {
       "title": "Standardmodell",
-      "description": "Das Modell für neue Unterhaltungen. Wählen Sie zwischen 🏠 lokalem vLLM und 🌐 externen LLMs (OpenRouter, BYOK)."
+      "description": "Das Modell für neue Unterhaltungen. Wählen Sie zwischen 🏠 lokalem vLLM und 🌐 externen LLMs (OpenRouter, BYOK).",
+      "status": {
+        "key_disabled": "Der Anbieterschlüssel dieses Modells ist ausgeschaltet, daher wird vorerst mit „Auto (Server-Standard)“ geantwortet. Schalten Sie den Schlüssel wieder ein, um dieses Modell erneut zu verwenden.",
+        "key_missing": "Für dieses Modell ist kein Anbieterschlüssel registriert, daher wird vorerst mit „Auto (Server-Standard)“ geantwortet. Registrieren Sie einen Schlüssel, um dieses Modell erneut zu verwenden.",
+        "unusable": "Dieses Modell ist für Ihr Konto nicht nutzbar, daher wird mit „Auto (Server-Standard)“ geantwortet. Wählen Sie ein anderes Modell.",
+        "not_listed": "Dieses Modell wurde nicht gefunden, daher wird vorerst mit „Auto (Server-Standard)“ geantwortet. Wählen Sie ein anderes Modell."
+      }
     },
     "externalLlmHint": {
       "prefix": "Um ein externes LLM (OpenRouter) hinzuzufügen,",

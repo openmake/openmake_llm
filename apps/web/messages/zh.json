@@ -134,7 +134,13 @@
     },
     "defaultModel": {
       "title": "默认模型",
-      "description": "用于新对话的模型。可在 🏠 本地 vLLM 和 🌐 外部 LLM（OpenRouter、BYOK）之间选择。"
+      "description": "用于新对话的模型。可在 🏠 本地 vLLM 和 🌐 外部 LLM（OpenRouter、BYOK）之间选择。",
+      "status": {
+        "key_disabled": "此模型的提供商密钥已关闭，目前使用自动（服务器默认）回复。重新开启密钥后将再次使用此模型。",
+        "key_missing": "此模型的提供商密钥尚未注册，目前使用自动（服务器默认）回复。注册密钥后将再次使用此模型。",
+        "unusable": "已确认此模型在您的账户中不可用，因此使用自动（服务器默认）回复。请选择其他模型。",
+        "not_listed": "找不到此模型，目前使用自动（服务器默认）回复。请选择其他模型。"
+      }
     },
     "externalLlmHint": {
       "prefix": "若要添加外部 LLM（OpenRouter），请在",
