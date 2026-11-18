@@ -40,6 +40,21 @@ export const modelPaths = {
                                         type: 'string',
                                         nullable: true,
                                         description: '이미지 생성 모델 id (미설정 시 null)'
+                                    },
+                                    defaultModelSelection: {
+                                        type: 'object',
+                                        nullable: true,
+                                        description: '저장된 기본 모델 판정 — 비로그인은 auto, 로그인 사용자의 선호·키 조회 실패 시 null',
+                                        required: ['saved', 'effective', 'status'],
+                                        properties: {
+                                            saved: { type: 'string', nullable: true, description: '선호 defaultModel 원문 (저장한 적 없으면 null)' },
+                                            effective: { type: 'string', description: "지금 보낼 값 — saved 또는 'default'(자동)" },
+                                            status: {
+                                                type: 'string',
+                                                enum: ['auto', 'ok', 'key_disabled', 'key_missing', 'unusable', 'not_listed'],
+                                                description: 'auto·ok 외에는 저장한 모델을 못 써 자동으로 답한다(사유)'
+                                            }
+                                        }
                                     }
                                 }
                             })

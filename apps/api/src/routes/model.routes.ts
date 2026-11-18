@@ -29,6 +29,9 @@ import { getProviderCatalogEntry } from '../config/external-providers';
 import { isRoleAssignableModel, isChatCapableModel } from '../config/role-model-filter';
 import { resolveExternalModels } from '../services/external-models-catalog';
 import { resolveCapabilityTarget } from '../services/orchestrator/capability-resolver';
+import { UserRepository } from '../data/repositories/user-repository';
+import { judgeDefaultModelSelection } from '../services/default-model-selection';
+import type { DefaultModelSelection } from '@openmake/shared-types';
 
 const router = Router();
 const logger = createLogger('ModelRoutes');
@@ -129,14 +132,21 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
     const userId = userObj
         ? String(userObj.id ?? userObj.userId ?? '') || null
         : null;
+    // 저장된 기본 모델 판정 — 비로그인은 자동. 로그인 사용자는 키·선호 조회가 실패하면 null(웹은 store 유지).
+    let defaultModelSelection: DefaultModelSelection | null = userId
+        ? null
+        : { saved: null, effective: 'default', status: 'auto' };
     if (userId) {
+        // 꺼진 키도 한 번에 읽는다 — 목록엔 켜진 키만 싣고, 꺼진 키는 기본 모델 판정(key_disabled)에만 쓴다.
+        let allKeys: Awaited<ReturnType<ExternalKeysRepository['listByUser']>> | null = null;
+        let unusable = new Set<string>();
         try {
             const repo = new ExternalKeysRepository(getPool());
-            const userKeys = await repo.listByUser(userId);
+            allKeys = await repo.listByUser(userId, { includeDisabled: true });
             // 실사용 불가로 판정된 모델 제외 (083) — provider 카탈로그는 계정 권한과
             // 무관하게 전체를 주므로, 고르면 실패하는 모델이 셀렉터에 남지 않게 한다.
-            const unusable = await repo.listUnusableModels(userId).catch(() => new Set<string>());
-            for (const keyRow of userKeys) {
+            unusable = await repo.listUnusableModels(userId).catch(() => new Set<string>());
+            for (const keyRow of allKeys.filter((k) => k.enabled)) {
                 // openai-compatible 분기: provider 의 /v1/models 호출 (TTL 캐시 + 실패 격리)
                 if (keyRow.sdkType === 'openai-compatible' && keyRow.baseUrl) {
                     try {
@@ -173,6 +183,19 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
         } catch (err) {
             logger.warn(`외부 모델 카탈로그 조회 실패: ${err instanceof Error ? err.message : err}`);
         }
+        if (allKeys) {
+            try {
+                const prefs = await new UserRepository(getPool()).getPreferences(userId);
+                defaultModelSelection = judgeDefaultModelSelection({
+                    saved: prefs.defaultModel,
+                    localModelIds: localModels.map((m) => m.id),
+                    keys: allKeys,
+                    unusable,
+                });
+            } catch (err) {
+                logger.warn(`기본 모델 판정용 선호 조회 실패: ${err instanceof Error ? err.message : err}`);
+            }
+        }
     }
 
     // 이미지 생성 모델 — 채팅 모델이 아니라 오케스트레이터 image.generate capability 배정으로 호출.
@@ -198,6 +221,7 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
         defaultModel: buildFullModelId('local-llm', defaultChat),
         models: outModels,
         imageModel,
+        defaultModelSelection,
     }));
 }));
 
