@@ -47,8 +47,8 @@ OpenMake Companion 헬퍼 실행 파일 — Node 헬퍼(`apps/desktop-native/hel
 14. 주소 찾기가 끝난 **뒤**의 명령은 받은 순서대로 처리한다 — Node 는 `connect` 마다 `await endpointsReady` 라 같은 읽기 조각의 뒷줄보다 늦게 돈다
     (한 번에 쓴 `auth`·`connect`·`disconnect` → Node 는 연결 유지, 여기는 해제 / `connect`·`auth` → Node 는 연결, 여기는 `api_key_required`). 둘 다 덜 붙는 쪽
     이고, 앱은 `auth` 를 먼저 보내고 명령마다 따로 쓴다(`stdio_roots` `after_discovery_commands_run_in_order`).
-15. 지원 폴더 잠금(device-id 충돌 설계 §3.3) — 일반 실행은 `device-id` 를 읽기 전에 `<지원 폴더>/instance.lock` 을 잡고 끝날 때까지 쥔다. 다른 헬퍼가
+15. 지원 폴더 잠금(device-id 충돌 설계 §3.3) — 일반 실행은 `device-id` 를 읽기 전에 `<지원 폴더>/instance.lock` 을 잡고 런타임 정리(남은 Chrome·exec 자식·FS 작업)가 끝날 때까지 쥔다. 다른 헬퍼가
     쥐고 있으면 처음 한 번 `status connecting`(폴더 없음)을 내고 `OMK_HELPER_LOCK_WAIT_MS`(기본 15000) 동안 다시 시도한다. 끝내 못 잡으면
-    `status instance_conflict`(`arg` = 주인의 실행 경로), 잠금 파일을 열지 못하거나 잠금이 안 되면 곧바로 `status instance_lock_failed` 를 내고
+    `status instance_conflict`(`arg` = 주인의 실행 경로), 지원 폴더를 만들지 못하거나 잠금 파일을 열지 못하거나 잠금이 안 되면 곧바로 `status instance_lock_failed` 를 내고
     exit 3 — 어느 쪽도 `idle`·`endpoints`·연결·`device-id`·브라우저 프로필에 닿지 않는다. `--resolve` 는 잠금과 무관하다. Node 헬퍼에는 잠금이 없다
     (`stdio_instance_lock`).
