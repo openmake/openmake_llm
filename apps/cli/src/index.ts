@@ -356,6 +356,11 @@ async function cmdResume(taskId: string, dir: string, autoApprove: boolean): Pro
     const task = taskOf(await api.getTask(taskId));
     if (task.executor !== 'local') { console.error('로컬 실행 작업이 아닙니다 — 웹에서 이어하세요.'); process.exit(1); }
     if (task.device_id && task.device_id !== deviceIdFor(folder)) {
+        // 옛 id(폴더 없이 hostId 만)로 만든 작업은 --dir 로도 맞출 수 없다 — 폴더 안내 대신 따로 알린다.
+        if (task.device_id === hostId()) {
+            console.error('이 작업은 폴더별 디바이스 id 를 쓰기 전의 CLI 로 만든 것이라 이어할 수 없습니다. 새 작업으로 다시 시작하세요.');
+            process.exit(1);
+        }
         console.error(`이 작업은 다른 디바이스(${task.device_id.slice(0, 8)}…)에서 만든 것입니다. 그 디바이스·폴더에서 resume 하세요 (--dir 로 작업 폴더 지정).`);
         process.exit(1);
     }

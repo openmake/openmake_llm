@@ -22,10 +22,10 @@ export function tempHome(t, { serverUrl, hostId } = {}) {
   return home;
 }
 
-/** Runs the built CLI with HOME=home and resolves { code, out, err }. stdin is not a TTY. */
-export function runCli(home, args, { cwd, timeoutMs = 20000 } = {}) {
+/** Runs the built CLI with HOME=home (plus `env`) and resolves { code, out, err }. stdin is not a TTY. */
+export function runCli(home, args, { cwd, timeoutMs = 20000, env = {} } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [CLI, ...args], { cwd, env: { PATH: process.env.PATH, HOME: home }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, [CLI, ...args], { cwd, env: { PATH: process.env.PATH, HOME: home, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     let err = '';
     child.stdout.on('data', d => { out += d; });

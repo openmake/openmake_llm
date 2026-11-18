@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { DIST, tempHome } from './fake-server.mjs';
+import { DIST, tempHome, fakeServer, runCli } from './fake-server.mjs';
 
 const require = createRequire(import.meta.url);
 const owner = () => require(join(DIST, 'browser-owner.js'));
@@ -208,7 +208,9 @@ test('releasing while our Chrome is still running hands the lock to that Chrome 
   const chrome = spawn('sleep', ['60']);
   t.after(() => chrome.kill('SIGKILL'));
   owner().releaseBrowserOwner(dir, mine.token, chrome.pid);
-  assert.deepEqual(readLock(dir), { pid: chrome.pid, token: mine.token });
+  const handed = readLock(dir);
+  assert.equal(handed.pid, chrome.pid);
+  assert.notEqual(handed.token, mine.token);
   assert.deepEqual(leftovers(dir), []);
   const blocked = owner().acquireBrowserOwner(dir);
   assert.equal(blocked.owned, false);
@@ -253,4 +255,39 @@ LocalBrowser.forProfile(o.browserProfileDir)
   if (chromeAlive) assert.equal(readLock(dir).pid, pid, 'lock must stay with the still-running Chrome');
   else assert.equal(lockLeft, false, 'released after Chrome was killed');
   assert.equal(chromeAlive, false, 'a Chrome ignoring SIGTERM is force-killed on exit');
+});
+
+// r4 (Fable): handing the lock to a lingering Chrome must not keep the old token. Otherwise a reclaimer that read
+// {deadOwner, T} before the hand-over passes its token re-check and takes the lock while that Chrome still lives.
+test('a reclaimer that read the lock before it was handed to a lingering Chrome backs off', async t => {
+  const dir = tempDir(t);
+  const token = writeLock(dir, deadPid());
+  const chrome = spawn('sleep', ['60']);
+  t.after(() => chrome.kill('SIGKILL'));
+  const r = owner().acquireBrowserOwner(dir, { afterRead: () => owner().releaseBrowserOwner(dir, token, chrome.pid) });
+  assert.equal(r.owned, false);
+  const lock = readLock(dir);
+  assert.equal(lock.pid, chrome.pid);
+  assert.notEqual(lock.token, token);
+  assert.deepEqual(leftovers(dir), []);
+});
+
+// r4 (Fable): what the server sees — a CLI that is not the browser owner leaves 'browser' out of bridge_hello.
+test('bridge_hello lists the browser only for the CLI that owns the lock', async t => {
+  const hello = async lockPid => {
+    const server = await fakeServer(t, (method, url) => {
+      if (method === 'POST' && url === '/api/agent-tasks/task-b/resume') return { message: 'ok' };
+      if (url === '/api/agent-tasks/task-b') return { task: { id: 'task-b', executor: 'local', device_id: null, status: server?.hellos?.length ? 'completed' : 'failed' } };
+      return undefined;
+    });
+    const home = tempHome(t, { serverUrl: server.url, hostId: '11111111-2222-4333-8444-555555555555' });
+    if (lockPid) writeLock(join(home, '.openmake'), lockPid);
+    // findChrome only checks that the path exists; nothing launches Chrome here.
+    const { code, out, err } = await runCli(home, ['resume', 'task-b', '--dir', home], { env: { OMK_BRIDGE_BROWSER: '1', OMK_BRIDGE_CHROME: process.execPath } });
+    assert.equal(code, 0, `${out}\n${err}`);
+    assert.equal(server.hellos.length, 1);
+    return server.hellos[0].capabilities;
+  };
+  assert.ok((await hello(undefined)).includes('browser'), 'the owner announces the browser');
+  assert.ok(!(await hello(process.pid)).includes('browser'), 'a CLI that lost the lock must not announce the browser');
 });
