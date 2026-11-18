@@ -48,7 +48,7 @@ export async function cleanupTaskRun(opts: {
     if (!taskRuntime) return;
     const keepWorkspace = opts.status === 'completed' || opts.status === 'failed' || parked;
     if (opts.status !== 'completed' && !parked) await captureDiffOnCleanup(taskRuntime, taskId, stepNumber).catch(() => { /* fail-open */ });
-    await taskRuntime.cleanup(!keepWorkspace).catch((e) => logger.warn(`[AgentTask] 샌드박스 정리 실패: ${taskId} — ${e}`));
+    await taskRuntime.cleanup(!keepWorkspace, { handover: !!opts.keepWorkspace }).catch((e) => logger.warn(`[AgentTask] 샌드박스 정리 실패: ${taskId} — ${e}`));
     await recordIsolationOutcome({
         taskId, userId: opts.userId, status: opts.status, progress: opts.progress, currentTurn: opts.currentTurn,
         parked: opts.parked || !!opts.interrupted, isolation: taskRuntime.isolation,

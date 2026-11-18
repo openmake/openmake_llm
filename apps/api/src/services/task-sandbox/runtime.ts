@@ -182,7 +182,7 @@ export class TaskRuntime {
 
     async create(): Promise<void> { await this.executor.create(); }
     /** removeWorkspace=false 면 산출물 다운로드를 위해 workspace 보존(컨테이너만 제거). */
-    async cleanup(removeWorkspace = true): Promise<void> { await this.executor.cleanup(removeWorkspace); }
+    async cleanup(removeWorkspace = true, opts?: { handover?: boolean }): Promise<void> { await this.executor.cleanup(removeWorkspace, opts); }
     /** 산출물 회수용 — workspace 파일 목록(상대경로, 재귀). */
     async listWorkspace(strict = false): Promise<string[]> { return this.executor.listWorkspaceFiles(strict); }
     /** 입력 첨부 주입 등 호스트 측 workspace 파일 쓰기 — 경로 가드(safeRealWorkspacePath)+쿼터 적용. */

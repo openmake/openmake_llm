@@ -26,7 +26,7 @@ describe('cleanupTaskRun', () => {
         expect(clearAutoApprove).toHaveBeenCalledWith('t1');
         expect(closeTask).not.toHaveBeenCalled();
         expect(captureDiffOnCleanup).not.toHaveBeenCalled();
-        expect(rt.cleanup).toHaveBeenCalledWith(false);
+        expect(rt.cleanup).toHaveBeenCalledWith(false, { handover: false });
         expect(clearSteering).toHaveBeenCalledWith('t1');
     });
 
@@ -36,7 +36,8 @@ describe('cleanupTaskRun', () => {
         expect(clearAutoApprove).toHaveBeenCalledWith('t1');
         expect(closeTask).not.toHaveBeenCalled();
         expect(captureDiffOnCleanup).not.toHaveBeenCalled();
-        expect(rt.cleanup).toHaveBeenCalledWith(false);
+        // 넘겨준 세그먼트(handover)는 후속이 같은 worktree 를 쓰므로 로컬 실행기가 remove 를 보내지 않는다
+        expect(rt.cleanup).toHaveBeenCalledWith(false, { handover: true });
     });
 
     it('실패도 승인 정리·diff 캡처 후 workspace 를 보존해 산출물을 회수할 수 있다', async () => {
@@ -44,16 +45,16 @@ describe('cleanupTaskRun', () => {
         await cleanupTaskRun({ taskId: 't1', userId: 'u1', progress: 0, currentTurn: 0, taskRuntime: failed as unknown as TaskRuntime, status: 'failed', parked: false, stepNumber: 5 });
         expect(closeTask).toHaveBeenCalledWith('t1');
         expect(captureDiffOnCleanup).toHaveBeenCalledWith(failed, 't1', 5);
-        expect(failed.cleanup).toHaveBeenCalledWith(false);
+        expect(failed.cleanup).toHaveBeenCalledWith(false, { handover: false });
         const done = runtime();
         await cleanupTaskRun({ taskId: 't2', userId: 'u1', progress: 0, currentTurn: 0, taskRuntime: done as unknown as TaskRuntime, status: 'completed', parked: false, stepNumber: 1 });
-        expect(done.cleanup).toHaveBeenCalledWith(false);
+        expect(done.cleanup).toHaveBeenCalledWith(false, { handover: false });
     });
 
     it('취소된 작업은 기존처럼 workspace 를 삭제한다', async () => {
         const rt = runtime();
         await cleanupTaskRun({ taskId: 'cancelled', userId: 'u1', progress: 0, currentTurn: 0, taskRuntime: rt as unknown as TaskRuntime, status: 'cancelled', parked: false, stepNumber: 0 });
-        expect(rt.cleanup).toHaveBeenCalledWith(true);
+        expect(rt.cleanup).toHaveBeenCalledWith(true, { handover: false });
     });
 
     it('런타임이 없으면 승인·steering 만 정리한다', async () => {
