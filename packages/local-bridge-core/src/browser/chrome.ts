@@ -52,8 +52,11 @@ export interface LaunchedChrome {
     proc: ChildProcess;
 }
 
-/** 전용 프로필로 Chrome 을 띄우고 디버깅 주소가 준비될 때까지 기다린다. */
-export async function launchChrome(profileDir: string, signal?: AbortSignal): Promise<LaunchedChrome> {
+/**
+ * 전용 프로필로 Chrome 을 띄우고 디버깅 주소가 준비될 때까지 기다린다.
+ * `onSpawn` 은 프로세스가 생긴 직후(주소 대기 전) 불린다 — 대기 중 호스트가 끝나도 그 Chrome 을 끄고 확인할 수 있게.
+ */
+export async function launchChrome(profileDir: string, signal?: AbortSignal, onSpawn?: (proc: ChildProcess) => void): Promise<LaunchedChrome> {
     const bin = findChrome();
     if (!bin) throw new Error('Chrome 을 찾지 못했습니다 — Google Chrome 을 설치하거나 OMK_BRIDGE_CHROME 에 실행 파일 경로를 지정하세요');
     fs.mkdirSync(profileDir, { recursive: true });
@@ -72,6 +75,7 @@ export async function launchChrome(profileDir: string, signal?: AbortSignal): Pr
     let exited = false;
     proc.once('exit', () => { exited = true; });
     proc.once('error', () => { exited = true; });
+    onSpawn?.(proc);
     const deadline = Date.now() + BROWSER_LAUNCH_TIMEOUT_MS;
     while (Date.now() < deadline) {
         // 호출부가 기동을 그만뒀다(LocalBrowser.dispose) — 띄우던 자식을 끄고 그만둔다

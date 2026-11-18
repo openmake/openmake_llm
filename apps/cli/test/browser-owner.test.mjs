@@ -200,6 +200,43 @@ LocalBrowser.forProfile(o.browserProfileDir)
   assert.equal(readFileSync(out, 'utf8').trim(), 'held');
 });
 
+// r5 (Astra): Ctrl+C while the launched Chrome has not yet written DevToolsActivePort. That Chrome exists already,
+// so the owner must still see it gone before letting go of the lock — tracking must start right after the spawn.
+test('Ctrl+C while Chrome is still starting keeps the lock until that Chrome has exited', { skip: process.platform === 'win32' && 'POSIX shell fake' }, async t => {
+  const home = tempHome(t);
+  const dir = join(home, '.openmake');
+  const out = join(home, 'lock-at-chrome-exit');
+  const pidFile = join(home, 'chrome-pid');
+  const bin = join(home, 'fake-chrome');
+  writeFileSync(bin, [
+    '#!/bin/sh',
+    `trap 'sleep 0.3; if [ -e "${join(dir, LOCK)}" ]; then echo held > "${out}"; else echo free > "${out}"; fi; kill $s 2>/dev/null; exit 0' TERM`,
+    'sleep 60 & s=$!',
+    `echo $$ > "${pidFile}"`, // never writes DevToolsActivePort: still starting
+    'wait $s',
+  ].join('\n'), { mode: 0o755 });
+  const core = require.resolve('@openmake/local-bridge-core', { paths: [DIST] });
+  const script = `const fs = require('fs');
+const { browserOption } = require(${JSON.stringify(join(DIST, 'bridge.js'))});
+const { LocalBrowser } = require(${JSON.stringify(core)});
+process.on('SIGINT', () => process.exit(0)); // as index.ts
+const o = browserOption(process.env, process.argv[1]);
+if (!o.browserProfileDir) process.exit(2);
+LocalBrowser.forProfile(o.browserProfileDir)
+  .run({ actions: [{ type: 'wait', ms: 0 }], sitePolicy: { allow: [], deny: [] } }, { taskId: 'A', saveFile: async () => undefined })
+  .catch(() => undefined);
+const poll = setInterval(() => { if (fs.existsSync(process.argv[2])) { clearInterval(poll); process.kill(process.pid, 'SIGINT'); } }, 20);`;
+  const child = spawn(process.execPath, ['-e', script, dir, pidFile], { stdio: 'inherit', env: { ...process.env, OMK_BRIDGE_BROWSER: '1', OMK_BRIDGE_CHROME: bin } });
+  const code = await new Promise(r => child.on('exit', r));
+  const pid = Number(readFileSync(pidFile, 'utf8').trim());
+  t.after(() => { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } });
+  assert.equal(code, 0);
+  const end = Date.now() + 3000;
+  while (!existsSync(out) && Date.now() < end) await new Promise(r => setTimeout(r, 20));
+  assert.equal(existsSync(out) ? readFileSync(out, 'utf8').trim() : 'not stopped', 'held', 'the starting Chrome is stopped while the lock is still held');
+  assert.equal(existsSync(join(dir, LOCK)), false, 'released after Chrome exited');
+});
+
 // r3: Chrome that has not been seen to exit must not hand the profile over. The exiting owner leaves the lock
 // to that Chrome's pid, so a new CLI backs off while it lives and reclaims the lock once it is gone.
 test('releasing while our Chrome is still running hands the lock to that Chrome instead of freeing it', async t => {
