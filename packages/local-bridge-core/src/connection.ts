@@ -7,9 +7,10 @@
  * 서버→디바이스 프레임은 bridge_exec(요청)·bridge_notice(단방향 알림) 두 가지만 처리하고 나머지는
  * 무시한다. 알림은 검증을 통과한 것만 호스트(onNotice)에 넘길 뿐 아무 동작도 일으키지 않는다.
  */
+import { randomUUID } from 'crypto';
 import WebSocket from 'ws';
 import {
-    AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, AUTH_RETRY_MS, BROWSER_KIND, HANDSHAKE_TIMEOUT_MS, HELLO_DELAY_MS, LIVENESS_PING_MS, LIVENESS_TIMEOUT_MS,
+    AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, AUTH_RETRY_MS, BROWSER_KIND, DEVICE_CONFLICT_REASON, DEVICE_CONFLICT_TEXT, HANDSHAKE_TIMEOUT_MS, HELLO_DELAY_MS, LIVENESS_PING_MS, LIVENESS_TIMEOUT_MS,
     NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE,
 } from './constants';
 import { RequestGuard } from './request-guard';
@@ -89,8 +90,14 @@ export function parseNotice(m: BridgeMsg): BridgeNotice | null {
     return { notice: 'approval_pending', taskId: m.taskId, toolName };
 }
 
-/** 서버가 인증 사유로 닫는 코드 — 정책 위반(1008). 서버의 #1164·#1168 종료와 같다. */
+/** 서버가 인증 사유로 닫는 코드 — 정책 위반(1008). 서버의 #1164·#1168 종료와 같다. 같은 기기 id 충돌도 이 코드다. */
 const AUTH_CLOSE_CODE = 1008;
+
+/**
+ * 이 프로세스의 난수(2026-11-19) — bridge_hello.instanceId. 프로세스가 시작할 때 한 번 만들고 재연결해도 같다.
+ * 서버는 같으면 같은 프로세스의 재연결로 보고 확인 없이 대체한다(다르면 기존 연결의 응답을 확인한다).
+ */
+const PROCESS_INSTANCE_ID = randomUUID();
 
 export class BridgeConnection {
     private ws: WebSocket | null = null;
@@ -145,6 +152,7 @@ export class BridgeConnection {
                     label: this.opts.label,
                     folderName,
                     ...(this.opts.hostId ? { hostId: this.opts.hostId } : {}),
+                    instanceId: PROCESS_INSTANCE_ID,
                     capabilities: this.opts.core.capabilities(),
                     // 인증 실패를 사유와 함께 닫아도 된다는 표시(2026-10-06) — 서버는 이 표시가 없는 구버전에는 종전대로 오류만 보낸다.
                     authClose: true,
@@ -199,12 +207,16 @@ export class BridgeConnection {
             // 사용자가 키를 바꾸면 앱이 연결을 새로 만들고, 관리자가 되살리면 다음 재시도에 붙는다.
             const reason = String(reasonBuf ?? '');
             const authReason = code === AUTH_CLOSE_CODE && (AUTH_CLOSE_REASONS as readonly string[]).includes(reason) ? reason as BridgeAuthCloseReason : null;
+            // 같은 기기 id 로 다른 프로세스가 붙어 있어 거절됐다 — 그쪽을 끄면 1분 안에 붙도록 재연결 상한 간격으로만 다시 시도한다.
+            const conflict = !authReason && code === AUTH_CLOSE_CODE && reason === DEVICE_CONFLICT_REASON;
             if (authReason) this.status(AUTH_CLOSE_TEXT[authReason], authReason);
+            else if (conflict) this.status(DEVICE_CONFLICT_TEXT, 'device_conflict');
             else this.status('끊김 — 재연결 대기', 'reconnecting');
             if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
             const delay = authReason ? (this.opts.authRetryMs ?? AUTH_RETRY_MS)
-                : reconnectDelayMs(this.reconnectAttempt, this.opts.reconnectMs ?? RECONNECT_MS, this.opts.reconnectMaxMs ?? RECONNECT_MAX_MS, this.opts.random);
-            if (!authReason) this.reconnectAttempt += 1;
+                : conflict ? (this.opts.reconnectMaxMs ?? RECONNECT_MAX_MS)
+                    : reconnectDelayMs(this.reconnectAttempt, this.opts.reconnectMs ?? RECONNECT_MS, this.opts.reconnectMaxMs ?? RECONNECT_MAX_MS, this.opts.random);
+            if (!authReason && !conflict) this.reconnectAttempt += 1;
             this.reconnectTimer = setTimeout(() => { void this.connect(); }, delay);
             this.opts.onReconnectScheduled?.(delay);
         });

@@ -251,7 +251,7 @@
       "dismiss": "Schließen",
       "copyKey": "Schlüssel kopieren",
       "copied": "Kopiert",
-      "bridgeHint": "Dieser Schlüssel verbindet nur Companion und die CLI. Geben Sie ihn in den Companion-Einstellungen oder bei der CLI-Anmeldung (openmake-code login) ein. Er kann die Inferenz-API nicht aufrufen.",
+      "bridgeHint": "Dieser Schlüssel verbindet nur die Desktop-App und die CLI. Geben Sie ihn in den Einstellungen der Desktop-App oder bei der CLI-Anmeldung (openmake-code login) ein. Er kann die Inferenz-API nicht aufrufen.",
       "curlTitle": "Schnellstart (curl)",
       "copyCurl": "curl kopieren"
     },
@@ -965,8 +965,8 @@
     "stateLabel": "Status:",
     "turnLabel": "Runde:",
     "queuePosition": "Warteposition {position} — startet automatisch, sobald frühere Aufgaben fertig sind",
-    "waitingDevice": "Warten auf Ihr lokales Gerät — verbinden Sie Companion, um fortzufahren",
-    "waitingBrowserTakeover": "Sie bedienen gerade den Browser — geben Sie ihn in Companion zurück, um fortzufahren",
+    "waitingDevice": "Warten auf Ihr lokales Gerät — verbinden Sie die Desktop-App, um fortzufahren",
+    "waitingBrowserTakeover": "Sie bedienen gerade den Browser — geben Sie ihn in der Desktop-App zurück, um fortzufahren",
     "waitingModel": "Warten auf Antwort des Modellservers — die Aufgabe wird automatisch fortgesetzt, sobald er wieder erreichbar ist",
     "planLabel": "Plan ({completed}/{total})",
     "outputsLabel": "{count} Ausgabe(n)",
@@ -1052,10 +1052,10 @@
         "llm_error": "Versuchen Sie es gleich noch einmal. Wenn es weiter fehlschlägt, wählen Sie ein anderes Modell oder informieren Sie Ihren Administrator.",
         "interrupted": "Setzen Sie die Aufgabe an der unterbrochenen Stelle fort, falls möglich; andernfalls starten Sie sie erneut.",
         "unknown": "Prüfen Sie den vollständigen Fehlergrund. Tritt er erneut auf, informieren Sie Ihren Administrator.",
-        "device_wait_expired": "Verbinden Sie Companion (oder die CLI) und führen Sie die Aufgabe erneut aus.",
-        "browser_takeover_expired": "Geben Sie den Browser im Companion-Menü zurück und führen Sie die Aufgabe erneut aus.",
+        "device_wait_expired": "Verbinden Sie die Desktop-App (oder die CLI) und führen Sie die Aufgabe erneut aus.",
+        "browser_takeover_expired": "Geben Sie den Browser im Menü der Desktop-App zurück und führen Sie die Aufgabe erneut aus.",
         "sandbox_unavailable": "Starten Sie in Kürze erneut. Sobald weniger Aufgaben gleichzeitig laufen, wird eine Ausführungsumgebung frei. Wenn es weiter auftritt, informieren Sie die Administration.",
-        "interrupted_local_device": "Verbinden Sie Companion (oder die CLI) erneut und setzen Sie die Aufgabe fort, falls möglich; andernfalls starten Sie sie erneut.",
+        "interrupted_local_device": "Verbinden Sie die Desktop-App (oder die CLI) erneut und setzen Sie die Aufgabe fort, falls möglich; andernfalls starten Sie sie erneut.",
         "lease_held_elsewhere": "Starten Sie die Aufgabe in Kürze erneut.",
         "recovery_limit": "Sie können die Aufgabe an der unterbrochenen Stelle fortsetzen. Wenn sie erneut an derselben Stelle stoppt, teilen Sie das Ziel in kleinere Aufgaben auf und starten Sie erneut, oder informieren Sie die Administration."
       }
@@ -2406,7 +2406,7 @@
   },
   "desktopApp": {
     "title": "Desktop-App",
-    "subtitle": "OpenMake Companion — eine App, die Agentenaufgaben in Ordnern auf deinem eigenen PC ausführt.",
+    "subtitle": "OpenMake Desktop-App — eine App, die Agentenaufgaben in Ordnern auf deinem eigenen PC ausführt.",
     "loading": "Wird geladen…",
     "filesTitle": "Installationsdateien",
     "os": {
@@ -2424,7 +2424,7 @@
       "title": "Installationsanleitung",
       "native": "macOS: Öffne die dmg und verschiebe die App in den Ordner „Programme“. Erscheint beim ersten Start eine Warnung, wähle Systemeinstellungen → Datenschutz & Sicherheit → Dennoch öffnen.",
       "windows": "Windows: Führe die Installationsdatei aus. Erscheint der Bildschirm „Der Computer wurde durch Windows geschützt“, klicke auf Weitere Informationen → Trotzdem ausführen.",
-      "apiKey": "Trage nach der Installation in den App-Einstellungen die Serveradresse (die Adresse dieser Website) und einen API key ein — einen Verbindungsschlüssel für Companion und die CLI stellst du unter <link>API-Zugriff</link> aus."
+      "apiKey": "Trage nach der Installation in den App-Einstellungen die Serveradresse (die Adresse dieser Website) und einen API key ein — einen Verbindungsschlüssel für die Desktop-App und die CLI stellst du unter <link>API-Zugriff</link> aus."
     }
   },
   "notFound": {
@@ -2754,7 +2754,7 @@
   },
   "adminBridgeDevices": {
     "title": "Verbundene Geräte",
-    "description": "Alle Geräte, die über Companion oder CLI für die lokale Ausführung verbunden sind. Es werden nur Ordnernamen angezeigt.",
+    "description": "Alle Geräte, die über die Desktop-App oder CLI für die lokale Ausführung verbunden sind. Es werden nur Ordnernamen angezeigt.",
     "loadError": "Laden fehlgeschlagen.",
     "disabled": "Die lokale Ausführung ist ausgeschaltet (LOCAL_EXECUTOR_ENABLED).",
     "listTitle": "Verbundene Geräte",

@@ -17,6 +17,11 @@ pub const LIVENESS_TIMEOUT_MS: u64 = 75_000;
 pub const AUTH_RETRY_MS: u64 = 10 * 60 * 1000;
 /// 서버가 인증 사유로 닫는 코드(정책 위반). TS 는 내보내지 않는 값이라 fixture `conn-frames` 의 닫힘 사례로 고정한다.
 pub const AUTH_CLOSE_CODE: u16 = 1008;
+/// 같은 기기 id 로 다른 프로세스가 이미 연결돼 있어 서버가 새 연결을 거절한 사유(코드 1008 의 reason, 2026-11-19).
+/// 상태 코드로도 그대로 쓴다. 그쪽을 끄면 붙도록 `RECONNECT_MAX_MS` 간격으로만 다시 시도한다.
+pub const DEVICE_CONFLICT_REASON: &str = "device_conflict";
+/// TS `DEVICE_CONFLICT_TEXT` — 한국어 원문 상태 문구.
+pub const DEVICE_CONFLICT_TEXT: &str = "같은 기기 id 로 다른 앱이 이미 연결돼 있습니다 — 실행 중인 다른 OpenMake Companion·CLI 를 종료하세요";
 /// 서버 단방향 알림 종류.
 pub const NOTICE_KINDS: &[&str] = &["approval_pending"];
 /// 알림 도구 이름 상한(UTF-16 단위 — JS `slice`).
