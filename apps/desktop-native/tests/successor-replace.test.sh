@@ -14,11 +14,12 @@ PASS=0
 FAIL=0
 DOMAINS=()
 STRAYS=()
+VOL_NAME=OMKSuccTest
 
 cleanup() {
   for p in ${STRAYS[@]+"${STRAYS[@]}"}; do /bin/kill -KILL "$p" 2>/dev/null; done
   for d in ${DOMAINS[@]+"${DOMAINS[@]}"}; do defaults delete "$d" >/dev/null 2>&1; rm -f "$HOME/Library/Preferences/$d.plist"; done
-  hdiutil info 2>/dev/null | grep -o "/Volumes/OMKSuccTest[^ ]*" | while read -r v; do hdiutil detach "$v" -quiet -force; done
+  hdiutil info 2>/dev/null | grep -o "/Volumes/${VOL_NAME}[^ ]*" | while read -r v; do hdiutil detach "$v" -quiet -force; done
   chmod -R u+w "$ROOT" 2>/dev/null
   rm -rf "$ROOT"
 }
@@ -65,7 +66,7 @@ make_dmg() {
   local src="$ROOT/dmgsrc-$1"
   mkdir -p "$src"
   if [ "$1" = noapp ]; then echo x > "$src/README"; else make_app "$src" "OpenMake Code" "$2" "$3" "OpenMake Code"; fi
-  hdiutil create -quiet -volname "OMKSuccTest$1" -srcfolder "$src" -ov -format UDZO "$ROOT/$1.dmg" || { echo "dmg 생성 실패: $1"; exit 1; }
+  hdiutil create -quiet -volname "${VOL_NAME}$1" -srcfolder "$src" -ov -format UDZO "$ROOT/$1.dmg" || { echo "dmg 생성 실패: $1"; exit 1; }
 }
 make_dmg good cc.openmake.code 0.5.0
 make_dmg noapp
