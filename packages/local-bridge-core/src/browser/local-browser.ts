@@ -31,7 +31,7 @@ import {
 } from '../constants';
 import { condExpression, runBrowserFlow } from './browser-flow';
 import { CdpClient } from './cdp';
-import { launchChrome, readDevToolsEndpoint } from './chrome';
+import { killAndWaitSync, launchChrome, readDevToolsEndpoint } from './chrome';
 import { DownloadTracker, downloadTaskOf, popupTaskOf } from './downloads';
 import { BrowserScheduler } from './local-browser-scheduler';
 import { browserPolicyBlockOf, uploadRejectedPolicyBlock, userControlPolicyBlock } from './policy-block';
@@ -59,6 +59,13 @@ export class LocalBrowser {
         let b = LocalBrowser.instances.get(profileDir);
         if (!b) { b = new LocalBrowser(profileDir); LocalBrowser.instances.set(profileDir, b); }
         return b;
+    }
+
+    private static readonly lingering = new Map<string, number>();
+
+    /** 호스트 종료 훅에서 강제로 꺼도 끝난 것을 확인하지 못한 그 프로필의 Chrome pid — 호스트의 나중 'exit' 훅이 본다. */
+    static lingeringPid(profileDir: string): number | undefined {
+        return LocalBrowser.lingering.get(profileDir);
     }
 
     private cdp: CdpClient | null = null;
@@ -165,7 +172,19 @@ export class LocalBrowser {
         if (!cdp) {
             await this.downloads.clear(); // 새로 띄울 때만 — 떠 있는 Chrome 은 받는 중일 수 있다
             await this.downloads.setLaunchDefaults(this.profileDir); // 기본 다운로드 폴더도 대기 폴더로 — 쓰지 못하면 띄우지 않는다
-            const launched = await launchChrome(this.profileDir, this.disposing.signal).catch((e: unknown) => {
+            // 호스트 프로세스가 끝나면 띄운 Chrome 도 끈다 — 자식 프로세스는 저절로 끝나지 않는다.
+            // 프로세스가 생긴 직후부터 건다 — 주소를 기다리는 중에 끝나도(Ctrl+C) 그 Chrome 을 끄고 확인한다.
+            // 호스트의 다른 종료 훅보다 먼저 돌고 Chrome 이 끝날 때까지 기다린다 — CLI 는 그 뒤에 브라우저 주인 잠금을 놓는다.
+            // 강제로 꺼도 끝난 것을 확인하지 못하면 그 pid 를 남긴다 — 호스트가 프로필을 넘기지 않게(lingeringPid).
+            const profileDir = this.profileDir;
+            const onSpawn = (proc: ChildProcess): void => {
+                const onHostExit = (): void => {
+                    if (!killAndWaitSync(proc, BROWSER_EXIT_WAIT_MS) && proc.pid !== undefined) LocalBrowser.lingering.set(profileDir, proc.pid);
+                };
+                process.prependOnceListener('exit', onHostExit);
+                proc.once('exit', () => process.removeListener('exit', onHostExit)); // 끝난 Chrome 의 훅은 쌓이지 않게
+            };
+            const launched = await launchChrome(this.profileDir, this.disposing.signal, onSpawn).catch((e: unknown) => {
                 throw this.disposed ? new Error(BROWSER_DISPOSED_ERROR) : e;
             });
             // 정리가 기다림 상한을 넘겨 먼저 끝났으면 상태에 넣지 않고 끈다
@@ -174,9 +193,6 @@ export class LocalBrowser {
                 throw new Error(BROWSER_DISPOSED_ERROR);
             }
             this.proc = launched.proc;
-            // 호스트 프로세스가 끝나면 띄운 Chrome 도 끈다 — 자식 프로세스는 저절로 끝나지 않는다.
-            const proc = launched.proc;
-            process.once('exit', () => { try { proc.kill(); } catch { /* noop */ } });
             cdp = await CdpClient.connect(launched.wsUrl);
         }
         cdp.on('Page.javascriptDialogOpening', (params, sessionId) => { void this.onDialog(cdp!, params, sessionId); });
