@@ -2,7 +2,9 @@ const continueMock = jest.fn();
 jest.mock('./continuation', () => ({
     chainBudgetState: jest.requireActual('./continuation').chainBudgetState,
     continueAsNewSegment: (...a: unknown[]) => continueMock(...a),
+    followExistingSuccessor: (...a: unknown[]) => followMock(...a),
 }));
+const followMock = jest.fn();
 const ratioMock = jest.fn(() => 0.5);
 jest.mock('./turn-context', () => ({ contextUsageRatio: () => ratioMock() }));
 const mockLogger = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
@@ -17,7 +19,7 @@ jest.mock('../../config/runtime-limits', () => {
     const actual = jest.requireActual('../../config/runtime-limits');
     return { ...actual, AGENT_TASK_LIMITS: { ...actual.AGENT_TASK_LIMITS, FINAL_TURN_NUDGE_ENABLED: true } };
 });
-import { loadChainContext, chainGateInput, finishAsContinued, gateTurnWithContinuation, prepareSegmentWorkspace, segmentHasProgress, effectiveSegmentTimeoutMs } from './continuation-hook';
+import { loadChainContext, chainGateInput, finishAsContinued, finishIfAlreadyContinued, gateTurnWithContinuation, prepareSegmentWorkspace, segmentHasProgress, effectiveSegmentTimeoutMs } from './continuation-hook';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { AGENT_TASK_LONG_RUNNING } from '../../config/agent-task-long-running';
 import { HANDOFF_SUMMARY_MARKER } from '../../prompts/agent-task-context';
@@ -252,5 +254,65 @@ describe('prepareSegmentWorkspace', () => {
         initWorkspaceBaseline.mockResolvedValueOnce(false);
         await prepareSegmentWorkspace(rt, { id: 's1', continuation: {}, chain_root_task_id: 'root' } as never, false, 'local');
         expect(markChainCancelled).not.toHaveBeenCalled();
+    });
+});
+
+describe('prepareSegmentWorkspace — 로컬 worktree 자리 비교(D3)', () => {
+    beforeEach(() => { jest.clearAllMocks(); initWorkspaceBaseline.mockResolvedValue(false); });
+    const prevIso = { state: 'worktree', branch: 'omk-task/root1111', worktreeRel: '.openmake/worktrees/root-1111' };
+    const seg2 = { id: 'seg2', continuation: { fromTaskId: 'seg1' }, chain_root_task_id: 'root' } as never;
+    const runtimeWith = (isolation: unknown) => ({ localWorkdir: null, isolation } as never);
+    it('로컬 + 앞 세그먼트가 worktree 인데 이번이 direct 면 취소 표식 + workspace_restore_failed', async () => {
+        db.getAgentTask.mockResolvedValue({ id: 'seg1', isolation: prevIso });
+        await expect(prepareSegmentWorkspace(runtimeWith({ state: 'direct', reason: 'unavailable' }), seg2, false, 'local'))
+            .rejects.toThrow('workspace_restore_failed');
+        expect(db.getAgentTask).toHaveBeenCalledWith('seg1');
+        expect(markChainCancelled).toHaveBeenCalledWith('root');
+    });
+    it.each([
+        ['같은 worktree', prevIso, prevIso, true],
+        ['다른 worktreeRel', prevIso, { ...prevIso, worktreeRel: '.openmake/worktrees/seg2' }, false],
+        ['다른 branch', prevIso, { ...prevIso, branch: 'omk-task/seg22222' }, false],
+        ['worktree → 값 없음(브랜치 없는 응답)', prevIso, null, false],
+        ['direct → direct', { state: 'direct', reason: 'not_repo' }, { state: 'direct', reason: 'not_repo' }, true],
+        ['direct → worktree', { state: 'direct', reason: 'unavailable' }, prevIso, false],
+        ['앞 기록 없음', null, prevIso, true],
+        ['outcome 만 다른 것은 같은 자리(앞 행에 outcome 이 남은 옛 체인)', { ...prevIso, outcome: 'kept' }, prevIso, true],
+    ])('%s', async (_name, prev, cur, pass) => {
+        db.getAgentTask.mockResolvedValue({ id: 'seg1', isolation: prev });
+        const run = prepareSegmentWorkspace(runtimeWith(cur), seg2, false, 'local');
+        if (pass) await expect(run).resolves.toBeUndefined();
+        else await expect(run).rejects.toThrow('workspace_restore_failed');
+        expect(markChainCancelled).toHaveBeenCalledTimes(pass ? 0 : 1);
+    });
+    it('앞 행 조회가 실패하면(DB 오류) 확인할 수 없으므로 멈춘다(닫힌 실패)', async () => {
+        db.getAgentTask.mockRejectedValue(new Error('db'));
+        await expect(prepareSegmentWorkspace(runtimeWith(prevIso), seg2, false, 'local')).rejects.toThrow('workspace_restore_failed');
+        expect(markChainCancelled).toHaveBeenCalledWith('root');
+    });
+});
+
+describe('finishIfAlreadyContinued — 이미 후속을 만든 세그먼트의 재실행(위험 4)', () => {
+    beforeEach(() => jest.clearAllMocks());
+    it('후속이 살아 있으면 도구를 돌리지 않고 이어짐으로 마감한다', async () => {
+        followMock.mockResolvedValueOnce({ successorId: 'seg2' });
+        const update = jest.fn().mockResolvedValue(undefined);
+        expect(await finishIfAlreadyContinued({ preTask: { id: 'seg1', continued_by_task_id: 'seg2' } as never, userRole: 'user', update })).toBe(true);
+        expect(followMock).toHaveBeenCalledWith('seg1', { userRole: 'user' });
+        expect(update).toHaveBeenCalledWith(expect.objectContaining({ status: 'completed', completionPath: 'continued', result: expect.stringContaining('seg2') }));
+        // 재실행 행은 pending·queued 다 — completed 로 바로 갈 수 없어(task-state) running 을 먼저 거친다
+        expect(update.mock.calls.map(([u]) => (u as { status?: string }).status)).toEqual(['running', 'completed']);
+    });
+    it('후속이 없으면 아무것도 하지 않는다(종전 재개)', async () => {
+        const update = jest.fn();
+        expect(await finishIfAlreadyContinued({ preTask: { id: 'seg1' } as never, userRole: 'user', update })).toBe(false);
+        expect(followMock).not.toHaveBeenCalled();
+        expect(update).not.toHaveBeenCalled();
+    });
+    it('후속이 실패·취소돼 따를 수 없으면 false(종전 재개 — 겹칠 실행이 없다)', async () => {
+        followMock.mockResolvedValueOnce({ skipped: '없음' });
+        const update = jest.fn();
+        expect(await finishIfAlreadyContinued({ preTask: { id: 'seg1', continued_by_task_id: 'seg2' } as never, userRole: 'user', update })).toBe(false);
+        expect(update).not.toHaveBeenCalled();
     });
 });

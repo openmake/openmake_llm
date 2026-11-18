@@ -174,5 +174,6 @@ export interface TaskExecutor {
     notifyApprovalPending?(toolName: string): void;
 
     /** 실행 환경 정리. removeWorkspace=false 면 산출물 회수를 위해 workspace 보존. 멱등. */
-    cleanup(removeWorkspace?: boolean): Promise<void>;
+    /** handover: 이어가기로 넘겨준 세그먼트 — 후속이 같은 작업 공간을 쓴다(로컬 worktree 는 지우지 않는다, docker 는 무시). */
+    cleanup(removeWorkspace?: boolean, opts?: { handover?: boolean }): Promise<void>;
 }

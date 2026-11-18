@@ -23,6 +23,7 @@ import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
 import { getAgentTaskStuckNudge, getTaskSandboxGuidance, getLocalExecutorGuidance, getWorktreeIsolationNote } from '../prompts/agent-task-prompt';
+import { syncWorktreeIsolationNote } from '../prompts/agent-task-isolation-note';
 import { isTerminalStatus, notifyTaskTerminal } from './agent-task/terminal-notify';
 import { createLogger } from '../utils/logger';
 import type { UserContext } from '../tool-contract/types';
@@ -44,7 +45,7 @@ import { partialResultOf } from './agent-task/turn-call';
 import { injectTaskInputs } from './agent-task/task-inputs';
 import { finalizeTask, finalizeMaxTurnsExhausted, type VerifyHold } from './agent-task/finalize';
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
-import { loadChainContext, gateTurnWithContinuation, prepareSegmentWorkspace, effectiveSegmentTimeoutMs } from './agent-task/continuation-hook';
+import { loadChainContext, gateTurnWithContinuation, prepareSegmentWorkspace, effectiveSegmentTimeoutMs, finishIfAlreadyContinued } from './agent-task/continuation-hook';
 import { cleanupTaskRun } from './agent-task/run-cleanup';
 import { recordIsolationStart } from './agent-task/isolation-state';
 import { beginTaskLease } from './agent-task/task-lease';
@@ -198,6 +199,8 @@ export class AgentTaskService {
             // resume: 이전 실행분 토큰을 이어서 누적(4-4) — runaway 토큰 가드도 통산 기준으로 동작.
             // "나머지 모두 승인" 도 함께 복원(124) — 종전엔 메모리뿐이라 재시작 후 다시 물었다.
             if (input.resume) { totalTokens = Number(preTask?.total_tokens ?? 0); cacheUsage.restore(preTask); }
+            // 이미 후속을 만든 로컬 세그먼트의 재실행은 같은 worktree 를 후속과 함께 고치지 않게 곧바로 후속을 따른다(continuation-hook) — 토큰 복원 뒤: 마감 update 가 누적값을 싣는다
+            if (input.resume && input.executor === 'local' && await finishIfAlreadyContinued({ preTask, userRole, update })) { continuedToSuccessor = true; return; }
             if (input.resume && preTask?.auto_approve) getApprovalRegistry().setAutoApprove(taskId, true);
             // 승인 정책(183) — 처음 시작이면 남기고, 재개면 남긴 값으로 되살린다(주차 재개는 요청 본문이 없다).
             const approvalPolicy = effectiveApprovalPolicy(input, preTask?.approval_policy);
@@ -253,7 +256,7 @@ export class AgentTaskService {
             // 설정은 한 번만 읽어 스냅샷 공유. 승인 3모드는 input.approvalPolicy 로 이 실행에만 override
             // (비영속, resume은 전역 폴백; requiresApproval 호출부 2곳이 이 cfg 를 읽어 단일 지점 주입).
             // Cowork D1a: 실행 백엔드(docker/local)·승인 정책 결정 — 상세는 agent-task/executor-select.
-            const { sandboxCfg, runtimeEnabled, remoteExecutor } = resolveExecutorPlan({ ...input, approvalPolicy }, taskId, userId);
+            const { sandboxCfg, runtimeEnabled, remoteExecutor } = resolveExecutorPlan({ ...input, approvalPolicy }, taskId, userId, preTask?.continuation?.worktreeKey);
             if (runtimeEnabled) {
                 try {
                     // G4 위임 — 상세는 agent-task/delegate (SUBAGENT_ENABLED 시 depth=1 tool-loop 승격,
@@ -295,6 +298,8 @@ export class AgentTaskService {
                         // 로컬 실행기 worktree 격리가 걸렸으면 작업 브랜치를 알린다(사용자 검토 지점).
                         const isolated = remoteExecutor?.isolatedBranch;
                         if (isolated) conversation[0].content += getWorktreeIsolationNote(isolated);
+                    } else if (remoteExecutor && conversation[0]?.role === 'system' && typeof conversation[0].content === 'string') {
+                        conversation[0].content = syncWorktreeIsolationNote(conversation[0].content, remoteExecutor.isolatedBranch); // 재개(fork 포함): 체크포인트 system 의 안내를 실제 브랜치에 맞춘다(같으면 무변경)
                     }
                     logger.info(`[AgentTask] 샌드박스 활성 (${taskId}, ${taskRuntime.containerName})`);
                 } catch (e) {

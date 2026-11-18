@@ -93,8 +93,12 @@ export class RemoteExecutor implements TaskExecutor {
      */
     private readonly folderRel?: string;
 
-    constructor(taskId: string, userId: string, deviceId?: string, folderRel?: string) {
+    /** worktree add·diff·remove 요청의 taskId 자리 — 이어받은 세그먼트는 앞 세그먼트의 키(기본 = taskId). */
+    private readonly worktreeKey: string;
+
+    constructor(taskId: string, userId: string, deviceId?: string, folderRel?: string, worktreeKey?: string) {
         this.taskId = taskId;
+        this.worktreeKey = worktreeKey ?? taskId;
         this.userId = userId;
         this.deviceId = deviceId;
         this.folderRel = folderRel;
@@ -118,7 +122,7 @@ export class RemoteExecutor implements TaskExecutor {
         logger.info(`[${this.taskId}] 로컬 실행기 준비 (device=${dev.deviceId}, folder="${dev.folderName}"${this.folderRel ? `/${this.folderRel}` : ''})`);
 
         if (!LOCAL_BRIDGE.WORKTREE_ENABLED) { this.isolationState = { state: 'direct', reason: 'disabled' }; return; }
-        const r = await this.req({ kind: 'worktree', op: 'add', taskId: this.taskId });
+        const r = await this.req({ kind: 'worktree', op: 'add', taskId: this.worktreeKey });
         if (r.ok && r.worktreeRel) {
             this.worktreeRel = r.worktreeRel;
             this.worktreeBranch = r.branch ?? null;
@@ -280,7 +284,7 @@ export class RemoteExecutor implements TaskExecutor {
      */
     async captureDiff(): Promise<string | null> {
         if (!this.worktreeRel) return null;
-        const r = await this.req({ kind: 'worktree', op: 'diff', taskId: this.taskId });
+        const r = await this.req({ kind: 'worktree', op: 'diff', taskId: this.worktreeKey });
         if (!r.ok) {
             logger.warn(`[${this.taskId}] worktree diff 실패: ${r.error}`);
             return null;
@@ -395,11 +399,12 @@ export class RemoteExecutor implements TaskExecutor {
     /**
      * 종료 통지 + worktree 정리 — 사용자 폴더는 절대 삭제하지 않는다(removeWorkspace 무시).
      * worktree 도 **변경분이 없을 때만** 제거한다(디바이스가 판단). 변경이 남아 있으면 브랜치와
-     * 함께 보존해 사용자가 검토·머지할 수 있게 한다.
+     * 함께 보존해 사용자가 검토·머지할 수 있게 한다. 이어가기로 넘겨준 세그먼트(handover)는 후속이 같은 worktree 를
+     * 쓰므로 remove 를 보내지 않는다 — 후속이 먼저 디스패치되므로 지우면 후속의 작업 폴더가 사라질 수 있다.
      */
-    async cleanup(): Promise<void> {
-        if (this.worktreeRel) {
-            const r = await this.req({ kind: 'worktree', op: 'remove', taskId: this.taskId })
+    async cleanup(_removeWorkspace?: boolean, opts?: { handover?: boolean }): Promise<void> {
+        if (this.worktreeRel && !opts?.handover) {
+            const r = await this.req({ kind: 'worktree', op: 'remove', taskId: this.worktreeKey })
                 .catch(() => ({ ok: false } as BridgeResult));
             if (r.ok) {
                 logger.info(`[${this.taskId}] worktree ${r.kept ? `보존 (branch=${this.worktreeBranch})` : '정리 완료'}`);
