@@ -30,13 +30,20 @@ test('defaultModelSelection 이 null·없음 → null(store 유지)', () => {
   assert.equal(nextSelectedModel(undefined, 'gemini:x'), null);
 });
 
-test('saved === null + 현재 store 가 구체 모델 → needsCarryOver true, default 면 false', () => {
+test('saved === null + 현재 store 가 구체 모델 + 같은 사용자 → needsCarryOver true, default 면 false', () => {
   const p = payload({ saved: null, effective: 'default', status: 'auto' });
-  assert.equal(needsCarryOver(p, 'gemini:gemini-2.5-flash'), true);
-  assert.equal(needsCarryOver(p, 'default'), false);
-  assert.equal(needsCarryOver(p, ''), false);
-  assert.equal(needsCarryOver(payload({ saved: 'default', effective: 'default', status: 'auto' }), 'gemini:x'), false);
-  assert.equal(needsCarryOver(payload(null), 'gemini:x'), false);
+  assert.equal(needsCarryOver(p, 'gemini:gemini-2.5-flash', '7', '7'), true);
+  assert.equal(needsCarryOver(p, 'default', '7', '7'), false);
+  assert.equal(needsCarryOver(p, '', '7', '7'), false);
+  assert.equal(needsCarryOver(payload({ saved: 'default', effective: 'default', status: 'auto' }), 'gemini:x', '7', '7'), false);
+  assert.equal(needsCarryOver(payload(null), 'gemini:x', '7', '7'), false);
+});
+
+test('needsCarryOver — 기록한 사용자와 지금 사용자가 다르거나 모르면 false(계정 전환 누수 방지)', () => {
+  const p = payload({ saved: null, effective: 'default', status: 'auto' });
+  assert.equal(needsCarryOver(p, 'gemini:x', '7', '8'), false);
+  assert.equal(needsCarryOver(p, 'gemini:x', null, '8'), false);
+  assert.equal(needsCarryOver(p, 'gemini:x', '7', null), false);
 });
 
 test('isFallbackStatus — auto·ok 외에만 true', () => {

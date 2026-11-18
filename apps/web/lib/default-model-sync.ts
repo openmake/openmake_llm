@@ -26,10 +26,28 @@ export function nextSelectedModel(payload: Payload, current: string): string | n
 /**
  * 저장 안 된 기존 선택 넘기기 — 종전엔 저장 버튼 없이 고른 모델이 localStorage 에 남아 계속 쓰였다.
  * 서버에 저장값이 없고(saved=null) store 에 구체 모델이 있으면 판정 적용 전에 그 값을 한 번 저장한다.
+ * 그 값을 기록한 사용자(owner)가 지금 사용자일 때만 — localStorage 는 계정 사이에 남아, 다른 계정의 선택을
+ * 이 사용자의 서버 선호로 영구 저장하던 누수를 막는다(2026-11-18 Fable 리뷰).
  */
-export function needsCarryOver(payload: Payload, current: string): boolean {
+export function needsCarryOver(payload: Payload, current: string, owner: string | null, userId: string | null): boolean {
   const sel = payload?.defaultModelSelection;
-  return !!sel && sel.saved === null && !!current && current !== "default";
+  return !!sel && sel.saved === null && !!current && current !== "default" && !!userId && owner === userId;
+}
+
+/** 로그아웃 — 다음에 이 브라우저로 로그인하는 계정에 이 선택이 남지 않게 자동으로 되돌린다 */
+export function clearDefaultModelOnLogout(): void {
+  useAppStore.getState().setSelectedModel("default", null);
+}
+
+/**
+ * 소유자 기록 전(구 버전)에 남은 값의 주인 정하기 — 로그아웃 없이 이어진 세션(`continued`)으로 로그인한
+ * 사용자의 값으로 본다. 로그아웃·세션 종료는 로그인 흔적을 지우므로 새로 로그인한 다른 계정은 주인이 되지 않는다.
+ * auth-sync 가 setAuth 직전에 불러, 사용자별 모델 목록 질의가 시작되기 전에 정해진다.
+ */
+export function adoptLegacyModelOwner(userId: string, continued: boolean): void {
+  const { selectedModel, selectedModelOwner } = useAppStore.getState();
+  if (!continued || selectedModelOwner !== null || selectedModel === "default") return;
+  useAppStore.getState().setSelectedModel(selectedModel, userId);
 }
 
 /** 저장한 모델을 못 써 자동으로 답하는 상태인가 (auto·ok 가 아닌 것) */
@@ -46,8 +64,9 @@ export function useDefaultModelSync(modelsData: ModelsPayload | undefined, activ
   const carrying = useRef(false);
   useEffect(() => {
     if (!active || !modelsData) return;
-    const current = useAppStore.getState().selectedModel;
-    if (needsCarryOver(modelsData, current)) {
+    const { selectedModel: current, selectedModelOwner: owner, auth } = useAppStore.getState();
+    const userId = auth.currentUser?.id ?? null;
+    if (needsCarryOver(modelsData, current, owner, userId)) {
       if (carrying.current) return;
       carrying.current = true;
       // 실패하면 store 를 건드리지 않고 다음 로드에 다시 시도한다
@@ -58,6 +77,6 @@ export function useDefaultModelSync(modelsData: ModelsPayload | undefined, activ
       return;
     }
     const next = nextSelectedModel(modelsData, current);
-    if (next !== null) useAppStore.getState().setSelectedModel(next);
+    if (next !== null) useAppStore.getState().setSelectedModel(next, userId);
   }, [modelsData, active, queryClient]);
 }
