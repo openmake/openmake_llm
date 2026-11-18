@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.139.3](https://github.com/openmake/openmake_llm/compare/v1.139.2...v1.139.3) (2026-11-18)
+
+
+### 🐛 버그 수정
+
+* **api:** web-push 4.0.0(ESM 전용)으로 올리고 jest 로드를 shim 으로 맞춘다 ([fbf5298](https://github.com/openmake/openmake_llm/commit/fbf529899ec8d525d7d6f4f8215157851d560c6c)), closes [#1825](https://github.com/openmake/openmake_llm/issues/1825)
+* **api:** web-push 4.0.0(ESM 전용)으로 올린다 ([#1825](https://github.com/openmake/openmake_llm/issues/1825) 대체) ([ce52983](https://github.com/openmake/openmake_llm/commit/ce52983669e410a4da6d15e6e99a8d5b496b5c5b))
+
 ## [1.139.2](https://github.com/openmake/openmake_llm/compare/v1.139.1...v1.139.2) (2026-11-16)
 
 
