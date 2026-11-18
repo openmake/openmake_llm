@@ -142,6 +142,11 @@ NEW="$APP_DIR/$OMK_SUCC_NAME.app"
 NEW_EXEC="$NEW/Contents/MacOS/$EXE"
 STAGE="$NEW.new"
 BACKUP="$NEW.old"
+# 앞선 갈래 B 가 남긴 .old 에는 사용자가 원래 가지고 있던 앱이 있을 수 있다 — 지우지 않고 멈춘다.
+if [ -e "$BACKUP" ]; then
+  log "남은 이전 앱: $BACKUP"
+  fail_early "$OMK_SUCC_MSG_BACKUP_LEFT"
+fi
 
 rm -rf "$STAGE"
 if ! ditto "$SRC" "$STAGE"; then
@@ -169,25 +174,27 @@ fi
 
 # ─── 단계 2: 교체 진행 표식 → 자리 바꿈 → 격리 속성 제거 → FIFO → 열기 ───
 # 표식은 같은 폴더의 임시 이름에 쓴 뒤 mv 로 바꿔 넣는다(반쯤 쓰인 표식을 보이지 않는다).
-# 시작 시각을 읽지 못하면 소유자를 식별할 수 없는 표식이 되므로 만들지 않는다.
+# 시작 시각을 읽지 못하면 소유자를 식별할 수 없는 표식이 되므로 만들지 않는다(종료 2 — 문구가 다르다).
 make_pending() {
   local st tmp
-  st="$(self_start)" || return 1
-  case "$st" in ""|*[!0-9]*) return 1 ;; esac
+  st="$(self_start)" || return 2
+  case "$st" in ""|*[!0-9]*) return 2 ;; esac
   mkdir -p "$(dirname "$PENDING")" || return 1
   tmp="$PENDING.tmp.$$"
   ( umask 077 && printf '%s %s\n' "$$" "$st" > "$tmp" ) || { rm -f "$tmp"; return 1; }
   chmod 600 "$tmp" && mv -f "$tmp" "$PENDING" || { rm -f "$tmp"; return 1; }
 }
-if ! make_pending; then
+make_pending
+PENDING_RC=$?
+if [ "$PENDING_RC" != 0 ]; then
   # 옮긴 것이 없다 — 되돌리기 A 에서 남는 것은 실패 버전·경고·옛 앱 다시 열기뿐이다.
   rm -rf "$STAGE"
   STAGE=""
+  if [ "$PENDING_RC" = 2 ]; then rollback "$OMK_SUCC_MSG_START_TIME"; fi
   rollback "$OMK_SUCC_MSG_PREPARE"
 fi
 
 if [ -e "$NEW" ]; then
-  rm -rf "$BACKUP"
   mv "$NEW" "$BACKUP" || rollback "$OMK_SUCC_MSG_REPLACE"
   BACKED_UP=1
 fi
@@ -197,14 +204,18 @@ STAGE=""
 xattr -dr com.apple.quarantine "$NEW" 2>/dev/null
 
 # 키 넘겨주기(D-119·D-146): FIFO 는 디스크에 내용을 쓰지 않는다. 30초 정리는 이 스크립트가 강제 종료된 경우의 뒷문이다.
-if [ -n "$OMK_KEY" ] && [ -n "$KH" ]; then
-  if mkdir -p "$(dirname "$KH")" 2>/dev/null && rm -f "$KH" && mkfifo -m 600 "$KH" 2>/dev/null; then
+# 키가 있는데 FIFO 를 준비하지 못하면 되돌리기 A 로 간다 — 키 없이 옛 앱을 지우는 경로를 두지 않는다(D-146).
+if [ -n "$OMK_KEY" ]; then
+  if [ -n "$KH" ] && mkdir -p "$(dirname "$KH")" 2>/dev/null && rm -f "$KH" 2>/dev/null && mkfifo -m 600 "$KH" 2>/dev/null; then
     KH_MADE=1
     ( printf '%s' "$OMK_KEY" > "$KH" ) 2>/dev/null &
     KH_PID=$!
     ( sleep 30; kill "$KH_PID" 2>/dev/null; rm -f "$KH" ) >/dev/null 2>&1 &
     KH_REAPER=$!
     log "key-handoff writer $KH_PID"
+  else
+    OMK_KEY=""
+    rollback "$OMK_SUCC_MSG_PREPARE"
   fi
 fi
 OMK_KEY=""

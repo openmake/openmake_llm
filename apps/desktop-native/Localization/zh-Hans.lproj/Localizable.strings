@@ -106,6 +106,8 @@
 "update.successor.badBundleId" = "下载的映像中的应用不是 OpenMake Code（Bundle ID 不一致）。";
 "update.successor.badVersion" = "下载的映像中的应用版本与服务器公布的版本不同。";
 "update.successor.prepare" = "无法准备替换（支持文件夹不可写）。未做任何更改。";
+"update.successor.startTime" = "无法准备替换（无法读取替换任务的开始时间）。未做任何更改。";
+"update.successor.backupLeft" = "由于之前的替换留下的 OpenMake Code.app.old 仍然存在，已停止替换。它可能是您之前使用的应用；请检查并移动或删除它，然后再次检查更新。";
 "update.successor.launch" = "OpenMake Code 未能正常启动，已撤销安装。可以继续使用此应用。";
 "update.successor.killFailed" = "无法结束 OpenMake Code。请手动退出 OpenMake Code，然后重新打开 OpenMake Companion。";
 "menu.browser.takeover" = "接管浏览器（暂停代理）";

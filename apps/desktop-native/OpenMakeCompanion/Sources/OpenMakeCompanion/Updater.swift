@@ -236,6 +236,8 @@ final class Updater: ObservableObject {
         "OMK_SUCC_MSG_VERSION": "update.successor.badVersion",
         "OMK_SUCC_MSG_RUNNING": "update.successor.running.body",
         "OMK_SUCC_MSG_PREPARE": "update.successor.prepare",
+        "OMK_SUCC_MSG_START_TIME": "update.successor.startTime",
+        "OMK_SUCC_MSG_BACKUP_LEFT": "update.successor.backupLeft",
         "OMK_SUCC_MSG_LAUNCH": "update.successor.launch",
         "OMK_SUCC_MSG_KILL_FAILED": "update.successor.killFailed",
     ]

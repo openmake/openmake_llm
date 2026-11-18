@@ -106,6 +106,8 @@
 "update.successor.badBundleId" = "받은 이미지 안의 앱이 OpenMake Code 가 아닙니다(번들 ID 불일치).";
 "update.successor.badVersion" = "받은 이미지 안의 앱 버전이 서버가 알린 버전과 다릅니다.";
 "update.successor.prepare" = "교체를 준비하지 못했습니다(지원 폴더에 쓸 수 없음). 아무것도 바꾸지 않았습니다.";
+"update.successor.startTime" = "교체를 준비하지 못했습니다(이 교체 작업의 시작 시각을 읽을 수 없음). 아무것도 바꾸지 않았습니다.";
+"update.successor.backupLeft" = "앞선 교체가 남긴 OpenMake Code.app.old 가 있어 교체를 멈췄습니다. 원래 쓰던 앱일 수 있으니 확인해 옮기거나 지운 뒤 다시 업데이트를 확인하세요.";
 "update.successor.launch" = "OpenMake Code 가 정상적으로 뜨지 않아 설치를 되돌렸습니다. 이 앱을 그대로 씁니다.";
 "update.successor.killFailed" = "OpenMake Code 를 끝내지 못했습니다. OpenMake Code 를 직접 종료한 뒤 OpenMake Companion 을 다시 여세요.";
 "menu.browser.takeover" = "브라우저 넘겨받기 (에이전트 일시 정지)";
