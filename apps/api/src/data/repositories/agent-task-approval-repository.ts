@@ -180,6 +180,17 @@ export class AgentTaskApprovalRepository extends BaseRepository {
         return r.rows;
     }
 
+    /**
+     * 작업 종료 시 아직 쓰지 않은 승인을 무효화 — 자리가 없어 주차로 넘긴 승인(미소비)이 취소된 작업의 재실행에서 쓰이지 않게.
+     * 이미 소비된 행·거절·pending 은 그대로다.
+     */
+    async voidUnconsumedForTask(taskId: string): Promise<void> {
+        await this.query(
+            `UPDATE agent_task_approvals SET status = 'aborted' WHERE task_id = $1 AND status = 'approved' AND consumed_at IS NULL`,
+            [taskId],
+        );
+    }
+
     /** 작업 종료 시 남은 pending 을 정리 — 승인함에 죽은 요청이 남지 않게. */
     async expirePendingForTask(taskId: string, status: 'expired' | 'aborted' = 'aborted'): Promise<void> {
         await this.query(

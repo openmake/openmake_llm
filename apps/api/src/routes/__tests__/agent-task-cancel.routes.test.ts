@@ -15,7 +15,8 @@ const cancel = jest.fn();
 jest.mock('../../services/AgentTaskService', () => ({ AgentTaskService: { cancel: (id: string) => cancel(id) } }));
 const cancelPending = jest.fn().mockReturnValue(false);
 jest.mock('../../services/agent-task/task-queue', () => ({ getAgentTaskQueue: () => ({ cancelPending }) }));
-jest.mock('../../services/task-sandbox/approval-gate', () => ({ getApprovalRegistry: () => ({ closeTask: jest.fn() }) }));
+const closeTask = jest.fn();
+jest.mock('../../services/task-sandbox/approval-gate', () => ({ getApprovalRegistry: () => ({ closeTask }) }));
 jest.mock('../../auth/ownership', () => ({ assertResourceOwnerOrAdmin: jest.fn() }));
 
 import { cancelRouter } from '../agent-task-cancel.routes';
@@ -77,5 +78,23 @@ describe('POST /:taskId/cancel — 체인', () => {
         expect(cancel).toHaveBeenCalledWith('t');
         expect(listChain).not.toHaveBeenCalled();
         expect(markChainCancelled).not.toHaveBeenCalled();
+    });
+});
+
+describe('POST /:taskId/cancel — 미소비 승인 무효화', () => {
+    beforeEach(() => { jest.clearAllMocks(); for (const k of Object.keys(rows)) delete rows[k]; cancel.mockReturnValue(false); });
+    it('대기열(queued) 작업 취소도 closeTask 를 부른다 — 자리가 없어 주차로 넘긴 미소비 승인이 다시 쓰이지 않게', async () => {
+        rows.q = { id: 'q', status: 'queued', user_id: 'u1' };
+        cancelPending.mockReturnValueOnce(true);
+        const res = await request(app).post('/api/agent-tasks/q/cancel');
+        expect(res.status).toBe(200);
+        expect(updateAgentTask).toHaveBeenCalledWith('q', { status: 'cancelled' });
+        expect(closeTask).toHaveBeenCalledWith('q');
+    });
+    it('주차(paused) 작업 취소는 종전대로 closeTask', async () => {
+        rows.p = { id: 'p', status: 'paused', user_id: 'u1' };
+        const res = await request(app).post('/api/agent-tasks/p/cancel');
+        expect(res.status).toBe(200);
+        expect(closeTask).toHaveBeenCalledWith('p');
     });
 });
