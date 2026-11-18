@@ -85,6 +85,19 @@ describe('embedTexts — 사용자 키 거절 메모', () => {
         expect(callJsonMock).toHaveBeenCalledTimes(3);
     });
 
+    it('키를 교체하면(해석된 인증 헤더가 바뀌면) TTL 안이라도 메모가 풀리고, 같은 키는 계속 막힌다 (2026-11-18 r4)', async () => {
+        const oldKey = { ...USER, headers: { Authorization: 'Bearer sk-old' } } as CapabilityTarget;
+        const newKey = { ...USER, headers: { Authorization: 'Bearer sk-new' } } as CapabilityTarget;
+        callJsonMock.mockRejectedValueOnce(rejection());
+        await expect(embedTexts(te(oldKey, 'u1'), ['a'], OPTS)).rejects.toMatchObject({ keyRejected: true });
+        await expect(embedTexts(te({ ...oldKey, headers: { Authorization: 'Bearer sk-old' } }, 'u1'), ['a'], OPTS)).rejects.toMatchObject({ keyRejected: true });
+        expect(callJsonMock).toHaveBeenCalledTimes(1);
+
+        callJsonMock.mockResolvedValue({ data: [{ index: 0, embedding: [1] }] });
+        await expect(embedTexts(te(newKey, 'u1'), ['a'], OPTS)).resolves.toEqual([[1]]);
+        expect(callJsonMock).toHaveBeenCalledTimes(2);
+    });
+
     it('TTL 뒤에는 다시 시도한다', async () => {
         const now = Date.now();
         const spy = jest.spyOn(Date, 'now').mockReturnValue(now);

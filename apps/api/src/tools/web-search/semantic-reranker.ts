@@ -25,10 +25,32 @@ const SHADOW_TEXT_CHARS = 512;
 /** 실제 리랭킹 임베딩 호출 타임아웃(ms) — 초과 시 기존 랭킹 유지. env: SEARCH_RERANK_TIMEOUT_MS. */
 const RERANK_TIMEOUT_MS = Number(process.env.SEARCH_RERANK_TIMEOUT_MS) || 2500;
 
-/** 행위자 배정으로 해석해 한 번 임베딩한다 — 기한이 지나면 요청이 끊긴다(callJson). 재시도 없음. */
+/**
+ * 행위자 배정으로 해석해 한 번 임베딩한다. 재시도 없음.
+ * 기한 하나가 해석(DB 조회·키 복호화)부터 임베딩까지 덮는다 — 지나면 공유 신호로 진행 중 요청이 끊기고(callJson) throw.
+ */
 async function embedForRerank(texts: string[], costUserId: string | undefined): Promise<{ te: TextEmbedTarget; embs: number[][] }> {
-    const te = await resolveTextEmbed(costUserId);
-    return { te, embs: await embedTexts(te, texts, { timeoutMs: RERANK_TIMEOUT_MS }) };
+    const ac = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, rej) => {
+        timer = setTimeout(() => {
+            const err = new Error(`리랭킹 임베딩 타임아웃(${RERANK_TIMEOUT_MS}ms)`);
+            ac.abort(err);
+            rej(err);
+        }, RERANK_TIMEOUT_MS);
+        timer.unref?.();
+    });
+    const work = (async () => {
+        const te = await resolveTextEmbed(costUserId);
+        ac.signal.throwIfAborted(); // 해석이 기한 뒤에 끝났으면 호출하지 않는다
+        return { te, embs: await embedTexts(te, texts, { timeoutMs: RERANK_TIMEOUT_MS, signal: ac.signal }) };
+    })();
+    work.catch(() => undefined); // 기한 초과 뒤의 늦은 실패는 race 가 이미 처리했다
+    try {
+        return await Promise.race([work, timeout]);
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 function cosine(a: number[], b: number[]): number {

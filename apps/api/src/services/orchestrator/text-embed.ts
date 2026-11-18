@@ -2,11 +2,12 @@
  * text.embed capability 임베딩 — 도구 선별(에이전트 작업·딥리서치)과 웹검색 의미 리랭킹이 쓴다.
  * 모델은 행위자의 `text.embed` 배정(개인 → 전역)으로만 정한다(코드·env 기본값 없음). 외부 모델은 키 정책
  * actor-byok 에 따라 행위자의 키로만 돈다. 호출은 http-call 경계(공급자 슬롯·계측·게이트웨이 재시도 끄기·기한 중단)를 지난다.
- * 사용자 키를 공급자가 거절하면 (사용자, 공급자) 를 TTL 동안 기억해 그 사이 호출을 막는다
+ * 사용자 키를 공급자가 거절하면 (사용자, 공급자, 키 지문) 을 TTL 동안 기억해 그 사이 호출을 막는다 — 키를 교체하면 풀린다
  * (knowledge-runtime 의 거절 메모와 별개 — add-on 경계 때문에 합치지 않는다).
  *
  * @module services/orchestrator/text-embed
  */
+import { createHash } from 'crypto';
 import { resolveCapabilityTarget, CapabilityUnavailableError, type CapabilityTarget } from './capability-resolver';
 import { callJson, HttpCallError } from './http-call';
 import { CAPABILITY_LIMITS } from '../../config/capabilities';
@@ -45,9 +46,18 @@ export function logTextEmbedFailure(log: ReturnType<typeof createLogger>, prefix
     log.warn(msg);
 }
 
-/** `${userId}\u0000${providerId}` → 거절 기록 시각(ms) */
+/** `${userId}\u0000${providerId}\u0000${키 지문}` → 거절 기록 시각(ms) */
 const rejectedAt = new Map<string, number>();
-const memoKey = (userId: string, providerId: string): string => `${userId}\u0000${providerId}`;
+/**
+ * 키 지문 = 해석된 인증 헤더의 SHA-256 앞 16자(평문 키는 메모에 남기지 않는다). 해석은 매 호출 키를 새로 복호화하므로
+ * 사용자가 키를 교체하면 지문이 달라져 TTL 안이라도 다시 시도하고, 같은 키는 계속 막는다.
+ */
+function keyFingerprint(headers: Record<string, string>): string {
+    const canonical = JSON.stringify(Object.keys(headers).sort().map((k) => [k, headers[k]]));
+    return createHash('sha256').update(canonical).digest('hex').slice(0, 16);
+}
+const memoKey = (userId: string, target: CapabilityTarget): string =>
+    `${userId}\u0000${target.providerId}\u0000${keyFingerprint(target.headers)}`;
 
 function isRejected(key: string, now: number): boolean {
     const at = rejectedAt.get(key);
@@ -81,7 +91,7 @@ export async function embedTexts(
     opts: { timeoutMs: number; signal?: AbortSignal },
 ): Promise<number[][]> {
     const { target } = t;
-    const key = target.costOwner === 'user' && t.actorUserId ? memoKey(t.actorUserId, target.providerId) : undefined;
+    const key = target.costOwner === 'user' && t.actorUserId ? memoKey(t.actorUserId, target) : undefined;
     if (key && isRejected(key, Date.now())) {
         throw new HttpCallError(`'${target.providerId}' 공급자가 API 키를 거절했습니다(최근 기록) — 설정 → 외부 API 키에서 키를 교체하세요`, 401, 'http', true);
     }
