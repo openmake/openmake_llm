@@ -281,7 +281,7 @@ describe('종료 정리(run-cleanup) — 종료로 끊긴 실행', () => {
     it('작업 공간과 대기 중 승인을 남긴다(부팅 복구가 이어받는다) — 컨테이너만 내린다', async () => {
         const rt = runtime();
         await cleanupTaskRun({ taskId: 't1', userId: 'u1', progress: 0, currentTurn: 0, taskRuntime: rt as never, status: 'running', parked: false, stepNumber: 0, interrupted: true });
-        expect(rt.cleanup).toHaveBeenCalledWith(false);
+        expect(rt.cleanup).toHaveBeenCalledWith(false, { handover: false });
         expect(closeTask).not.toHaveBeenCalled();
         expect(clearAutoApprove).toHaveBeenCalledWith('t1');
     });

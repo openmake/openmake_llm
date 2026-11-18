@@ -123,7 +123,7 @@ const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(
  * 살아 있으면(재디스패치 포함) 그 id 를 돌려 호출부가 이 작업을 '이어짐'으로 끝내게 하고(종료 알림 없음),
  * 후속 행이 없거나 실패·취소·체크포인트 없음이면 skipped — 호출부는 종전대로 마무리한다.
  */
-async function followExistingSuccessor(taskId: string, p: Pick<ContinueInput, 'userRole'>): Promise<ContinueOutcome> {
+export async function followExistingSuccessor(taskId: string, p: Pick<ContinueInput, 'userRole'>): Promise<ContinueOutcome> {
     const db = getUnifiedDatabase();
     const cur = await db.getAgentTask(taskId).catch(() => undefined);
     const existingId = cur?.continued_by_task_id;
@@ -241,6 +241,8 @@ async function runContinuation(p: ContinueInput, track: ContinueTrack, abandon: 
     const segmentIndex = state.segmentIndex + 1;
     const summary = buildContinuationSummary(p.conversation, p.task.goal, nextSteps);
     const continuation: ContinuationInfo = { fromTaskId: p.task.id, segmentIndex, reason: p.reason, summary, chainUsedMs: state.usedMs, chainUsedTokens: state.usedTokens };
+    // 로컬 실행은 앞 세그먼트의 worktree 를 잇는다 — 기기는 같은 키의 worktree 가 있으면 재사용한다
+    if (p.task.executor === 'local') continuation.worktreeKey = p.task.continuation?.worktreeKey ?? p.task.id;
     // fork 와 같은 시드: [원 system 그대로, 목표, 인계 요약+안내] — 체크포인트와 resume 둘 다 이 배열을 쓴다
     const systemMsg = p.conversation[0]?.role === 'system' ? p.conversation[0] : { role: 'system' as const, content: '' };
     const seeded: ChatMessage[] = [systemMsg, { role: 'user', content: p.task.goal }, { role: 'user', content: `${summary}\n\n${getContinuationNotice(segmentIndex, p.reason)}` }];

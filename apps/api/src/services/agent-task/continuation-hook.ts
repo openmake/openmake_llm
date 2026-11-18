@@ -6,11 +6,12 @@ import { getUnifiedDatabase, getPool } from '../../data/models/unified-database'
 import { AGENT_TASK_LONG_RUNNING } from '../../config/agent-task-long-running';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import type { AgentTask } from '../../data/models/unified-database.types';
+import type { AgentTaskIsolation } from '@openmake/shared-types';
 import { AgentTaskChainRepository } from '../../data/repositories/agent-task-chain-repository';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import { initWorkspaceBaseline } from './code-diff';
-import { chainBudgetState, continueAsNewSegment, type ContinueInput } from './continuation';
+import { chainBudgetState, continueAsNewSegment, followExistingSuccessor, type ContinueInput } from './continuation';
 import { contextUsageRatio } from './turn-context';
 import { applyTurnResourceGates } from './turn-gate';
 import { HANDOFF_SUMMARY_MARKER } from '../../prompts/agent-task-context';
@@ -103,15 +104,45 @@ export async function gateTurnWithContinuation(p: { gate: GateInput; chain: Chai
 }
 
 /**
+ * PURE: 로컬 이어받은 세그먼트가 앞 세그먼트와 같은 자리에서 도는가(D3). 앞 기록이 없으면(옛 행·브랜치 없는 응답) 판단 근거가 없어 통과.
+ * worktree 는 같은 worktreeRel·branch 여야 하고(outcome 은 보지 않는다), direct 는 이번도 direct 여야 한다(앞 변경은 사용자 폴더에 있다).
+ */
+export function sameSegmentWorkspace(prev: AgentTaskIsolation | null | undefined, cur: AgentTaskIsolation | null | undefined): boolean {
+    if (!prev) return true;
+    if (prev.state === 'direct') return cur?.state === 'direct';
+    return cur?.state === 'worktree' && cur.worktreeRel === prev.worktreeRel && cur.branch === prev.branch;
+}
+
+/**
  * 작업 공간 기준점·복원 — 이어받은 세그먼트(continuation 있음)는 code-diff 설정과 무관하게 강제 복원한다(188).
  * 샌드박스 실행기에서 복원에 실패하면 되풀이를 막기 위해 루트에 취소 표식을 남기고 세그먼트를 실패시킨다.
- * 로컬 실행기는 같은 폴더를 쓰므로 복원 대상이 아니다.
+ * 로컬 실행기는 스냅숏 복원 대상이 아니다 — 대신 앞 세그먼트와 같은 자리(같은 worktree, 또는 둘 다 직접 실행)인지 보고,
+ * 다르면 같은 길로 멈춘다(앞 변경 없이 시작하거나 사용자 폴더를 직접 고치는 것보다 낫다).
  */
 export async function prepareSegmentWorkspace(runtime: TaskRuntime, preTask: AgentTask | undefined, codeDiffEnabled: boolean, executor: 'sandbox' | 'local' | undefined): Promise<void> {
     const continued = !!preTask?.continuation;
     if (!codeDiffEnabled && !continued) return;
     const restored = await initWorkspaceBaseline(runtime, preTask, { forceRestore: continued });
-    if (!continued || restored || executor === 'local') return;
+    if (!continued || restored) return;
+    if (executor === 'local') {
+        const fromId = preTask?.continuation?.fromTaskId;
+        const prev = fromId ? await getUnifiedDatabase().getAgentTask(fromId).catch(() => undefined) : undefined;
+        if (sameSegmentWorkspace(prev?.isolation, runtime.isolation)) return;
+        logger.warn(`[Continuation] 앞 세그먼트와 작업 자리가 다르다 — 체인을 멈춘다: ${preTask?.id} (앞 ${JSON.stringify(prev?.isolation)}, 이번 ${JSON.stringify(runtime.isolation)})`);
+    }
     if (preTask?.chain_root_task_id) await new AgentTaskChainRepository(getPool()).markChainCancelled(preTask.chain_root_task_id).catch(() => { /* 표식 실패 무시 */ });
     throw new Error('이어받은 작업 공간을 복원하지 못했습니다(workspace_restore_failed) — 체인을 멈춥니다');
+}
+
+/**
+ * 이미 후속을 만든 세그먼트의 재실행(부팅 복구·소유권 회수, 설계 §7 위험 4) — 도구를 돌리기 전에 그 후속을 따라 '이어짐' 으로 마감한다.
+ * 로컬 실행은 후속과 같은 worktree 를 쓰므로, 턴 중간 체크포인트의 남은 호출을 먼저 실행하면 후속과 같은 폴더를 동시에 고친다.
+ * 후속이 없거나 따를 수 없으면(실패·취소) false — 호출부는 종전대로 재개한다(겹칠 실행이 없다).
+ */
+export async function finishIfAlreadyContinued(p: { preTask: AgentTask | undefined; userRole: ContinueInput['userRole']; update: FinishInput['update'] }): Promise<boolean> {
+    if (!p.preTask?.continued_by_task_id) return false;
+    const outcome = await followExistingSuccessor(p.preTask.id, { userRole: p.userRole });
+    if ('skipped' in outcome) { logger.info(`[Continuation] 재실행 — 후속을 따를 수 없어 종전대로 재개: ${p.preTask.id} — ${outcome.skipped}`); return false; }
+    await p.update({ status: 'completed', completionPath: 'continued', progress: 100, result: `이어가기: 후속 작업 ${outcome.successorId} 에서 계속합니다 (재실행 — 이미 이어졌음).` });
+    return true;
 }
