@@ -44,3 +44,13 @@ export async function syncExistingPushSubscription(
   await deps.register({ endpoint: sub.endpoint, keys: sub.toJSON().keys });
   return true;
 }
+
+/**
+ * 초기 재등록 실패 구분 — 서버 검증 거부(400·422, 예: 허용되지 않는 push 호스트)면 true(꺼짐+오류 문구).
+ * 그 밖(네트워크 오류·401·403·429·5xx 등)은 일시 오류로 false(브라우저 구독이 있으니 켜짐 유지, 문구 없음).
+ * ApiClient 의 ApiError 는 숫자 `status` 필드를 가진다.
+ */
+export function isPushRegistrationRejected(err: unknown): boolean {
+  const status = (err as { status?: unknown } | null | undefined)?.status;
+  return status === 400 || status === 422;
+}
