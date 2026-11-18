@@ -13,7 +13,12 @@ jest.mock('../../task-sandbox/planning', () => ({ currentPlanStepIndex: () => un
 const runTool = jest.fn();
 jest.mock('../task-steps', () => ({ runTool: (...a: unknown[]) => runTool(...a), isSearchTool: () => false }));
 jest.mock('../tool-args', () => ({ prepareToolArgs: (a: unknown) => a }));
-jest.mock('../../tool-parallel', () => ({ ...jest.requireActual('../../tool-parallel'), prefetchReadOnlyCalls: async () => new Map() }));
+// 병렬 선실행은 기본으로 끈다 — mcp_elicit 제외 회귀만 실제 구현을 쓴다
+let realPrefetch = false;
+jest.mock('../../tool-parallel', () => {
+    const actual = jest.requireActual('../../tool-parallel');
+    return { ...actual, prefetchReadOnlyCalls: (...a: unknown[]) => (realPrefetch ? actual.prefetchReadOnlyCalls(...a) : Promise.resolve(new Map())) };
+});
 // 도구가 사용자에게 묻는 문맥(구 MCP elicitation)은 이제 도구 런타임 포트가 연다 — 그 문맥을 낚아챈다.
 let elicitCtx: { ask(args: Record<string, unknown>): Promise<unknown> } | undefined;
 jest.mock('../../../runtime-ports/tool-runtime', () => ({
@@ -47,7 +52,7 @@ function input(overrides: Record<string, unknown>) {
     };
 }
 
-beforeEach(() => { jest.clearAllMocks(); elicitCtx = undefined; });
+beforeEach(() => { jest.clearAllMocks(); elicitCtx = undefined; realPrefetch = false; });
 
 describe('executeTurnToolCalls — 주차', () => {
     it('ask_human(task 도구)이 주차되면 이미 끝난 호출은 남기고 질문 호출 앞에서 체크포인트·주차', async () => {
@@ -115,5 +120,125 @@ describe('executeTurnToolCalls — 주차', () => {
         const taskRuntime = { isTaskTool: () => true, executeTaskTool: async () => { throw new AgentTaskParked(); }, getPlanSnapshot: () => [], notifyApprovalPending: jest.fn() };
         const { args } = input({ taskRuntime, toolCalls: [{ id: 'c1', function: { name: 'ask_human', arguments: {} } }] });
         await expect(executeTurnToolCalls(args)).rejects.toThrow('db down');
+    });
+});
+
+/** 실제 승인 레지스트리(가짜 저장소·가짜 slots)로 위임 — 자리 없음 분기·mcp_elicit 제외를 턴 실행과 함께 본다. */
+function realRegistry(room: boolean) {
+    const { ApprovalRegistry } = jest.requireActual('../../task-sandbox/approval-gate') as typeof import('../../task-sandbox/approval-gate');
+    const store = {
+        insertPending: jest.fn(async () => undefined), markDecided: jest.fn(async (..._a: unknown[]): Promise<boolean> => true),
+        listPending: jest.fn(async () => []), getPending: jest.fn(async () => undefined), takeoverForCall: jest.fn(async () => undefined),
+        expirePendingForTask: jest.fn(async () => undefined), extendPending: jest.fn(async () => true),
+    };
+    const slots = { yieldSlot: jest.fn(), tryReclaimSlot: jest.fn(() => room), forceReclaimSlot: jest.fn(), resumeAfterRelease: jest.fn() };
+    const reg = new ApprovalRegistry(store, slots);
+    request.mockImplementation((i: Parameters<typeof reg.request>[0], o: Parameters<typeof reg.request>[1]) => reg.request(i, o));
+    const cards: string[] = [];
+    const waitCards = async (n: number) => {
+        for (let i = 0; i < 50 && cards.length < n; i++) {
+            await new Promise((r) => setImmediate(r));
+            for (const p of await reg.list('u1')) if (!cards.includes(p.approvalId)) cards.push(p.approvalId);
+        }
+        expect(cards.length).toBeGreaterThanOrEqual(n);
+        return cards;
+    };
+    return { reg, store, slots, waitCards };
+}
+function deferred<T>() {
+    let resolve!: (v: T) => void;
+    let reject!: (e: unknown) => void;
+    const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+    return { promise, resolve, reject };
+}
+
+describe('executeTurnToolCalls — 승인 대기 슬롯 양보(호스트 도구)', () => {
+    afterEach(() => { requiresApproval.mockReturnValue(false); request.mockReset(); });
+    const hostCall = { id: 'c1', function: { name: 'od::create_item', arguments: { title: 'x' } } };
+    const allPolicy = { sandboxCfg: { approvalPolicy: 'all', approvalTimeoutMs: 60_000 } };
+
+    it('결정 때 자리가 없으면 parked — 도구 실행 0회·실행 중 표식 0회·체크포인트·AgentTaskParked', async () => {
+        requiresApproval.mockReturnValue(true);
+        const r = realRegistry(false);
+        const { args, conversation } = input({ ...allPolicy, toolCalls: [hostCall] });
+        const run = executeTurnToolCalls(args);
+        const [id] = await r.waitCards(1);
+        await r.reg.approve(id);
+        await expect(run).rejects.toBeInstanceOf(AgentTaskParked);
+        expect(r.slots.yieldSlot).toHaveBeenCalledWith('t1');
+        expect(r.store.markDecided).toHaveBeenCalledWith(id, 'approved', undefined, undefined, false);
+        expect(r.slots.resumeAfterRelease).toHaveBeenCalledWith('t1');
+        expect(runTool).not.toHaveBeenCalled();
+        expect(markToolCallInFlight).not.toHaveBeenCalledWith('t1', 'c1');
+        expect(writeTurnCheckpoint).toHaveBeenCalledWith('t1', conversation, 3, null);
+        expect(markParked).toHaveBeenCalledWith('t1');
+    });
+
+    it.each([
+        ['예외', (d: ReturnType<typeof deferred<boolean>>) => d.reject(new Error('db down'))],
+        ['false', (d: ReturnType<typeof deferred<boolean>>) => d.resolve(false)],
+    ] as const)('저장 대기 → 중단 → 저장 실패(%s) → 도구 실행 0회·실행 중 표식 0회', async (_n, fail) => {
+        requiresApproval.mockReturnValue(true);
+        const r = realRegistry(false);
+        const save = deferred<boolean>();
+        r.store.markDecided.mockReturnValueOnce(save.promise);
+        const ac = new AbortController();
+        const { args } = input({ ...allPolicy, toolCalls: [hostCall], signal: ac.signal });
+        const run = executeTurnToolCalls(args).catch((e: unknown) => e);
+        const [id] = await r.waitCards(1);
+        await r.reg.approve(id);
+        ac.abort();
+        fail(save);
+        await run;
+        expect(runTool).not.toHaveBeenCalled();
+        expect(markToolCallInFlight).not.toHaveBeenCalledWith('t1', 'c1');
+        expect(r.slots.forceReclaimSlot).not.toHaveBeenCalled();
+    });
+
+    it('대조군: 중단 없이 저장 실패 → 상한을 넘겨 그 자리에서 실행(도구 1회)', async () => {
+        requiresApproval.mockReturnValue(true);
+        runTool.mockResolvedValue('ok');
+        const r = realRegistry(false);
+        r.store.markDecided.mockRejectedValueOnce(new Error('db down'));
+        const { args } = input({ ...allPolicy, toolCalls: [hostCall] });
+        const run = executeTurnToolCalls(args).catch((e: unknown) => e);
+        const [id] = await r.waitCards(1);
+        await r.reg.approve(id);
+        await run;
+        expect(r.slots.forceReclaimSlot).toHaveBeenCalledTimes(1);
+        expect(runTool).toHaveBeenCalledTimes(1);
+        expect(markToolCallInFlight).toHaveBeenCalledWith('t1', 'c1');
+    });
+});
+
+describe('executeTurnToolCalls — mcp_elicit 은 슬롯을 양보하지 않는다', () => {
+    afterEach(() => { request.mockReset(); });
+
+    it('읽기 전용 외부 도구 2건이 동시에 입력을 요청해도 yieldSlot·tryReclaimSlot 0회, parkDeferred 로 요청', async () => {
+        realPrefetch = true;
+        const r = realRegistry(false);
+        runTool.mockImplementation(async () => {
+            const a = await elicitCtx!.ask({ server: 'od', question: '어느 쪽?' }) as { decision: string; text?: string };
+            return `답: ${a.text ?? a.decision}`;
+        });
+        const { args } = input({
+            toolCalls: [
+                { id: 'c1', function: { name: 'od::search_a', arguments: {} } },
+                { id: 'c2', function: { name: 'od::search_b', arguments: {} } },
+            ],
+        });
+        const run = executeTurnToolCalls(args);
+        const [first, second] = await r.waitCards(2);
+        expect(request).toHaveBeenCalledWith(expect.objectContaining({ toolName: 'mcp_elicit' }), expect.objectContaining({ parkable: true, parkDeferred: true }));
+        await r.reg.answer(first, '왼쪽');
+        await new Promise((res) => setImmediate(res));
+        expect(r.slots.yieldSlot).not.toHaveBeenCalled();
+        expect(r.slots.tryReclaimSlot).not.toHaveBeenCalled();
+        await r.reg.answer(second, '오른쪽');
+        await run;
+        expect(runTool).toHaveBeenCalledTimes(2);
+        expect(r.slots.yieldSlot).not.toHaveBeenCalled();
+        expect(r.slots.tryReclaimSlot).not.toHaveBeenCalled();
+        expect(r.store.markDecided).toHaveBeenCalledWith(first, 'approved', '왼쪽', undefined, true);
     });
 });
