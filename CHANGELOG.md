@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.139.6](https://github.com/openmake/openmake_llm/compare/v1.139.5...v1.139.6) (2026-11-18)
+
+
+### 🐛 버그 수정
+
+* **api:** 외부 스트리밍 채팅에 첫 청크·유휴 무응답 시한과 진단 로그를 둔다 ([ffdffd2](https://github.com/openmake/openmake_llm/commit/ffdffd2c975f108c0e1aea8ee753781b875f21df))
+* **local-bridge:** 무시(.gitignore) 파일만 만든 격리 작업 폴더를 종료 정리 때 지우지 않는다 ([aabe233](https://github.com/openmake/openmake_llm/commit/aabe2336dc92c43b967062eb612493b03b3cf2e3))
+
+
+### ♻️ 리팩터링
+
+* **api:** 외부 스트림 시한·진단 로그를 external-stream-monitor 로 분리해 파일 크기 관문(600줄)을 맞춘다 ([a118ca2](https://github.com/openmake/openmake_llm/commit/a118ca262a3932636fef069e67c33f65363ae373))
+
 ## [1.139.5](https://github.com/openmake/openmake_llm/compare/v1.139.4...v1.139.5) (2026-11-18)
 
 
