@@ -47,6 +47,7 @@
 "status.auth.accountDisabled" = "アカウントが無効化されました — 管理者にお問い合わせください";
 "status.auth.accountDeleted" = "アカウントが削除されました — 管理者にお問い合わせください";
 "status.auth.scopeRequired" = "この API key には bridge スコープがありません — bridge スコープのキーを発行して設定に入力してください";
+"status.deviceConflict" = "同じデバイス id で別のアプリがすでに接続しています — 実行中の他の OpenMake Companion・CLI を終了してください";
 
 /* フォルダ選択 */
 "panel.title" = "エージェントのタスクに接続するフォルダを選択（複数のフォルダを 1 つずつ追加できます）";

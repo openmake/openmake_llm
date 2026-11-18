@@ -13,6 +13,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -33,6 +34,7 @@
             "deviceId": "pc-1-r-abc",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true,
             "hostId": "pc-1"
@@ -54,6 +56,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -75,6 +78,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "한글 폴더",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -96,6 +100,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           },
@@ -118,6 +123,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           },
@@ -141,6 +147,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           },
@@ -170,6 +177,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           },
@@ -201,6 +209,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           },
@@ -224,6 +233,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           },
@@ -246,6 +256,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           },
@@ -267,6 +278,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -303,6 +315,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           },
@@ -325,6 +338,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -348,6 +362,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -376,6 +391,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -396,6 +412,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           },
@@ -418,6 +435,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -438,6 +456,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -458,6 +477,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -478,6 +498,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -498,6 +519,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -518,6 +540,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -538,6 +561,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -562,6 +586,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -569,6 +594,27 @@
         "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["API key 가 만료되었습니다 — 새 키를 발급해 설정에 넣으세요", "api_key_expired", null]],
         "notices": [],
         "delays": [7777]
+      }
+    },
+    {
+      "id": "close-1008-device-conflict",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test", "reconnectMs": 100},
+      "steps": [{"serverClose": {"code": 1008, "reason": "device_conflict"}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["같은 기기 id 로 다른 앱이 이미 연결돼 있습니다 — 실행 중인 다른 OpenMake Companion·CLI 를 종료하세요", "device_conflict", null]],
+        "notices": [],
+        "delays": [60000]
       }
     },
     {
@@ -582,6 +628,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -602,6 +649,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -622,6 +670,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -642,6 +691,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -662,6 +712,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -682,6 +733,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -702,6 +754,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           }
@@ -729,6 +782,7 @@
             "deviceId": "test-device-1",
             "label": "unit · test",
             "folderName": "root",
+            "instanceId": "{{INSTANCE_ID}}",
             "capabilities": "{{CAPABILITIES}}",
             "authClose": true
           },
