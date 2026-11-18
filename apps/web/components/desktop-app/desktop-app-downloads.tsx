@@ -10,12 +10,20 @@ import { Button, Card, CardContent, CardHeader, CardTitle } from "@/components/u
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { COPY_FEEDBACK_RESET_MS } from "@/lib/constants/ui-limits";
 
-/** 서버 블록 키 = OS. 화면은 키에 라벨만 붙이고, 응답에 있는 블록만 그린다(최상위 값은 native 의 복제라 읽지 않는다). */
+/** 화면의 OS 줄 키(라벨·설치 안내 키와 같다). 응답에 있는 블록만 그린다(최상위 값은 native 의 복제라 읽지 않는다). */
 const OS_KEYS = ["native", "windows"] as const;
 type OsKey = (typeof OS_KEYS)[number];
 
 /**
- * Companion 설치 파일 목록·설치 안내 — GET /api/desktop/latest (공개 라우트).
+ * PURE: OS 줄 하나가 그릴 서버 블록. macOS 줄은 새 정체성 `macos` 가 있으면 그것을, 없으면 `native` 를 그린다 —
+ * `macos` 가 있을 때의 `native` 는 옛 앱 업데이터만 받는 다리 파일이라 화면에 내지 않는다.
+ */
+function releaseBlockFor(data: DesktopLatestPayload, key: OsKey): DesktopReleaseBlock | undefined {
+  return key === "native" ? (data.macos ?? data.native) : data[key];
+}
+
+/**
+ * 데스크톱 앱 설치 파일 목록·설치 안내 — GET /api/desktop/latest (공개 라우트). macOS 줄은 `macos ?? native` 하나.
  * 받기 주소·버전·해시는 서버 값 그대로 쓴다(주소 조립·버전 비교·OS 추정 없음). 게시본 없음은 서버의 404 로 판별한다.
  */
 export function DesktopAppDownloads() {
@@ -66,7 +74,7 @@ export function DesktopAppDownloads() {
   if (!data) return null;
 
   const blocks = OS_KEYS.flatMap((key) => {
-    const block: DesktopReleaseBlock | undefined = data[key];
+    const block = releaseBlockFor(data, key);
     return block ? [{ key, block }] : [];
   });
 

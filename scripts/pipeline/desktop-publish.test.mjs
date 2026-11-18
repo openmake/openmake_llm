@@ -87,7 +87,7 @@ test('판정에 쓰는 스크립트 경로 상수가 실제 이 스크립트 파
 });
 
 // automated: false 면 VERSION 이 게시 자동화(이 스크립트)보다 먼저 저장소에 들어온 이력 — 릴리스가 만들어지지 않는 버전.
-async function fixture(t, { automated = true } = {}) {
+async function fixture(t, { automated = true, version = '0.3.8', file = FILE } = {}) {
     const root = mkdtempSync(path.join(tmpdir(), 'desktop-publish-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const llm = path.join(root, 'llm');
@@ -95,7 +95,7 @@ async function fixture(t, { automated = true } = {}) {
     mkdirSync(path.join(llm, 'apps/desktop-native'), { recursive: true });
     mkdirSync(path.join(llm, 'scripts'));
     copyFileSync(path.join(ROOT, 'scripts/publish-desktop.sh'), path.join(llm, 'scripts/publish-desktop.sh'));
-    writeFileSync(path.join(llm, 'apps/desktop-native/VERSION'), '0.3.8\n');
+    writeFileSync(path.join(llm, 'apps/desktop-native/VERSION'), `${version}\n`);
     if (automated) { mkdirSync(path.join(llm, 'scripts/pipeline')); writeFileSync(path.join(llm, AUTOMATION_SCRIPT), '// automation\n'); }
     git('init', '-q', '-b', 'main');
     git('add', '.'); git('commit', '-qm', 'base');
@@ -112,7 +112,7 @@ async function fixture(t, { automated = true } = {}) {
     };
 
     const routes = new Map(), requests = [];
-    const asset = (name) => `/acme/app/releases/download/desktop-native-v0.3.8/${name}`;
+    const asset = (name) => `/acme/app/releases/download/desktop-native-v${version}/${name}`;
     const server = createServer((req, res) => {
         requests.push(req.url);
         const route = routes.get(req.url);
@@ -125,8 +125,8 @@ async function fixture(t, { automated = true } = {}) {
     // 실제 GitHub 처럼 자산 주소는 다른 곳으로 리다이렉트된다.
     const serve = (manifest = {}) => {
         routes.set(asset('desktop-native.json'), { status: 302, headers: { location: '/objects/manifest' } });
-        routes.set('/objects/manifest', { body: JSON.stringify({ schemaVersion: 1, version: '0.3.8', file: FILE, sha256: DMG_SHA, gitSha: built, ...manifest }) });
-        routes.set(asset(FILE), { status: 302, headers: { location: '/objects/dmg' } });
+        routes.set('/objects/manifest', { body: JSON.stringify({ schemaVersion: 1, version, file, sha256: DMG_SHA, gitSha: built, ...manifest }) });
+        routes.set(asset(file), { status: 302, headers: { location: '/objects/dmg' } });
         routes.set('/objects/dmg', { body: DMG });
     };
     const dir = path.join(llm, 'data/desktop-updates'), latest = path.join(dir, 'latest.json');
@@ -312,7 +312,7 @@ test('publish: 성공하면 native 를 새 버전으로, 직전 매니페스트�
     assert.deepEqual(readFileSync(path.join(f.dir, FILE)), DMG);
     assert.ok(!existsSync(path.join(f.dir, '.incoming')));
     const r = f.receipt();
-    assert.deepEqual({ ...r, at: undefined }, { schemaVersion: 1, stage: 'desktop-publish', sha: f.installed, version: '0.3.8', file: FILE, sha256: DMG_SHA, gitSha: f.built, status: 'published', at: undefined });
+    assert.deepEqual({ ...r, at: undefined }, { schemaVersion: 1, stage: 'desktop-publish', sha: f.installed, version: '0.3.8', file: FILE, sha256: DMG_SHA, gitSha: f.built, block: 'native', status: 'published', at: undefined });
     assert.ok(!Number.isNaN(Date.parse(r.at)));
     assert.equal(statSync(f.receiptPath).mode & 0o777, 0o600);
     assert.doesNotMatch(readFileSync(f.receiptPath, 'utf8'), /https?:|127\.0\.0\.1/, 'receipt carries no address');
@@ -376,6 +376,64 @@ test('publish: 게시 뒤 매니페스트가 기대값이 아니면 되돌리고
     const runPublishScript = ({ dir }) => { writeFileSync(path.join(dir, 'latest.json'), JSON.stringify({ native: { version: '0.3.8', file: FILE, sha256: '1'.repeat(64) } })); return 0; };
     assert.equal(await f.run({ runPublishScript }), 1);
     assert.equal(manifestOf(f.latest), PREVIOUS);
+    // 두 블록 어느 쪽도 자산과 같지 않으면(값이 macos 에 엉뚱하게 실려도) 되돌리고 실패한다.
+    const both = ({ dir }) => {
+        writeFileSync(path.join(dir, 'latest.json'), JSON.stringify({
+            native: { version: '0.3.7', file: 'OpenMake-Companion-0.3.7-arm64.dmg', sha256: 'e'.repeat(64) },
+            macos: { version: '0.3.8', file: 'OpenMake-Code-0.3.8-arm64.dmg', sha256: DMG_SHA },
+        }));
+        return 0;
+    };
+    assert.equal(await f.run({ runPublishScript: both }), 1);
+    assert.match(f.receipt().reason, /does not match the release asset/);
+    assert.equal(manifestOf(f.latest), PREVIOUS);
+});
+
+// ── macOS 두 블록: native(옛 정체성 OpenMake Companion)·macos(새 정체성 OpenMake Code) — 게시본 = 둘 중 높은 버전 ──
+const CODE_FILE = 'OpenMake-Code-0.5.0-arm64.dmg';
+const BRIDGE = { version: '0.4.4', file: 'OpenMake-Companion-0.4.4-arm64.dmg', sha256: 'e'.repeat(64) };
+const WIN = { version: '0.1.0', file: 'OpenMake-Companion-Setup-0.1.0.exe', sha256: 'f'.repeat(64) };
+
+test('publish: native 0.4.4 + macos 0.5.0, 체크아웃 0.5.0 → unchanged, 네트워크 0회, 영수증은 macos 의 값', async (t) => {
+    const f = await fixture(t, { version: '0.5.0', file: CODE_FILE });
+    f.serve();
+    f.setPublished(JSON.stringify({ native: BRIDGE, macos: { version: '0.5.0', file: CODE_FILE, sha256: DMG_SHA } }));
+    assert.equal(await f.run(), 0);
+    assert.equal(f.receipt().status, 'unchanged');
+    assert.equal(f.receipt().block, 'macos');
+    assert.deepEqual(f.receipt().published, { file: CODE_FILE, sha256: DMG_SHA });
+    assert.equal(f.requests.length, 0);
+});
+
+test('publish: native 0.4.4 만 있고 체크아웃 0.5.0(OpenMake Code 자산) → macos 를 게시, native·windows 그대로 — 다시 돌리면 unchanged', async (t) => {
+    const f = await fixture(t, { version: '0.5.0', file: CODE_FILE });
+    const previous = JSON.stringify({ native: BRIDGE, windows: WIN }) + '\n';
+    f.setPublished(previous);
+    f.serve();
+    assert.equal(await f.run(), 0);
+    const now = JSON.parse(manifestOf(f.latest));
+    assert.deepEqual(now, { native: BRIDGE, windows: WIN, macos: { version: '0.5.0', file: CODE_FILE, sha256: DMG_SHA } });
+    assert.equal(readFileSync(`${f.latest}.prev`, 'utf8'), previous);
+    assert.equal(f.receipt().status, 'published');
+    assert.equal(f.receipt().block, 'macos');
+    const before = f.requests.length;
+    assert.equal(await f.run(), 0);
+    assert.equal(f.receipt().status, 'unchanged');
+    assert.equal(f.receipt().block, 'macos');
+    assert.equal(f.requests.length, before);
+});
+
+test('publish: macos 가 체크아웃보다 높으면(native 는 낮아도) ahead — 내리지 않는다', async (t) => {
+    const f = await fixture(t, { version: '0.5.0', file: CODE_FILE });
+    f.serve();
+    const published = JSON.stringify({ native: BRIDGE, macos: { version: '0.5.1', file: 'OpenMake-Code-0.5.1-arm64.dmg', sha256: 'd'.repeat(64) } });
+    f.setPublished(published);
+    assert.equal(await f.run(), 0);
+    assert.equal(f.receipt().status, 'ahead');
+    assert.equal(f.receipt().block, 'macos');
+    assert.deepEqual(f.receipt().published, { file: 'OpenMake-Code-0.5.1-arm64.dmg', sha256: 'd'.repeat(64) });
+    assert.equal(manifestOf(f.latest), published);
+    assert.equal(f.requests.length, 0);
 });
 
 test('CLI: publish 는 OMK_GITHUB_WEB 에서 받고 종료 코드(75)를 그대로 낸다, 인자가 모자라면 1', async (t) => {

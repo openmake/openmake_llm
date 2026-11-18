@@ -251,7 +251,7 @@
       "dismiss": "닫기",
       "copyKey": "키 복사",
       "copied": "복사됨",
-      "bridgeHint": "이 키는 Companion 과 CLI 연결 전용입니다. Companion 의 설정 또는 CLI 의 로그인(openmake-code login)에 넣으세요. 추론 API 호출에는 쓸 수 없습니다.",
+      "bridgeHint": "이 키는 데스크톱 앱과 CLI 연결 전용입니다. 데스크톱 앱의 설정 또는 CLI 의 로그인(openmake-code login)에 넣으세요. 추론 API 호출에는 쓸 수 없습니다.",
       "curlTitle": "빠른 시작 (curl)",
       "copyCurl": "curl 복사"
     },
@@ -965,8 +965,8 @@
     "stateLabel": "상태:",
     "turnLabel": "턴:",
     "queuePosition": "대기 순번 {position}번 — 앞선 작업이 끝나면 자동으로 시작합니다",
-    "waitingDevice": "로컬 기기 연결을 기다리는 중 — Companion 을 연결하면 이어서 실행합니다",
-    "waitingBrowserTakeover": "사용자가 브라우저를 조작하는 중 — Companion 에서 브라우저를 돌려주면 이어서 실행합니다",
+    "waitingDevice": "로컬 기기 연결을 기다리는 중 — 데스크톱 앱을 연결하면 이어서 실행합니다",
+    "waitingBrowserTakeover": "사용자가 브라우저를 조작하는 중 — 데스크톱 앱에서 브라우저를 돌려주면 이어서 실행합니다",
     "waitingModel": "모델 서버의 응답을 기다리는 중 — 모델이 돌아오면 자동으로 이어서 실행합니다",
     "planLabel": "계획 ({completed}/{total})",
     "outputsLabel": "산출물 {count}개",
@@ -1052,10 +1052,10 @@
         "llm_error": "잠시 뒤 다시 실행하세요. 계속되면 다른 모델을 고르거나 관리자에게 알리세요.",
         "interrupted": "이어하기가 있으면 중단된 지점부터 이어서 하고, 없으면 다시 실행하세요.",
         "unknown": "실패 사유 전문을 확인하고, 다시 실행해도 같으면 관리자에게 알리세요.",
-        "device_wait_expired": "Companion(또는 CLI)을 연결한 뒤 다시 실행하세요.",
-        "browser_takeover_expired": "Companion 메뉴에서 브라우저를 돌려준 뒤 다시 실행하세요.",
+        "device_wait_expired": "데스크톱 앱(또는 CLI)을 연결한 뒤 다시 실행하세요.",
+        "browser_takeover_expired": "데스크톱 앱 메뉴에서 브라우저를 돌려준 뒤 다시 실행하세요.",
         "sandbox_unavailable": "잠시 뒤 다시 실행하세요. 동시에 도는 작업이 줄면 실행 환경을 받을 수 있습니다. 계속되면 관리자에게 알리세요.",
-        "interrupted_local_device": "Companion(또는 CLI)을 다시 연결한 뒤, 이어하기가 있으면 이어서 하고 없으면 다시 실행하세요.",
+        "interrupted_local_device": "데스크톱 앱(또는 CLI)을 다시 연결한 뒤, 이어하기가 있으면 이어서 하고 없으면 다시 실행하세요.",
         "lease_held_elsewhere": "잠시 뒤 다시 실행하세요.",
         "recovery_limit": "이어하기로 중단된 지점부터 다시 시도할 수 있습니다. 같은 지점에서 또 멈추면 목표를 더 작게 나눠 다시 실행하거나 관리자에게 알리세요."
       }
@@ -2406,7 +2406,7 @@
   },
   "desktopApp": {
     "title": "데스크톱 앱",
-    "subtitle": "OpenMake Companion — 내 PC 의 폴더에서 에이전트 작업을 실행하게 해 주는 앱입니다.",
+    "subtitle": "OpenMake 데스크톱 앱 — 내 PC 의 폴더에서 에이전트 작업을 실행하게 해 주는 앱입니다.",
     "loading": "불러오는 중…",
     "filesTitle": "설치 파일",
     "os": {
@@ -2424,7 +2424,7 @@
       "title": "설치 안내",
       "native": "macOS: dmg 를 열어 앱을 응용 프로그램 폴더로 옮깁니다. 처음 실행 때 경고가 나오면 시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기를 누릅니다.",
       "windows": "Windows: 설치 파일을 실행합니다. \"Windows의 PC 보호\" 화면이 나오면 추가 정보 → 실행을 누릅니다.",
-      "apiKey": "설치 뒤 앱 설정에 서버 주소(이 웹의 주소)와 API key 를 넣습니다 — <link>API 액세스</link>에서 Companion·CLI 연결용 키를 발급하세요."
+      "apiKey": "설치 뒤 앱 설정에 서버 주소(이 웹의 주소)와 API key 를 넣습니다 — <link>API 액세스</link>에서 데스크톱 앱·CLI 연결용 키를 발급하세요."
     }
   },
   "notFound": {
@@ -2754,7 +2754,7 @@
   },
   "adminBridgeDevices": {
     "title": "연결 기기",
-    "description": "Companion·CLI 로 로컬 실행에 연결된 전체 기기입니다. 폴더는 이름만 보입니다.",
+    "description": "데스크톱 앱·CLI 로 로컬 실행에 연결된 전체 기기입니다. 폴더는 이름만 보입니다.",
     "loadError": "불러오기에 실패했습니다.",
     "disabled": "로컬 실행 기능이 꺼져 있습니다(LOCAL_EXECUTOR_ENABLED).",
     "listTitle": "연결된 기기",
