@@ -135,3 +135,56 @@ it('사용자 키 거절 뒤 같은 사용자의 재호출은 공급자를 다�
     await rerankBySemantics('q', input, 'u2');
     expect(callJsonMock).toHaveBeenCalledTimes(2);
 });
+
+describe('리랭킹 기한(SEARCH_RERANK_TIMEOUT_MS 기본 2500) — 해석부터 임베딩까지 하나로 덮는다 (2026-11-18 r4, Fable r3 지적 3)', () => {
+    afterEach(() => jest.useRealTimers());
+
+    it('embedTexts 에 기한과 공유 신호를 넘긴다', async () => {
+        resolveMock.mockResolvedValue(TARGET);
+        callJsonMock.mockImplementation(rankingEmbed());
+        await rerankBySemantics('q', results(3), 'u1');
+        const opts = callJsonMock.mock.calls[0][1] as { timeoutMs: number; signal?: AbortSignal };
+        expect(opts.timeoutMs).toBe(2500);
+        expect(opts.signal).toBeInstanceOf(AbortSignal);
+        expect(opts.signal!.aborted).toBe(false);
+    });
+
+    it('해석이 기한을 넘기면 기존 랭킹을 돌려주고, 늦게 끝난 해석 뒤에도 호출·원장이 없다', async () => {
+        jest.useFakeTimers();
+        let finishResolve!: (v: unknown) => void;
+        resolveMock.mockReturnValue(new Promise((r) => { finishResolve = r; }));
+        callJsonMock.mockImplementation(rankingEmbed());
+        const input = results(3);
+
+        const p = rerankBySemantics('q', input, 'u1');
+        await jest.advanceTimersByTimeAsync(2500);
+        await expect(p).resolves.toBe(input);
+
+        finishResolve(TARGET);
+        await jest.advanceTimersByTimeAsync(0);
+        expect(callJsonMock).not.toHaveBeenCalled();
+        expect(recordCostMock).not.toHaveBeenCalled();
+    });
+
+    it('해석 2000ms + 임베딩이 남은 500ms 를 넘기면 2500ms 에 끊고 기존 랭킹을 돌려준다', async () => {
+        jest.useFakeTimers();
+        resolveMock.mockImplementation(() => new Promise((r) => setTimeout(() => r(TARGET), 2000)));
+        let seen: AbortSignal | undefined;
+        callJsonMock.mockImplementation((_t: unknown, o: { signal?: AbortSignal }) => new Promise((_, rej) => {
+            seen = o.signal;
+            o.signal?.addEventListener('abort', () => rej(new Error('aborted')));
+        }));
+        const input = results(3);
+
+        let settled = false;
+        const p = rerankBySemantics('q', input, 'u1').finally(() => { settled = true; });
+        await jest.advanceTimersByTimeAsync(2000);
+        expect(callJsonMock).toHaveBeenCalledTimes(1);
+        await jest.advanceTimersByTimeAsync(499);
+        expect(settled).toBe(false);
+        await jest.advanceTimersByTimeAsync(1);
+        await expect(p).resolves.toBe(input);
+        expect(seen?.aborted).toBe(true);
+        expect(recordCostMock).not.toHaveBeenCalled();
+    });
+});
