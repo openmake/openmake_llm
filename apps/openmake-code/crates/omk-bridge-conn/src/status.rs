@@ -1,8 +1,8 @@
 //! 상태 알림 — 글은 한국어 고정 문구(TS 와 글자 단위로 같다), 코드·치환값은 호스트 다국어 표시용.
 
-use crate::constants::AuthCloseReason;
+use crate::constants::{AuthCloseReason, DEVICE_CONFLICT_REASON};
 
-/// 상태 코드 14개 — TS `BridgeStatusCode`.
+/// 상태 코드 15개 — TS `BridgeStatusCode`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusCode {
     Connecting,
@@ -12,6 +12,8 @@ pub enum StatusCode {
     Closed,
     Idle,
     AuthError,
+    /// 같은 기기 id 로 다른 프로세스가 이미 연결돼 있어 거절됨(2026-11-19).
+    DeviceConflict,
     /// 인증 사유로 닫힘 — 사유 이름이 그대로 코드다.
     Auth(AuthCloseReason),
 }
@@ -26,6 +28,7 @@ impl StatusCode {
             StatusCode::Closed => "closed",
             StatusCode::Idle => "idle",
             StatusCode::AuthError => "auth_error",
+            StatusCode::DeviceConflict => DEVICE_CONFLICT_REASON,
             StatusCode::Auth(r) => r.as_str(),
         }
     }

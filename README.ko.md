@@ -170,7 +170,7 @@ OpenMake
 | 설정 | 켜지는 기능 | 준비 사항 |
 |---|---|---|
 | `TASK_SANDBOX_ENABLED=true` | 작업마다 영속 Docker 작업 공간 | `infra/mcp-runtime` 을 빌드한 뒤 `infra/task-runtime` 빌드 |
-| `LOCAL_EXECUTOR_ENABLED=true` | 사용자 컴퓨터에서 도구 실행 | `bridge` 스코프 API 키로 연결한 OpenMake Companion 또는 CLI |
+| `LOCAL_EXECUTOR_ENABLED=true` | 사용자 컴퓨터에서 도구 실행 | `bridge` 스코프 API 키로 연결한 OpenMake 데스크톱 앱 또는 CLI |
 | `AGENT_TASK_QUEUE_ENABLED=true` | 전체·사용자별 동시 실행 상한 | — |
 
 ```bash

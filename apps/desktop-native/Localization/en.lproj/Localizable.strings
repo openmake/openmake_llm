@@ -13,6 +13,7 @@
 "menu.checkUpdates" = "Check for Updates…";
 "menu.settings" = "Settings…";
 "menu.quit" = "Quit";
+"menu.retry" = "Try Again";
 
 /* Settings */
 "settings.auth" = "Authentication";
@@ -36,6 +37,8 @@
 "status.closed" = "Closed";
 "status.apiKeyRequired" = "API key required — enter it in Settings";
 "status.folderOpenFailed" = "Could not open folder: %@";
+"status.instance_conflict" = "Another OpenMake Companion is already running (%@)";
+"status.instance_lock_failed" = "Could not lock the app data folder, so no connection was made";
 "status.helperMissing" = "Helper resources missing (reinstall required)";
 "status.helperExited" = "Helper stopped — connect again";
 "status.helperLaunchFailed" = "Could not start helper: %@";
@@ -47,6 +50,7 @@
 "status.auth.accountDisabled" = "Your account has been deactivated — contact your administrator";
 "status.auth.accountDeleted" = "Your account has been deleted — contact your administrator";
 "status.auth.scopeRequired" = "This API key lacks the bridge scope — create a key with the bridge scope and enter it in Settings";
+"status.deviceConflict" = "Another app is already connected with the same device id — quit the other OpenMake Companion or CLI that is running";
 
 /* Folder picker */
 "panel.title" = "Choose a folder for agent tasks (you can add several folders one at a time)";

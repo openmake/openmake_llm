@@ -13,10 +13,12 @@ export interface DesktopReleaseBlock {
 }
 
 /**
- * data — `native`(macOS)·`windows` 블록은 게시된 OS 만 실린다.
- * 최상위 값은 native 의 복제(구 업데이터 호환) — 웹은 `native`·`windows` 블록만 읽는다.
+ * data — 블록은 게시된 것만 실린다. `native` = macOS 옛 정체성(OpenMake Companion, 옛 앱 업데이터용),
+ * `macos` = macOS 새 정체성(OpenMake Code), `windows` = Windows.
+ * 최상위 값은 native 의 복제(구 업데이터 호환) — 웹은 블록만 읽고, macOS 줄은 `macos` 가 있으면 그것을 그린다.
  */
 export type DesktopLatestPayload = Partial<DesktopReleaseBlock> & {
   native?: DesktopReleaseBlock;
+  macos?: DesktopReleaseBlock;
   windows?: DesktopReleaseBlock;
 };

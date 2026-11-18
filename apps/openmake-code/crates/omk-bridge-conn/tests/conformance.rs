@@ -255,6 +255,8 @@ fn conn_constants() {
         "AUTH_RETRY_MS": c::AUTH_RETRY_MS,
         "AUTH_CLOSE_REASONS": reasons,
         "AUTH_CLOSE_TEXT": texts,
+        "DEVICE_CONFLICT_REASON": c::DEVICE_CONFLICT_REASON,
+        "DEVICE_CONFLICT_TEXT": c::DEVICE_CONFLICT_TEXT,
         "NOTICE_KINDS": c::NOTICE_KINDS,
         "NOTICE_TOOL_NAME_MAX": c::NOTICE_TOOL_NAME_MAX,
         "TASK_ID_RE": {"source": c::TASK_ID_RE_SOURCE, "flags": c::TASK_ID_RE_FLAGS},

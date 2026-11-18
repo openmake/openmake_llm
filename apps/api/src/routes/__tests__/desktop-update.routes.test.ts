@@ -165,3 +165,63 @@ describe('resolveDesktopPorts — 웹 포트 규칙은 resolve-ports.cjs 와 같
         expect(resolveDesktopPorts(52416, {})).toEqual({ apiPort: 52416, webPort: 3000 });
     });
 });
+
+describe('macos 블록 (OpenMake Code)', () => {
+    const MACOS = { version: '0.5.0', file: 'OpenMake-Code-0.5.0-arm64.dmg', sha256: 'd'.repeat(64) };
+    const WIN = { version: '0.1.0', file: 'OpenMake-Companion-Setup-0.1.0.exe', sha256: 'c'.repeat(64) };
+    const url = (file: string) => `/api/desktop/download/${file}`;
+    beforeAll(() => fs.writeFileSync(path.join(DIR, MACOS.file), 'code-app'));
+
+    it('native·macos·windows 를 모두 싣고, 최상위 값은 macos 가 아니라 native 를 따른다', async () => {
+        writeManifest({ native: NATIVE, macos: MACOS, windows: WIN });
+        const res = await request(app).get('/api/desktop/latest');
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual({
+            ...NATIVE, url: url(NATIVE.file),
+            native: { ...NATIVE, url: url(NATIVE.file) },
+            macos: { ...MACOS, url: url(MACOS.file) },
+            windows: { ...WIN, url: url(WIN.file) },
+        });
+    });
+
+    it('macos 만 있으면 200 — 최상위 값·native 는 없다', async () => {
+        writeManifest({ macos: MACOS });
+        const res = await request(app).get('/api/desktop/latest');
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual({ macos: { ...MACOS, url: url(MACOS.file) } });
+    });
+
+    it('블록은 자기 패턴의 파일명일 때만 싣는다 — 두 정체성의 파일명이 뒤바뀌면 둘 다 빠진다', async () => {
+        writeManifest({ native: { ...NATIVE, file: MACOS.file }, macos: { ...MACOS, file: NATIVE.file }, windows: WIN });
+        const res = await request(app).get('/api/desktop/latest');
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual({ windows: { ...WIN, url: url(WIN.file) } });
+    });
+
+    it('macos 만 있는데 파일명이 패턴 밖이면 404', async () => {
+        writeManifest({ macos: { ...MACOS, file: 'OpenMake-Codex-0.5.0-arm64.dmg' } });
+        expect((await request(app).get('/api/desktop/latest')).status).toBe(404);
+    });
+
+    it('OpenMake-Code dmg 를 내려주고, 없는 파일은 404, 패턴 밖 이름은 400', async () => {
+        const ok = await request(app).get(url(MACOS.file)).buffer(true).parse((r, cb) => {
+            const chunks: Buffer[] = [];
+            r.on('data', (c: Buffer) => chunks.push(c));
+            r.on('end', () => cb(null, Buffer.concat(chunks)));
+        });
+        expect(ok.status).toBe(200);
+        expect((ok.body as Buffer).toString()).toBe('code-app');
+        expect(ok.headers['content-type']).toBe('application/x-apple-diskimage');
+        expect((await request(app).get(url('OpenMake-Code-9.9.9-arm64.dmg'))).status).toBe(404);
+        for (const bad of ['OpenMake-Code-..%2Fx.dmg', 'OpenMake-Codex-1.dmg', 'OpenMake-Code-1.exe']) {
+            expect((await request(app).get(url(bad))).status).toBe(400);
+        }
+    });
+
+    it('게시 스크립트(bash)의 파일명 검사는 서버 패턴과 글자 그대로 같다', async () => {
+        const { DESKTOP_UPDATE } = await import('../../config/desktop-update');
+        const script = fs.readFileSync(path.resolve(__dirname, '../../../../../scripts/publish-desktop.sh'), 'utf8');
+        expect(script).toContain(DESKTOP_UPDATE.FILE_PATTERN.source);
+        expect(script).toContain(DESKTOP_UPDATE.MACOS_FILE_PATTERN.source);
+    });
+});

@@ -29,6 +29,12 @@ export const LOCAL_BRIDGE = {
     /** PC 1대가 동시에 연결할 수 있는 폴더(루트) 상한 — PC 단위로 세면서 폴더 수가 무한정 늘지 않게 한다. */
     MAX_ROOTS_PER_HOST: parseInt(process.env.LOCAL_BRIDGE_MAX_ROOTS_PER_HOST || '8', 10),
 
+    /**
+     * 같은 deviceId 의 다른 연결이 오면 기존 연결에 확인 ping 을 보내고 pong 을 기다리는 시간(ms, 2026-11-19).
+     * 응답하면 새 연결을 거절(device_conflict)하고, 응답하지 않으면 종전대로 대체한다. 재연결 첫 간격(5~10초)보다 짧게 둔다.
+     */
+    REREGISTER_PROBE_MS: parseInt(process.env.LOCAL_BRIDGE_REREGISTER_PROBE_MS || '', 10) || 5000,
+
     /** 폴더 선택(folders kind) 1회 열거 상한 — 초과분은 절단 + truncated 플래그(디바이스측 강제). */
     FOLDERS_MAX_ENTRIES: parseInt(process.env.BRIDGE_FOLDERS_MAX_ENTRIES || '200', 10),
 
@@ -101,6 +107,17 @@ export type BridgeAuthFailure = keyof typeof BRIDGE_AUTH_FAILURE_MESSAGES;
 
 /** 브리지 연결을 닫는 코드 — 정책 위반(1008, 다시 연결해도 같은 결과)과 잠시 후 재시도(1013). */
 export const BRIDGE_CLOSE_CODES = { POLICY: 1008, TRY_AGAIN_LATER: 1013 } as const;
+
+/**
+ * 같은 deviceId 로 다른 프로세스가 이미 연결돼 있어(확인 ping 에 응답) 새 연결을 거절할 때의 사유·문구(2026-11-19).
+ * 사유 문자열은 코어 DEVICE_CONFLICT_REASON 과 1:1(fixture conn-constants) — 앱이 이 값으로 다국어 상태를 고른다.
+ */
+export const BRIDGE_DEVICE_CONFLICT_REASON = 'device_conflict';
+export const BRIDGE_DEVICE_CONFLICT_MESSAGE = '같은 기기 id 로 다른 앱이 이미 연결돼 있습니다 — 실행 중인 다른 OpenMake Companion·CLI 를 종료하세요';
+/** 무응답 대체 횟수를 세는 창(ms) — 경고 줄에 이 창 안의 횟수를 붙인다. */
+export const BRIDGE_SILENT_REPLACE_WINDOW_MS = 10 * 60 * 1000;
+/** 거절 경고를 기기별로 이 간격(ms)에 한 번만 남긴다 — 거절된 옛 앱이 계속 다시 시도해도 줄이 쏟아지지 않게. */
+export const BRIDGE_CONFLICT_LOG_INTERVAL_MS = 60 * 1000;
 
 /** 다시 시도하면 풀릴 수 있는 인증 실패 — TRY_AGAIN_LATER 로 닫는다. */
 export const BRIDGE_AUTH_RETRYABLE: ReadonlySet<BridgeAuthFailure> = new Set<BridgeAuthFailure>(['auth_unavailable']);

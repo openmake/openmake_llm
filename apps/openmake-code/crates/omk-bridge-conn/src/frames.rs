@@ -7,11 +7,13 @@ use serde_json::{Map, Value, json};
 use crate::notice::{Notice, parse_notice};
 
 /// `bridge_hello`. `hostId` 는 비어 있지 않을 때만 싣는다. `authClose` 는 인증 실패를 사유와 함께 닫아도 된다는 표시다.
+/// `instanceId` 는 프로세스 난수(재연결해도 같다) — 없으면(난수 실패) 싣지 않는다. 서버는 옛 기기처럼 다룬다.
 pub fn hello(
     device_id: &str,
     label: &str,
     folder_name: &str,
     host_id: Option<&str>,
+    instance_id: Option<&str>,
     capabilities: &[&str],
 ) -> Value {
     let mut f = json!({
@@ -24,6 +26,9 @@ pub fn hello(
     });
     if let Some(h) = host_id.filter(|h| !h.is_empty()) {
         f["hostId"] = json!(h);
+    }
+    if let Some(i) = instance_id {
+        f["instanceId"] = json!(i);
     }
     f
 }
@@ -96,18 +101,31 @@ mod tests {
     #[test]
     fn hello_has_host_id_only_when_non_empty() {
         let caps = ["read"];
-        let with = hello("d", "l", "f", Some("pc"), &caps);
+        let with = hello("d", "l", "f", Some("pc"), Some("i-1"), &caps);
         assert_eq!(
             with,
             json!({"type": "bridge_hello", "deviceId": "d", "label": "l", "folderName": "f",
-                   "capabilities": ["read"], "authClose": true, "hostId": "pc"})
+                   "capabilities": ["read"], "authClose": true, "hostId": "pc", "instanceId": "i-1"})
         );
         assert!(
-            hello("d", "l", "f", Some(""), &caps)
+            hello("d", "l", "f", Some(""), None, &caps)
                 .get("hostId")
                 .is_none()
         );
-        assert!(hello("d", "l", "f", None, &caps).get("hostId").is_none());
+        assert!(
+            hello("d", "l", "f", None, None, &caps)
+                .get("hostId")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn hello_omits_instance_id_when_absent() {
+        assert!(
+            hello("d", "l", "f", None, None, &["read"])
+                .get("instanceId")
+                .is_none()
+        );
     }
 
     #[test]

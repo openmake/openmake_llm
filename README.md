@@ -168,7 +168,7 @@ An agent task pursues a goal across many tool-calling turns. Agents can:
 | Setting | Enables | Prerequisite |
 |---|---|---|
 | `TASK_SANDBOX_ENABLED=true` | Persistent Docker workspace per task | Build `infra/mcp-runtime`, then `infra/task-runtime` |
-| `LOCAL_EXECUTOR_ENABLED=true` | Tool calls on a user's own machine | OpenMake Companion or CLI with a `bridge`-scoped API key |
+| `LOCAL_EXECUTOR_ENABLED=true` | Tool calls on a user's own machine | The OpenMake desktop app or CLI with a `bridge`-scoped API key |
 | `AGENT_TASK_QUEUE_ENABLED=true` | Global and per-user concurrency limits | — |
 
 ```bash

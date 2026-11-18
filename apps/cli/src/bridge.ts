@@ -12,6 +12,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { BridgeConnection, BridgeCore, type ConfirmFn as CoreConfirmFn } from '@openmake/local-bridge-core';
 import { deviceId } from './config';
+import { RegistrationWatch, type RegisterOutcome } from './register-wait';
 
 /** 터미널 confirm 어댑터 시그니처 — 코어 계약을 그대로 재노출 (index.ts 하위호환). */
 export type ConfirmFn = CoreConfirmFn;
@@ -28,6 +29,8 @@ interface BridgeOptions {
 
 export class CliBridge {
     private readonly connection: BridgeConnection;
+    /** 자기 소켓의 등록 결과 — 연결을 시작하기 전부터 상태를 받아 둔다(run·resume 의 성공 판정, 2026-11-19). */
+    private readonly registration = new RegistrationWatch();
 
     constructor(opts: BridgeOptions) {
         const core = new BridgeCore({
@@ -46,10 +49,12 @@ export class CliBridge {
             // 네이티브 클라이언트라 Origin 헤더를 보내지 않는다 — 인증은 API key(헤더). 서버는
             // API key 요청에 한해 Origin 검증을 면제한다(CSWSH 는 쿠키 기반 브라우저 공격).
             headers: () => ({ Authorization: `Bearer ${opts.apiKey}` }),
-            ...(opts.onStatus ? { onStatus: opts.onStatus } : {}),
+            onStatus: (s, code, arg) => { this.registration.note(s, code, arg); opts.onStatus?.(s); },
         });
     }
 
     connect(): void { void this.connection.connect(); }
+    /** 자기 소켓이 bridge_ready 를 받을 때까지(또는 충돌·인증 실패) 기다린다. 시간이 다 되면 timeout. */
+    waitRegistered(timeoutMs: number): Promise<RegisterOutcome> { return this.registration.wait(timeoutMs); }
     disconnect(): void { this.connection.disconnect(); }
 }
