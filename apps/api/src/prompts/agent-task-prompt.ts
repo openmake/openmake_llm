@@ -118,10 +118,11 @@ export function getAgentTaskDeliverableNudge(): string {
  * 로컬 실행기 worktree 격리 안내 — 사용자의 현재 브랜치·작업트리를 건드리지 않고 별도 브랜치에서
  * 작업 중임을 모델에게 알려, 최종 답변에 브랜치명을 명시하게 한다(사용자가 검토·머지할 지점).
  */
+export const WORKTREE_ISOLATION_HEADING = '## 작업 브랜치 (격리)'; // 안내 생성과 재개 때 찾기(agent-task-isolation-note)가 같이 쓴다
 export function getWorktreeIsolationNote(branch: string): string {
     return [
         '',
-        '## 작업 브랜치 (격리)',
+        WORKTREE_ISOLATION_HEADING,
         `- 당신의 변경은 사용자 저장소의 별도 작업 브랜치 \`${branch}\` 에서만 이뤄집니다.`,
         '  사용자의 현재 브랜치·작업 중인 파일은 영향을 받지 않습니다.',
         '- 브랜치를 직접 바꾸거나(checkout/switch) 병합하지 마세요 — 검토·병합은 사용자가 합니다.',

@@ -212,3 +212,32 @@ describe('worktree 격리 상태(isolation, 200)', () => {
         expect(thrown.isolation).not.toHaveProperty('outcome');
     });
 });
+
+describe('이어받은 세그먼트의 worktree (worktreeKey)', () => {
+    it('worktree add·diff·remove 는 물려받은 키로, exec·task_end 는 자기 taskId 로 보낸다', async () => {
+        const ex = new RemoteExecutor('seg2-0000-0000', 'user-1', undefined, undefined, 'root-1111-1111');
+        await ex.create();
+        await ex.exec('ls');
+        await ex.captureDiff();
+        await ex.cleanup();
+        const wt = requests.filter((r) => r.kind === 'worktree');
+        expect(wt.map((r) => r.op)).toEqual(['add', 'diff', 'remove']);
+        expect(wt.every((r) => r.taskId === 'root-1111-1111')).toBe(true);
+        expect(requests.find((r) => r.kind === 'exec')).toEqual(expect.objectContaining({ taskId: 'seg2-0000-0000' }));
+        expect(requests.find((r) => r.kind === 'task_end')).toEqual(expect.objectContaining({ taskId: 'seg2-0000-0000' }));
+    });
+
+    it('키를 주지 않으면 종전대로 자기 taskId', async () => {
+        const ex = new RemoteExecutor('task-abcdef12', 'user-1');
+        await ex.create();
+        await ex.cleanup();
+        expect(requests.filter((r) => r.kind === 'worktree').every((r) => r.taskId === 'task-abcdef12')).toBe(true);
+    });
+
+    it('handover 면 worktree remove 를 보내지 않고 task_end 만 보낸다(outcome 없음)', async () => {
+        const ex = await isolated();
+        await ex.cleanup(false, { handover: true });
+        expect(requests.map((r) => `${r.kind}:${r.op ?? ''}`)).toEqual(['task_end:']);
+        expect(ex.isolation).toEqual({ state: 'worktree', branch: BRANCH, worktreeRel: WT_REL });
+    });
+});

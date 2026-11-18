@@ -249,6 +249,7 @@ describeOrSkip('이어가기 원자성·복구 (실제 Postgres, #1473)', () => 
             expect(r).toHaveProperty('successorId');
             const s = (await assertParentLinkComplete(parent.id, { leased: true }))!;
             expect(s).toMatchObject({ executor: 'local', device_id: 'dev-1', folder_rel: 'proj/a', user_id: parent.user_id, max_turns: 32 });
+            expect((s.continuation as { worktreeKey?: string }).worktreeKey).toBe(parent.id); // 로컬 후속은 앞 세그먼트의 worktree 를 잇는다(JSON 왕복)
             expect(dispatchMock).toHaveBeenCalledTimes(1);
         });
     });
