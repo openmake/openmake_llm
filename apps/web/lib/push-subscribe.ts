@@ -1,0 +1,32 @@
+/**
+ * 웹 푸시 켜기 — 브라우저 구독을 확보하고 서버(/api/push/subscribe)에 등록한다.
+ * 서버 등록이 실패하면 이번에 새로 만든 브라우저 구독은 해제해 되돌리고, 원래 오류를 던진다
+ * (호출처가 토글을 꺼짐으로 두고 오류를 보이도록). 순수 로직 — 브라우저 API·ApiClient 는 주입받는다.
+ */
+
+export interface PushSubscriptionLike {
+  endpoint: string;
+  toJSON(): { keys?: Record<string, string> };
+  unsubscribe(): Promise<boolean>;
+}
+
+export interface EnablePushDeps {
+  getSubscription: () => Promise<PushSubscriptionLike | null>;
+  createSubscription: () => Promise<PushSubscriptionLike>;
+  register: (body: { endpoint: string; keys?: Record<string, string> }) => Promise<unknown>;
+}
+
+export async function enablePushSubscription(deps: EnablePushDeps): Promise<void> {
+  let sub = await deps.getSubscription();
+  const created = !sub;
+  if (!sub) sub = await deps.createSubscription();
+  try {
+    await deps.register({ endpoint: sub.endpoint, keys: sub.toJSON().keys });
+  } catch (err) {
+    if (created) {
+      // 되돌리기 실패는 무시하고 원래 등록 오류를 보인다
+      await sub.unsubscribe().catch(() => undefined);
+    }
+    throw err;
+  }
+}
