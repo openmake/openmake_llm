@@ -8,7 +8,7 @@
  *   connect [dir]          폴더 상주 연결(데몬 전경 실행, 단일 폴더)
  *   status                 연결 상태·디바이스 조회
  *   "목표" [--dir .]        cwd(또는 --dir)에서 로컬 에이전트 작업 1회 실행
- *   tasks [--all]          이 디바이스의 로컬 작업 목록 (기본: 미종료·재개 가능만)
+ *   tasks [--all] [--dir .]  이 폴더(디바이스)의 로컬 작업 목록 (기본: 미종료·재개 가능만)
  *   show <taskId>          작업 결과·진행 기록·변경분 재출력 (조회 전용)
  *   resume <taskId> [--dir .]  checkpoint 에서 이어하기 (서버 재개 API + 같은 worktree 재부착)
  *   share <taskId>         결과를 읽기 전용 링크로 공유 (미리보기 → 확인 → 게시)
@@ -16,7 +16,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { loadConfig, saveConfig, deviceId } from './config';
+import { loadConfig, saveConfig, hostId, deviceIdFor } from './config';
 import { CliBridge, type ConfirmFn } from './bridge';
 import { PORTS } from '@openmake/config';
 import { ApiClient, type ApiTask, type ApiTaskStep } from './api';
@@ -62,7 +62,7 @@ async function cmdLogin(): Promise<void> {
         process.exit(1);
     }
     saveConfig({ serverUrl: serverUrl.replace(/\/+$/, ''), apiKey });
-    console.log(`\x1b[32m✓ 저장됨\x1b[0m (~/.openmake/config.json, device=${deviceId().slice(0, 8)}…)`);
+    console.log(`\x1b[32m✓ 저장됨\x1b[0m (~/.openmake/config.json, PC id=${hostId().slice(0, 8)}…)`);
 }
 
 async function cmdStatus(): Promise<void> {
@@ -72,7 +72,9 @@ async function cmdStatus(): Promise<void> {
         const s = await api.bridgeStatus();
         console.log(`서버: ${cfg.serverUrl}`);
         console.log(`로컬 실행 기능: ${s.enabled ? '활성' : '비활성(LOCAL_EXECUTOR_ENABLED=false)'}`);
-        console.log(`이 디바이스 id: ${deviceId()}`);
+        // 디바이스 id 는 폴더별이다(<PC id>-r-<폴더 해시>) — 현재 폴더의 id 를 함께 보인다.
+        console.log(`이 PC id(hostId): ${hostId()}`);
+        console.log(`현재 폴더의 디바이스 id: ${deviceIdFor(process.cwd())} (${process.cwd()})`);
         const devices = s.devices ?? [];
         if (devices.length === 0) { console.log('접속 디바이스: 없음 — `openmake-code connect` 로 연결하세요.'); return; }
         console.log('접속 디바이스:');
@@ -156,7 +158,7 @@ async function cmdRun(goal: string, dir: string, autoApprove: boolean): Promise<
     const bridge = await connectAndRegister(cfg, api, folder);
 
     console.log(`\x1b[32m✓ 연결됨\x1b[0m — 작업을 생성합니다.`);
-    const creation = await api.createTask(goal, deviceId());
+    const creation = await api.createTask(goal, deviceIdFor(folder));
     const created = taskOf(creation);
     const taskId = created.id;
     // 재전송으로 서버가 기존 작업을 돌려줬고 이미 시작된 상태면 다시 실행하지 않고 진행만 따라간다.
@@ -244,16 +246,20 @@ function fmtWhen(iso?: string): string {
 /** 목록 기본값: 종료(completed) 는 --all 일 때만. failed/cancelled 는 재개 후보라 항상 보여준다. */
 function isListedByDefault(t: ApiTask): boolean { return t.status !== 'completed'; }
 
-async function cmdTasks(all: boolean): Promise<void> {
+/** 디바이스 id 는 폴더별이다 — 목록은 이 폴더(--dir, 없으면 현재 폴더)에서 만든 작업만 보인다. */
+async function cmdTasks(all: boolean, dir: string): Promise<void> {
     const cfg = requireConfig();
+    const folder = path.resolve(dir);
+    const myId = deviceIdFor(folder);
+    const real = fs.realpathSync(folder);
     const api = new ApiClient(cfg.serverUrl, cfg.apiKey);
-    const { tasks } = await api.listTasks({ deviceId: deviceId() });
+    const { tasks } = await api.listTasks({ deviceId: myId });
     const rows = all ? tasks : tasks.filter(isListedByDefault);
     if (rows.length === 0) {
-        console.log(all ? '이 디바이스의 로컬 작업이 없습니다.' : '미종료·재개 가능한 로컬 작업이 없습니다. (`--all` 로 종료 작업 포함)');
+        console.log(all ? `이 폴더(${real})의 로컬 작업이 없습니다.` : `이 폴더(${real})에 미종료·재개 가능한 로컬 작업이 없습니다. (\`--all\` 로 종료 작업 포함, 다른 폴더는 \`--dir\`)`);
         return;
     }
-    console.log(`이 디바이스(${deviceId().slice(0, 8)}…)의 로컬 작업 ${rows.length}건${all ? '' : ' — 종료 작업은 --all'}:`);
+    console.log(`이 폴더(${real}, 디바이스 ${myId.slice(0, 8)}…)의 로컬 작업 ${rows.length}건${all ? '' : ' — 종료 작업은 --all'}:`);
     for (const t of rows) {
         const flag = t.resumable ? ' \x1b[32m[resume 가능]\x1b[0m' : (t.status === 'running' || t.status === 'paused' || t.status === 'queued') ? ' \x1b[36m[진행 중]\x1b[0m' : '';
         const folder = t.folder_rel ? ` · 폴더 ${t.folder_rel}` : '';
@@ -263,8 +269,8 @@ async function cmdTasks(all: boolean): Promise<void> {
 }
 
 /** 재개 대상 선택 — 이 디바이스의 최근 `resumable`(failed+checkpoint) 작업. 진행 중이면 재개 대신 follow 대상. */
-async function pickResumeTarget(api: ApiClient): Promise<{ task: ApiTask; followOnly: boolean } | null> {
-    const { tasks } = await api.listTasks({ deviceId: deviceId() });
+async function pickResumeTarget(api: ApiClient, folder: string): Promise<{ task: ApiTask; followOnly: boolean } | null> {
+    const { tasks } = await api.listTasks({ deviceId: deviceIdFor(folder) });
     const live = tasks.find((t) => t.status === 'running' || t.status === 'paused' || t.status === 'queued');
     if (live) return { task: live, followOnly: true };
     const cand = tasks.find((t) => t.resumable);
@@ -353,8 +359,13 @@ async function cmdResume(taskId: string, dir: string, autoApprove: boolean): Pro
     // 서버는 folder_rel(상대경로)만 안다 — 루트는 --dir/cwd 로 사용자가 준 것만 쓴다(디바이스 발원 원칙).
     const task = taskOf(await api.getTask(taskId));
     if (task.executor !== 'local') { console.error('로컬 실행 작업이 아닙니다 — 웹에서 이어하세요.'); process.exit(1); }
-    if (task.device_id && task.device_id !== deviceId()) {
-        console.error(`이 작업은 다른 디바이스(${task.device_id.slice(0, 8)}…)에서 만든 것입니다. 그 디바이스에서 resume 하세요.`);
+    if (task.device_id && task.device_id !== deviceIdFor(folder)) {
+        // 옛 id(폴더 없이 hostId 만)로 만든 작업은 --dir 로도 맞출 수 없다 — 폴더 안내 대신 따로 알린다.
+        if (task.device_id === hostId()) {
+            console.error('이 작업은 폴더별 디바이스 id 를 쓰기 전의 CLI 로 만든 것이라 이어할 수 없습니다. 새 작업으로 다시 시작하세요.');
+            process.exit(1);
+        }
+        console.error(`이 작업은 다른 디바이스(${task.device_id.slice(0, 8)}…)에서 만든 것입니다. 그 디바이스·폴더에서 resume 하세요 (--dir 로 작업 폴더 지정).`);
         process.exit(1);
     }
     const bridge = await connectAndRegister(cfg, api, folder);
@@ -384,7 +395,10 @@ async function main(): Promise<void> {
     if (cmd === 'login') return cmdLogin();
     if (cmd === 'status') return cmdStatus();
     if (cmd === 'connect') return cmdConnect(argv.slice(1));
-    if (cmd === 'tasks') return cmdTasks(argv.includes('--all'));
+    if (cmd === 'tasks') {
+        const di = argv.indexOf('--dir');
+        return cmdTasks(argv.includes('--all'), di >= 0 ? argv[di + 1] ?? '.' : '.');
+    }
     if (cmd === 'show') {
         const taskId = argv[1];
         if (!taskId || taskId.startsWith('--')) { console.error('사용법: openmake-code show <taskId> [--steps] [--diff]'); process.exit(1); }
@@ -423,7 +437,7 @@ async function main(): Promise<void> {
   openmake-code status             연결 상태·디바이스 조회
   openmake-code "목표" [--dir .] [--yes]   로컬 에이전트 작업 1회 실행
                                    (--yes: 파일 쓰기류 서버 승인 자동화. 셸은 별도 확인)
-  openmake-code tasks [--all]      이 디바이스의 로컬 작업 목록 (종료 작업은 --all)
+  openmake-code tasks [--all] [--dir .]   이 폴더의 로컬 작업 목록 (종료 작업은 --all)
   openmake-code show <taskId> [--steps] [--diff]   작업 결과 다시 보기 (실행 없음·연결 불필요)
   openmake-code resume <taskId> [--dir .] [--yes]   checkpoint 에서 이어하기 (같은 worktree 재부착)
   openmake-code share <taskId> [--link] [--preview] [--off]   결과를 읽기 전용 링크로 공유
@@ -444,7 +458,7 @@ async function main(): Promise<void> {
     if (wantResume) {
         const cfg = requireConfig();
         const api = new ApiClient(cfg.serverUrl, cfg.apiKey);
-        const target = await pickResumeTarget(api);
+        const target = await pickResumeTarget(api, path.resolve(dir));
         if (target) {
             console.log(`\x1b[2m--resume: ${target.followOnly ? '진행 중인' : '재개 가능한'} 작업 ${shortId(target.task.id)} 을 ${target.followOnly ? '따라갑니다' : '이어합니다'}${goal ? ' (입력한 목표는 무시)' : ''}\x1b[0m`);
             return cmdResume(target.task.id, dir, autoApprove);

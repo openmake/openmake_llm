@@ -3,7 +3,8 @@
 // 빌드된 CLI(`npm run build --workspace=@openmake/cli`)를 임시 HOME 으로 띄우고, HTTP·WebSocket 한 포트의 가짜 서버에 붙인다.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, realpathSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,15 +13,21 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 
 const CLI = fileURLToPath(new URL('../dist/index.js', import.meta.url));
-const DEVICE_ID = 'cli-test-device-1';
+const DEVICE_ID = 'cli-test-device-1'; // ~/.openmake/device-id(hostId)
+/** 폴더별 deviceId — CLI config.deviceIdFor 와 같은 규칙(`<hostId>-r-<sha256(realpath) 앞 12자>`). */
+const folderId = (dir) => `${DEVICE_ID}-r-${createHash('sha256').update(realpathSync(dir)).digest('hex').slice(0, 12)}`;
 const TASK_ID = 'task-1234abcd';
 
 /**
  * 가짜 서버. hello 응답: ready(bridge_ready) · conflict(error + 1008 device_conflict) · silent(무응답) ·
- * auth(1008 api_key_revoked) · limit(error + 1008 bridge_device_limit).
+ * auth(1008 api_key_revoked) · limit(error + 1008 bridge_device_limit) ·
+ * perId(서버 규칙 흉내 — 같은 deviceId 로 열린 연결이 있으면 새 연결을 device_conflict 로 거절, 없으면 bridge_ready).
  */
 async function fakeServer({ hello, enabled = true, devices = [{ deviceId: DEVICE_ID, label: 'other', folderName: 'w' }], task }) {
   const requests = [];
+  const hellos = [];
+  const state = { task }; // resume 시나리오는 폴더 id 를 안 뒤에 넣는다(set task)
+  const live = new Map(); // deviceId → 등록된 소켓(perId)
   let wsConnections = 0;
   let created = false;
   const http = createServer((req, res) => {
@@ -32,7 +39,7 @@ async function fakeServer({ hello, enabled = true, devices = [{ deviceId: DEVICE
       if (url === '/api/local-bridge/status') return json({ enabled, connected: devices.length > 0, devices });
       if (req.method === 'POST' && url === '/api/agent-tasks') { created = true; return json({ task: { id: TASK_ID, status: 'pending' } }); }
       if (url === '/api/agent-tasks/approvals/pending') return json({ pending: [] });
-      if (req.method === 'GET' && url === `/api/agent-tasks/${TASK_ID}`) return json({ task: created ? { id: TASK_ID, status: 'completed', result: 'done' } : task });
+      if (req.method === 'GET' && url === `/api/agent-tasks/${TASK_ID}`) return json({ task: created ? { id: TASK_ID, status: 'completed', result: 'done' } : state.task });
       return json({});
     });
   });
@@ -42,6 +49,18 @@ async function fakeServer({ hello, enabled = true, devices = [{ deviceId: DEVICE
     ws.on('message', (d) => {
       const f = JSON.parse(d.toString());
       if (f.type !== 'bridge_hello') return;
+      hellos.push(f.deviceId);
+      if (hello === 'perId') {
+        if (live.has(f.deviceId)) {
+          ws.send(JSON.stringify({ type: 'error', message: '같은 기기 id 로 다른 앱이 이미 연결돼 있습니다' }));
+          ws.close(1008, 'device_conflict');
+          return;
+        }
+        live.set(f.deviceId, ws);
+        ws.on('close', () => { if (live.get(f.deviceId) === ws) live.delete(f.deviceId); });
+        ws.send(JSON.stringify({ type: 'bridge_ready', deviceId: f.deviceId }));
+        return;
+      }
       if (hello === 'ready') ws.send(JSON.stringify({ type: 'bridge_ready', deviceId: f.deviceId }));
       else if (hello === 'conflict') {
         ws.send(JSON.stringify({ type: 'error', message: '같은 기기 id 로 다른 앱이 이미 연결돼 있습니다' }));
@@ -58,6 +77,8 @@ async function fakeServer({ hello, enabled = true, devices = [{ deviceId: DEVICE
   return {
     url: `http://127.0.0.1:${port}`,
     requests,
+    hellos,
+    set task(v) { state.task = v; },
     wsConnections: () => wsConnections,
     posts: (re) => requests.filter((r) => r.method === 'POST' && re.test(r.url ?? '')),
     close: () => new Promise((r) => { for (const c of wss.clients) c.terminate(); wss.close(); http.close(() => r()); }),
@@ -73,10 +94,10 @@ function home(serverUrl) {
   return h;
 }
 
-function cli(h, args, limitMs = 30000) {
+function cli(h, args, limitMs = 30000, cwd = join(h, 'work')) {
   return new Promise((resolve, reject) => {
     const started = Date.now();
-    const child = spawn(process.execPath, [CLI, ...args], { cwd: join(h, 'work'), env: { PATH: process.env.PATH, HOME: h }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, [CLI, ...args], { cwd, env: { PATH: process.env.PATH, HOME: h }, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     child.stdout.setEncoding('utf8').on('data', (c) => { out += c; });
     child.stderr.setEncoding('utf8').on('data', (c) => { out += c; });
@@ -105,18 +126,20 @@ test('① 충돌로 거절되면 run 은 목록에 같은 id 가 있어도 작�
 });
 
 test('② 충돌로 거절되면 resume 은 재개·승인 자동화를 부르지 않는다(실패 작업)', async (t) => {
-  const task = { id: TASK_ID, executor: 'local', device_id: DEVICE_ID, status: 'failed', resumable: true };
-  const { server, h } = await scenario(t, { hello: 'conflict', task });
+  const { server, h } = await scenario(t, { hello: 'conflict' });
+  server.task = { id: TASK_ID, executor: 'local', device_id: folderId(join(h, 'work')), status: 'failed', resumable: true };
   const r = await cli(h, ['resume', TASK_ID, '--dir', '.']);
   assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /다른 OpenMake Companion·CLI 가 이미 연결돼 있어 작업을 시작하지 않았습니다/);
   assert.deepEqual(server.posts(TASK_WRITES), []);
 });
 
 test('② 진행 중 작업이어도 충돌이면 따라가지 않고 끝난다', async (t) => {
-  const task = { id: TASK_ID, executor: 'local', device_id: DEVICE_ID, status: 'running' };
-  const { server, h } = await scenario(t, { hello: 'conflict', task });
+  const { server, h } = await scenario(t, { hello: 'conflict' });
+  server.task = { id: TASK_ID, executor: 'local', device_id: folderId(join(h, 'work')), status: 'running' };
   const r = await cli(h, ['resume', TASK_ID, '--dir', '.']);
   assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /다른 OpenMake Companion·CLI 가 이미 연결돼 있어 작업을 시작하지 않았습니다/);
   assert.doesNotMatch(r.out, /진행을 따라갑니다/);
   assert.deepEqual(server.requests.filter((q) => q.url === '/api/agent-tasks/approvals/pending'), []);
   assert.deepEqual(server.posts(TASK_WRITES), []);
@@ -170,4 +193,30 @@ test('⑧ --dir 없이 준 목표도 목표로 읽는다(첫 인자를 버리지
   const r = await cli(h, ['파일 하나 만들기']);
   assert.equal(r.code, 0, r.out);
   assert.equal(server.posts(/^\/api\/agent-tasks$/).length, 1);
+});
+
+test('⑨ 같은 폴더를 두 번 띄우면(같은 폴더 id) 뒤쪽 run 은 device_conflict 로 멈추고, 다른 폴더는 따로 붙는다', async (t) => {
+  const { server, h } = await scenario(t, { hello: 'perId', devices: [] });
+  const work = join(h, 'work');
+  const other = join(h, 'other');
+  mkdirSync(other);
+  // 첫 번째: 같은 폴더에 상주 connect — bridge_ready 를 받을 때까지 기다린다.
+  const first = spawn(process.execPath, [CLI, 'connect', '.'], { cwd: work, env: { PATH: process.env.PATH, HOME: h }, stdio: 'ignore' });
+  t.after(() => { first.kill(); });
+  const until = Date.now() + 10000;
+  while (!server.hellos.includes(folderId(work)) && Date.now() < until) await new Promise((r) => setTimeout(r, 100));
+  assert.ok(server.hellos.includes(folderId(work)), 'first connect registered');
+
+  const r = await cli(h, ['파일 하나 만들기', '--dir', '.']);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /다른 OpenMake Companion·CLI 가 이미 연결돼 있어 작업을 시작하지 않았습니다/);
+  assert.ok(r.ms < 10000, `stopped without waiting out the register timeout: ${r.ms}ms`);
+  assert.deepEqual(server.posts(TASK_WRITES), []);
+  assert.deepEqual(server.hellos, [folderId(work), folderId(work)], 'same folder → same id, and run did not reconnect after the conflict');
+
+  // 다른 폴더는 다른 id 라 거절되지 않는다(폴더별 id).
+  const ok = await cli(h, ['파일 하나 만들기', '--dir', '.'], 30000, other);
+  assert.equal(ok.code, 0, ok.out);
+  assert.equal(server.hellos.at(-1), folderId(other));
+  assert.notEqual(folderId(other), folderId(work));
 });
