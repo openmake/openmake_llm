@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.139.4](https://github.com/openmake/openmake_llm/compare/v1.139.3...v1.139.4) (2026-11-18)
+
+
+### 🐛 버그 수정
+
+* **api:** WS "자동" 모델이 커스텀 에이전트 배정 모델을 가리지 않게 한다 ([75e8c0d](https://github.com/openmake/openmake_llm/commit/75e8c0db239e549dccbe64d49ba68cc5ee77aa9d))
+
 ## [1.139.3](https://github.com/openmake/openmake_llm/compare/v1.139.2...v1.139.3) (2026-11-18)
 
 
