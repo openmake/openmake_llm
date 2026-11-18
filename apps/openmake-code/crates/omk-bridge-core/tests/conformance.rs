@@ -393,6 +393,25 @@ fn constants() {
     seen.push("SANDBOX_SPAWN_ERROR_PREFIX");
     seen.push("FALLBACK_CHILD_PATH");
     seen.extend(["WORKTREE_DIR", "WORKTREE_BRANCH_PREFIX"]);
+    // 무시 파일 보존(설계 2026-11-18 ignored-cleanup K3·K6).
+    let theirs = strs(
+        &values["WORKTREE_DISPOSABLE_DIRS"],
+        "constants/WORKTREE_DISPOSABLE_DIRS",
+    );
+    assert_eq!(
+        theirs,
+        c::WORKTREE_DISPOSABLE_DIRS,
+        "constants/WORKTREE_DISPOSABLE_DIRS"
+    );
+    assert_eq!(
+        values["WORKTREE_KEEP_IGNORED_CAPABILITY"],
+        c::WORKTREE_KEEP_IGNORED_CAPABILITY,
+        "constants/WORKTREE_KEEP_IGNORED_CAPABILITY"
+    );
+    seen.extend([
+        "WORKTREE_DISPOSABLE_DIRS",
+        "WORKTREE_KEEP_IGNORED_CAPABILITY",
+    ]);
     // 읽기 전용 도구 (PR-1.4) — 두 시간 제한은 기본값(TS 는 환경 변수가 없을 때의 값).
     let tools: [(&str, u64); 12] = [
         ("CODE_NAV_TIMEOUT_MS", c::CODE_NAV_TIMEOUT_MS),

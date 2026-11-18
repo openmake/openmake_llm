@@ -298,6 +298,19 @@ pub const WORKTREE_DIR: &str = ".openmake/worktrees";
 pub const WORKTREE_BRANCH_PREFIX: &str = "omk-task/";
 /// taskId 형식 — TS `TASK_ID_RE.source`(플래그 없음). 경로·브랜치 이름에 들어가는 유일한 서버 문자열이다.
 pub const TASK_ID_RE: &str = "^[a-zA-Z0-9-]{8,64}$";
+/// 종료 정리 때 무시 항목이어도 지워도 되는 폴더 이름 — 설치 명령·도구가 다시 만들 수 있고 요청한 산출물이 놓일 일이 없는 것만
+/// (설계 2026-11-18 ignored-cleanup K3). 빌드 산출물 폴더(dist·build·out·target·.next)는 넣지 않는다. 서버가 보내지 않는다(TS 같음).
+pub const WORKTREE_DISPOSABLE_DIRS: &[&str] = &[
+    "node_modules",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+];
+/// 무시 파일만 만든 작업 폴더를 종료 정리 때 지우지 않는다는 능력(K6) — 옛 기기에는 서버가 파일을 만든 작업의 remove 를 보내지 않는다.
+pub const WORKTREE_KEEP_IGNORED_CAPABILITY: &str = "worktree_keep_ignored";
 
 // 읽기 전용 도구 (PR-1.4)
 

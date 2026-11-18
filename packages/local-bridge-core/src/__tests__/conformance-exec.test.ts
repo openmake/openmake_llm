@@ -10,6 +10,7 @@ import { BridgeCore } from '../core';
 import { TASK_ID_RE } from '../constants';
 import { resolveExecPath } from '../exec-path';
 import { detectGit, type GitPaths } from '../git-trust';
+import { removeVerdict } from '../worktree-status';
 import type { BridgeMsg, BridgeResult } from '../types';
 import {
     COMPARES, SETUP_KINDS, applyOpStep, applySetup, checkAfter, childEnv, exec, fakeBin, fill, load, makeTmp, nonEmpty,
@@ -121,7 +122,7 @@ describe('fixture 모양 — 묶음 이름·키 허용 목록·빈 목록', () =
     });
     it('worktree', () => {
         const doc = load<Record<string, unknown>>('worktree');
-        shape(doc, ['suite', 'version', 'taskIdPattern', 'cases', 'taskId', 'gitDir'], [], 'worktree');
+        shape(doc, ['suite', 'version', 'taskIdPattern', 'cases', 'taskId', 'gitDir', 'statusVerdict'], [], 'worktree');
         for (const c of nonEmpty(doc.cases, 'worktree/cases')) {
             const at = `worktree/cases/${String(c.id)}`;
             shape(c, ['id', 'setup', 'root', 'steps'], [], at);
@@ -141,6 +142,10 @@ describe('fixture 모양 — 묶음 이름·키 허용 목록·빈 목록', () =
         }
         for (const c of nonEmpty(doc.taskId, 'worktree/taskId')) shape(c, ['id', 'input', 'expect'], [], `worktree/taskId/${String(c.id)}`);
         for (const c of nonEmpty(doc.gitDir, 'worktree/gitDir')) shape(c, ['id', 'setup', 'input', 'expect'], [], `worktree/gitDir/${String(c.id)}`);
+        for (const c of nonEmpty(doc.statusVerdict, 'worktree/statusVerdict')) {
+            shape(c, ['id', 'input', 'expect'], [], `worktree/statusVerdict/${String(c.id)}`);
+            shape(c.input, ['stdout'], [], `worktree/statusVerdict/${String(c.id)}/input`);
+        }
     });
 });
 
@@ -327,6 +332,7 @@ describe('worktree', () => {
         cases: { id: string; setup: Setup[]; root: string; steps: (WtReq | OpStep)[] }[];
         taskId: Case<{ taskId?: unknown }, BridgeResult | 'accepted'>[];
         gitDir: (Case<{ root: string }, { git: GitPaths | null }> & { setup: Setup[] })[];
+        statusVerdict: Case<{ stdout: string }, 'changes' | 'ignored' | 'clean'>[];
     }>('worktree');
     /** worktree 는 묻지 않는다 — 확인 콜백이 불리면 실패한다. */
     const noConfirm = (): Promise<'no'> => { throw new Error('worktree 가 확인을 물었다'); };
@@ -365,6 +371,11 @@ describe('worktree', () => {
                 expect(got).toStrictEqual(c.expect === 'accepted' ? { ok: false, error: 'git 레포가 아닙니다' } : c.expect);
             });
         } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+    });
+
+    // remove 판정(설계 2026-11-18 ignored-cleanup §2.1) — git 없이 `status --porcelain --ignored=matching -z` 출력만 본다.
+    it.each(doc.statusVerdict.map((c) => [c.id, c] as const))('statusVerdict/%s', (_id, c) => {
+        expect(removeVerdict(c.input.stdout)).toBe(c.expect);
     });
 
     it.each(doc.gitDir.map((c) => [c.id, c] as const))('gitDir/%s', async (_id, c) => {
