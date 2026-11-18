@@ -9,8 +9,9 @@ interface Deps {
     createSubscription: () => Promise<Sub>;
     register: (body: { endpoint: string; keys?: Record<string, string> }) => Promise<unknown>;
 }
-const { enablePushSubscription } = require('../../../../web/lib/push-subscribe') as {
+const { enablePushSubscription, syncExistingPushSubscription } = require('../../../../web/lib/push-subscribe') as {
     enablePushSubscription: (deps: Deps) => Promise<void>;
+    syncExistingPushSubscription: (deps: Pick<Deps, 'getSubscription' | 'register'>) => Promise<boolean>;
 };
 
 function makeSub(endpoint = 'https://jmt17.google.com/fcm/send/abc'): Sub & { unsubscribe: jest.Mock } {
@@ -57,5 +58,30 @@ describe('web push-subscribe enablePushSubscription', () => {
             createSubscription: async () => sub,
             register: jest.fn().mockRejectedValue(new Error('register failed')),
         })).rejects.toThrow('register failed');
+    });
+});
+
+describe('web push-subscribe syncExistingPushSubscription (설정 화면 진입 시 초기 상태)', () => {
+    it('브라우저 구독이 없으면 등록하지 않고 false(꺼짐)', async () => {
+        const register = jest.fn();
+        await expect(syncExistingPushSubscription({ getSubscription: async () => null, register })).resolves.toBe(false);
+        expect(register).not.toHaveBeenCalled();
+    });
+
+    it('브라우저 구독이 있으면 서버에 다시 등록하고 성공 시 true(켜짐)', async () => {
+        const sub = makeSub();
+        const register = jest.fn().mockResolvedValue({});
+        await expect(syncExistingPushSubscription({ getSubscription: async () => sub, register })).resolves.toBe(true);
+        expect(register).toHaveBeenCalledWith({ endpoint: sub.endpoint, keys: { p256dh: 'p', auth: 'a' } });
+    });
+
+    it('재등록이 실패하면 서버 오류를 그대로 던지고 브라우저 구독은 해제하지 않는다', async () => {
+        const sub = makeSub();
+        const err = new Error('허용되지 않는 push 서비스 호스트입니다');
+        await expect(syncExistingPushSubscription({
+            getSubscription: async () => sub,
+            register: jest.fn().mockRejectedValue(err),
+        })).rejects.toBe(err);
+        expect(sub.unsubscribe).not.toHaveBeenCalled();
     });
 });

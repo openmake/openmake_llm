@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { useQuery } from "@tanstack/react-query";
-import { enablePushSubscription } from "@/lib/push-subscribe";
+import { enablePushSubscription, syncExistingPushSubscription } from "@/lib/push-subscribe";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
 import { fetchModels } from "@/lib/models-api";
@@ -291,17 +291,31 @@ export default function SettingsPage() {
     setPushSupported(supported);
     if (!supported) return;
 
+    let alive = true;
     navigator.serviceWorker.ready
       .then((reg) => {
         setPushSwReady(true);
-        return reg.pushManager.getSubscription();
-      })
-      .then((sub) => {
-        if (sub) setPushAlerts(true);
+        // 브라우저 구독만 남고 서버 등록이 없을 수 있다 → 다시 등록이 성공해야 켜짐으로 그린다
+        return syncExistingPushSubscription({
+          getSubscription: () => reg.pushManager.getSubscription(),
+          register: (body) => ApiClient.post("/api/push/subscribe", body),
+        }).then(
+          (on) => {
+            if (alive) setPushAlerts(on);
+          },
+          (err: unknown) => {
+            if (!alive) return;
+            setPushAlerts(false);
+            setPushError(err instanceof Error ? err.message : "");
+          },
+        );
       })
       .catch(() => {
         // SW 등록 안 됨
       });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
