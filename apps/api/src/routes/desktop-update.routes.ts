@@ -5,15 +5,17 @@
  * 최신 버전을 확인하고 dmg 를 받아 자체 교체한다(sha256 은 매니페스트로 검증).
  * 공개 라우트(앱 배포용) — 파일명 화이트리스트로 경로 조작을 차단한다.
  *
- * macOS 는 네이티브 컴패니언만 배포한다(2026-09-11). 매니페스트는 `native` 블록 하나이고,
- * 응답의 최상위(기본) 값도 그 블록을 따른다 — 채널을 모르는 소비자도 컴패니언을 본다.
+ * macOS 는 네이티브 앱만 배포한다(2026-09-11). 블록은 둘이다 — `native`(옛 정체성 OpenMake Companion)와
+ * `macos`(새 정체성 OpenMake Code). 응답의 최상위(기본) 값은 종전대로 `native` 만 따른다 — 채널을 모르는 소비자도 컴패니언을 본다.
+ * 블록은 자기 정체성의 파일명 패턴에 맞을 때만 싣는다 — 옛 업데이터가 새 앱 dmg 로 교체를 시도하지 않게 서버가 막는다.
  * 구 Electron 앱의 업데이터는 최상위 값을 읽는데, 컴패니언 버전(0.x)이 자기 버전(1.10.0)보다
  * 낮아 "최신" 으로만 판단한다. 설령 넘어서더라도 그 교체 스크립트는 dmg 안의 `OpenMake.app` 을
  * 찾지 못해 원래 앱을 다시 연다 — 덮어쓰지 않는다.
  *
- * GET /api/desktop/latest          → { version, file, sha256, url, native: { 같은 값 }, windows?: { version, file, sha256, url } }
- *   windows 는 Windows 설치 파일(`OpenMake-Companion-Setup-*.exe`)이 게시돼 있을 때만 싣는다(Companion P4).
- * GET /api/desktop/download/:file  → dmg 스트림 (컴패니언 dmg 만)
+ * GET /api/desktop/latest          → { version?, file?, sha256?, url?, native?: { 같은 값 }, macos?: {…}, windows?: { version, file, sha256, url } }
+ *   macos 는 `OpenMake-Code-*.dmg` 가, windows 는 Windows 설치 파일(`OpenMake-Companion-Setup-*.exe`)이 게시돼 있을 때만 싣는다.
+ *   세 블록이 모두 없으면 404.
+ * GET /api/desktop/download/:file  → 설치 파일 스트림 (세 패턴 중 하나에 맞는 파일명만)
  * GET /api/desktop/config          → { apiPort, webPort } — 앱이 사용자가 넣은 주소 하나에서 연결 주소·웹 주소를 정하는 근거
  *
  * @module routes/desktop-update
@@ -43,16 +45,23 @@ router.get('/latest', (_req: Request, res: Response) => {
     try {
         const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
             native?: ManifestBlock;
+            macos?: ManifestBlock;
             windows?: ManifestBlock;
         };
         const native = toBlock(m.native, DESKTOP_UPDATE.FILE_PATTERN);
+        // macos 블록(새 정체성) — 더하기만 한다. 최상위 값은 따르지 않는다(최상위를 읽는 구 앱이 새 앱 dmg 를 받지 않게).
+        const macos = toBlock(m.macos, DESKTOP_UPDATE.MACOS_FILE_PATTERN);
         // Windows 블록(Companion P4) — 있으면 함께 싣는다. 최상위(기본) 값은 종전대로 macOS 컴패니언만 따른다.
         const windows = toBlock(m.windows, DESKTOP_UPDATE.WINDOWS_FILE_PATTERN);
-        if (!native && !windows) {
+        if (!native && !macos && !windows) {
             res.status(404).json(notFound('업데이트 매니페스트가 올바르지 않습니다'));
             return;
         }
-        const payload: DesktopLatestPayload = { ...(native ? { ...native, native } : {}), ...(windows ? { windows } : {}) };
+        const payload: DesktopLatestPayload = {
+            ...(native ? { ...native, native } : {}),
+            ...(macos ? { macos } : {}),
+            ...(windows ? { windows } : {}),
+        };
         res.json(success(payload));
     } catch {
         res.status(404).json(notFound('배포된 데스크톱 업데이트가 없습니다'));
@@ -66,7 +75,8 @@ router.get('/config', (_req: Request, res: Response) => {
 
 router.get('/download/:file', (req: Request, res: Response) => {
     const file = req.params.file;
-    if (!DESKTOP_UPDATE.FILE_PATTERN.test(file) && !DESKTOP_UPDATE.WINDOWS_FILE_PATTERN.test(file)) {
+    const allowed = [DESKTOP_UPDATE.FILE_PATTERN, DESKTOP_UPDATE.MACOS_FILE_PATTERN, DESKTOP_UPDATE.WINDOWS_FILE_PATTERN];
+    if (!allowed.some((pattern) => pattern.test(file))) {
         res.status(400).json(badRequest('허용되지 않는 파일명'));
         return;
     }

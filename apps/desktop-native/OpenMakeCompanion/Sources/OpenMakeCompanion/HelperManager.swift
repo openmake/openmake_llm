@@ -27,6 +27,11 @@ final class HelperManager: NSObject, ObservableObject {
      */
     private(set) var authClosedFolders: Set<String> = []
     @Published var autoApproveCount = 0
+    /**
+     * 헬퍼가 지원 폴더 잠금을 못 잡아 끝났다(다른 Companion 이 실행 중이거나 잠금 실패). 사용자가 "다시 시도" 를 누를 때까지
+     * 헬퍼를 다시 띄우지 않는다 — 어느 앱을 남길지는 사용자가 고른다(앱은 스스로 끝내지 않는다).
+     */
+    @Published private(set) var instanceBlocked = false
     /** 브라우저 제어권 — true 면 사용자가 넘겨받은 상태(에이전트의 브라우저 요청을 실행하지 않는다). */
     @Published var browserUserControl = false
 
@@ -102,6 +107,9 @@ final class HelperManager: NSObject, ObservableObject {
         "idle": "status.idle",
         "api_key_required": "status.apiKeyRequired",
         "folder_open_failed": "status.folderOpenFailed",
+        // 헬퍼 지원 폴더 잠금(한 PC 한 헬퍼) — 못 잡으면 헬퍼가 연결하지 않고 끝난다
+        "instance_conflict": "status.instance_conflict",
+        "instance_lock_failed": "status.instance_lock_failed",
         // 서버가 인증 사유로 닫음(코어 AUTH_CLOSE_REASONS) — 코어는 긴 간격으로만 다시 시도한다
         "api_key_revoked": "status.auth.apiKeyRevoked",
         "api_key_invalid": "status.auth.apiKeyInvalid",
@@ -110,6 +118,8 @@ final class HelperManager: NSObject, ObservableObject {
         "account_disabled": "status.auth.accountDisabled",
         "account_deleted": "status.auth.accountDeleted",
         "bridge_scope_required": "status.auth.scopeRequired",
+        // 같은 기기 id 로 다른 앱이 이미 연결돼 있어 서버가 거절함(코어 DEVICE_CONFLICT_REASON) — 코어는 1분 간격으로 다시 시도한다
+        "device_conflict": "status.deviceConflict",
     ]
 
     // ── 헬퍼 프로세스 lifecycle ──
@@ -124,6 +134,7 @@ final class HelperManager: NSObject, ObservableObject {
 
     private func ensureHelper() -> Bool {
         if let p = process, p.isRunning { return true }
+        if instanceBlocked { return false } // 상태 문구(충돌·잠금 실패)를 그대로 둔다
         // 테스트 훅(개발/E2E 전용): env key 가 있으면 Keychain 대신 사용 — Electron 의
         // OMK_BRIDGE_TOKEN 관행과 동일 계열. 정식 실행 경로는 Keychain 만 쓴다.
         let envKey = ProcessInfo.processInfo.environment["OMK_COMPANION_API_KEY"]
@@ -271,6 +282,14 @@ final class HelperManager: NSObject, ObservableObject {
         rootStatus = [:]
     }
 
+    /** 잠금 충돌·실패 뒤 "다시 시도" — 막힘을 풀고 마지막 폴더들로 헬퍼를 다시 띄운다(폴더가 없으면 헬퍼만 띄워 잠금을 다시 본다). */
+    func retryInstance() {
+        instanceBlocked = false
+        statusText = L("status.idle")
+        let folders = lastFolders
+        if folders.isEmpty { _ = ensureHelper() } else { for f in folders { connect(folder: f) } }
+    }
+
     func clearAutoApprove() { send(["cmd": "clearAutoApprove"]) }
 
     /** 브라우저 제어권 전환 — 넘겨받으면 에이전트 입력이 멈추고, 돌려주면 에이전트가 현재 화면을 다시 읽는다. */
@@ -351,7 +370,12 @@ final class HelperManager: NSObject, ObservableObject {
         switch kind {
         case "status":
             let code = ev["code"] as? String
-            let text = Self.statusText(code: code, arg: ev["arg"] as? String, fallback: ev["text"] as? String ?? "")
+            var arg = ev["arg"] as? String
+            if code == "instance_conflict" || code == "instance_lock_failed" {
+                instanceBlocked = true
+                arg = arg.map(Self.appPath)
+            }
+            let text = Self.statusText(code: code, arg: arg, fallback: ev["text"] as? String ?? "")
             if let f = ev["folder"] as? String {
                 rootStatus[f] = text // 루트별 상태 (연결됨/재연결 중/서버 오류)
                 if Self.isAuthClosed(code) { authClosedFolders.insert(f) } else { authClosedFolders.remove(f) }
@@ -384,6 +408,12 @@ final class HelperManager: NSObject, ObservableObject {
         default:
             break
         }
+    }
+
+    /** 잠금 주인의 실행 파일 경로 → 그 `.app` 경로(번들 밖 실행이면 그대로). */
+    static func appPath(_ exe: String) -> String {
+        guard let r = exe.range(of: ".app/Contents/MacOS/") else { return exe }
+        return String(exe[..<r.lowerBound]) + ".app"
     }
 
     /** 인증 사유로 닫힘을 뜻하는 상태 코드인가 — 문구 키가 status.auth.* 인 코드(코어 AUTH_CLOSE_REASONS). */

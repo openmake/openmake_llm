@@ -76,7 +76,8 @@ test('an unwritable home is an error and the CLI does not connect', { skip: proc
   assert.equal(code, 1);
   assert.match(err, /기기 id 파일을 만들지 못했습니다/);
   assert.equal(server.hellos.length, 0);
-  assert.equal(server.requests.length, 0);
+  // 연결 전 기능 꺼짐 확인(status 조회, PR 1)만 허용 — 작업 생성 등 다른 요청은 없다.
+  assert.deepEqual(server.requests.filter(r => r.url !== '/api/local-bridge/status'), []);
   assert.equal(existsSync(join(dir, 'device-id')), false);
 });
 
