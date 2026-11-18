@@ -24,8 +24,7 @@ async function fakeServer({ hello, enabled = true, devices = [{ deviceId: DEVICE
   let wsConnections = 0;
   let created = false;
   const http = createServer((req, res) => {
-    let body = '';
-    req.on('data', (c) => { body += c; });
+    req.on('data', () => { /* 본문은 쓰지 않는다 — 끝까지 읽어 end 를 받는다 */ });
     req.on('end', () => {
       requests.push({ method: req.method, url: req.url });
       const json = (data) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ data })); };
