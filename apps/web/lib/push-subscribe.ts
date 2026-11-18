@@ -30,3 +30,17 @@ export async function enablePushSubscription(deps: EnablePushDeps): Promise<void
     throw err;
   }
 }
+
+/**
+ * 설정 화면 진입 시 초기 토글 상태 — 브라우저 구독이 남아 있으면 서버에 다시 등록해 맞춘다.
+ * 서버는 같은 endpoint 를 덮어쓴다(캐시 Map·DB ON CONFLICT upsert)라 중복이 생기지 않는다.
+ * 구독이 없으면 false, 등록 성공이면 true, 실패면 서버 오류를 던진다(브라우저 구독은 그대로 둔다).
+ */
+export async function syncExistingPushSubscription(
+  deps: Pick<EnablePushDeps, "getSubscription" | "register">,
+): Promise<boolean> {
+  const sub = await deps.getSubscription();
+  if (!sub) return false;
+  await deps.register({ endpoint: sub.endpoint, keys: sub.toJSON().keys });
+  return true;
+}
