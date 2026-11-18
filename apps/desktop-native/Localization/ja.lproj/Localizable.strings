@@ -13,6 +13,7 @@
 "menu.checkUpdates" = "アップデートを確認…";
 "menu.settings" = "設定…";
 "menu.quit" = "終了";
+"menu.retry" = "再試行";
 
 /* 設定 */
 "settings.auth" = "認証";
@@ -36,6 +37,8 @@
 "status.closed" = "終了";
 "status.apiKeyRequired" = "API キーが必要です — 設定で入力してください";
 "status.folderOpenFailed" = "フォルダを開けませんでした: %@";
+"status.instance_conflict" = "別の OpenMake Companion がすでに実行中です (%@)";
+"status.instance_lock_failed" = "アプリのデータフォルダをロックできなかったため接続しませんでした";
 "status.helperMissing" = "ヘルパーのリソースがありません（再インストールが必要です）";
 "status.helperExited" = "ヘルパーが終了しました — もう一度接続してください";
 "status.helperLaunchFailed" = "ヘルパーを起動できませんでした: %@";
