@@ -30,11 +30,12 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { enablePushSubscription, isPushRegistrationRejected, syncExistingPushSubscription } from "@/lib/push-subscribe";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
 import { fetchModels } from "@/lib/models-api";
+import { isFallbackStatus } from "@/lib/default-model-sync";
 import { cn } from "@/lib/utils";
 import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, isLocale, toBcp47 } from "@/i18n/config";
 import { ModelPicker } from "@/components/model-picker";
@@ -212,8 +213,11 @@ export default function SettingsPage() {
   const tabOwnsSaving = addonTab?.ownsSaving ?? false;
 
   // 일반 / 모델
-  const selectedModel = useAppStore((s) => s.selectedModel);
-  const setSelectedModel = useAppStore((s) => s.setSelectedModel);
+  // 기본 모델 편집값은 화면 지역 상태(초기값 = 서버 선호) — store `selectedModel` 은 채팅이 보내는 값이라 저장 전엔
+  // 건드리지 않는다. 종전엔 고르기만 해도 채팅 모델이 바뀌고 localStorage 에 남았다(2026-11-18 D2).
+  // 채팅 반영은 저장 뒤 `["models"]` 재조회 → 서버 판정 → 컴포저(lib/default-model-sync)가 한다.
+  const [draftModel, setDraftModel] = useState("default");
+  const queryClient = useQueryClient();
   // 응답 스타일 — composer 사이클 버튼과 동일한 store.style 을 단일 소스로 사용(영속화됨).
   const responseStyle = useAppStore((s) => s.style);
   const setResponseStyle = useAppStore((s) => s.setStyle);
@@ -228,6 +232,7 @@ export default function SettingsPage() {
   });
   // 기본 모델은 2단계 선택(provider → model)으로 노출 — components/model-picker.tsx 공용
   const allModels = modelsData?.models ?? [];
+  const selection = modelsData?.defaultModelSelection ?? null;
   const externalModels = allModels.filter((m) => m.provider !== "local-llm");
   // UI 표시 언어 — NEXT_LOCALE 쿠키가 SoT (i18n/request.ts 가 서버 렌더 시 읽음).
   // 로컬 state 중복 없이 쿠키를 직접 구독: 서버 스냅샷 "" → hydration 후 클라 값으로 갱신.
@@ -419,7 +424,7 @@ export default function SettingsPage() {
         );
         const p = pres?.data?.preferences ?? {};
         if (alive) {
-          if (typeof p.defaultModel === "string") setSelectedModel(p.defaultModel);
+          if (typeof p.defaultModel === "string") setDraftModel(p.defaultModel);
           if (p.responseStyle === "concise" || p.responseStyle === "default" || p.responseStyle === "verbose")
             setResponseStyle(p.responseStyle);
           const sh = typeof p.saveHistory === "boolean" ? p.saveHistory : true;
@@ -438,7 +443,7 @@ export default function SettingsPage() {
     return () => {
       alive = false;
     };
-  }, [setSelectedModel, setResponseStyle, setPrivacyPrefs]);
+  }, [setResponseStyle, setPrivacyPrefs]);
 
   // 동의(consent) 상태 로드
   useEffect(() => {
@@ -466,13 +471,14 @@ export default function SettingsPage() {
       });
       // defaultModel/responseStyle/개인정보 영속화 (language 는 NEXT_LOCALE 쿠키, 테마는 next-themes).
       await ApiClient.put("/api/users/me/preferences", {
-        defaultModel: selectedModel,
+        defaultModel: draftModel,
         responseStyle,
         saveHistory,
         memoryLearning,
       });
       // 개인정보 설정은 채팅 WS 메시지로 전송돼 즉시 적용되도록 store 에 반영.
       setPrivacyPrefs({ saveHistory, memoryLearning });
+      void queryClient.invalidateQueries({ queryKey: ["models"] });
       setSavedAt(new Date().toLocaleTimeString(bcp47));
     } catch {
       setSavedAt(null);
@@ -673,9 +679,13 @@ export default function SettingsPage() {
                       <div className="flex flex-col gap-1.5">
                         <ModelPicker
                           models={allModels}
-                          value={selectedModel}
-                          onChange={setSelectedModel}
+                          value={draftModel}
+                          onChange={setDraftModel}
                         />
+                        {/* 저장한 모델을 지금 못 쓰면(키 꺼짐 등) 서버 판정 사유 — 편집 중인 다른 값에는 붙이지 않는다 */}
+                        {selection && draftModel === selection.saved && isFallbackStatus(selection.status) && (
+                          <p className="text-xs text-warning">{tSettings(`defaultModel.status.${selection.status}`)}</p>
+                        )}
                         {/* 키 등록 섹션이 같은 탭 하단(ProviderKeysSection)으로 흡수됨 — 링크 대신 안내만 */}
                         {externalModels.length === 0 && (
                           <p className="text-xs text-muted">
@@ -688,7 +698,7 @@ export default function SettingsPage() {
                     ) : (
                       <Select
                         value=""
-                        onChange={setSelectedModel}
+                        onChange={setDraftModel}
                         options={[{ value: "", label: tSettings("modelLoading") }]}
                       />
                     )}
