@@ -5,7 +5,8 @@
  * 잠금 파일 내용은 `{pid, token}`(token 은 잡을 때마다 새 UUID). 지우는 단계 없이, 단계마다 원자적 연산
  * 하나로 승자가 하나만 나온다.
  *   1. 다 쓴 임시 파일을 `link` 로 올린다 — 잠금이 없으면 하나만 성공한다.
- *   2. 있으면 읽는다. 깨졌거나 pid 가 살아 있으면 잡힌 것으로 본다.
+ *   2. 있으면 읽는다(읽는 사이 놓였으면 1 을 한 번 더). 깨졌거나 pid 가 살아 있으면 잡힌 것으로 본다
+ *      (자기 pid 는 재시작으로 다시 쓰인 것이라 죽은 것으로 본다).
  *   3. pid 가 죽었으면 읽은 token T 로 회수 권리 파일(`reclaim.<T>`)을 새로 만든다(`wx`) — 하나만 만든다.
  *   4. 잠금을 다시 읽어 token 이 여전히 T 인지 본다. 다르면 물러난다.
  *   5. `rename` 으로 잠금을 덮어쓴다(잠금이 없는 순간이 없다). 그 뒤 권리 파일을 지운다.
@@ -20,6 +21,7 @@ export type BrowserOwnerResult = { owned: true; token: string } | { owned: false
 
 /** 테스트 주입 훅 — 단계 사이에 다른 프로세스의 진행을 끼워 넣는다. */
 interface BrowserOwnerHooks {
+    beforeRead?: () => void;
     afterRead?: () => void;
     afterReclaim?: () => void;
 }
@@ -56,16 +58,23 @@ export function acquireBrowserOwner(dir: string, hooks: BrowserOwnerHooks = {}):
     try {
         fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(tmp, JSON.stringify({ pid: process.pid, token }));
-        try {
-            fs.linkSync(tmp, lock);
-            return { owned: true, token };
-        } catch (e) {
-            if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+        // 올리기에 진 직후 주인이 잠금을 놓았으면(읽으니 없다) 한 번 더 올린다.
+        let held: ReturnType<typeof readLock> = 'missing';
+        for (let attempt = 0; attempt < 2 && held === 'missing'; attempt++) {
+            try {
+                fs.linkSync(tmp, lock);
+                return { owned: true, token };
+            } catch (e) {
+                if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+            }
+            hooks.beforeRead?.();
+            held = readLock(lock);
         }
-        const held = readLock(lock);
         hooks.afterRead?.();
-        if (held === 'missing' || held === null) return off('브라우저 주인 잠금 파일을 읽지 못했습니다');
-        if (isAlive(held.pid)) return off(`브라우저는 다른 openmake-code(pid ${held.pid})가 쓰고 있습니다`);
+        if (held === 'missing') return off('브라우저 주인 잠금이 잡혔다 놓이기를 되풀이합니다. 다시 실행하세요');
+        if (held === null) return off('브라우저 주인 잠금 파일을 읽지 못했습니다');
+        // 자기 pid 가 남아 있으면 재시작으로 pid 가 다시 쓰인 것이다(잡기 전이라 이 프로세스의 잠금일 수 없다).
+        if (held.pid !== process.pid && isAlive(held.pid)) return off(`브라우저는 다른 openmake-code(pid ${held.pid})가 쓰고 있습니다`);
 
         const reclaim = path.join(dir, browserOwnerReclaimName(held.token));
         try { fs.closeSync(fs.openSync(reclaim, 'wx')); } catch {

@@ -30,7 +30,8 @@ interface BridgeOptions {
 /**
  * 로컬 브라우저(P2) 옵션 — OMK_BRIDGE_BROWSER=1 이고 이 프로세스가 PC 의 브라우저 주인 잠금을 잡았을 때만
  * 전용 프로필(`dir/browser-profile`, 평소 Chrome 프로필이 아니다)을 넘긴다. 못 잡으면 브라우저 없이 시작한다
- * (능력 목록에서 빠져 서버가 브라우저 요청을 보내지 않는다). 잡았으면 끝날 때 자기 잠금만 놓는다.
+ * (능력 목록에서 빠져 서버가 브라우저 요청을 보내지 않는다). 잡았으면 끝날 때 자기 잠금만 놓는다 —
+ * 코어의 Chrome 종료 훅은 나중에 등록돼도 앞에 끼워져(prependOnceListener) Chrome 이 끝난 뒤에 놓는다.
  */
 export function browserOption(env: NodeJS.ProcessEnv, dir: string): { browserProfileDir?: string } {
     if (env.OMK_BRIDGE_BROWSER !== '1') return {};

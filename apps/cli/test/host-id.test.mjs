@@ -57,7 +57,8 @@ test('an id file that stays empty is an error and is left as is', t => {
   assert.equal(readFileSync(join(dir, 'device-id'), 'utf8'), '');
 });
 
-test('an unwritable home is an error and the CLI does not connect', async t => {
+// root ignores directory permissions, so the home cannot be made unwritable there.
+test('an unwritable home is an error and the CLI does not connect', { skip: process.getuid?.() === 0 && 'root ignores chmod' }, async t => {
   const server = await fakeServer(t);
   const home = tempHome(t, { serverUrl: server.url });
   const dir = join(home, '.openmake');
