@@ -216,7 +216,11 @@ export async function runExternalStream(
             const fittedMessages = estimateMessageTokens(messages) > EXTERNAL_LLM_INPUT_TOKEN_BUDGET
                 ? truncateMessagesPreservingSystem(messages, EXTERNAL_LLM_INPUT_TOKEN_BUDGET)
                 : messages;
-            if (!timings.firstLlmCallAt) timings.firstLlmCallAt = Date.now();
+            if (!timings.firstLlmCallAt) {
+                timings.firstLlmCallAt = Date.now();
+                // 사전 단계(에이전트 선택 뒤 ~ 첫 LLM 호출) 소요 — 외부 무응답 진단 시 사전 단계 지연을 배제하는 값
+                logger.debug(`[ExternalStream] pre ${resolved.fullId} preMs=${timings.firstLlmCallAt - timings.enteredAt}`);
+            }
             timings.turns++;
             const replayTool = turn === 0 && forcedFirstTurnToolName && turnTools.length > 0 ? { type: 'function', function: { name: forcedFirstTurnToolName } } : undefined;
             captureReplay(req.sessionId, { requestId: provenance.requestId, provider: resolved, messages: fittedMessages, tools: turnTools, tool_choice: replayTool, thinking: resolveThinking(req, caps.thinking) }); // 재현 번들(F24.7)

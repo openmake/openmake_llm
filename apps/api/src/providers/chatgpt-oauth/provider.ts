@@ -32,6 +32,8 @@ import {
 import { ProviderError } from '../provider-errors';
 import { createLogger } from '../../utils/logger';
 import { createPinnedFetch } from '../../security/ssrf-guard';
+import { createStallWatchdog } from '../stream-stall-watchdog';
+import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { CHATGPT_OAUTH, CHATGPT_PROVIDER_ID } from '../../config/chatgpt-oauth';
 import {
     ChatGPTOAuthSessionPayload,
@@ -284,6 +286,12 @@ export class ChatGPTOAuthProvider implements IProvider {
 
         let aborted = false;
         opts.abortSignal?.addEventListener('abort', () => { aborted = true; });
+        // 무응답 감시 — openai-compat-provider streamChat 과 같다(providers/stream-stall-watchdog).
+        const watchdog = createStallWatchdog({
+            firstChunkMs: LLM_TIMEOUTS.EXTERNAL_FIRST_CHUNK_TIMEOUT_MS,
+            idleMs: LLM_TIMEOUTS.EXTERNAL_STREAM_IDLE_TIMEOUT_MS,
+            ...(opts.abortSignal ? { callerSignal: opts.abortSignal } : {}),
+        });
 
         try {
             const requestParams = {
@@ -304,14 +312,17 @@ export class ChatGPTOAuthProvider implements IProvider {
             // SDK 재시도 0 — 한 번 호출 = upstream 한 번(거절된 요청을 다시 보내지 않는다, openai-compat-provider 채팅과 같다).
             const stream = await this.client.responses.create(
                 requestParams as never,
-                { maxRetries: 0, ...(opts.abortSignal ? { signal: opts.abortSignal } : {}) },
+                { maxRetries: 0, signal: watchdog.signal },
             );
 
             const collector = new ResponsesStreamCollector(codec);
             for await (const event of stream as unknown as AsyncIterable<ResponsesStreamEvent>) {
+                watchdog.touch();
                 if (aborted) break;
                 collector.handleEvent(event, callbacks);
             }
+            // SDK 스트림은 본문 도중 abort 를 받으면 오류 없이 끝난다 — 시한 만료면 아래 catch 에서 UPSTREAM_TIMEOUT 으로 바꾼다.
+            if (!aborted && watchdog.stalled()) throw new Error('stream stalled');
 
             const failure = collector.getFailure();
             if (failure && !aborted) {
@@ -323,7 +334,14 @@ export class ChatGPTOAuthProvider implements IProvider {
             if (aborted) {
                 throw new ProviderError('UPSTREAM_ERROR', 'ChatGPT(Codex) 호출 중단', err);
             }
+            const phase = watchdog.stalled();
+            if (phase) {
+                logger.warn(`[ExternalStream] stall phase=${phase} waited=${watchdog.waitedMs()} provider=${this.id} model=${opts.modelId}`);
+                throw new ProviderError('UPSTREAM_TIMEOUT', `ChatGPT(Codex) 무응답 시한 초과 (${phase})`, err);
+            }
             throw mapChatGPTError(err);
+        } finally {
+            watchdog.dispose();
         }
     }
 }

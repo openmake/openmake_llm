@@ -549,7 +549,8 @@
       "SUBSCRIPTION_REQUIRED": "需要订阅",
       "INVALID_API_KEY": "认证错误",
       "MISSING_API_KEY": "认证错误",
-      "UPSTREAM_ERROR": "上游错误"
+      "UPSTREAM_ERROR": "上游错误",
+      "UPSTREAM_TIMEOUT": "响应超时"
     },
     "verification": {
       "title": "验证发现的问题"
