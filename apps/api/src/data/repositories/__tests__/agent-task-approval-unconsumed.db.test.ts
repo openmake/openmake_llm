@@ -175,6 +175,54 @@ describeOrSkip('AgentTaskApprovalRepository — 미소비 결정 이어받기·�
         });
     });
 
+    // r6 — 경계(취소 전이 이벤트)는 상태 저장과 한 문장이다. 이벤트를 못 남기면 취소도 저장되지 않고 오류로 끝난다
+    it('무효화 실패 뒤 취소 전이 이벤트 기록이 실패하면 취소가 오류로 끝나고 상태는 그대로 — 다시 취소한 뒤 재실행은 옛 승인을 쓰지 않는다', async () => {
+        await inTx(async (repo, c, task) => {
+            const t = await task('event-fail');
+            const prior = await pending(repo, t, 'prior');
+            await repo.markDecided(prior, 'approved', undefined, userId, false);
+            await decidedAt(c, prior, -10);
+            const failingVoid = Object.assign(Object.create(repo) as AgentTaskApprovalRepository, {
+                voidUnconsumedForTask: async () => { throw new Error('db down'); },
+            });
+            await new ApprovalRegistry(failingVoid).closeTask(t);
+            expect((await row(c, prior)).status).toBe('approved');   // 무효화 실패로 미소비 승인이 남았다
+            const tasks = new AgentTaskRepository(c as unknown as Pool);
+            // 이 작업의 전이 이벤트 INSERT 만 실패시킨다(시험 트랜잭션 안의 제약 — 저장점 롤백으로 사라진다)
+            await c.query('SAVEPOINT r6_event_fail');
+            await c.query(`ALTER TABLE agent_task_events ADD CONSTRAINT r6_event_fail CHECK (task_id <> '${t}') NOT VALID`);
+            await expect(tasks.updateAgentTask(t, { status: 'cancelled', error: 'aborted', onlyFrom: ['paused'] })).rejects.toThrow(/r6_event_fail/);
+            await c.query('ROLLBACK TO SAVEPOINT r6_event_fail');
+            expect((await c.query<{ status: string }>('SELECT status FROM agent_tasks WHERE id = $1', [t])).rows[0]?.status).toBe('paused');
+            expect((await c.query('SELECT 1 FROM agent_task_events WHERE task_id = $1', [t])).rowCount).toBe(0);
+            // 사용자가 다시 취소 — 이번엔 이벤트와 함께 저장된다. 재시작 뒤 재실행은 취소 전 승인을 이어받지 않고 다시 묻는다
+            await tasks.updateAgentTask(t, { status: 'cancelled', error: 'aborted', onlyFrom: ['paused'] });
+            expect((await c.query<{ to_status: string }>('SELECT to_status FROM agent_task_events WHERE task_id = $1', [t])).rows).toEqual([{ to_status: 'cancelled' }]);
+            const restarted = new ApprovalRegistry(repo);
+            const ac = new AbortController();
+            let cardId = '';
+            const result = restarted.request(
+                { taskId: t, userId, toolName: 'browser', args },
+                { timeoutMs: 60_000, signal: ac.signal, onPending: (p) => { cardId = p.approvalId; ac.abort(); } },
+            );
+            await expect(result).resolves.toMatchObject({ decision: 'rejected', reason: 'abort' });
+            expect(cardId).not.toBe('');
+            expect(cardId).not.toBe(prior);
+        });
+    });
+
+    it('재시작 중단이 아닌 실패 전이도 같다 — 이벤트 기록이 실패하면 failed 가 저장되지 않는다', async () => {
+        await inTx(async (_repo, c, task) => {
+            const t = await task('event-fail-failed');
+            const tasks = new AgentTaskRepository(c as unknown as Pool);
+            await c.query('SAVEPOINT r6_event_fail2');
+            await c.query(`ALTER TABLE agent_task_events ADD CONSTRAINT r6_event_fail2 CHECK (task_id <> '${t}') NOT VALID`);
+            await expect(tasks.updateAgentTask(t, { status: 'failed', error: 'boom' })).rejects.toThrow(/r6_event_fail2/);
+            await c.query('ROLLBACK TO SAVEPOINT r6_event_fail2');
+            expect((await c.query<{ status: string }>('SELECT status FROM agent_tasks WHERE id = $1', [t])).rows[0]?.status).toBe('paused');
+        });
+    });
+
     it('미소비 승인은 revokeUnconsumed 로 철회되고, 철회 뒤에는 이어받지 못한다', async () => {
         await inTx(async (repo, c, task) => {
             const t = await task('revoke');
