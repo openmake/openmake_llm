@@ -230,38 +230,18 @@ describe('ApprovalRegistry — closeTask 무효화와 재실행 순서', () => {
 
     const priorApproved = () => ({ approval_id: 'apv_prior', status: 'approved', decided_at: new Date().toISOString(), created_at: new Date().toISOString(), answer_text: null });
 
-    it('무효화가 실패하면 재실행이 취소 전 미소비 승인을 쓰지 않는다 — 무효화 재시도도 실패하는 동안 이어받은 결정은 버리고 다시 묻는다', async () => {
+    it('무효화 실패는 메모리에 남기지 않는다 — closeTask 는 풀리고, 이어받기 판단은 저장소(마지막 취소·실패 전이 기준, 재시작 뒤에도 유지)가 한다', async () => {
+        // 취소 전 결정을 거르는 규칙은 takeoverForCall 의 SQL 에 있다(agent-task-approval-unconsumed.db.test — 재시작 모사 포함).
+        // 레지스트리는 무효화를 다시 시도하거나 이어받은 결정을 메모리 표식으로 버리지 않는다: 같은 인스턴스든 새 인스턴스든 결과가 같다.
         const s = store();
         s.voidUnconsumedForTask.mockRejectedValue(new Error('db down'));
-        s.takeoverForCall.mockImplementation(async () => priorApproved());   // 이어받기 쪽은 DB 가 회복된 상태
+        s.takeoverForCall.mockImplementation(async () => priorApproved());   // 저장소가 쓸 수 있다고 판단한 결정(취소 뒤 결정)
         const reg = new ApprovalRegistry(s, slots(true).port);
-        await reg.closeTask('t1');
+        await expect(reg.closeTask('t1')).resolves.toBeUndefined();
         const a = await ask(reg);
-        expect(a.settled).toEqual([]);
-        expect(a.id()).not.toBe('');
-        expect(a.id()).not.toBe('apv_prior');
-    });
-
-    it('무효화가 실패한 작업은 다음 요청 때 무효화를 다시 시도하고, 성공하면 옛 승인이 남지 않는다', async () => {
-        const s = store();
-        let unconsumed = true;
-        s.voidUnconsumedForTask.mockRejectedValueOnce(new Error('db down')).mockImplementation(async () => { unconsumed = false; return undefined; });
-        s.takeoverForCall.mockImplementation(async () => {
-            if (!unconsumed) return undefined;
-            unconsumed = false;
-            return priorApproved();
-        });
-        const reg = new ApprovalRegistry(s, slots(true).port);
-        await reg.closeTask('t1');
-        const a = await ask(reg);
-        expect(s.voidUnconsumedForTask).toHaveBeenCalledTimes(2);
-        expect(a.settled).toEqual([]);
-        expect(a.id()).not.toBe('apv_prior');
-        // 재시도가 성공한 뒤의 결정(재실행 자신의 주차 승인)은 다시 이어받는다
-        s.takeoverForCall.mockImplementation(async () => priorApproved());
-        const b = await ask(reg, {}, 'file_write');
         await flush();
-        expect(b.settled).toEqual(['approved']);
+        expect(s.voidUnconsumedForTask).toHaveBeenCalledTimes(1);
+        expect(a.settled).toEqual(['approved']);
     });
 });
 

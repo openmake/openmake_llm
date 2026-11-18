@@ -193,8 +193,6 @@ export class ApprovalRegistry {
     private unattendedTasks = new Set<string>();
     /** 진행 중인 closeTask 정리 — 같은 작업의 이어받기는 이게 끝난 뒤에만 한다(취소 직후 재실행이 취소 전 승인을 소비하지 않게). */
     private closing = new Map<string, Promise<void>>();
-    /** 미소비 승인 무효화가 실패한 작업 — 무효화가 성공할 때까지 이 작업의 이어받은 결정은 쓰지 않고 다시 묻는다(fail-closed). 메모리뿐. */
-    private voidFailed = new Set<string>();
 
     /** slots — 승인 대기 중 실행 슬롯 양보·되찾기(기본은 동시성 큐). 테스트는 가짜를 넣는다. */
     constructor(private readonly store?: ApprovalStore, private readonly slots?: ApprovalSlotPort) {}
@@ -311,13 +309,8 @@ export class ApprovalRegistry {
         const argsHash = hashApprovalArgs(input.args);
         // 저장소가 없으면(테스트·비영속) 대기 등록까지 동기적으로 끝낸다 — 호출 직후 list() 가 보이도록.
         if (this.store) await this.closing.get(input.taskId);
-        // 취소 때 무효화가 실패했으면 지금 다시 시도한다 — 그래도 실패하면 아래서 이어받은 결정을 버린다(취소 전 승인일 수 있다)
-        if (this.voidFailed.has(input.taskId) && await this.voidUnconsumed(input.taskId)) this.voidFailed.delete(input.taskId);
+        // 취소 때 무효화가 실패해 남은 취소 전 결정은 이어받기가 스스로 거른다(저장소의 마지막 취소 전이 기준 — 재시작 뒤에도 유지)
         let prior = this.store ? await this.persist((s) => s.takeoverForCall(input.taskId, input.toolName, argsHash)) : undefined;
-        if (prior && prior.status !== 'pending' && this.voidFailed.has(input.taskId)) {
-            logger.warn(`[${input.taskId}] 취소 때 승인 무효화가 실패해 이어받은 결정을 쓰지 않고 다시 묻습니다: ${input.toolName}`);
-            prior = undefined;
-        }
         // 오래된 미소비 승인은 쓰지 않고 다시 묻는다 — 승인함 "최근 결정" 창을 벗어나면 사용자가 볼 수도 철회할 수도 없다.
         // 질문 도구의 답은 권한이 아니라 사용자의 답이라 그대로 이어받는다. 이어받기가 이미 소비 표시를 했으므로 행은 다시 쓰이지 않는다.
         if (prior?.status === 'approved' && !HITL_ALWAYS_WAIT_TOOLS.has(input.toolName)
@@ -486,25 +479,16 @@ export class ApprovalRegistry {
         return this.settleOrPersist(approvalId, { decision: 'approved', text, decidedBy: actorId });
     }
 
-    /** 미소비 승인 무효화 — persist() 와 달리 실패를 성공으로 바꾸지 않는다. 저장소가 무효화를 모르면 남길 것이 없어 성공. */
-    private async voidUnconsumed(taskId: string): Promise<boolean> {
-        if (!this.store?.voidUnconsumedForTask) return true;
-        try { await this.store.voidUnconsumedForTask(taskId); return true; } catch (e) {
-            logger.warn(`[${taskId}] 미소비 승인 무효화 실패 — 무효화될 때까지 이어받은 결정을 쓰지 않는다: ${e instanceof Error ? e.message : e}`);
-            return false;
-        }
-    }
-
     /** 작업 종료 시 저장소에 남은 pending 정리(124) — 메모리 waiter 는 signal abort 가 이미 해소했다.
-     *  정리가 끝나야 풀린다. 그동안 같은 작업의 이어받기는 기다린다. pending 만료 실패는 삼키고(이어받아도 다시 묻는다),
-     *  미소비 승인 무효화 실패는 voidFailed 로 남겨 이어받기를 막는다(fail-closed). */
+     *  정리가 끝나야 풀린다. 그동안 같은 작업의 이어받기는 기다린다. 실패는 삼킨다 — pending 은 이어받아도 다시 묻고,
+     *  무효화되지 못한 미소비 승인은 이어받기(takeoverForCall)가 마지막 취소·실패 전이보다 앞선 결정이라 쓰지 않는다(fail-closed, 영속 기준). */
     closeTask(taskId: string): Promise<void> {
         this.autoApproveTasks.delete(taskId);
         this.unattendedTasks.delete(taskId);
         const done = Promise.all([
             this.persist((s) => s.expirePendingForTask(taskId)),
             // 자리가 없어 주차로 넘긴 미소비 승인 — 취소·종료된 작업을 다시 실행해도 옛 승인이 쓰이지 않게(주차·서버 종료는 closeTask 를 타지 않는다)
-            this.voidUnconsumed(taskId).then((ok) => { if (ok) this.voidFailed.delete(taskId); else this.voidFailed.add(taskId); }),
+            this.persist((s) => s.voidUnconsumedForTask?.(taskId) ?? Promise.resolve()),
         ]).then(() => undefined);
         this.closing.set(taskId, done);
         void done.then(() => { if (this.closing.get(taskId) === done) this.closing.delete(taskId); });

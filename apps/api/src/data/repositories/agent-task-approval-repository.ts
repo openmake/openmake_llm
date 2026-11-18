@@ -138,6 +138,9 @@ export class AgentTaskApprovalRepository extends BaseRepository {
     /**
      * 재시작 후 이어받기 — 같은 호출(task+tool+args)의 가장 최근 행 중 ① 미소비 결정(approved/
      * rejected) 또는 ② 아직 살아 있는 pending 을 돌려준다. 결정 행은 소비 표시해 1회만 쓴다.
+     * 작업의 마지막 취소·실패 전이(agent_task_events)보다 앞서 내린 결정은 쓰지 않는다 — 그 실행이 끝나며 closeTask 가 무효화했어야 할
+     * 결정이라, 무효화가 실패하고 재시작돼도 재실행이 재승인 없이 쓰지 않게 한다(fail-closed, 영속 기준). 서버 재시작으로 끊긴 실패
+     * ('server restarted' — 좀비 정리·종료 중단 기록)는 경계가 아니다: 그 결정은 재개가 이어받는다(124).
      */
     async takeoverForCall(taskId: string, toolName: string, argsHash: string): Promise<ApprovalRow | undefined> {
         const decided = await this.query<ApprovalRow>(
@@ -146,9 +149,12 @@ export class AgentTaskApprovalRepository extends BaseRepository {
                  SELECT approval_id FROM agent_task_approvals
                  WHERE task_id = $1 AND tool_name = $2 AND args_hash = $3
                    AND status IN ('approved', 'rejected') AND consumed_at IS NULL
+                   AND decided_at > COALESCE((SELECT MAX(e.created_at) FROM agent_task_events e
+                       WHERE e.task_id = $1 AND (e.to_status = 'cancelled' OR (e.to_status = 'failed' AND e.reason IS DISTINCT FROM $4))),
+                       '-infinity'::timestamptz)
                  ORDER BY decided_at DESC LIMIT 1)
              RETURNING *`,
-            [taskId, toolName, argsHash],
+            [taskId, toolName, argsHash, 'server restarted'],
         );
         if (decided.rows[0]) return decided.rows[0];
         const pending = await this.query<ApprovalRow>(
