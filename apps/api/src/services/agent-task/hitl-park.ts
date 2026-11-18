@@ -21,6 +21,7 @@ import { AgentTaskRepository } from '../../data/repositories/agent-task-reposito
 import { AgentTaskApprovalRepository } from '../../data/repositories/agent-task-approval-repository';
 import { AgentTaskService, type AgentTaskInputFile } from '../AgentTaskService';
 import { dispatchAgentTask, getAgentTaskQueue } from './task-queue';
+import { getApprovalRegistry } from '../task-sandbox/approval-gate';
 import { resolveUserRole } from './boot-recovery';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
@@ -61,6 +62,11 @@ export async function resumeParkedTask(taskId: string): Promise<boolean> {
     if (getAgentTaskQueue().has(taskId)) {
         getAgentTaskQueue().retryAfterRelease(taskId, () => resumeParkedTask(taskId));
         logger.info(`[${taskId}] 주차 재개 보류 — 직전 실행의 종료 정리가 아직 안 끝남(자리 반납 뒤 다시 시도)`);
+        return false;
+    }
+    // 취소 라우트가 승인 정리(closeTask)를 기다리는 중 — claim 하면 곧 cancelled 로 끝날 작업이 다시 돈다(Fable r3 P3). 경쟁으로 빠져나간 claim 은 라우트의 조건부 쓰기가 잡는다.
+    if (getApprovalRegistry().isClosing(taskId)) {
+        logger.info(`[${taskId}] 주차 재개 보류 — 취소 정리 중`);
         return false;
     }
     // 소유권도 같은 문장에서 쓴다 — claim 과 running 사이에서 죽어도 pending 고아로 남지 않고 소유권 점검이 다시 잡는다(2026-10-22 R2)
