@@ -80,7 +80,7 @@ describeOrSkip('AgentTaskApprovalRepository — 미소비 결정 이어받기·�
         });
     });
 
-    it('voidUnconsumedForTask 뒤에는 이어받지 못하고 행이 aborted — 소비된 행·다른 작업·pending 은 그대로', async () => {
+    it('voidUnconsumedForTask 뒤에는 이어받지 못하고 승인은 aborted·거절은 소비 표시 — 소비된 행·다른 작업·pending 은 그대로', async () => {
         await inTx(async (repo, c, task) => {
             const t = await task('void');
             const other = await task('void-other');
@@ -91,8 +91,15 @@ describeOrSkip('AgentTaskApprovalRepository — 미소비 결정 이어받기·�
             const stillPending = await pending(repo, t, 'p', 'file_ops');
             const otherTask = await pending(repo, other, 'o');
             await repo.markDecided(otherTask, 'approved', undefined, userId, false);
+            const rejected = await pending(repo, t, 'rj', 'bash');
+            await repo.markDecided(rejected, 'rejected', '하지 마', userId, false);
 
             await repo.voidUnconsumedForTask(t);
+
+            // 미소비 거절은 소비 표시로 닫는다(Fable r4 P2) — 상태는 rejected 그대로라 완료 판정의 "사용자가 뺀 동작"에는 남는다
+            expect(await row(c, rejected)).toMatchObject({ status: 'rejected', consumed_at: expect.any(Date) });
+            await expect(repo.takeoverForCall(t, 'bash', argsHash)).resolves.toBeUndefined();
+            expect((await repo.listRejectedForTask(t)).map((r) => r.answer_text)).toEqual(['하지 마']);
 
             expect((await row(c, unconsumed)).status).toBe('aborted');
             await expect(repo.takeoverForCall(t, 'browser', argsHash)).resolves.toBeUndefined();
@@ -220,6 +227,43 @@ describeOrSkip('AgentTaskApprovalRepository — 미소비 결정 이어받기·�
             await expect(tasks.updateAgentTask(t, { status: 'failed', error: 'boom' })).rejects.toThrow(/r6_event_fail2/);
             await c.query('ROLLBACK TO SAVEPOINT r6_event_fail2');
             expect((await c.query<{ status: string }>('SELECT status FROM agent_tasks WHERE id = $1', [t])).rows[0]?.status).toBe('paused');
+        });
+    });
+
+    // Fable r4 P2 — 경계로 걸러진 미소비 결정이 주차 스윕에서 "결정 있음"으로 잡히면 재개·주차를 반복하고 만료되지 않는다
+    it('취소 전 미소비 거절·승인만 남은 주차 작업은 has_decision=false(만료 대상) — 취소 뒤 결정은 true', async () => {
+        await inTx(async (repo, c, task) => {
+            const t = await task('park-boundary');
+            const rejectedBefore = await pending(repo, t, 'rb', 'bash');
+            await repo.markDecided(rejectedBefore, 'rejected', '하지 마', userId, false);
+            await decidedAt(c, rejectedBefore, -10);
+            const approvedBefore = await pending(repo, t, 'ab');   // 무효화가 실패해 남은 미소비 승인
+            await repo.markDecided(approvedBefore, 'approved', undefined, userId, false);
+            await decidedAt(c, approvedBefore, -10);
+            await transition(c, t, 'cancelled', 'aborted', -5);
+            // 재실행이 다른 카드에서 주차됐다(질문 대기 주차 사유)
+            const tasks = new AgentTaskRepository(c as unknown as Pool);
+            await tasks.markParked(t);
+            const parked = async () => (await tasks.listParkedTasks(100_000)).find((r) => r.id === t);
+            expect(await parked()).toMatchObject({ has_decision: false, has_live_pending: false });
+            // 재실행 자신이 받은 결정(취소 뒤)은 재개 대상이다
+            const after = await pending(repo, t, 'a', 'file_ops');
+            await repo.markDecided(after, 'rejected', undefined, userId, false);
+            await decidedAt(c, after, -1);
+            expect(await parked()).toMatchObject({ has_decision: true });
+        });
+    });
+
+    it('서버 재시작 실패(server restarted)는 has_decision 경계가 아니다 — 재시작 전 미소비 결정으로 재개한다', async () => {
+        await inTx(async (repo, c, task) => {
+            const t = await task('park-restart');
+            const kept = await pending(repo, t, 'k');
+            await repo.markDecided(kept, 'approved', undefined, userId, false);
+            await decidedAt(c, kept, -10);
+            await transition(c, t, 'failed', 'server restarted', -5);
+            const tasks = new AgentTaskRepository(c as unknown as Pool);
+            await tasks.markParked(t);
+            expect((await tasks.listParkedTasks(100_000)).find((r) => r.id === t)).toMatchObject({ has_decision: true });
         });
     });
 

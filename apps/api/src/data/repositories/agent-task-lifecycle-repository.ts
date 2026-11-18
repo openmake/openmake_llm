@@ -11,6 +11,7 @@ import { recoverableRestartCondition } from './agent-task-run-repository';
 import { claimableLeaseSql, orphanedClaimSql, reclaimableOrphanSql } from './agent-task-lease-sql';
 import { AGENT_TASK_PARKED_REASON, AGENT_TASK_PARK_REASONS } from '../../config/agent-task-park-reasons';
 import type { ParkedTaskRow } from './agent-task-park-repository';
+import { decidedAfterTakeoverBoundarySql } from './agent-task-event-sql';
 
 /**
  * 주차(F16.7) 판정 SQL — paused 이고 마지막 전이 이벤트 사유가 주차 사유(hitl_parked·device_wait). 부팅 마킹·복구·재개 claim·스윕이 같은 조건을 쓴다.
@@ -89,7 +90,8 @@ export class AgentTaskLifecycleRepository extends BaseRepository {
             `SELECT t.id, t.workspace_path, t.user_id, t.device_id,
                     (SELECT e.reason FROM agent_task_events e WHERE e.task_id = t.id ORDER BY e.id DESC LIMIT 1) AS reason,
                     (EXTRACT(EPOCH FROM (NOW() - (SELECT e.created_at FROM agent_task_events e WHERE e.task_id = t.id ORDER BY e.id DESC LIMIT 1))) * 1000)::bigint AS waited_ms,
-                    EXISTS (SELECT 1 FROM agent_task_approvals a WHERE a.task_id = t.id AND a.status IN ('approved', 'rejected') AND a.consumed_at IS NULL) AS has_decision,
+                    EXISTS (SELECT 1 FROM agent_task_approvals a WHERE a.task_id = t.id AND a.status IN ('approved', 'rejected') AND a.consumed_at IS NULL
+                                AND ${decidedAfterTakeoverBoundarySql('a', 't.id')}) AS has_decision,
                     EXISTS (SELECT 1 FROM agent_task_approvals a WHERE a.task_id = t.id AND a.status = 'pending' AND a.expires_at > NOW()) AS has_live_pending
                FROM agent_tasks t WHERE ${parkedTaskCondition('t')} ORDER BY t.updated_at ASC LIMIT $1`,
             [limit],

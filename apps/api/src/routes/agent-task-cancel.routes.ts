@@ -13,6 +13,7 @@ import { AgentTaskService } from '../services/AgentTaskService';
 import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
 import { getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { AgentTaskTransitionError } from '../services/agent-task/task-state';
+import type { AgentTaskStatus } from '../data/models/unified-database.types';
 import { loadOwnedTask } from './agent-task.helpers';
 import { cancelChainIfAny, cancelTargetOf } from './agent-task-chain';
 
@@ -43,8 +44,11 @@ cancelRouter.post('/:taskId/cancel', asyncHandler(async (req: Request, res: Resp
         // 재실행 가능한 상태(cancelled)는 무효화가 끝난 뒤 공개한다(저장이 늦는 사이 병렬 /resume 이 옛 승인을 이어받지 않게)
         await getApprovalRegistry().closeTask(task.id);
         // 조건부 쓰기 — 정리를 기다리는 사이 승인 라우트·자리 반납 재시도·스윕이 주차 행을 claim 해 실행했으면 덮어쓰지 않고(화면만 취소로 보이는 실행 방지) 그 실행에 취소 신호를 보낸다
+        // 대기열에서 꺼냈으면(dequeued) 읽은 뒤 주차 재개가 claim(pending)·dispatch(queued)한 행일 수 있다 — 그 항목은 이미 꺼냈으므로
+        // pending·queued 에서도 취소한다(거부되면 실행·대기 항목 없는 고아 queued 행이 남는다)
+        const onlyFrom: AgentTaskStatus[] = dequeued ? [...new Set<AgentTaskStatus>([task.status, 'pending', 'queued'])] : [task.status];
         try {
-            await getUnifiedDatabase().updateAgentTask(task.id, { status: 'cancelled', onlyFrom: [task.status] });
+            await getUnifiedDatabase().updateAgentTask(task.id, { status: 'cancelled', onlyFrom });
         } catch (e) {
             if (!(e instanceof AgentTaskTransitionError)) throw e;
             if (AgentTaskService.cancel(task.id)) return res.json(success({ message: '작업 취소를 요청했습니다.', taskId: task.id }));
