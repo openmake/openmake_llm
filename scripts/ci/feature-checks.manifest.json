@@ -52,6 +52,8 @@
     "apps/desktop-native/build.sh": "desktopBuild",
     "apps/desktop-native/lib/node-bundle.sh": "desktopBuild",
     "apps/desktop-native/lib/node-bundle.test.mjs": "desktopBuild",
+    "apps/desktop-native/scripts/successor-replace.sh": "desktopBuild",
+    "apps/desktop-native/tests/successor-replace.test.sh": "desktopBuild",
     "db/init/004-admin-user.sh": "infra",
     "ecosystem.config.js": "pipeline",
     "infra/task-runtime/__fixtures__/browser-flow-cases.json": ["infra", "bridge"],

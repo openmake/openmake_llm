@@ -40,6 +40,8 @@ chmod +x "$APP/Contents/MacOS/omk-helper"
 cp "$ROOT/apps/desktop-native/assets/icon.icns" "$APP/Contents/Resources/icon.icns"
 # 다국어 표 — ko(개발 언어)·en·ja·zh-Hans·de (웹 LOCALES 와 같은 언어)
 cp -R Localization/*.lproj "$APP/Contents/Resources/"
+# 후속 앱 교체 스크립트(plan-pr2.4 D-143) — Updater 가 이 바이트를 그대로 띄운다(셸 테스트가 도는 것과 같은 파일).
+cp scripts/successor-replace.sh "$APP/Contents/Resources/successor-replace.sh"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

@@ -99,6 +99,17 @@
 "update.script.replace" = "既存のアプリを置き換えられません。";
 "update.script.rollback" = "新しいバージョンのインストールに失敗したため、以前のバージョンに戻しました。";
 "update.script.reopen" = "アップデートは完了しましたが、アプリを再度開けませんでした。";
+"update.successor.title" = "OpenMake Companion は OpenMake Code v%1$@ に変わります (現在 v%2$@)";
+"update.successor.body" = "新しいアプリ OpenMake Code を同じフォルダにインストールし、正常に起動したことを確認してからこのアプリを削除します。サーバーアドレス・接続フォルダ・API key は引き継がれます。新しいアプリのため、macOS がフォルダへのアクセスとキーチェーンへのアクセスをもう一度確認することがあります。";
+"update.successor.running.title" = "OpenMake Code v%@ はすでに実行中です";
+"update.successor.running.body" = "OpenMake Code を終了してから、もう一度アップデートを確認してください。";
+"update.successor.badBundleId" = "ダウンロードしたイメージ内のアプリが OpenMake Code ではありません（バンドル ID 不一致）。";
+"update.successor.badVersion" = "ダウンロードしたイメージ内のアプリのバージョンが、サーバーが通知したバージョンと異なります。";
+"update.successor.prepare" = "置き換えを準備できませんでした（サポートフォルダに書き込めません）。何も変更していません。";
+"update.successor.startTime" = "置き換えを準備できませんでした（置き換え処理の開始時刻を読み取れません）。何も変更していません。";
+"update.successor.backupLeft" = "以前の置き換えで残った OpenMake Code.app.old があるため、置き換えを中止しました。以前使っていたアプリの可能性があります。確認して移動または削除してから、もう一度アップデートを確認してください。";
+"update.successor.launch" = "OpenMake Code が正常に起動しなかったため、インストールを元に戻しました。このアプリをそのまま使えます。";
+"update.successor.killFailed" = "OpenMake Code を終了できませんでした。OpenMake Code を手動で終了してから OpenMake Companion を再度開いてください。";
 "menu.browser.takeover" = "ブラウザを引き継ぐ（エージェントを一時停止）";
 "menu.browser.release" = "ブラウザを戻す（エージェントを再開）";
 "menu.browser.stop" = "ブラウザ作業を停止";
