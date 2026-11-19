@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.140.1](https://github.com/openmake/openmake_llm/compare/v1.140.0...v1.140.1) (2026-11-18)
+
+
+### 🐛 버그 수정
+
+* **cli:** 폴더별 기기 id·Chrome 종료 확인 후 잠금 해제 — 같은 기기 id 충돌 PR 3 ([b739f66](https://github.com/openmake/openmake_llm/commit/b739f661803bd4dabfc6d667e476ccbad1ccc31c))
+
 ## [1.140.0](https://github.com/openmake/openmake_llm/compare/v1.139.6...v1.140.0) (2026-11-18)
 
 
