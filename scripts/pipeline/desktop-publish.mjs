@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // 데스크톱 앱(dmg) 게시 — 앱 버전마다 한 번 만든 GitHub 릴리스 자산을 서버가 계보·sha256 확인 뒤 게시한다.
+// 본 게시 앞에 다리 보충(plan-pr2.5 D-162·plan §3.7): apps/desktop-native/BRIDGE_VERSION 이 있으면 옛 정체성 다리(native)를 먼저 맞춘다.
 //   manifest (CI):   --dmg PATH --sha FULL_SHA --output PATH
 //   publish (서버):  --cwd LLM_DIR --sha INSTALLED_SHA --dir UPDATE_DIR --repo OWNER/REPO --output RECEIPT_PATH
 // 인자 모양은 고정이다 — 파이프라인(pipeline.sh)은 갱신 전 판이 메모리에 남아 한 주기 동안 새 스크립트를 옛 인자로 부른다.
@@ -23,6 +24,9 @@ const MAX_DMG_BYTES = 512 * 1024 * 1024;         // 기본 상한(publish 의 ma
 export const EXIT = { OK: 0, FAILED: 1, PENDING: 75 };
 // 이 파일을 옮기면 판정 기준을 함께 바꿔야 한다 — 안 그러면 릴리스가 기대되는 버전의 404 가 모두 건너뜀(unreleased)이 된다.
 export const AUTOMATION_SCRIPT = 'scripts/pipeline/desktop-publish.mjs';
+/** 다리(옛 정체성 OpenMake Companion) 버전 — 이 파일이 없는 체크아웃(2.5 이전)은 다리 보충을 건너뛴다. */
+const BRIDGE_VERSION_FILE = 'apps/desktop-native/BRIDGE_VERSION';
+const BRIDGE_FILE_PREFIX = 'OpenMake-Companion-';
 
 /** 점으로 나눈 수 비교(모자란 자리는 0) — 앱 Updater.swift 의 isNewer 와 같은 규칙. */
 export function compareVersions(a, b) {
@@ -158,6 +162,90 @@ function preAutomationVersionCommit(gitOutput, cwd, sha, version) {
     return shown.status === 0 && shown.stdout.trim() === version ? commit : undefined;
 }
 
+/** 게시된 latest.json 의 블록 하나의 버전(규칙 밖이면 undefined). */
+function publishedBlockVersion(manifestPath, block) {
+    try {
+        const version = JSON.parse(readFileSync(manifestPath, 'utf8'))?.[block]?.version;
+        return typeof version === 'string' && VERSION_RE.test(version) ? version : undefined;
+    } catch { return undefined; }
+}
+
+/**
+ * 릴리스 자산 하나를 받아 계보·sha256 확인 뒤 publish-desktop.sh 로 게시하고, 게시된 블록이 자산과 글자 그대로 같은지 본다.
+ * 본 게시와 다리 보충이 함께 쓴다. 자산 매니페스트가 404 면 { pending: true }. 그 밖의 어긋남은 throw(latest.json 은 직전 내용으로).
+ *   blocks: 게시 뒤 자산과 같아야 하는 블록 후보(본 게시는 두 macOS 블록 중 하나, 다리는 native 만)
+ *   filePrefix: 자산 파일명 접두 검사(다리만 — publish-desktop.sh 가 macos 에 쓰지 않게)
+ *   onAsset: 검증한 자산 매니페스트를 영수증에 옮긴다
+ */
+async function publishRelease(ctx, { version, blocks, filePrefix, onAsset }) {
+    const { fetch, git, runPublishScript, cwd, sha, dir, web, repo, maxDmgBytes } = ctx;
+    const base = `${web}/${repo}/releases/download/${TAG_PREFIX}${version}`;
+    const response = await fetch(`${base}/${MANIFEST_ASSET}`, { redirect: 'follow', signal: AbortSignal.timeout(MANIFEST_TIMEOUT_MS) });
+    if (response.status === 404) return { pending: true };
+    if (!response.ok) throw new Error(`release manifest download failed: HTTP ${response.status}`);
+    const asset = parseReleaseManifest(await readTextLimited(response, MAX_MANIFEST_BYTES), version);
+    onAsset(asset);
+    if (filePrefix && !asset.file.startsWith(filePrefix)) throw new Error(`release asset file name does not start with ${filePrefix}`);
+    const lineage = git(['merge-base', '--is-ancestor', asset.gitSha, sha], cwd);
+    if (lineage !== 0) throw new Error(lineage === 1 ? 'build commit is not an ancestor of the installed commit' : `cannot check build commit lineage (git exit ${lineage})`);
+
+    const manifestPath = path.join(dir, 'latest.json'), prevPath = `${manifestPath}.prev`;
+    const incoming = path.join(dir, '.incoming');
+    rmSync(incoming, { recursive: true, force: true });
+    mkdirSync(incoming, { recursive: true });
+    try {
+        const received = path.join(incoming, asset.file);
+        await download(fetch, `${base}/${asset.file}`, received, asset.sha256, maxDmgBytes);
+        // .prev = 이 게시 단계 직전 사본 — 한 주기에 다리 보충과 본 게시가 함께 돌면 "다리만 게시된 상태".
+        const hadManifest = existsSync(manifestPath);
+        if (hadManifest) copyFileSync(manifestPath, prevPath);
+        const restore = () => { if (hadManifest) copyFileSync(prevPath, manifestPath); else rmSync(manifestPath, { force: true }); };
+        if (runPublishScript({ cwd, file: received, dir }) !== 0) { restore(); throw new Error('publish-desktop.sh failed; previous manifest restored'); }
+        let manifest;
+        try { manifest = JSON.parse(readFileSync(manifestPath, 'utf8')); } catch { /* 아래에서 실패 */ }
+        const block = blocks.find((name) => {
+            const value = manifest?.[name];
+            return value?.version === version && value?.file === asset.file && value?.sha256 === asset.sha256;
+        });
+        if (!block) {
+            restore();
+            throw new Error('published manifest does not match the release asset; previous manifest restored');
+        }
+        return { block };
+    } finally {
+        rmSync(incoming, { recursive: true, force: true });
+    }
+}
+
+/**
+ * 다리 보충(plan §3.7 게시기 순서 1~4) → 영수증의 bridge 객체.
+ * status: skipped(파일 없음) · unchanged · ahead(게시본이 더 높음 — 내리지 않는다) · published · pending(자산 404) · failed.
+ * 다리 자산의 404 에는 "릴리스 자동화 이전 버전" 건너뜀을 적용하지 않는다 — 다리 버전은 언제나 자동화 뒤다.
+ */
+async function supplementBridge(ctx) {
+    const file = path.join(ctx.cwd, BRIDGE_VERSION_FILE);
+    if (!existsSync(file)) return { status: 'skipped' };
+    const version = readFileSync(file, 'utf8').trim();
+    if (!VERSION_RE.test(version)) return { status: 'failed', reason: `${BRIDGE_VERSION_FILE} is malformed` };
+    const bridge = { version };
+    const native = publishedBlockVersion(path.join(ctx.dir, 'latest.json'), 'native');
+    if (native) {
+        const order = compareVersions(native, version);
+        if (order === 0) return { ...bridge, status: 'unchanged' };
+        if (order > 0) return { ...bridge, status: 'ahead' };
+    }
+    try {
+        const result = await publishRelease(ctx, {
+            version, blocks: ['native'], filePrefix: BRIDGE_FILE_PREFIX,
+            onAsset: (asset) => Object.assign(bridge, { file: asset.file, sha256: asset.sha256, gitSha: asset.gitSha }),
+        });
+        if (result.pending) return { ...bridge, status: 'pending', reason: `release asset ${TAG_PREFIX}${version} not available yet` };
+        return { ...bridge, status: 'published' };
+    } catch (error) {
+        return { ...bridge, status: 'failed', reason: error.message };
+    }
+}
+
 const defaultDeps = {
     fetch: (...args) => globalThis.fetch(...args),
     /** git -C cwd ... 의 종료 코드(신호로 끝나면 128). */
@@ -194,7 +282,19 @@ export async function publish(options, deps = {}) {
         const version = readFileSync(path.join(cwd, 'apps/desktop-native/VERSION'), 'utf8').trim();
         if (!VERSION_RE.test(version)) throw new Error('apps/desktop-native/VERSION is malformed');
         receipt.version = version;
-        const manifestPath = path.join(dir, 'latest.json'), prevPath = `${manifestPath}.prev`;
+        const manifestPath = path.join(dir, 'latest.json');
+        const ctx = { fetch, git, runPublishScript, cwd, sha, dir, web, repo, maxDmgBytes };
+
+        // 다리 보충이 본 판정보다 먼저 — 대기·실패면 본 게시를 하지 않는다(옛 앱이 넘어올 길 없이 새 앱만 실리지 않게).
+        const { reason: bridgeReason, ...bridge } = await supplementBridge(ctx);
+        receipt.bridge = bridge;
+        if (bridge.status !== 'skipped') console.log(`desktop-publish: bridge ${bridge.status}${bridge.version ? ` ${bridge.version}` : ''}`);
+        if (bridge.status === 'pending') return finish('pending', EXIT.PENDING, `bridge: ${bridgeReason}`);
+        if (bridge.status === 'failed') {
+            console.error(`desktop-publish: bridge: ${bridgeReason}`);
+            return finish('failed', EXIT.FAILED, `bridge: ${bridgeReason}`);
+        }
+
         const published = readPublished(manifestPath), publishedVersion = published?.version;
         const decision = decide({ repoVersion: version, publishedVersion });
         // 게시하지 않을 때도 지금 게시된 바이트를 남긴다 — 손 게시 등으로 릴리스 자산과 달라졌는지 사후 대조용.
@@ -205,44 +305,17 @@ export async function publish(options, deps = {}) {
             return finish('ahead', EXIT.OK, `published version ${publishedVersion} is higher`);
         }
 
-        const base = `${web}/${repo}/releases/download/${TAG_PREFIX}${version}`;
-        const response = await fetch(`${base}/${MANIFEST_ASSET}`, { redirect: 'follow', signal: AbortSignal.timeout(MANIFEST_TIMEOUT_MS) });
-        if (response.status === 404) {
+        // 두 macOS 블록 중 하나가 릴리스 자산과 같아야 한다 — 어느 블록인지는 영수증에 남긴다.
+        const result = await publishRelease(ctx, {
+            version, blocks: MAC_BLOCKS,
+            onAsset: (asset) => Object.assign(receipt, { file: asset.file, sha256: asset.sha256, gitSha: asset.gitSha }),
+        });
+        if (result.pending) {
             const versionCommit = preAutomationVersionCommit(gitOutput, cwd, sha, version);
             if (versionCommit) return finish('unreleased', EXIT.OK, `version ${version} was set before release automation (${versionCommit.slice(0, 7)}); no release asset is made for it`);
             return finish('pending', EXIT.PENDING, `release asset ${TAG_PREFIX}${version} not available yet`);
         }
-        if (!response.ok) throw new Error(`release manifest download failed: HTTP ${response.status}`);
-        const asset = parseReleaseManifest(await readTextLimited(response, MAX_MANIFEST_BYTES), version);
-        Object.assign(receipt, { file: asset.file, sha256: asset.sha256, gitSha: asset.gitSha });
-        const lineage = git(['merge-base', '--is-ancestor', asset.gitSha, sha], cwd);
-        if (lineage !== 0) throw new Error(lineage === 1 ? 'build commit is not an ancestor of the installed commit' : `cannot check build commit lineage (git exit ${lineage})`);
-
-        const incoming = path.join(dir, '.incoming');
-        rmSync(incoming, { recursive: true, force: true });
-        mkdirSync(incoming, { recursive: true });
-        try {
-            const received = path.join(incoming, asset.file);
-            await download(fetch, `${base}/${asset.file}`, received, asset.sha256, maxDmgBytes);
-            const hadManifest = existsSync(manifestPath);
-            if (hadManifest) copyFileSync(manifestPath, prevPath);
-            const restore = () => { if (hadManifest) copyFileSync(prevPath, manifestPath); else rmSync(manifestPath, { force: true }); };
-            if (runPublishScript({ cwd, file: received, dir }) !== 0) { restore(); throw new Error('publish-desktop.sh failed; previous manifest restored'); }
-            let manifest;
-            try { manifest = JSON.parse(readFileSync(manifestPath, 'utf8')); } catch { /* 아래에서 실패 */ }
-            // 두 macOS 블록 중 하나가 릴리스 자산과 같아야 한다 — 어느 블록인지는 영수증에 남긴다.
-            const block = MAC_BLOCKS.find((name) => {
-                const value = manifest?.[name];
-                return value?.version === version && value?.file === asset.file && value?.sha256 === asset.sha256;
-            });
-            if (!block) {
-                restore();
-                throw new Error('published manifest does not match the release asset; previous manifest restored');
-            }
-            receipt.block = block;
-        } finally {
-            rmSync(incoming, { recursive: true, force: true });
-        }
+        receipt.block = result.block;
         return finish('published', EXIT.OK);
     } catch (error) {
         console.error(`desktop-publish: ${error.message}`);
