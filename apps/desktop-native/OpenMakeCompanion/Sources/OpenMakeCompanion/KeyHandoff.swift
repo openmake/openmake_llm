@@ -52,7 +52,11 @@ enum KeyHandoff {
         guard bytes.count <= maxKeyBytes, let key = String(bytes: bytes, encoding: .utf8),
               !key.isEmpty, key.unicodeScalars.allSatisfy({ $0.value > 0x20 && $0.value != 0x7F && !CharacterSet.whitespacesAndNewlines.contains($0) && !CharacterSet.controlCharacters.contains($0) })
         else { return }
-        // 저장이 실패해도 이번 실행은 넘겨받은 키로 동작한다(다음 기동은 종전처럼 키체인 창).
+        keep(key)
+    }
+
+    /** 저장이 실패해도 이번 실행은 넘겨받은 키로 동작한다(다음 기동은 종전처럼 키체인 창). */
+    static func keep(_ key: String) {
         if !Keychain.save(key) { Keychain.remember(key) }
     }
 }

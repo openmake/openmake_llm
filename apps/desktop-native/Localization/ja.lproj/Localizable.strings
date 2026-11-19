@@ -1,4 +1,4 @@
-/* OpenMake Companion — 日本語。キーは識別子で、全言語の表のキー集合は check-l10n.sh が照合する。 */
+/* OpenMake Code — 日本語。キーは識別子で、全言語の表のキー集合は check-l10n.sh が照合する。 */
 
 /* メニュー */
 "menu.status" = "状態: %@";
@@ -37,7 +37,7 @@
 "status.closed" = "終了";
 "status.apiKeyRequired" = "API キーが必要です — 設定で入力してください";
 "status.folderOpenFailed" = "フォルダを開けませんでした: %@";
-"status.instance_conflict" = "別の OpenMake Companion がすでに実行中です (%@)";
+"status.instance_conflict" = "別の OpenMake Code がすでに実行中です (%@)";
 "status.instance_lock_failed" = "アプリのデータフォルダをロックできなかったため接続しませんでした";
 "status.helperMissing" = "ヘルパーのリソースがありません（再インストールが必要です）";
 "status.helperExited" = "ヘルパーが終了しました — もう一度接続してください";
@@ -50,7 +50,7 @@
 "status.auth.accountDisabled" = "アカウントが無効化されました — 管理者にお問い合わせください";
 "status.auth.accountDeleted" = "アカウントが削除されました — 管理者にお問い合わせください";
 "status.auth.scopeRequired" = "この API key には bridge スコープがありません — bridge スコープのキーを発行して設定に入力してください";
-"status.deviceConflict" = "同じデバイス id で別のアプリがすでに接続しています — 実行中の他の OpenMake Companion・CLI を終了してください";
+"status.deviceConflict" = "同じデバイス id で別のアプリがすでに接続しています — 実行中の他の OpenMake デスクトップアプリ・CLI を終了してください";
 
 /* フォルダ選択 */
 "panel.title" = "エージェントのタスクに接続するフォルダを選択（複数のフォルダを 1 つずつ追加できます）";
@@ -99,20 +99,17 @@
 "update.script.replace" = "既存のアプリを置き換えられません。";
 "update.script.rollback" = "新しいバージョンのインストールに失敗したため、以前のバージョンに戻しました。";
 "update.script.reopen" = "アップデートは完了しましたが、アプリを再度開けませんでした。";
-"update.successor.title" = "OpenMake Companion は OpenMake Code v%1$@ に変わります (現在 v%2$@)";
-"update.successor.body" = "新しいアプリ OpenMake Code を同じフォルダにインストールし、正常に起動したことを確認してからこのアプリを削除します。サーバーアドレス・接続フォルダ・API key は引き継がれます。新しいアプリのため、macOS がフォルダへのアクセスとキーチェーンへのアクセスをもう一度確認することがあります。";
-"update.successor.running.title" = "OpenMake Code v%@ はすでに実行中です";
-"update.successor.running.body" = "OpenMake Code を終了してから、もう一度アップデートを確認してください。";
-"update.successor.badBundleId" = "ダウンロードしたイメージ内のアプリが OpenMake Code ではありません（バンドル ID 不一致）。";
-"update.successor.badVersion" = "ダウンロードしたイメージ内のアプリのバージョンが、サーバーが通知したバージョンと異なります。";
-"update.successor.prepare" = "置き換えを準備できませんでした（サポートフォルダに書き込めません）。何も変更していません。";
-"update.successor.startTime" = "置き換えを準備できませんでした（置き換え処理の開始時刻を読み取れません）。何も変更していません。";
-"update.successor.backupLeft" = "以前の置き換えで残った OpenMake Code.app.old があるため、置き換えを中止しました。以前使っていたアプリの可能性があります。確認して移動または削除してから、もう一度アップデートを確認してください。";
-"update.successor.launch" = "OpenMake Code が正常に起動しなかったため、インストールを元に戻しました。このアプリをそのまま使えます。";
-"update.successor.killFailed" = "OpenMake Code を終了できませんでした。OpenMake Code を手動で終了してから OpenMake Companion を再度開いてください。";
 "menu.browser.takeover" = "ブラウザを引き継ぐ（エージェントを一時停止）";
 "menu.browser.release" = "ブラウザを戻す（エージェントを再開）";
 "menu.browser.stop" = "ブラウザ作業を停止";
 "settings.browser" = "ブラウザ";
 "settings.browser.enable" = "エージェントのブラウザ使用を許可";
 "settings.browser.help" = "オンにすると、エージェントは専用の Chrome ウィンドウ（別プロファイル）で Web ページを開いて操作できます。普段お使いの Chrome のログイン情報は使いません。許可されていないサイトへの入力は Web で承認を求めます。";
+
+/* 初回起動の移行 — 旧アプリ (OpenMake Companion) */
+"migration.quitLegacy.failed.title" = "旧アプリ OpenMake Companion が終了しませんでした";
+"migration.quitLegacy.failed.body" = "OpenMake Companion を終了してから OpenMake Code をもう一度開いてください。それまでは接続しません。設定とキーはそのままです。";
+"migration.trash.title" = "旧アプリ OpenMake Companion をゴミ箱に移動しますか？";
+"migration.trash.body" = "設定と API key は OpenMake Code に移しました。旧アプリはもう使いません。";
+"migration.trash.move" = "ゴミ箱に移動";
+"migration.trash.keep" = "そのままにする";

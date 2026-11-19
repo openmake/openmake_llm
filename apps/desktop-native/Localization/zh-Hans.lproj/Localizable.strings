@@ -1,4 +1,4 @@
-/* OpenMake Companion — 简体中文。键为标识符，check-l10n.sh 会核对所有语言表的键集合。 */
+/* OpenMake Code — 简体中文。键为标识符，check-l10n.sh 会核对所有语言表的键集合。 */
 
 /* 菜单 */
 "menu.status" = "状态：%@";
@@ -37,7 +37,7 @@
 "status.closed" = "已关闭";
 "status.apiKeyRequired" = "需要 API 密钥 — 请在设置中输入";
 "status.folderOpenFailed" = "无法打开文件夹：%@";
-"status.instance_conflict" = "另一个 OpenMake Companion 已在运行（%@）";
+"status.instance_conflict" = "另一个 OpenMake Code 已在运行（%@）";
 "status.instance_lock_failed" = "无法锁定应用数据文件夹，因此未连接";
 "status.helperMissing" = "缺少辅助程序资源（需要重新安装）";
 "status.helperExited" = "辅助程序已停止 — 请重新连接";
@@ -50,7 +50,7 @@
 "status.auth.accountDisabled" = "账户已被停用 — 请联系管理员";
 "status.auth.accountDeleted" = "账户已被删除 — 请联系管理员";
 "status.auth.scopeRequired" = "此 API key 没有 bridge 范围 — 请生成具有 bridge 范围的密钥并在设置中输入";
-"status.deviceConflict" = "另一个应用已使用相同的设备 id 连接 — 请退出正在运行的其他 OpenMake Companion 或 CLI";
+"status.deviceConflict" = "另一个应用已使用相同的设备 id 连接 — 请退出正在运行的其他 OpenMake 桌面应用或 CLI";
 
 /* 选择文件夹 */
 "panel.title" = "选择要连接到智能体任务的文件夹（可以逐个添加多个文件夹）";
@@ -99,20 +99,17 @@
 "update.script.replace" = "无法替换现有应用。";
 "update.script.rollback" = "新版本安装失败，已恢复为之前的版本。";
 "update.script.reopen" = "更新已完成，但无法重新打开应用。";
-"update.successor.title" = "OpenMake Companion 将变为 OpenMake Code v%1$@（当前 v%2$@）";
-"update.successor.body" = "新应用 OpenMake Code 将安装到同一文件夹，确认新应用正常启动后再删除此应用。服务器地址、已连接文件夹和 API key 会保留。由于是新应用，macOS 可能会再次询问文件夹访问权限和钥匙串访问权限。";
-"update.successor.running.title" = "OpenMake Code v%@ 已在运行";
-"update.successor.running.body" = "请退出 OpenMake Code，然后再次检查更新。";
-"update.successor.badBundleId" = "下载的映像中的应用不是 OpenMake Code（Bundle ID 不一致）。";
-"update.successor.badVersion" = "下载的映像中的应用版本与服务器公布的版本不同。";
-"update.successor.prepare" = "无法准备替换（支持文件夹不可写）。未做任何更改。";
-"update.successor.startTime" = "无法准备替换（无法读取替换任务的开始时间）。未做任何更改。";
-"update.successor.backupLeft" = "由于之前的替换留下的 OpenMake Code.app.old 仍然存在，已停止替换。它可能是您之前使用的应用；请检查并移动或删除它，然后再次检查更新。";
-"update.successor.launch" = "OpenMake Code 未能正常启动，已撤销安装。可以继续使用此应用。";
-"update.successor.killFailed" = "无法结束 OpenMake Code。请手动退出 OpenMake Code，然后重新打开 OpenMake Companion。";
 "menu.browser.takeover" = "接管浏览器（暂停代理）";
 "menu.browser.release" = "交还浏览器（恢复代理）";
 "menu.browser.stop" = "停止浏览器任务";
 "settings.browser" = "浏览器";
 "settings.browser.enable" = "允许代理使用浏览器";
 "settings.browser.help" = "开启后，代理可以在专用的 Chrome 窗口（独立配置文件）中打开并操作网页。不会使用您日常 Chrome 的登录信息。向未列入允许列表的网站输入内容时，会在网页端请求您的批准。";
+
+/* 首次启动迁移 — 旧应用 (OpenMake Companion) */
+"migration.quitLegacy.failed.title" = "旧应用 OpenMake Companion 未退出";
+"migration.quitLegacy.failed.body" = "请退出 OpenMake Companion，然后重新打开 OpenMake Code。在此之前不会连接，设置和密钥保持不变。";
+"migration.trash.title" = "要将旧应用 OpenMake Companion 移到废纸篓吗？";
+"migration.trash.body" = "设置和 API key 已迁移到 OpenMake Code。旧应用不再使用。";
+"migration.trash.move" = "移到废纸篓";
+"migration.trash.keep" = "保留";

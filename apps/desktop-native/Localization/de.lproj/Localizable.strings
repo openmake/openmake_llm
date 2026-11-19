@@ -1,4 +1,4 @@
-/* OpenMake Companion — Deutsch. Keys are identifiers; check-l10n.sh verifies all tables share the same key set. */
+/* OpenMake Code — Deutsch. Keys are identifiers; check-l10n.sh verifies all tables share the same key set. */
 
 /* Menu */
 "menu.status" = "Status: %@";
@@ -37,7 +37,7 @@
 "status.closed" = "Geschlossen";
 "status.apiKeyRequired" = "API-Schlüssel erforderlich – bitte in den Einstellungen eingeben";
 "status.folderOpenFailed" = "Ordner konnte nicht geöffnet werden: %@";
-"status.instance_conflict" = "Ein anderer OpenMake Companion läuft bereits (%@)";
+"status.instance_conflict" = "Eine andere OpenMake Code-Instanz läuft bereits (%@)";
 "status.instance_lock_failed" = "Der App-Datenordner konnte nicht gesperrt werden – es wurde keine Verbindung hergestellt";
 "status.helperMissing" = "Hilfsressourcen fehlen (Neuinstallation erforderlich)";
 "status.helperExited" = "Hilfsprozess beendet – bitte erneut verbinden";
@@ -50,7 +50,7 @@
 "status.auth.accountDisabled" = "Ihr Konto wurde deaktiviert – wenden Sie sich an Ihren Administrator";
 "status.auth.accountDeleted" = "Ihr Konto wurde gelöscht – wenden Sie sich an Ihren Administrator";
 "status.auth.scopeRequired" = "Dieser API key hat keinen bridge-Bereich – Schlüssel mit bridge-Bereich erstellen und in den Einstellungen eingeben";
-"status.deviceConflict" = "Eine andere App ist bereits mit derselben Geräte-ID verbunden – beenden Sie die andere laufende OpenMake Companion- oder CLI-Instanz";
+"status.deviceConflict" = "Eine andere App ist bereits mit derselben Geräte-ID verbunden – beenden Sie die andere laufende OpenMake-Desktop-App oder CLI-Instanz";
 
 /* Folder picker */
 "panel.title" = "Ordner für Agentenaufgaben auswählen (Sie können nacheinander mehrere Ordner hinzufügen)";
@@ -99,20 +99,17 @@
 "update.script.replace" = "Die vorhandene App konnte nicht ersetzt werden.";
 "update.script.rollback" = "Die Installation der neuen Version ist fehlgeschlagen; die vorherige Version wurde wiederhergestellt.";
 "update.script.reopen" = "Das Update war erfolgreich, aber die App konnte nicht erneut geöffnet werden.";
-"update.successor.title" = "OpenMake Companion wird zu OpenMake Code v%1$@ (aktuell v%2$@)";
-"update.successor.body" = "Die neue App OpenMake Code wird im selben Ordner installiert; diese App wird entfernt, sobald die neue App korrekt gestartet ist. Serveradresse, verbundene Ordner und API-Key werden übernommen. Da es eine neue App ist, fragt macOS möglicherweise noch einmal nach Ordnerzugriff und Schlüsselbundzugriff.";
-"update.successor.running.title" = "OpenMake Code v%@ läuft bereits";
-"update.successor.running.body" = "Beenden Sie OpenMake Code und suchen Sie dann erneut nach Updates.";
-"update.successor.badBundleId" = "Die App im heruntergeladenen Image ist nicht OpenMake Code (Bundle-ID stimmt nicht überein).";
-"update.successor.badVersion" = "Die App-Version im heruntergeladenen Image weicht von der vom Server angekündigten Version ab.";
-"update.successor.prepare" = "Der Austausch konnte nicht vorbereitet werden (Support-Ordner nicht beschreibbar). Es wurde nichts geändert.";
-"update.successor.startTime" = "Der Austausch konnte nicht vorbereitet werden (die Startzeit des Austauschvorgangs konnte nicht gelesen werden). Es wurde nichts geändert.";
-"update.successor.backupLeft" = "Der Austausch wurde angehalten, weil OpenMake Code.app.old von einem früheren Austausch noch vorhanden ist. Es kann die App sein, die Sie zuvor verwendet haben; prüfen Sie sie, verschieben oder löschen Sie sie und suchen Sie dann erneut nach Updates.";
-"update.successor.launch" = "OpenMake Code ist nicht korrekt gestartet, daher wurde die Installation rückgängig gemacht. Sie können diese App weiter verwenden.";
-"update.successor.killFailed" = "OpenMake Code konnte nicht beendet werden. Beenden Sie OpenMake Code selbst und öffnen Sie dann OpenMake Companion erneut.";
 "menu.browser.takeover" = "Browser übernehmen (Agent pausieren)";
 "menu.browser.release" = "Browser zurückgeben (Agent fortsetzen)";
 "menu.browser.stop" = "Browser-Aufgabe stoppen";
 "settings.browser" = "Browser";
 "settings.browser.enable" = "Dem Agenten die Browsernutzung erlauben";
 "settings.browser.help" = "Wenn aktiviert, kann der Agent Webseiten in einem eigenen Chrome-Fenster mit separatem Profil öffnen und bedienen. Die Anmeldungen Ihres normalen Chrome werden nicht verwendet. Eingaben auf nicht freigegebenen Websites erfordern Ihre Genehmigung im Web.";
+
+/* Migration beim ersten Start — bisherige App (OpenMake Companion) */
+"migration.quitLegacy.failed.title" = "Die bisherige App OpenMake Companion wurde nicht beendet";
+"migration.quitLegacy.failed.body" = "Beenden Sie OpenMake Companion und öffnen Sie OpenMake Code erneut. Bis dahin wird keine Verbindung hergestellt; Einstellungen und Schlüssel bleiben unverändert.";
+"migration.trash.title" = "Bisherige App OpenMake Companion in den Papierkorb legen?";
+"migration.trash.body" = "Ihre Einstellungen und Ihr API key wurden zu OpenMake Code übernommen. Die bisherige App wird nicht mehr verwendet.";
+"migration.trash.move" = "In den Papierkorb legen";
+"migration.trash.keep" = "Behalten";
