@@ -8,5 +8,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(name: "OpenMakeCompanion", path: "Sources/OpenMakeCompanion"),
+        // 업데이트 판단 순수 함수의 단위 테스트(plan-pr2.4 D-148) — 실행 대상을 @testable import 로 바로 시험한다.
+        .testTarget(name: "OpenMakeCompanionTests", dependencies: ["OpenMakeCompanion"], path: "Tests/OpenMakeCompanionTests"),
     ]
 )

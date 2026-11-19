@@ -85,3 +85,26 @@ test('the companion job installs the Rust toolchain before building omk-helper a
     assert.ok(harness > cargoBuild, 'cargo build before harness');
     assert.ok(buildSh > harness, 'harness before build.sh');
 });
+
+// plan-pr2.4 D-150: 2.5 뒤 옛 정체성 재발행은 고정 이름 가지 release/desktop-bridge 에서 빌드한다.
+test('the release job condition allows exactly main and release/desktop-bridge pushes', () => {
+    const condition = release.match(/^ {4}if: (.+)$/m)?.[1] ?? '';
+    const refs = [...condition.matchAll(/github\.ref == '([^']+)'/g)].map((m) => m[1]).sort();
+    assert.deepEqual(refs, ['refs/heads/main', 'refs/heads/release/desktop-bridge'], condition);
+    assert.doesNotMatch(condition, /startsWith|contains|!=/, condition);
+    assert.match(condition, /^github\.event_name == 'push' && \(github\.ref == '[^']+' \|\| github\.ref == '[^']+'\)$/, condition);
+    const push = workflow.match(/^ {2}push:\n {4}branches: \[(.+)\]$/m)?.[1] ?? '';
+    assert.deepEqual(push.split(',').map((s) => s.trim()), ['main', 'dev', 'release/desktop-bridge']);
+    const pr = workflow.match(/^ {2}pull_request:\n {4}branches: \[(.+)\]$/m)?.[1] ?? '';
+    assert.deepEqual(pr.split(',').map((s) => s.trim()), ['main', 'dev']);
+});
+
+test('the companion job runs the Swift unit tests and the successor replace script test before the dmg', () => {
+    const companion = workflow.slice(workflow.search(/^ {2}companion:$/m), workflow.search(/^ {2}release:$/m));
+    const swiftTest = companion.search(/^ +run: swift test --package-path apps\/desktop-native\/OpenMakeCompanion$/m);
+    const succTest = companion.search(/^ +run: bash apps\/desktop-native\/tests\/successor-replace\.test\.sh$/m);
+    const buildSh = companion.search(/^ +run: bash apps\/desktop-native\/build\.sh$/m);
+    assert.ok(swiftTest > 0, 'swift test present');
+    assert.ok(succTest > 0, 'successor-replace test present');
+    assert.ok(buildSh > swiftTest && buildSh > succTest, 'tests before build.sh');
+});
