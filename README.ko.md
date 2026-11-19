@@ -101,7 +101,7 @@ flowchart TB
 - **이미지 생성, 낭독, 음성 전사를 요청** — 요청마다 해당 기능에 배정된 모델로 갑니다.
 - **에이전트에게 목표 맡기기** — 계획을 세우고, 웹을 찾아보고, 파일을 고치고, Docker 샌드박스에서 코드를 실행하며, 위험한 단계 전에는 승인을 기다립니다.
 - **MCP 로 외부 서비스 연결**(Notion, Context7, Tavily, NotebookLM 등)하거나 Claude Code 형식의 플러그인·스킬 설치하기.
-- **내 컴퓨터의 폴더에서 에이전트 작업 실행** — OpenMake Companion 앱이나 OpenMake Code CLI 로.
+- **내 컴퓨터의 폴더에서 에이전트 작업 실행** — OpenMake Code 앱이나 OpenMake Code CLI 로.
 
 | 영역 | 포함하는 것 |
 |---|---|
@@ -163,7 +163,7 @@ OpenMake
 - ✓ 일시정지·재개·취소가 되고, 서버 재시작 후에도 복구되는 영속 작업
 - ✓ 에이전트 단계·스킬·확장·MCP 서버를 한곳에서 처리하는 **승인** 화면
 - ✓ 템플릿, 예약 실행, 작업 결과 공유
-- ✓ OpenMake Companion(macOS)이나 OpenMake Code CLI 를 통한 로컬 실행 — 경로 범위 제한, 명령 확인 게이트, git worktree 격리
+- ✓ OpenMake Code(macOS)이나 OpenMake Code CLI 를 통한 로컬 실행 — 경로 범위 제한, 명령 확인 게이트, git worktree 격리
 
 **선택 활성화** — 기본값은 꺼져 있습니다. `.env` 에서 켜세요:
 
@@ -209,7 +209,7 @@ docker build -t openmake-task-runtime:latest infra/task-runtime
 flowchart TB
     subgraph clients["클라이언트"]
         WEB["웹 앱 · Next.js"]
-        NATIVE["Companion (macOS) · Code CLI"]
+        NATIVE["Code app (macOS) · Code CLI"]
         APIC["OpenAI 호환 API · Discord 봇"]
     end
     clients -->|"REST · WebSocket"| API["API 서버 · Express 5 + TypeScript"]
@@ -243,7 +243,7 @@ flowchart TB
 | 데이터 | 파라미터화 raw SQL 로 쓰는 PostgreSQL(ORM 없음), Redis |
 | LLM | vLLM, LiteLLM 게이트웨이, `openai` SDK |
 | 에이전트·도구 | Model Context Protocol 클라이언트 v2, Docker 격리 샌드박스 |
-| 네이티브 클라이언트 | SwiftUI(macOS Companion, iOS 개발 중), Node CLI — `packages/local-bridge-core` 공유 |
+| 네이티브 클라이언트 | SwiftUI(macOS OpenMake Code, iOS 개발 중), Node CLI — `packages/local-bridge-core` 공유 |
 
 ### 설계 원칙
 
@@ -314,7 +314,7 @@ apps/
 ├── api/             Express 5 API — 채팅 파이프라인, 오케스트레이터, 에이전트, MCP, 데이터
 ├── web/             Next.js 웹 앱
 ├── cli/             OpenMake Code — 로컬 브리지 CLI
-├── desktop-native/  OpenMake Companion — SwiftUI 메뉴 막대 앱 (macOS)
+├── desktop-native/  OpenMake Code — SwiftUI 메뉴 막대 앱 (macOS)
 ├── ios/             SwiftUI iOS 클라이언트 (개발 중)
 └── discord-bot/     Discord 게이트웨이 봇
 packages/            공유 타입, API 계약, 설정, API 클라이언트, 로컬 브리지 코어

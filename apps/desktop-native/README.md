@@ -1,4 +1,4 @@
-# OpenMake Companion (SwiftUI 네이티브 데스크톱)
+# OpenMake Code (SwiftUI 네이티브 데스크톱)
 
 메뉴바 상주 **로컬 에이전트 컴패니언** — 폴더 연결·디바이스 상태·exec 승인·작업 알림(종료·승인 대기)·웹 딥링크만 담당한다.
 채팅 등 깊은 UI 는 웹(chat.example.com)이 전담한다 (plan §1 비목표: 채팅 UI 재구현 금지).
@@ -9,7 +9,7 @@ Plan: `docs/proposals/2026-08-22-desktop-native-companion-plan.md` (로컬 보�
 ```
 helper/src/helper.mjs    # Node 헬퍼 — @openmake/local-bridge-core 의 stdio JSON-lines 어댑터 (앱은 0.4.0 부터 쓰지 않는다 — PR-2.2 에서 삭제)
 helper/harness.cjs       # 헬퍼 회귀 하네스 (build.sh 가 게이트로 실행). `--helper <실행 파일>` 로 omk-helper 등 다른 헬퍼를 같은 단언으로
-OpenMakeCompanion/       # SwiftPM 앱 (MenuBarExtra + 설정 + HelperManager + Updater)
+OpenMakeCompanion/       # SwiftPM 앱 (MenuBarExtra + 설정 + HelperManager + Updater + LegacyMigration) — SwiftPM 이름은 그대로
 Localization/            # <lang>.lproj/Localizable.strings — ko(개발 언어)·en·ja·zh-Hans
 check-l10n.sh            # 다국어 표 게이트 (build.sh·CI 공용)
 build.sh                 # omk-helper 릴리스 빌드(cargo) → 하네스(--helper) → l10n 게이트 → swift build → .app 조립 → ad-hoc 서명·검증 → dmg
@@ -29,6 +29,7 @@ build.sh                 # omk-helper 릴리스 빌드(cargo) → 하네스(--he
 - **브라우저 중지가 진행 중 대기를 끊음(0.4.2)**: 메뉴의 "브라우저 작업 중지"·"브라우저 넘겨받기"가 다음 액션까지 기다리지 않고 진행 중인 이동(`goto`)·`wait`·요소 대기·문서 대기를 바로 끊고, 그 탭의 이동을 멈춘다(`Page.stopLoading` — 에이전트가 건 이동이 뒤늦게 페이지를 바꾸지 않게). 결과 문구·표식은 액션 사이 중지와 같고, 중지된 요청은 진행 중 다운로드를 기다리지 않는다(다음 요청에 실린다). 마우스·키 입력 묶음·새 창 따라가기·저장·업로드는 끝까지 보낸 뒤 멈춘다. 읽는 중에 끊기면 반쯤 읽힌 페이지가 남을 수 있고, 누르기·Enter 로 보낸 폼은 서버에 닿았어도 결과는 "중지"다. 요청 끝의 주소 읽기 도중 온 중지는 끊지 못한다. 앱 코드 변경은 없고 동봉 코어만 바뀐다. Windows 앱(TS 코어)은 아직 다음 액션부터 멈춘다.
 - **도구·명령의 홈 읽기 좁히기(0.4.3)**: 확인 없이 뜨는 도구(tsc·python·git·mise 진단)의 홈 읽기를 허용 목록(런타임·버전 파일·git/mise 설정 + 연결 폴더·작업 트리)으로 바꾸고, 승인된 명령도 Desktop·Documents·Downloads·Pictures·Music·Movies·iCloud·CloudStorage·사진·연락처·캘린더·미리 알림 내용을 읽지 못하게 한다(연결 폴더가 그 안이면 그 폴더는 다시 연다). 홈을 훑는 명령이 앱 이름의 macOS 접근 권한 창을 여러 개 띄우던 것을 막는다. 인터프리터·의존에 닿지 못하면 가짜 진단을 내지 않는다. 사이트 정책 호스트 패턴 판정을 정규식 없이 선형으로 한다(판정 결과는 같다). 앱 코드 변경은 없고 동봉 코어만 바뀐다. Windows 앱은 해당 없음(샌드박스 없음).
 - **OpenMake Code 로 넘어가는 다리(0.4.4)**: 업데이터가 `GET /api/desktop/latest` 의 `macos` 블록(새 정체성 OpenMake Code, `OpenMake-Code-*.dmg`·sha256 64자)을 먼저 보고, 지금보다 높으면 `native` 대신 그쪽으로 바로 간다(판단은 순수 함수 `UpdateChoice`, 정체성 글자는 `AppIdentity.swift`). 안내 창 뒤 `Contents/Resources/successor-replace.sh` 가 dmg 의 번들 ID(`cc.openmake.code`)·버전을 확인하고 같은 폴더에 `OpenMake Code.app` 을 놓아 연다 — 새 프로세스가 15초 안에 뜨고 5초 살아 있을 때만 이 앱을 지운다. 그 전에 실패하면 새 앱을 끝내고 되돌린 뒤 이 앱을 다시 연다(새 앱을 끝내지 못하면 다시 열지 않고 직접 종료를 안내). 교체 중에는 지원 폴더에 진행 표식 `successor-pending`(`<스크립트 PID> <그 시작 시각 epoch 초>`)을 두어, 새 앱이 확정 전에 옛 Keychain 항목·옛 앱을 치우지 않게 한다. API key 는 종전 FIFO 로 넘긴다. 실패한 버전은 `update.successorFailedVersion` 에 적혀 기동 때 자동 확인이 건너뛰고(메뉴의 업데이트 확인은 다시 시도), OpenMake Code 가 이미 실행 중이면 받지 않는다. `macos` 블록이 없으면 0.4.3 과 같다.
+- **새 앱 OpenMake Code(0.5.0)**: 정체성을 뒤집었다 — 앱 이름·실행 파일 `OpenMake Code`, 번들 ID·Keychain 서비스 `cc.openmake.code`, dmg `OpenMake-Code-<v>-arm64.dmg`(글자는 `AppIdentity.swift` 한곳). 지원 폴더 `OpenMakeCompanion/` 은 그대로다. 업데이터는 `macos` 블록만 읽고 같은 정체성 교체만 한다(후속 앱 교체 스크립트는 main 에서 지웠다). 첫 실행 이전(`LegacyMigration`): 기동은 키 넘겨받기(FIFO) → 옛 앱(OpenMake Companion)이 돌면 묻지 않고 종료 요청·최대 5초 대기(끝나지 않으면 이번 실행은 이전·연결을 하지 않고 안내만) → 옛 도메인의 설정 5개·옛 Keychain 항목을 옮김 → 연결 → 알림 권한 → 옛 앱 휴지통 안내 순이다. 다리의 교체 표식이 살아 있는 동안(그 PID 의 커널 시작 시각이 같거나, 달라도 다리 스크립트 자신이면)은 옛 Keychain 항목·옛 앱을 치우지 않고 `migration.v1 = cleanup-pending` 으로 다음 기동에 넘긴다. 옛 항목 삭제는 새 서비스에 키가 실제로 저장돼 있음을 Keychain 재조회로 확인한 뒤에만 한다. 손 설치는 옛 항목을 읽을 때 Keychain 창이 한 번 뜬다(ad-hoc 서명의 알려진 한계).
 - **코어 동봉 갱신(0.3.9)**: 앱 코드 변경은 없고 동봉 코어만 바뀐다 — code_nav 의 깊은 정규식이 스택을 넘기면 "정규식 판정이 너무 깊어 중단했습니다 (역추적 한도 초과) — 패턴을 단순하게 바꾸세요" 로 답하고(#1791), 헬퍼 종료 때 띄우는 중인 로컬 브라우저 Chrome 을 끄고 이후 연결을 거부한다.
 - **게시 자동화 시험(0.3.8)**: 기능 0.3.7 과 같음 — 코드 변경 없이 버전만 올려 데스크톱 게시 자동화를 시험한다.
 - **재연결 hello 중복 방지·mise 위치 변수(0.3.7)**: 코어가 hello 를 자기가 연 소켓에만 보내고, 그 소켓이 끊기면 대기 중인 hello 를 취소한다 — 지연(300ms) 전에 끊긴 소켓의 타이머가 재연결로 열린 새 소켓에 hello 를 한 번 더 보냈다. 셸 경로 탐색에는 mise 의 설치본·설정 위치 변수를 넘겨, 위치를 기본값에서 옮긴 사용자의 PATH 도 잡는다(비밀값 변수는 계속 넘기지 않는다). 앱 코드 변경은 없고 동봉 코어만 바뀐다.
@@ -37,18 +38,19 @@ build.sh                 # omk-helper 릴리스 빌드(cargo) → 하네스(--he
 - **헬퍼 키 전달 경로(0.3.4)**: API key 를 헬퍼의 환경변수가 아니라 stdin 첫 줄(`{cmd:'auth',apiKey}`)로 준다. 프로세스 시작 환경은 같은 사용자의 다른 프로세스가 읽을 수 있어(`sysctl KERN_PROCARGS2`), 샌드박스 안에서 승인된 명령이 헬퍼의 키를 읽어 낼 수 있었다 — 헬퍼가 읽은 뒤 `process.env` 에서 지워도 시작 환경은 남는다.
 - **업로드·정책 차단 표식(0.3.3)**: 코어가 로컬 브라우저 파일 업로드 액션 `uploadFile`(연결된 허용 폴더 안의 파일만, 매번 사용자 승인)을 지원하고 능력 `browser_upload` 를 알린다. 정책·사용자 제어로 막은 호출에는 결과에 `policyBlock` 표식을 실어 서버가 감사 기록을 남긴다(#1177 · #1178).
 - **인증 사유 표시(0.3.2)**: 서버가 키 폐기·만료·비활성, 계정 비활성·삭제, bridge 스코프 없음으로 연결을 닫으면(1008 + 사유) 그 폴더의 상태에 사유를 보여 준다("API key 가 폐기되었습니다 — 새 키를 발급해 설정에 넣으세요" 등, 5개 언어). 코어는 이 사유로 닫힌 뒤 10분 간격으로만 다시 시도하고(`AUTH_RETRY_MS`), 설정에서 API key 를 바꾸면 헬퍼를 다시 띄워 새 키로 바로 붙는다. hello 의 `authClose` 로 새 코어임을 알려야 서버가 게스트 연결을 사유와 함께 닫으므로, 구버전 서버에서는 종전처럼 "서버 오류" 로 보인다.
-- 업데이트: `GET /api/desktop/latest` 의 `native` 블록 — sha256 검증 후 분리 스크립트가 교체·재실행 (구 Electron updater.js 에서 이식). **macOS 는 네이티브 컴패니언만 배포한다(2026-09-11)** — 매니페스트의 macOS 블록은 `native`(이 앱, 옛 정체성)와 `macos`(새 정체성 OpenMake Code `OpenMake-Code-*.dmg`) 둘이고, 이 앱의 업데이터는 0.4.4(다리)부터 `macos` 블록이 온전하고 현재보다 높으면 OpenMake Code 로 갈아타고, 아니면 종전대로 `native` 를 읽는다. 최상위(기본) 값은 `native` 를 따르며, 구 Electron dmg 는 게시·다운로드에서 제거됐다. 서버 브리지 등록도 API key(bridge 스코프) 연결만 받는다(쿠키 로그인 연결 = 구 Electron 앱 경로 차단).
+- 업데이트: `GET /api/desktop/latest` 의 `macos` 블록 — sha256 검증 후 분리 스크립트가 교체·재실행 (구 Electron updater.js 에서 이식). **macOS 는 네이티브 앱만 배포한다(2026-09-11)** — 매니페스트의 macOS 블록은 `native`(옛 정체성 OpenMake Companion — 다리 0.4.x)와 `macos`(이 앱 OpenMake Code) 둘이고, 이 앱은 `macos` 만 읽는다. 옛 앱은 다리(0.4.4)부터 `macos` 블록을 보고 이 앱으로 갈아탄다. 최상위(기본) 값은 `native` 를 따르며, 구 Electron dmg 는 게시·다운로드에서 제거됐다. 서버 브리지 등록도 API key(bridge 스코프) 연결만 받는다(쿠키 로그인 연결 = 구 Electron 앱 경로 차단).
 
 ## 빌드 / 게시
 
 ```bash
 npm ci                                      # 하네스의 ws 패키지 — Rust 툴체인도 필요(판은 apps/openmake-code/rust-toolchain.toml)
-bash apps/desktop-native/build.sh           # dist/OpenMake-Companion-<v>-arm64.dmg — 버전은 VERSION 파일(인자로 덮어쓸 수 있다)
-bash scripts/publish-desktop.sh apps/desktop-native/dist/OpenMake-Companion-<v>-arm64.dmg   # 로컬(localhost) 시험용 수동 게시
-# → latest.json 의 native 블록만 바꾼다(OpenMake-Code-*.dmg 면 macos 블록, 다른 블록은 그대로, 그 밖의 dmg 는 거부)
+bash apps/desktop-native/build.sh           # dist/OpenMake-Code-<v>-arm64.dmg — 버전은 VERSION 파일(인자로 덮어쓸 수 있다)
+bash scripts/publish-desktop.sh apps/desktop-native/dist/OpenMake-Code-<v>-arm64.dmg   # 로컬(localhost) 시험용 수동 게시
+# → latest.json 의 macos 블록만 바꾼다(OpenMake-Companion-*.dmg 면 native 블록, 다른 블록은 그대로, 그 밖의 dmg 는 거부)
 ```
 
 - **서버 게시는 자동이다.** PR 에서 `VERSION` 을 올리면, main 에 들어간 뒤 `desktop-native.yml` 의 `release` job 이 그 실행의 dmg 를 사전 릴리스 `desktop-native-v<버전>` 자산으로 한 번 올리고, 스테이징·운영 파이프라인(`OMK_DESKTOP_PUBLISH=1`)이 계보·sha256 확인 뒤 같은 자산을 게시한다 — 스테이징이 먼저, 사용자 verify 뒤 운영. 서버에서 `publish-desktop.sh` 를 손으로 돌리지 않는다. 자세한 흐름·종료 코드는 [`scripts/env/README.md`](../../scripts/env/README.md) "데스크톱 앱 게시".
+- **다리(옛 정체성 OpenMake Companion 0.4.x)**: main 은 이제 새 앱만 빌드한다. 다리는 `release/desktop-bridge` 가지(태그 `desktop-native-v<BRIDGE_VERSION>` 에서 딴다)가 들고 있고, 서버 게시기가 `apps/desktop-native/BRIDGE_VERSION` 의 다리를 `native` 블록에 먼저 맞춘다. 결함 수정 절차는 [`scripts/env/README.md`](../../scripts/env/README.md) "데스크톱 앱 게시".
 - `VERSION` 을 올리지 않은 앱 변경은 게시되지 않는다. 릴리스 자산은 덮어쓰지 않으므로 잘못 만든 버전은 버리고 `VERSION` 을 다시 올린다. 릴리스 job 이 실패하거나 main 의 다음 push 로 취소되면 그 실행을 다시 돌린다(초안 릴리스가 남아 gate 가 오류로 멈추면 그 초안을 지운 뒤).
 
 - **버전**: `VERSION` 파일이 기준이다. 앱은 서버에 게시된 버전이 자기보다 높으면 업데이트를 권하므로, 기능을 더한 빌드는 게시본보다 높은 버전이어야 한다(낮으면 업데이트가 구버전으로 되돌린다).
