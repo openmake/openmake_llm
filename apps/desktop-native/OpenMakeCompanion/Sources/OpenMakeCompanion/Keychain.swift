@@ -82,7 +82,8 @@ enum Keychain {
         return true
     }
 
-    /** 저장 없이 이번 실행의 캐시에만 둔다 — 넘겨받은·옮긴 키의 저장이 실패했을 때만. */
+    /** 저장 없이 이번 실행의 캐시에만 둔다 — 넘겨받은·옮긴 키의 저장이 실패했을 때, 또는 캐시층을 거치지 않고
+     *  영구 저장한 옮긴 키로 캐시를 맞출 때(LegacyMigration .copied). */
     static func remember(_ value: String) {
         cached = .some(value)
     }

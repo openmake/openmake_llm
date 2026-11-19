@@ -307,6 +307,7 @@ enum LegacyMigration {
             case let .value(v):
                 if deps.newStore.save(v) && deps.newStore.loadPersisted() == v {
                     copy = .copied
+                    deps.remember(v) // 앞서 load() 가 채운 캐시(없음 등)를 영구 값과 맞춘다(리뷰 r1 M-1(a))
                 } else {
                     deps.remember(v)
                     copy = .failed
