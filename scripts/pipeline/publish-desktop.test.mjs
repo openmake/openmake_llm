@@ -113,3 +113,24 @@ test('매니페스트가 없던 폴더의 첫 게시 — 세 경로 각각 자�
         assert.deepEqual(s.manifest(), { [block]: { version, file: name, sha256: file.sha256 } }, name);
     }
 });
+
+// plan-pr2.5 D-163: 인자 없는 기본값은 dist 의 OpenMake-Code-*.dmg 중 최신 — 옛 정체성 dmg 가 더 새것이어도 고르지 않는다.
+test('인자 없이 돌면 dist 의 OpenMake-Code-*.dmg 중 최신을 macos 로 게시한다', (t) => {
+    const root = mkdtempSync(path.join(tmpdir(), 'publish-desktop-default-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const dist = path.join(root, 'apps/desktop-native/dist'), dir = path.join(root, 'updates');
+    spawnSync('mkdir', ['-p', dist, path.join(root, 'scripts')]);
+    writeFileSync(path.join(root, 'scripts/publish-desktop.sh'), readFileSync(MAC_SCRIPT));
+    const put = (name, mtime) => {
+        writeFileSync(path.join(dist, name), `bytes of ${name}`);
+        spawnSync('touch', ['-t', mtime, path.join(dist, name)]);
+    };
+    put('OpenMake-Code-0.5.0-arm64.dmg', '202601010000');
+    put('OpenMake-Code-0.5.1-arm64.dmg', '202601020000');
+    put('OpenMake-Companion-0.4.9-arm64.dmg', '202601030000');
+    const r = spawnSync('bash', [path.join(root, 'scripts/publish-desktop.sh')], { env: { ...process.env, DESKTOP_UPDATE_DIR: dir }, encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const manifest = JSON.parse(readFileSync(path.join(dir, 'latest.json'), 'utf8'));
+    assert.deepEqual(Object.keys(manifest), ['macos']);
+    assert.equal(manifest.macos.file, 'OpenMake-Code-0.5.1-arm64.dmg');
+});
