@@ -1,4 +1,4 @@
-// OpenMake Companion — 메뉴바 상주 로컬 에이전트 컴패니언.
+// OpenMake Code — 메뉴바 상주 로컬 에이전트 컴패니언.
 // 역할 한정(plan §1 비목표): 채팅 UI 없음 — 깊은 작업은 웹으로 딥링크 핸드오프.
 // 사용자 문구는 전부 L(키) — Localization/<lang>.lproj (L10n.swift 참고).
 import AppKit
@@ -10,11 +10,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         NSApp.setActivationPolicy(.accessory) // 메뉴바 전용 (Dock 미노출)
         let center = UNUserNotificationCenter.current()
         center.delegate = self
-        center.requestAuthorization(options: [.alert, .sound]) { _, _ in /* 거부는 fail-open */ }
-        KeyHandoff.consume() // 업데이트한 옛 버전이 넘긴 키를 연결 전에 자기 신원으로 다시 저장(D-119)
+        // 기동 순서는 LaunchSequence(plan-pr2.5 D-173) — FIFO 소비가 어떤 창·조회보다 먼저, 알림 권한 요청은 연결 뒤.
         Task { @MainActor in
-            HelperManager.shared.reconnectIfPossible()
-            Updater.shared.scheduleStartupCheck(backendUrl: HelperManager.shared.serverAddress)
+            await LaunchSequence.run(LaunchSteps(
+                consumeKey: { KeyHandoff.consume() }, // 업데이트한 옛 버전이 넘긴 키를 자기 신원으로 다시 저장(D-119)
+                migrate: { await LegacyMigration.run(deps: .live) },
+                connect: { HelperManager.shared.reconnectIfPossible() },
+                requestNotifications: { center.requestAuthorization(options: [.alert, .sound]) { _, _ in /* 거부는 fail-open */ } },
+                offerTrash: { LegacyMigration.offerTrash($0) },
+                scheduleUpdateCheck: { Updater.shared.scheduleStartupCheck(backendUrl: HelperManager.shared.serverAddress) }))
         }
     }
 

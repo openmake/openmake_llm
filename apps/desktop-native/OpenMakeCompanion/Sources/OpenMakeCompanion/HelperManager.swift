@@ -28,7 +28,7 @@ final class HelperManager: NSObject, ObservableObject {
     private(set) var authClosedFolders: Set<String> = []
     @Published var autoApproveCount = 0
     /**
-     * 헬퍼가 지원 폴더 잠금을 못 잡아 끝났다(다른 Companion 이 실행 중이거나 잠금 실패). 사용자가 "다시 시도" 를 누를 때까지
+     * 헬퍼가 지원 폴더 잠금을 못 잡아 끝났다(다른 OpenMake 데스크톱 앱이 실행 중이거나 잠금 실패). 사용자가 "다시 시도" 를 누를 때까지
      * 헬퍼를 다시 띄우지 않는다 — 어느 앱을 남길지는 사용자가 고른다(앱은 스스로 끝내지 않는다).
      */
     @Published private(set) var instanceBlocked = false

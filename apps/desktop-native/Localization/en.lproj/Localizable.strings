@@ -1,4 +1,4 @@
-/* OpenMake Companion — English. Keys are identifiers; check-l10n.sh verifies all tables share the same key set. */
+/* OpenMake Code — English. Keys are identifiers; check-l10n.sh verifies all tables share the same key set. */
 
 /* Menu */
 "menu.status" = "Status: %@";
@@ -37,7 +37,7 @@
 "status.closed" = "Closed";
 "status.apiKeyRequired" = "API key required — enter it in Settings";
 "status.folderOpenFailed" = "Could not open folder: %@";
-"status.instance_conflict" = "Another OpenMake Companion is already running (%@)";
+"status.instance_conflict" = "Another OpenMake Code is already running (%@)";
 "status.instance_lock_failed" = "Could not lock the app data folder, so no connection was made";
 "status.helperMissing" = "Helper resources missing (reinstall required)";
 "status.helperExited" = "Helper stopped — connect again";
@@ -50,7 +50,7 @@
 "status.auth.accountDisabled" = "Your account has been deactivated — contact your administrator";
 "status.auth.accountDeleted" = "Your account has been deleted — contact your administrator";
 "status.auth.scopeRequired" = "This API key lacks the bridge scope — create a key with the bridge scope and enter it in Settings";
-"status.deviceConflict" = "Another app is already connected with the same device id — quit the other OpenMake Companion or CLI that is running";
+"status.deviceConflict" = "Another app is already connected with the same device id — quit the other OpenMake desktop app or CLI that is running";
 
 /* Folder picker */
 "panel.title" = "Choose a folder for agent tasks (you can add several folders one at a time)";
@@ -99,20 +99,17 @@
 "update.script.replace" = "Could not replace the existing app.";
 "update.script.rollback" = "Installing the new version failed, so the previous version was restored.";
 "update.script.reopen" = "The update succeeded, but the app could not be reopened.";
-"update.successor.title" = "OpenMake Companion is becoming OpenMake Code v%1$@ (current v%2$@)";
-"update.successor.body" = "The new app, OpenMake Code, will be installed in the same folder, and this app will be removed once the new app has started correctly. Your server address, connected folders and API key carry over. Because it is a new app, macOS may ask once more for folder access and keychain access.";
-"update.successor.running.title" = "OpenMake Code v%@ is already running";
-"update.successor.running.body" = "Quit OpenMake Code, then check for updates again.";
-"update.successor.badBundleId" = "The app in the downloaded image is not OpenMake Code (bundle ID mismatch).";
-"update.successor.badVersion" = "The app version in the downloaded image differs from the version the server announced.";
-"update.successor.prepare" = "Could not prepare the replacement (the support folder is not writable). Nothing was changed.";
-"update.successor.startTime" = "Could not prepare the replacement (could not read the start time of the replacement task). Nothing was changed.";
-"update.successor.backupLeft" = "The replacement was stopped because OpenMake Code.app.old, left by an earlier replacement, still exists. It may be the app you used before; check it, move or delete it, then check for updates again.";
-"update.successor.launch" = "OpenMake Code did not start correctly, so the installation was reverted. You can keep using this app.";
-"update.successor.killFailed" = "OpenMake Code could not be stopped. Quit OpenMake Code yourself, then reopen OpenMake Companion.";
 "menu.browser.takeover" = "Take Over Browser (Pause Agent)";
 "menu.browser.release" = "Hand Back Browser (Resume Agent)";
 "menu.browser.stop" = "Stop Browser Task";
 "settings.browser" = "Browser";
 "settings.browser.enable" = "Allow the agent to use a browser";
 "settings.browser.help" = "When on, the agent can open and operate web pages in a dedicated Chrome window with its own profile. It does not use the logins of your everyday Chrome. Typing into sites that are not on the allowed list asks for your approval on the web.";
+
+/* First-run migration — previous app (OpenMake Companion) */
+"migration.quitLegacy.failed.title" = "The previous app OpenMake Companion did not quit";
+"migration.quitLegacy.failed.body" = "Quit OpenMake Companion, then open OpenMake Code again. It will not connect until then; your settings and key are unchanged.";
+"migration.trash.title" = "Move the previous app OpenMake Companion to the Trash?";
+"migration.trash.body" = "Your settings and API key have moved to OpenMake Code. The previous app is no longer used.";
+"migration.trash.move" = "Move to Trash";
+"migration.trash.keep" = "Keep";
