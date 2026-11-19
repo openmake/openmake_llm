@@ -101,7 +101,7 @@ flowchart TB
 - **画像生成、読み上げ、文字起こしを依頼する** — リクエストごとに、その機能に割り当てたモデルが処理します。
 - **エージェントに目標を任せる** — 計画を立て、Web を調べ、ファイルを編集し、Docker サンドボックスでコードを実行し、リスクのある手順の前には承認を待ちます。
 - **MCP で外部サービスに接続する**(Notion、Context7、Tavily、NotebookLM など)、または Claude Code 形式のプラグインやスキルをインストールする。
-- **自分のマシンのフォルダーでエージェント作業を実行する** — OpenMake Companion アプリまたは OpenMake Code CLI から。
+- **自分のマシンのフォルダーでエージェント作業を実行する** — OpenMake Code アプリまたは OpenMake Code CLI から。
 
 | 領域 | 対象 |
 |---|---|
@@ -163,14 +163,14 @@ OpenMake
 - ✓ 一時停止・再開・キャンセルができ、サーバー再起動後も復旧する永続タスク
 - ✓ エージェントの手順・スキル・拡張機能・MCP サーバーをまとめて扱う **承認** 画面
 - ✓ テンプレート、スケジュール実行、タスク結果の共有
-- ✓ OpenMake Companion(macOS)または OpenMake Code CLI によるローカル実行 — パス範囲の制限、コマンド確認ゲート、git worktree による隔離
+- ✓ OpenMake Code(macOS)または OpenMake Code CLI によるローカル実行 — パス範囲の制限、コマンド確認ゲート、git worktree による隔離
 
 **オプトイン** — 既定では無効です。`.env` で有効にします:
 
 | 設定 | 有効になる機能 | 前提条件 |
 |---|---|---|
 | `TASK_SANDBOX_ENABLED=true` | タスクごとの永続 Docker ワークスペース | `infra/mcp-runtime` をビルドしてから `infra/task-runtime` をビルド |
-| `LOCAL_EXECUTOR_ENABLED=true` | ユーザーのマシンでのツール実行 | `bridge` スコープの API キーで接続した OpenMake Companion または CLI |
+| `LOCAL_EXECUTOR_ENABLED=true` | ユーザーのマシンでのツール実行 | `bridge` スコープの API キーで接続した OpenMake Code または CLI |
 | `AGENT_TASK_QUEUE_ENABLED=true` | 全体・ユーザー単位の同時実行上限 | — |
 
 ```bash
@@ -209,7 +209,7 @@ docker build -t openmake-task-runtime:latest infra/task-runtime
 flowchart TB
     subgraph clients["クライアント"]
         WEB["Web アプリ · Next.js"]
-        NATIVE["Companion (macOS) · Code CLI"]
+        NATIVE["Code app (macOS) · Code CLI"]
         APIC["OpenAI 互換 API · Discord ボット"]
     end
     clients -->|"REST · WebSocket"| API["API サーバー · Express 5 + TypeScript"]
@@ -243,7 +243,7 @@ flowchart TB
 | データ | パラメーター化した生 SQL による PostgreSQL(ORM なし)、Redis |
 | LLM | vLLM、LiteLLM ゲートウェイ、`openai` SDK |
 | エージェント・ツール | Model Context Protocol クライアント v2、Docker で隔離したサンドボックス |
-| ネイティブクライアント | SwiftUI(macOS Companion、iOS は開発中)、Node CLI — `packages/local-bridge-core` を共有 |
+| ネイティブクライアント | SwiftUI(macOS OpenMake Code、iOS は開発中)、Node CLI — `packages/local-bridge-core` を共有 |
 
 ### 設計原則
 
@@ -314,7 +314,7 @@ apps/
 ├── api/             Express 5 API — チャットパイプライン、オーケストレーター、エージェント、MCP、データ
 ├── web/             Next.js Web アプリ
 ├── cli/             OpenMake Code — ローカルブリッジ CLI
-├── desktop-native/  OpenMake Companion — SwiftUI メニューバーアプリ (macOS)
+├── desktop-native/  OpenMake Code — SwiftUI メニューバーアプリ (macOS)
 ├── ios/             SwiftUI iOS クライアント (開発中)
 └── discord-bot/     Discord ゲートウェイボット
 packages/            共有型、API 契約、設定、API クライアント、ローカルブリッジコア
