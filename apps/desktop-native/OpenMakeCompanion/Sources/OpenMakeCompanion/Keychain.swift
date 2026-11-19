@@ -55,11 +55,14 @@ struct KeychainStore {
         return nil
     }
 
+    /** 삭제 시도의 OSStatus 그대로(로그용, 값은 담지 않는다). */
+    func deleteStatus() -> OSStatus {
+        secDelete(query as CFDictionary)
+    }
+
     /** 성공 또는 이미 없음이면 true. */
-    @discardableResult
-    func delete() -> Bool {
-        let status = secDelete(query as CFDictionary)
-        return status == errSecSuccess || status == errSecItemNotFound
+    static func isDeleted(_ status: OSStatus) -> Bool {
+        status == errSecSuccess || status == errSecItemNotFound
     }
 }
 

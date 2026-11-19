@@ -206,6 +206,17 @@ enum DefaultsCopy {
     }
 }
 
+/** 휴지통 안내 대상(D-176) — 새 앱 번들과 같은 폴더의 옛 앱 하나. 그 경로의 Info.plist 번들 ID 가 옛 ID 일 때만.
+ *  LaunchServices 조회는 쓰지 않는다(다른 위치 사본을 잡는다). */
+enum LegacyBundleLocator {
+    static func url(newBundle: URL) -> URL? {
+        let candidate = newBundle.deletingLastPathComponent().appendingPathComponent("\(AppIdentity.legacyAppName).app")
+        let plist = NSDictionary(contentsOf: candidate.appendingPathComponent("Contents/Info.plist"))
+        guard plist?["CFBundleIdentifier"] as? String == AppIdentity.legacyBundleId else { return nil }
+        return candidate
+    }
+}
+
 // MARK: - 효과 실행기
 
 struct LegacyMigrationDeps {
@@ -235,7 +246,7 @@ extension LegacyMigrationDeps {
             newStore: Keychain.store,
             legacyStore: KeychainStore(service: AppIdentity.legacyKeychainService),
             remember: { Keychain.remember($0) },
-            legacyBundleURL: { NSWorkspace.shared.urlForApplication(withBundleIdentifier: AppIdentity.legacyBundleId) },
+            legacyBundleURL: { LegacyBundleLocator.url(newBundle: Bundle.main.bundleURL) },
             legacyRunning: { !NSRunningApplication.runningApplications(withBundleIdentifier: AppIdentity.legacyBundleId).isEmpty },
             terminateLegacy: {
                 for app in NSRunningApplication.runningApplications(withBundleIdentifier: AppIdentity.legacyBundleId) { app.terminate() }
@@ -315,8 +326,9 @@ enum LegacyMigration {
             }
         }
         if plan.keyCleanup == .delete || (plan.keyCleanup == .deleteIfCopied && copy == .copied) {
-            let ok = deps.legacyStore.delete() // 실패는 다시 시도하지 않는다
-            NSLog("OpenMake Code migration: legacy keychain item delete \(ok ? "ok" : "failed")")
+            let status = deps.legacyStore.deleteStatus() // 실패는 다시 시도하지 않는다(D-175: ad-hoc 서명에선 남을 수 있음)
+            let ok = KeychainStore.isDeleted(status)
+            NSLog("OpenMake Code migration: legacy keychain item delete \(ok ? "ok" : "failed") (OSStatus \(status))")
         }
         if plan.removeMarker { try? FileManager.default.removeItem(atPath: markerPath) }
         if let s = MigrationPlan.record(plan: plan, keychainCopy: copy, legacyDefaultsFound: legacyDefaultsFound) {
