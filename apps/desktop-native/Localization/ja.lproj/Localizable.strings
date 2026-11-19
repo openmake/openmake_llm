@@ -110,6 +110,6 @@
 "migration.quitLegacy.failed.title" = "旧アプリ OpenMake Companion が終了しませんでした";
 "migration.quitLegacy.failed.body" = "OpenMake Companion を終了してから OpenMake Code をもう一度開いてください。それまでは接続しません。設定とキーはそのままです。";
 "migration.trash.title" = "旧アプリ OpenMake Companion をゴミ箱に移動しますか？";
-"migration.trash.body" = "設定と API key は OpenMake Code に移しました。旧アプリはもう使いません。";
+"migration.trash.body" = "設定を OpenMake Code に移しました。旧アプリはもう使いません。";
 "migration.trash.move" = "ゴミ箱に移動";
 "migration.trash.keep" = "そのままにする";

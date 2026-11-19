@@ -7,13 +7,13 @@ import UserNotifications
 
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let keyHandoff = KeyHandoff.consume() // 동기로 맨 먼저 — 업데이트한 옛 버전이 넘긴 키를 어떤 Keychain 조회보다 먼저 자기 신원으로 다시 저장(D-119·§4.1 1)
         NSApp.setActivationPolicy(.accessory) // 메뉴바 전용 (Dock 미노출)
         let center = UNUserNotificationCenter.current()
         center.delegate = self
-        // 기동 순서는 LaunchSequence(plan-pr2.5 D-173) — FIFO 소비가 어떤 창·조회보다 먼저, 알림 권한 요청은 연결 뒤.
+        // 나머지 기동 순서는 LaunchSequence(plan-pr2.5 D-173) — 알림 권한 요청은 연결 뒤.
         Task { @MainActor in
-            await LaunchSequence.run(LaunchSteps(
-                consumeKey: { KeyHandoff.consume() }, // 업데이트한 옛 버전이 넘긴 키를 자기 신원으로 다시 저장(D-119)
+            await LaunchSequence.run(keyHandoff: keyHandoff, LaunchSteps(
                 migrate: { await LegacyMigration.run(deps: .live) },
                 connect: { HelperManager.shared.reconnectIfPossible() },
                 requestNotifications: { center.requestAuthorization(options: [.alert, .sound]) { _, _ in /* 거부는 fail-open */ } },

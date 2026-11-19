@@ -1,7 +1,9 @@
 // 기동 조율(plan-pr2.5 D-173·§4.1) — 순서를 한 함수에 두어 단위로 고정한다.
-// consumeKey(FIFO, 맨 앞) → migrate(옛 앱 종료 대기·이전) → [.proceed 일 때만] connect → requestNotifications
+// FIFO 소비(KeyHandoff.consume)는 applicationDidFinishLaunching 안에서 동기로 맨 먼저 돌고 이 함수는 그 결과만 받는다 —
+// Task 지연 사이에 Keychain 조회가 consume 앞에 끼지 않게(D-119·§4.1 1, 리뷰 r1 M-1(b)).
+// migrate(옛 앱 종료 대기·이전) → [.proceed 일 때만] connect → requestNotifications
 // → offerTrash(휴지통 ○ 일 때만, 주 큐 다음 차례) → scheduleUpdateCheck.
-// .blocked 순서: consumeKey → migrate → scheduleUpdateCheck — connect·requestNotifications·offerTrash 각 0회.
+// .blocked 순서: migrate → scheduleUpdateCheck — connect·requestNotifications·offerTrash 각 0회.
 import Foundation
 
 enum MigrationOutcome: Equatable {
@@ -12,7 +14,6 @@ enum MigrationOutcome: Equatable {
 }
 
 struct LaunchSteps {
-    var consumeKey: () -> Void
     var migrate: () async -> MigrationOutcome
     var connect: () -> Void
     var requestNotifications: () -> Void
@@ -22,8 +23,8 @@ struct LaunchSteps {
 
 enum LaunchSequence {
     @MainActor
-    static func run(_ steps: LaunchSteps) async {
-        steps.consumeKey()
+    static func run(keyHandoff: KeyHandoff.Result, _ steps: LaunchSteps) async {
+        NSLog("OpenMake Code launch: key handoff \(keyHandoff)")
         if case let .proceed(trash) = await steps.migrate() {
             steps.connect()
             steps.requestNotifications()

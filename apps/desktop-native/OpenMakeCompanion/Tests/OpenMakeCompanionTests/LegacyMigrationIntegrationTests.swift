@@ -128,7 +128,7 @@ final class LegacyMigrationIntegrationTests: XCTestCase {
             legacyDefaults: { legacyDefaults },
             newStore: newStore,
             legacyStore: legacyStore,
-            remember: { _ in log.add("remember") },
+            remember: { log.add("remember"); Keychain.remember($0) }, // live 와 같은 캐시층(tearDown 이 store 를 되돌려 캐시도 비운다)
             legacyBundleURL: { bundle },
             legacyRunning: {
                 log.add("legacyRunning")
@@ -140,11 +140,11 @@ final class LegacyMigrationIntegrationTests: XCTestCase {
             processLookup: ProcessLookup.of)
     }
 
-    /** 기동 조율 그대로 — 연결·알림·휴지통·업데이트 확인은 기록만. */
+    /** 기동 조율 그대로 — FIFO 소비(동기, 맨 앞)·연결·알림·휴지통·업데이트 확인은 기록만. */
     private func launch(_ d: LegacyMigrationDeps) async {
         let log = self.log!
-        await LaunchSequence.run(LaunchSteps(
-            consumeKey: { log.add("consumeKey") },
+        log.add("consumeKey")
+        await LaunchSequence.run(keyHandoff: .notReceived, LaunchSteps(
             migrate: { await LegacyMigration.run(deps: d) },
             connect: { log.add("connect") },
             requestNotifications: { log.add("requestNotifications") },
@@ -401,12 +401,27 @@ final class LegacyMigrationIntegrationTests: XCTestCase {
     func testK5NormalCopy() async throws {
         let new = realStore("new"), legacy = realStore("legacy")
         XCTAssertTrue(legacy.save(testValue))
+        Keychain.store = new
         log.calls = []
         await launch(deps(newStore: new, legacyStore: legacy))
         XCTAssertEqual(new.loadPersisted(), testValue)
         XCTAssertNil(legacy.loadPersisted())
         XCTAssertEqual(state, "done")
-        XCTAssertEqual(log.count("remember"), 0)
+        XCTAssertEqual(log.count("remember"), 1) // 복사 성공도 캐시를 영구 값과 맞춘다(리뷰 r1 M-1(a))
+        XCTAssertEqual(Keychain.load(), testValue) // 연결이 쓰는 메모리 키
+    }
+
+    /** 리뷰 r1 M-1(a) 회귀 — 이전 전에 `Keychain.load()` 가 새 서비스에서 "없음"을 캐시해도 .copied 뒤엔 옮긴 키가 보인다. */
+    func testK6CopiedOverridesEarlierNilCache() async throws {
+        let new = realStore("new"), legacy = realStore("legacy")
+        XCTAssertTrue(legacy.save(testValue))
+        Keychain.store = new
+        XCTAssertNil(Keychain.load()) // 캐시 .some(nil)
+        log.calls = []
+        await launch(deps(newStore: new, legacyStore: legacy))
+        XCTAssertEqual(state, "done")
+        XCTAssertEqual(new.loadPersisted(), testValue)
+        XCTAssertEqual(Keychain.load(), testValue)
     }
 
     func testLegacyReadDeniedIsKeychainSkipped() async throws {
