@@ -35,13 +35,14 @@ final class ConfirmModalTests: XCTestCase {
         defer { f.restoreDefaults() }
         ProcessSetup.apply()
         let savedTerminate = AppTermination.terminate, savedRunning = AppTermination.modalRunning
-        let savedAbort = AppTermination.abortModal
+        let savedAbort = AppTermination.abortModal, savedRequested = AppTermination.requested
         defer {
             AppTermination.terminate = savedTerminate
             AppTermination.modalRunning = savedRunning
             AppTermination.abortModal = savedAbort
-            AppTermination.requested = false
+            AppTermination.requested = savedRequested
         }
+        AppTermination.requested = false
         f.helper.connect(folder: folder)
         var modal = false, aborted = false
         AppTermination.modalRunning = { modal }
@@ -68,7 +69,8 @@ final class ConfirmModalTests: XCTestCase {
     /** 종료가 요청된 뒤의 승인 요청은 창을 띄우지 않고 거부로 답한다. */
     func testConfirmAfterTerminateRequestIsDeniedWithoutWindow() async {
         let f = FakeHosts()
-        defer { f.restoreDefaults(); AppTermination.requested = false }
+        let savedRequested = AppTermination.requested
+        defer { f.restoreDefaults(); AppTermination.requested = savedRequested }
         f.helper.connect(folder: folder)
         AppTermination.requested = true
         var shown = false
@@ -111,7 +113,10 @@ private func nestedModalDrainsMainQueue() -> Bool {
 }
 
 /** 같은 종류 후보(Astra r1 H-1 후속 3) — 호스트가 살아 있을 수 있는 자리의 모달은 모두 AppTermination.runModal 을 거친다.
-    남는 직접 runModal 은 둘뿐: 승인 창 기본 표시(runModal 안에서 불린다)와 이전 안내(LegacyMigration.alert — 호스트 기동 전). */
+    남는 직접 runModal 은 둘뿐: 승인 창 기본 표시(runModal 안에서 불린다)와 이전 안내(LegacyMigration.alert — 호스트 기동 전).
+    한계(Opus r4 N-2): 줄 단위 문자열 대조라 runModal(for:)·runModalSession·beginSheetModal·별칭 변수·줄바꿈한 호출·같은 줄
+    주석은 잡지 못하고, 허용 항목의 위치도 고정하지 않는다. 회귀 신호일 뿐 런타임 안전성 증명이 아니다 — 실제 동작은
+    ConfirmModalTests·RealTerminationTests 와 라이브 R-10 이 본다. */
 final class ModalSitesTests: XCTestCase {
     func testDirectRunModalOnlyInAllowedPlaces() throws {
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()

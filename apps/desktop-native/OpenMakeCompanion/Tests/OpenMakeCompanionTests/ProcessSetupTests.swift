@@ -56,8 +56,9 @@ private func nestedLoopDrainsMainQueue() -> Bool {
 @MainActor
 final class AppTerminationTests: XCTestCase {
     func testRequestInsideMainQueueBlockRunsAfterBlockAndCanDrainMainQueue() async {
-        let saved = AppTermination.terminate
-        defer { AppTermination.terminate = saved; AppTermination.requested = false }
+        let saved = AppTermination.terminate, savedRequested = AppTermination.requested
+        defer { AppTermination.terminate = saved; AppTermination.requested = savedRequested }
+        AppTermination.requested = false
         let done = XCTestExpectation(description: "terminate")
         var blockEnded = false
         var ranAfterBlock = false
@@ -80,8 +81,9 @@ final class AppTerminationTests: XCTestCase {
 
     func testSignalDefaultGoesThroughRequest() async {
         ProcessSetup.apply()
-        let saved = AppTermination.terminate
-        defer { AppTermination.terminate = saved; AppTermination.requested = false }
+        let saved = AppTermination.terminate, savedRequested = AppTermination.requested
+        defer { AppTermination.terminate = saved; AppTermination.requested = savedRequested }
+        AppTermination.requested = false
         let done = XCTestExpectation(description: "terminate via SIGTERM")
         var drained = false
         AppTermination.terminate = {
@@ -91,5 +93,42 @@ final class AppTerminationTests: XCTestCase {
         kill(getpid(), SIGTERM)
         await fulfillment(of: [done], timeout: 5)
         XCTAssertTrue(drained, "신호 처리기(main 큐 블록)에서 바로 부르면 reply 를 기다리는 중첩 루프가 교착한다")
+    }
+
+    /** 이중 종료 요청(PR-3.2 Opus r4 M-1·Astra r2 H-1) — 두 번째 요청은 terminate 를 다시 부르지 않는다. 실제 AppKit 은
+        .terminateLater 대기 중 terminate 에 다시 들어가면 reply 없이 바로 끝낸다(RealTerminationTests). */
+    func testSecondRequestDoesNotTerminateAgain() async {
+        let saved = AppTermination.terminate, savedRequested = AppTermination.requested
+        defer { AppTermination.terminate = saved; AppTermination.requested = savedRequested }
+        AppTermination.requested = false
+        var calls = 0
+        AppTermination.terminate = { calls += 1 }
+        AppTermination.request()
+        AppTermination.request()
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        XCTAssertEqual(calls, 1)
+    }
+
+    /** 종료가 이미 진행 중(메뉴 종료·로그아웃 — applicationShouldTerminate)이면 SIGTERM 은 terminate 를 부르지 않는다. */
+    func testSignalAfterTerminationStartedDoesNothing() async {
+        ProcessSetup.apply()
+        let saved = AppTermination.terminate, savedRequested = AppTermination.requested
+        let savedSignal = ProcessSetup.onTerminateSignal
+        defer {
+            AppTermination.terminate = saved
+            AppTermination.requested = savedRequested
+            ProcessSetup.onTerminateSignal = savedSignal
+        }
+        AppTermination.requested = false
+        _ = AppDelegate().applicationShouldTerminate(NSApplication.shared) // 시험 프로세스엔 살아 있는 호스트가 없다 — .terminateNow
+        XCTAssertTrue(AppTermination.requested, "종료 진입이 요청됨을 남긴다")
+        var calls = 0
+        AppTermination.terminate = { calls += 1 }
+        let hit = XCTestExpectation(description: "SIGTERM delivered")
+        ProcessSetup.onTerminateSignal = { savedSignal(); hit.fulfill() }
+        kill(getpid(), SIGTERM)
+        await fulfillment(of: [hit], timeout: 5)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        XCTAssertEqual(calls, 0)
     }
 }
