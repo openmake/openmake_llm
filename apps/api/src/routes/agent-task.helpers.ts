@@ -15,6 +15,9 @@ import { getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { LOCAL_BRIDGE } from '../config/local-bridge';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
 import type { AgentTaskInputFile } from '../services/AgentTaskService';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('AgentTaskHelpers');
 
 /**
  * executor='local' 작업 생성 전 검증 — 기능 게이트/디바이스 연결/폴더 선택(102).
@@ -104,7 +107,7 @@ export function filterTaskList<T extends { executor?: string | null; device_id?:
 /**
  * 대기 정보(Companion P1-7) — 목록·상세 응답에 덧붙인다.
  *   queuePosition : 대기열에서 몇 번째로 시작되는지(1 부터). 대기 중이 아니면 없다. 메모리 조회라 목록에도 쓴다.
- *   waitReason    : 멈춘 작업이 무엇을 기다리는지(device_wait = 로컬 기기 연결, hitl_parked = 사용자 답). DB 조회라 상세에만 쓴다.
+ *   waitReason    : 멈춘 작업이 무엇을 기다리는지(device_wait = 로컬 기기 연결, hitl_parked = 사용자 답). DB 조회 — 상세는 waitReasonOf, 목록은 withWaitReasons(멈춘 작업만 한 문장).
  */
 export function queuePositionOf(t: { id?: unknown; status?: unknown }): { queuePosition?: number } {
     if (t.status !== 'queued' || typeof t.id !== 'string') return {};
@@ -124,7 +127,10 @@ export async function waitReasonOf(t: { id?: unknown; status?: unknown }): Promi
 export async function withWaitReasons<T extends { id: string; status?: unknown }>(tasks: T[]): Promise<Array<T & { waitReason?: string }>> {
     const paused = tasks.filter((t) => t.status === 'paused').map((t) => t.id);
     if (paused.length === 0) return tasks;
-    const reasons = await new AgentTaskParkRepository(getPool()).getParkReasons(paused).catch(() => new Map<string, string>());
+    const reasons = await new AgentTaskParkRepository(getPool()).getParkReasons(paused).catch((e) => {
+        logger.warn(`[AgentTask] 목록 대기 사유 조회 실패(목록은 그대로): ${e instanceof Error ? e.message : String(e)}`);
+        return new Map<string, string>();
+    });
     return tasks.map((t) => (reasons.has(t.id) ? { ...t, waitReason: reasons.get(t.id) } : t));
 }
 
