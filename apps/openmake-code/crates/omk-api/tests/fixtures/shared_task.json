@@ -1,0 +1,58 @@
+{
+  "success": true,
+  "data": {
+    "shareId": "sh-synth",
+    "visibility": "link",
+    "sharedAt": "2026-01-01T00:00:00.000Z",
+    "document": {
+      "taskId": "task-synth-1",
+      "goal": "합성 목표",
+      "result": "합성 결과",
+      "status": "completed",
+      "summary": {
+        "turns": 3,
+        "toolCalls": 5,
+        "retries": 0,
+        "diffs": 1,
+        "artifacts": 2
+      },
+      "steps": [
+        {
+          "n": 1,
+          "type": "tool_call",
+          "tool": "read_file",
+          "text": "합성"
+        },
+        {
+          "n": 2,
+          "type": "final",
+          "text": "합성"
+        }
+      ],
+      "diffs": [
+        "--- a\n+++ b\n"
+      ],
+      "artifacts": [
+        {
+          "id": "art-1",
+          "title": "합성 문서",
+          "kind": "markdown",
+          "body": "# 합성"
+        },
+        {
+          "id": "art-2",
+          "title": "합성 페이지",
+          "kind": "html",
+          "body": null,
+          "omitted": "markup",
+          "viewerId": "view-synth"
+        }
+      ],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "completedAt": null
+    }
+  },
+  "meta": {
+    "timestamp": "2026-01-01T00:00:00.000Z"
+  }
+}

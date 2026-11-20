@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "data": {
+    "message": "동시 실행 한도로 대기열에 추가되었습니다.",
+    "taskId": "task-synth-3",
+    "queued": true
+  },
+  "meta": {
+    "timestamp": "2026-01-01T00:00:00.000Z"
+  }
+}
