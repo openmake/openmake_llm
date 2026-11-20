@@ -34,6 +34,7 @@ final class TaskApiWorker: @unchecked Sendable {
     private var api: TaskApi?
     private var server: String?
 
+    // 키를 바꾸는 경로는 TasksModel.sessionChanged() 를 불러야 한다 — 같은 서버면 여기 캐시된 TaskApi(옛 키)를 다시 쓴다.
     func invalidate() {
         queue.async {
             self.api = nil
