@@ -1,7 +1,7 @@
 # ==============================================================
 # openmake_code Rust 코어 CI (설계 2026-11-12 §2.5)
 # ==============================================================
-# path-filter: Rust workspace(apps/openmake-code) 또는 공용 적합성 fixture 변경 시에만 실행.
+# path-filter: Rust workspace(apps/openmake-code) 또는 공용 적합성 fixture·REST 계약(openapi.v1.json — omk-api 계약 대조) 변경 시에만 실행.
 # 코어의 검증 대상(sandbox-exec·/private/tmp realpath 등)이 macOS 고유라 macOS 러너에서 돈다.
 # TS 러너(conformance.test.ts)는 ci.yml Gate 1(bridge 선정)이 맡고, 여기서는 Rust 쪽만 본다.
 # 툴체인은 apps/openmake-code/rust-toolchain.toml 로 고정한다(러너 이미지의 rustup 이 그 판을 받는다).
@@ -16,6 +16,7 @@ on:
     paths:
       - 'apps/openmake-code/**'
       - 'packages/local-bridge-core/conformance/**'
+      - 'packages/api-contracts/openapi.v1.json'
       - 'infra/task-runtime/__fixtures__/browser-flow-cases.json'
       - 'apps/desktop-native/helper/harness.cjs'
       - '.github/workflows/openmake-code.yml'
@@ -24,6 +25,7 @@ on:
     paths:
       - 'apps/openmake-code/**'
       - 'packages/local-bridge-core/conformance/**'
+      - 'packages/api-contracts/openapi.v1.json'
       - 'infra/task-runtime/__fixtures__/browser-flow-cases.json'
       - 'apps/desktop-native/helper/harness.cjs'
       - '.github/workflows/openmake-code.yml'
