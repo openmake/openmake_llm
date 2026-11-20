@@ -1,0 +1,207 @@
+{
+  "_comment": "미문서 operation·필드의 정확한 예외(D-201 A안·D-208). wildcard 금지. 문서가 생기면 테스트가 실패해 대조 대상으로 승격한다. 계약 보강은 U-10(단계 ④ 이후 별도 서버 PR).",
+  "exceptions": [
+    {
+      "operation": "GetShare",
+      "kind": "operation",
+      "method": "get",
+      "path": "/api/agent-tasks/{taskId}/share",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task-share.routes.ts:110 success({share}) nullable",
+      "consumerPR": [
+        "3.5",
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [],
+      "body": [],
+      "response": [
+        "data",
+        "data.share",
+        "data.share.includeArtifacts",
+        "data.share.includeDiff",
+        "data.share.includeSteps",
+        "data.share.path",
+        "data.share.shareId",
+        "data.share.shareToken",
+        "data.share.sharedAt",
+        "data.share.visibility",
+        "success"
+      ]
+    },
+    {
+      "operation": "PreviewShare",
+      "kind": "operation",
+      "method": "post",
+      "path": "/api/agent-tasks/{taskId}/share/preview",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task-share.routes.ts:132 success({preview}), apps/api/src/routes/agent-task-share.routes.ts:76 readToggles, apps/api/src/services/agent-task/share-document.ts:59 ShareDocument",
+      "consumerPR": [
+        "3.5",
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [],
+      "body": [
+        "includeArtifacts",
+        "includeDiff",
+        "includeSteps"
+      ],
+      "response": [
+        "data",
+        "data.preview",
+        "data.preview.artifacts",
+        "data.preview.artifacts[]",
+        "data.preview.artifacts[].body",
+        "data.preview.artifacts[].id",
+        "data.preview.artifacts[].kind",
+        "data.preview.artifacts[].omitted",
+        "data.preview.artifacts[].title",
+        "data.preview.artifacts[].viewerId",
+        "data.preview.completedAt",
+        "data.preview.createdAt",
+        "data.preview.diffs",
+        "data.preview.diffs[]",
+        "data.preview.goal",
+        "data.preview.result",
+        "data.preview.status",
+        "data.preview.steps",
+        "data.preview.steps[]",
+        "data.preview.steps[].n",
+        "data.preview.steps[].text",
+        "data.preview.steps[].tool",
+        "data.preview.steps[].type",
+        "data.preview.summary",
+        "data.preview.summary.artifacts",
+        "data.preview.summary.diffs",
+        "data.preview.summary.retries",
+        "data.preview.summary.toolCalls",
+        "data.preview.summary.turns",
+        "data.preview.taskId",
+        "success"
+      ]
+    },
+    {
+      "operation": "PublishShare",
+      "kind": "operation",
+      "method": "post",
+      "path": "/api/agent-tasks/{taskId}/share",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task-share.routes.ts:184 success({shareId,visibility,shareToken,path}) — include* 없음",
+      "consumerPR": [
+        "3.5",
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [],
+      "body": [
+        "includeArtifacts",
+        "includeDiff",
+        "includeSteps",
+        "visibility"
+      ],
+      "response": [
+        "data",
+        "data.path",
+        "data.shareId",
+        "data.shareToken",
+        "data.visibility",
+        "success"
+      ]
+    },
+    {
+      "operation": "GetSharedTask",
+      "kind": "operation",
+      "method": "get",
+      "path": "/api/shared-tasks/{shareId}",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task-share.routes.ts:224 success({shareId,visibility,sharedAt,document}), share-document.ts:59 ShareDocument",
+      "consumerPR": [
+        "3.5",
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [
+        "token"
+      ],
+      "body": [],
+      "response": [
+        "data",
+        "data.document",
+        "data.document.artifacts",
+        "data.document.artifacts[]",
+        "data.document.artifacts[].body",
+        "data.document.artifacts[].id",
+        "data.document.artifacts[].kind",
+        "data.document.artifacts[].omitted",
+        "data.document.artifacts[].title",
+        "data.document.artifacts[].viewerId",
+        "data.document.completedAt",
+        "data.document.createdAt",
+        "data.document.diffs",
+        "data.document.diffs[]",
+        "data.document.goal",
+        "data.document.result",
+        "data.document.status",
+        "data.document.steps",
+        "data.document.steps[]",
+        "data.document.steps[].n",
+        "data.document.steps[].text",
+        "data.document.steps[].tool",
+        "data.document.steps[].type",
+        "data.document.summary",
+        "data.document.summary.artifacts",
+        "data.document.summary.diffs",
+        "data.document.summary.retries",
+        "data.document.summary.toolCalls",
+        "data.document.summary.turns",
+        "data.document.taskId",
+        "data.shareId",
+        "data.sharedAt",
+        "data.visibility",
+        "success"
+      ]
+    },
+    {
+      "operation": "OpenSharedArtifact",
+      "kind": "operation",
+      "method": "get",
+      "path": "/api/shared-tasks/{shareId}/artifacts/{index}/open",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task-share.routes.ts:256 success({url})",
+      "consumerPR": [
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [
+        "token"
+      ],
+      "body": [],
+      "response": [
+        "data",
+        "data.url",
+        "success"
+      ]
+    },
+    {
+      "operation": "Unshare",
+      "kind": "operation",
+      "method": "delete",
+      "path": "/api/agent-tasks/{taskId}/share",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task-share.routes.ts:202 success({unshared})",
+      "consumerPR": [
+        "3.5",
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [],
+      "body": [],
+      "response": [
+        "data",
+        "data.unshared",
+        "success"
+      ]
+    }
+  ]
+}

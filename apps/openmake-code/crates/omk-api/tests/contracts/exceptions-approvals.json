@@ -1,0 +1,108 @@
+{
+  "_comment": "미문서 operation·필드의 정확한 예외(D-201 A안·D-208). wildcard 금지. 문서가 생기면 테스트가 실패해 대조 대상으로 승격한다. 계약 보강은 U-10(단계 ④ 이후 별도 서버 PR).",
+  "exceptions": [
+    {
+      "operation": "SetAutoApprove",
+      "kind": "operation",
+      "method": "post",
+      "path": "/api/agent-tasks/{taskId}/approvals/auto-approve",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task-approvals.routes.ts:88 success({taskId,autoApprove})",
+      "consumerPR": [
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [],
+      "body": [
+        "enabled"
+      ],
+      "response": [
+        "data",
+        "data.autoApprove",
+        "data.taskId",
+        "success"
+      ]
+    },
+    {
+      "operation": "ListPending",
+      "kind": "operation",
+      "method": "get",
+      "path": "/api/agent-tasks/approvals/pending",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task-approvals.routes.ts:97 success({pending}), apps/api/src/services/task-sandbox/approval-gate.ts:131-147 PendingApproval, apps/cli/src/ask-human.ts:31-55 args.question(s)",
+      "consumerPR": [
+        "3.5",
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [],
+      "body": [],
+      "response": [
+        "data",
+        "data.pending",
+        "data.pending[]",
+        "data.pending[].approvalId",
+        "data.pending[].args",
+        "data.pending[].assigneeUserId",
+        "data.pending[].createdAt",
+        "data.pending[].preview",
+        "data.pending[].riskClass",
+        "data.pending[].sensitive",
+        "data.pending[].taskId",
+        "data.pending[].toolName",
+        "data.pending[].userId",
+        "success"
+      ],
+      "opaque": [
+        "data.pending[].args"
+      ],
+      "opaqueNote": "args 는 서버 승인함 사본(비밀 값 가림) — 내부 구조는 opaque JSON 이며 소비자가 question/questions 만 읽는다."
+    },
+    {
+      "operation": "AnswerApproval",
+      "kind": "operation",
+      "method": "post",
+      "path": "/api/agent-tasks/approvals/{approvalId}/{decision}",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task-approvals.routes.ts:210 success({approvalId,decision,resumed}) (route /approvals/:approvalId/:decision)",
+      "consumerPR": [
+        "3.5",
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [],
+      "body": [],
+      "response": [
+        "data",
+        "data.approvalId",
+        "data.decision",
+        "data.resumed",
+        "success"
+      ]
+    },
+    {
+      "operation": "AnswerQuestion",
+      "kind": "operation",
+      "method": "post",
+      "path": "/api/agent-tasks/approvals/{approvalId}/answer",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task-approvals.routes.ts:188 success({approvalId,answered,resumed})",
+      "consumerPR": [
+        "3.5",
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [],
+      "body": [
+        "text"
+      ],
+      "response": [
+        "data",
+        "data.answered",
+        "data.approvalId",
+        "data.resumed",
+        "success"
+      ]
+    }
+  ]
+}
