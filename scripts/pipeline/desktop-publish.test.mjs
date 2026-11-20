@@ -81,13 +81,16 @@ const DMG_SHA = createHash('sha256').update(DMG).digest('hex');
 const PREVIOUS = JSON.stringify({ native: { version: '0.3.7', file: 'OpenMake-Companion-0.3.7-arm64.dmg', sha256: 'e'.repeat(64) }, windows: { version: '0.1.0', file: 'OpenMake-Companion-Setup-0.1.0.exe', sha256: 'f'.repeat(64) } }) + '\n';
 
 const VERSION_FILE = 'apps/desktop-native/VERSION';
+const BRIDGE_VERSION_FILE = 'apps/desktop-native/BRIDGE_VERSION';
+const BRIDGE_DMG = Buffer.from('fake bridge dmg 0.4.4');
+const BRIDGE_DMG_SHA = createHash('sha256').update(BRIDGE_DMG).digest('hex');
 
 test('판정에 쓰는 스크립트 경로 상수가 실제 이 스크립트 파일 위치와 같다', () => {
     assert.equal(path.join(ROOT, AUTOMATION_SCRIPT), SCRIPT);
 });
 
 // automated: false 면 VERSION 이 게시 자동화(이 스크립트)보다 먼저 저장소에 들어온 이력 — 릴리스가 만들어지지 않는 버전.
-async function fixture(t, { automated = true, version = '0.3.8', file = FILE } = {}) {
+async function fixture(t, { automated = true, version = '0.3.8', file = FILE, bridge } = {}) {
     const root = mkdtempSync(path.join(tmpdir(), 'desktop-publish-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const llm = path.join(root, 'llm');
@@ -97,6 +100,7 @@ async function fixture(t, { automated = true, version = '0.3.8', file = FILE } =
     copyFileSync(path.join(ROOT, 'scripts/publish-desktop.sh'), path.join(llm, 'scripts/publish-desktop.sh'));
     writeFileSync(path.join(llm, 'apps/desktop-native/VERSION'), `${version}\n`);
     if (automated) { mkdirSync(path.join(llm, 'scripts/pipeline')); writeFileSync(path.join(llm, AUTOMATION_SCRIPT), '// automation\n'); }
+    if (bridge !== undefined) writeFileSync(path.join(llm, BRIDGE_VERSION_FILE), `${bridge}\n`);
     git('init', '-q', '-b', 'main');
     git('add', '.'); git('commit', '-qm', 'base');
     const base = git('rev-parse', 'HEAD');
@@ -129,12 +133,22 @@ async function fixture(t, { automated = true, version = '0.3.8', file = FILE } =
         routes.set(asset(file), { status: 302, headers: { location: '/objects/dmg' } });
         routes.set('/objects/dmg', { body: DMG });
     };
+    // 다리(옛 정체성) 사전 릴리스 desktop-native-v<BRIDGE_VERSION> — 기본은 main 의 빌드 커밋에서 만든 OpenMake-Companion dmg.
+    const bridgeAsset = (name) => `/acme/app/releases/download/desktop-native-v${bridge}/${name}`;
+    const serveBridge = (manifest = {}) => {
+        const value = { schemaVersion: 1, version: bridge, file: `OpenMake-Companion-${bridge}-arm64.dmg`, sha256: BRIDGE_DMG_SHA, gitSha: built, ...manifest };
+        routes.set(bridgeAsset('desktop-native.json'), { status: 302, headers: { location: '/objects/bridge-manifest' } });
+        routes.set('/objects/bridge-manifest', { body: JSON.stringify(value) });
+        routes.set(`/acme/app/releases/download/desktop-native-v${value.version}/${value.file}`, { status: 302, headers: { location: '/objects/bridge-dmg' } });
+        routes.set('/objects/bridge-dmg', { body: BRIDGE_DMG });
+        return value;
+    };
     const dir = path.join(llm, 'data/desktop-updates'), latest = path.join(dir, 'latest.json');
     const receiptPath = path.join(root, 'env/.pipeline/desktop-publish.json');
     const setPublished = (text) => { mkdirSync(dir, { recursive: true }); writeFileSync(latest, text); };
     const run = (deps, extra = {}) => publish({ cwd: llm, sha: installed, dir: 'data/desktop-updates', repo: 'acme/app', output: receiptPath, web, ...extra }, deps);
     const receipt = () => JSON.parse(readFileSync(receiptPath, 'utf8'));
-    return { root, llm, git, commit, base, built, installed, side, routes, requests, serve, dir, latest, receiptPath, setPublished, run, receipt, web };
+    return { root, llm, git, commit, base, built, installed, side, routes, requests, serve, serveBridge, dir, latest, receiptPath, setPublished, run, receipt, web };
 }
 
 const manifestOf = (latest) => readFileSync(latest, 'utf8');
@@ -312,7 +326,7 @@ test('publish: 성공하면 native 를 새 버전으로, 직전 매니페스트�
     assert.deepEqual(readFileSync(path.join(f.dir, FILE)), DMG);
     assert.ok(!existsSync(path.join(f.dir, '.incoming')));
     const r = f.receipt();
-    assert.deepEqual({ ...r, at: undefined }, { schemaVersion: 1, stage: 'desktop-publish', sha: f.installed, version: '0.3.8', file: FILE, sha256: DMG_SHA, gitSha: f.built, block: 'native', status: 'published', at: undefined });
+    assert.deepEqual({ ...r, at: undefined }, { schemaVersion: 1, stage: 'desktop-publish', sha: f.installed, version: '0.3.8', file: FILE, sha256: DMG_SHA, gitSha: f.built, block: 'native', bridge: { status: 'skipped' }, status: 'published', at: undefined });
     assert.ok(!Number.isNaN(Date.parse(r.at)));
     assert.equal(statSync(f.receiptPath).mode & 0o777, 0o600);
     assert.doesNotMatch(readFileSync(f.receiptPath, 'utf8'), /https?:|127\.0\.0\.1/, 'receipt carries no address');
@@ -471,4 +485,197 @@ test('CLI: 자동화 이전 버전의 404 는 프로세스 종료 코드 0, 영�
     });
     assert.equal(code, 0);
     assert.equal(f.receipt().status, 'unreleased');
+});
+
+// ── 다리 보충(plan-pr2.5 D-162, plan §3.7 게시기 순서 1~5) — 본 판정보다 먼저, 다리가 대기·실패면 본 게시 0회 ──
+const BRIDGE_FILE = 'OpenMake-Companion-0.4.4-arm64.dmg';
+const BRIDGE_BLOCK = { version: '0.4.4', file: BRIDGE_FILE, sha256: BRIDGE_DMG_SHA };
+const OLD_NATIVE = { version: '0.4.3', file: 'OpenMake-Companion-0.4.3-arm64.dmg', sha256: 'e'.repeat(64) };
+const CODE_BLOCK = { version: '0.5.0', file: CODE_FILE, sha256: DMG_SHA };
+const bridgeFixture = (t, extra = {}) => fixture(t, { version: '0.5.0', file: CODE_FILE, bridge: '0.4.4', ...extra });
+const bridgeRequests = (f) => f.requests.filter((u) => u.includes('desktop-native-v0.4.') || u.startsWith('/objects/bridge'));
+const mainRequests = (f) => f.requests.filter((u) => u.includes('desktop-native-v0.5.0') || u === '/objects/manifest' || u === '/objects/dmg');
+
+test('ⓐ native < BRIDGE_VERSION, macos == 체크아웃 → 다리 보충이 돌고(native = 자산 글자 그대로) 본 판정은 unchanged', async (t) => {
+    const f = await bridgeFixture(t);
+    f.setPublished(JSON.stringify({ native: OLD_NATIVE, macos: CODE_BLOCK, windows: WIN }));
+    f.serveBridge();
+    assert.equal(await f.run(), 0);
+    const now = JSON.parse(manifestOf(f.latest));
+    assert.deepEqual(now.native, BRIDGE_BLOCK);
+    assert.deepEqual(now.macos, CODE_BLOCK);
+    assert.deepEqual(now.windows, WIN);
+    assert.deepEqual(readFileSync(path.join(f.dir, BRIDGE_FILE)), BRIDGE_DMG);
+    const r = f.receipt();
+    assert.deepEqual(r.bridge, { version: '0.4.4', status: 'published', file: BRIDGE_FILE, sha256: BRIDGE_DMG_SHA, gitSha: f.built });
+    assert.equal(r.status, 'unchanged');
+    assert.equal(r.block, 'macos');
+    assert.deepEqual(mainRequests(f), []);
+});
+
+test('ⓑ 다리 빌드 커밋이 설치 SHA 의 조상이 아님 → 1, latest.json 바이트 그대로, 본 게시 0회', async (t) => {
+    const f = await bridgeFixture(t);
+    const before = JSON.stringify({ native: OLD_NATIVE }) + '\n';
+    f.setPublished(before);
+    f.serve();
+    f.serveBridge({ gitSha: f.side });
+    assert.equal(await f.run(), 1);
+    assert.equal(manifestOf(f.latest), before);
+    assert.equal(f.receipt().status, 'failed');
+    assert.equal(f.receipt().bridge.status, 'failed');
+    assert.match(f.receipt().reason, /^bridge: .*not an ancestor/);
+    assert.deepEqual(mainRequests(f), []);
+    assert.ok(!f.requests.includes('/objects/bridge-dmg'), 'bridge dmg is not downloaded');
+});
+
+test('ⓒ 다리 빌드 커밋을 -s ours 로 병합한 SHA 를 설치 SHA 로 → 게시된다(실제 git)', async (t) => {
+    const f = await bridgeFixture(t);
+    f.git('merge', '-q', '-s', 'ours', '-m', 'merge release/desktop-bridge', 'side');
+    const merged = f.git('rev-parse', 'HEAD');
+    f.setPublished(JSON.stringify({ native: OLD_NATIVE, macos: CODE_BLOCK }));
+    f.serveBridge({ gitSha: f.side });
+    assert.equal(await f.run(undefined, { sha: merged }), 0);
+    assert.deepEqual(JSON.parse(manifestOf(f.latest)).native, BRIDGE_BLOCK);
+    assert.equal(f.receipt().bridge.status, 'published');
+    assert.equal(f.receipt().bridge.gitSha, f.side);
+});
+
+test('ⓓ 다리 자산 404 → 75, 본 게시 0회, 자동화 이전 VERSION 커밋이 줄에 있어도 unreleased 가 아니다', async (t) => {
+    const f = await bridgeFixture(t, { automated: false });
+    const sha = f.commit(AUTOMATION_SCRIPT, '// automation\n', 'automation');
+    const before = JSON.stringify({ native: OLD_NATIVE }) + '\n';
+    f.setPublished(before);
+    f.serve();
+    assert.equal(await f.run(undefined, { sha }), 75);
+    const r = f.receipt();
+    assert.equal(r.status, 'pending');
+    assert.equal(r.bridge.status, 'pending');
+    assert.equal(r.bridge.version, '0.4.4');
+    assert.equal(manifestOf(f.latest), before);
+    assert.deepEqual(mainRequests(f), []);
+    assert.ok(bridgeRequests(f).some((u) => u.endsWith('/desktop-native.json')));
+});
+
+test('ⓔ BRIDGE_VERSION 없음 → bridge.status = skipped, 다리 요청 0회, 본 게시는 종전대로', async (t) => {
+    const f = await fixture(t, { version: '0.5.0', file: CODE_FILE });
+    f.setPublished(JSON.stringify({ native: OLD_NATIVE }));
+    f.serve();
+    assert.equal(await f.run(), 0);
+    assert.deepEqual(f.receipt().bridge, { status: 'skipped' });
+    assert.equal(f.receipt().status, 'published');
+    assert.deepEqual(JSON.parse(manifestOf(f.latest)).native, OLD_NATIVE);
+    assert.deepEqual(bridgeRequests(f), []);
+});
+
+test('ⓕ native > BRIDGE_VERSION → ahead, 내리지 않음, 본 판정은 진행', async (t) => {
+    const f = await bridgeFixture(t);
+    const higher = { version: '0.4.5', file: 'OpenMake-Companion-0.4.5-arm64.dmg', sha256: 'd'.repeat(64) };
+    f.setPublished(JSON.stringify({ native: higher }));
+    f.serve();
+    f.serveBridge();
+    assert.equal(await f.run(), 0);
+    const now = JSON.parse(manifestOf(f.latest));
+    assert.deepEqual(now.native, higher);
+    assert.deepEqual(now.macos, CODE_BLOCK);
+    assert.deepEqual(f.receipt().bridge, { version: '0.4.4', status: 'ahead' });
+    assert.equal(f.receipt().status, 'published');
+    assert.deepEqual(bridgeRequests(f), []);
+});
+
+test('ⓖ 다리 자산 파일명이 OpenMake-Code- → 1, latest.json 바이트 그대로', async (t) => {
+    const f = await bridgeFixture(t);
+    const before = JSON.stringify({ native: OLD_NATIVE }) + '\n';
+    f.setPublished(before);
+    f.serveBridge({ file: 'OpenMake-Code-0.4.4-arm64.dmg' });
+    assert.equal(await f.run(), 1);
+    assert.equal(manifestOf(f.latest), before);
+    assert.match(f.receipt().reason, /^bridge: .*OpenMake-Companion-/);
+    assert.ok(!f.requests.includes('/objects/bridge-dmg'));
+});
+
+test('ⓗ native == BRIDGE_VERSION → unchanged, 다리 자산 요청 0회', async (t) => {
+    const f = await bridgeFixture(t);
+    f.setPublished(JSON.stringify({ native: BRIDGE_BLOCK, macos: CODE_BLOCK }));
+    f.serveBridge();
+    assert.equal(await f.run(), 0);
+    assert.deepEqual(f.receipt().bridge, { version: '0.4.4', status: 'unchanged' });
+    assert.equal(f.receipt().status, 'unchanged');
+    assert.equal(f.requests.length, 0);
+});
+
+test('ⓘ 새 서버(latest.json 없음) → 다리 게시 → 본 게시, 두 블록, .prev = 다리 게시 직후 사본', async (t) => {
+    const f = await bridgeFixture(t);
+    f.serveBridge();
+    f.serve();
+    assert.equal(await f.run(), 0);
+    assert.deepEqual(JSON.parse(manifestOf(f.latest)), { native: BRIDGE_BLOCK, macos: CODE_BLOCK });
+    assert.deepEqual(JSON.parse(readFileSync(`${f.latest}.prev`, 'utf8')), { native: BRIDGE_BLOCK });
+    const r = f.receipt();
+    assert.equal(r.bridge.status, 'published');
+    assert.equal(r.status, 'published');
+    assert.equal(r.block, 'macos');
+    // 다시 돌리면 둘 다 unchanged, 요청 0회.
+    const before = f.requests.length;
+    assert.equal(await f.run(), 0);
+    assert.equal(f.receipt().bridge.status, 'unchanged');
+    assert.equal(f.receipt().status, 'unchanged');
+    assert.equal(f.requests.length, before);
+});
+
+test('ⓙ BRIDGE_VERSION 형식 오류 → 1, 자산 요청 0회', async (t) => {
+    for (const bad of ['0.4.x', '', 'v0.4.4']) {
+        const f = await bridgeFixture(t, { bridge: bad });
+        f.serve();
+        assert.equal(await f.run(), 1, bad);
+        assert.equal(f.receipt().status, 'failed', bad);
+        assert.equal(f.receipt().bridge.status, 'failed', bad);
+        assert.match(f.receipt().reason, /BRIDGE_VERSION is malformed/, bad);
+        assert.equal(f.requests.length, 0, bad);
+        assert.ok(!existsSync(f.latest), bad);
+    }
+});
+
+test('ⓚ 다리 자산 매니페스트 버전 ≠ BRIDGE_VERSION → 1', async (t) => {
+    const f = await bridgeFixture(t);
+    const before = JSON.stringify({ native: OLD_NATIVE }) + '\n';
+    f.setPublished(before);
+    f.serveBridge({ version: '0.4.5', file: 'OpenMake-Companion-0.4.5-arm64.dmg' });
+    assert.equal(await f.run(), 1);
+    assert.match(f.receipt().reason, /^bridge: release manifest version 0\.4\.5 differs/);
+    assert.equal(manifestOf(f.latest), before);
+});
+
+test('ⓛ 다리 게시 뒤 native 가 자산과 다르면(값이 macos 에 실림) .prev 복원, 1', async (t) => {
+    const f = await bridgeFixture(t);
+    const before = JSON.stringify({ native: OLD_NATIVE }) + '\n';
+    f.setPublished(before);
+    f.serveBridge();
+    f.serve();
+    const runPublishScript = ({ dir }) => {
+        writeFileSync(path.join(dir, 'latest.json'), JSON.stringify({ native: OLD_NATIVE, macos: BRIDGE_BLOCK }));
+        return 0;
+    };
+    assert.equal(await f.run({ runPublishScript }), 1);
+    assert.equal(manifestOf(f.latest), before);
+    assert.equal(f.receipt().bridge.status, 'failed');
+    assert.match(f.receipt().reason, /^bridge: published manifest does not match/);
+    assert.deepEqual(mainRequests(f), []);
+});
+
+test('ⓜ 본 게시만 실패(다리는 성공) → native 게시는 남고 1 — 다음 주기에 다리 unchanged 로 지나간다', async (t) => {
+    const f = await bridgeFixture(t);
+    f.setPublished(JSON.stringify({ native: OLD_NATIVE }));
+    f.serveBridge();
+    f.serve({ sha256: '0'.repeat(64) });
+    assert.equal(await f.run(), 1);
+    assert.deepEqual(JSON.parse(manifestOf(f.latest)), { native: BRIDGE_BLOCK });
+    assert.equal(f.receipt().bridge.status, 'published');
+    assert.equal(f.receipt().status, 'failed');
+    f.serve();
+    const bridgeBefore = bridgeRequests(f).length;
+    assert.equal(await f.run(), 0);
+    assert.equal(f.receipt().bridge.status, 'unchanged');
+    assert.equal(f.receipt().status, 'published');
+    assert.equal(bridgeRequests(f).length, bridgeBefore);
+    assert.deepEqual(JSON.parse(manifestOf(f.latest)), { native: BRIDGE_BLOCK, macos: CODE_BLOCK });
 });

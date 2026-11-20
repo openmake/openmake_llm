@@ -441,15 +441,22 @@ test('the org-specific removal change set selects a real suite for every non-API
   for (const file of ['db/init/005-new.sh', 'apps/desktop-native/check-l10n.sh', 'apps/desktop-native/lib/new.sh']) assert.throws(() => selectFeatures([file]), /Unmapped changed source/, file);
 });
 
-// plan-pr2.4: 후속 앱 교체 스크립트와 그 셸 테스트는 macOS 전용(hdiutil·PlistBuddy) — 실행은 desktop-native 워크플로(Gate 2-S)가 하고,
-// 선택은 build.sh 와 같은 desktopBuild 로 묶는다(Unmapped 로 막히지 않게).
-test('the successor replace script and its shell test map to desktopBuild', () => {
+// plan-pr2.4: 후속 앱 교체 스크립트와 그 셸 테스트는 build.sh 와 같은 desktopBuild 로 묶었다. plan-pr2.5 가 두 파일을 지웠지만
+// main 기준 diff 에 지운 경로가 남으므로(Unmapped 로 막히지 않게) 매핑은 둔다 — 다리 계약은 release/desktop-bridge 가 지킨다.
+test('the deleted successor replace script and its shell test still map to desktopBuild', () => {
   for (const file of ['apps/desktop-native/scripts/successor-replace.sh', 'apps/desktop-native/tests/successor-replace.test.sh']) {
     const selection = selectFeatures([file]);
     assert.equal(selection.desktopBuild, true, file);
     assert.deepEqual(selection.api, [], file);
   }
   assert.throws(() => selectFeatures(['apps/desktop-native/scripts/other.sh']), /Unmapped changed source/);
+});
+
+// plan-pr2.5 D-161·D-171: BRIDGE_VERSION 은 게시기(scripts/pipeline/desktop-publish.mjs)가 읽는다 — 같은 pipeline 스위트.
+test('apps/desktop-native/BRIDGE_VERSION maps to the pipeline suite', () => {
+  const selection = selectFeatures(['apps/desktop-native/BRIDGE_VERSION']);
+  assert.equal(selection.pipeline, true);
+  assert.deepEqual(selection.api, []);
 });
 
 test('desktop, CLI and admin-init fixtures referenced by the new suites exist', async () => {

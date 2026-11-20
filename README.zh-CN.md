@@ -100,7 +100,7 @@ flowchart TB
 - **请求生成图像、朗读或语音转写**——每个请求都会交给该能力所指定的模型。
 - **把目标交给智能体**——它会制定计划、浏览网页、编辑文件、在 Docker 沙箱中运行代码，并在高风险步骤前等待审批。
 - **通过 MCP 连接外部服务**（Notion、Context7、Tavily、NotebookLM 等），或安装 Claude Code 风格的插件和技能。
-- **在你自己电脑的文件夹中运行智能体工作**——通过 OpenMake Companion 应用或 OpenMake Code CLI。
+- **在你自己电脑的文件夹中运行智能体工作**——通过 OpenMake Code 应用或 OpenMake Code CLI。
 
 | 领域 | 涵盖内容 |
 |---|---|
@@ -162,14 +162,14 @@ OpenMake
 - ✓ 可暂停、恢复、取消，并能在服务器重启后恢复的持久任务
 - ✓ 集中处理智能体步骤、技能、扩展和 MCP 服务器的 **审批** 页面
 - ✓ 模板、定时运行和任务结果分享
-- ✓ 通过 OpenMake Companion（macOS）或 OpenMake Code CLI 本地执行——路径范围受限、命令需确认、使用 git worktree 隔离
+- ✓ 通过 OpenMake Code（macOS）或 OpenMake Code CLI 本地执行——路径范围受限、命令需确认、使用 git worktree 隔离
 
 **按需启用**——以下功能默认关闭，请在 `.env` 中开启：
 
 | 设置 | 启用的功能 | 前提条件 |
 |---|---|---|
 | `TASK_SANDBOX_ENABLED=true` | 每个任务一个持久 Docker 工作区 | 先构建 `infra/mcp-runtime`，再构建 `infra/task-runtime` |
-| `LOCAL_EXECUTOR_ENABLED=true` | 在用户自己的电脑上执行工具调用 | 使用 `bridge` 权限 API 密钥连接的 OpenMake Companion 或 CLI |
+| `LOCAL_EXECUTOR_ENABLED=true` | 在用户自己的电脑上执行工具调用 | 使用 `bridge` 权限 API 密钥连接的 OpenMake Code 或 CLI |
 | `AGENT_TASK_QUEUE_ENABLED=true` | 全局和每用户并发上限 | — |
 
 ```bash
@@ -208,7 +208,7 @@ docker build -t openmake-task-runtime:latest infra/task-runtime
 flowchart TB
     subgraph clients["客户端"]
         WEB["Web 应用 · Next.js"]
-        NATIVE["Companion (macOS) · Code CLI"]
+        NATIVE["Code app (macOS) · Code CLI"]
         APIC["OpenAI 兼容 API · Discord 机器人"]
     end
     clients -->|"REST · WebSocket"| API["API 服务器 · Express 5 + TypeScript"]
@@ -242,7 +242,7 @@ flowchart TB
 | 数据 | 通过参数化原生 SQL 访问 PostgreSQL（不使用 ORM）、Redis |
 | LLM | vLLM、LiteLLM 网关、`openai` SDK |
 | 智能体与工具 | Model Context Protocol 客户端 v2、Docker 隔离沙箱 |
-| 原生客户端 | SwiftUI（macOS Companion，iOS 开发中）、Node CLI——共用 `packages/local-bridge-core` |
+| 原生客户端 | SwiftUI（macOS OpenMake Code，iOS 开发中）、Node CLI——共用 `packages/local-bridge-core` |
 
 ### 设计原则
 
@@ -313,7 +313,7 @@ apps/
 ├── api/             Express 5 API — 聊天管线、编排器、智能体、MCP、数据
 ├── web/             Next.js Web 应用
 ├── cli/             OpenMake Code — 本地桥接 CLI
-├── desktop-native/  OpenMake Companion — SwiftUI 菜单栏应用 (macOS)
+├── desktop-native/  OpenMake Code — SwiftUI 菜单栏应用 (macOS)
 ├── ios/             SwiftUI iOS 客户端 (开发中)
 └── discord-bot/     Discord 网关机器人
 packages/            共享类型、API 契约、配置、API 客户端、本地桥接核心

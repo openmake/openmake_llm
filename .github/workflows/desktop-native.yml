@@ -1,5 +1,5 @@
 # ==============================================================
-# Desktop Native Companion CI (plan §2 레포 배치)
+# Desktop Native — OpenMake Code CI (plan §2 레포 배치)
 # ==============================================================
 # path-filter: apps/desktop-native, Rust 헬퍼(apps/openmake-code) 또는 브리지 코어(packages/local-bridge-core) 변경 시에만 실행.
 # 앱에 넣는 omk-helper 릴리스 빌드 + 하네스, Node 헬퍼 번들 + 하네스(PR-2.2 까지)가 깨지는 커밋을 여기서 잡는다 (iOS ci 패턴 준용).
@@ -35,7 +35,7 @@ concurrency:
 
 jobs:
   companion:
-    name: Companion (omk-helper → harness → Swift build → dmg)
+    name: OpenMake Code (omk-helper → harness → Swift build → dmg)
     runs-on: macos-latest
     timeout-minutes: 30
 
@@ -80,13 +80,9 @@ jobs:
       - name: "Gate 2: Swift build"
         run: swift build -c release --package-path apps/desktop-native/OpenMakeCompanion
 
-      # ─── Gate 2-T: 업데이트 판단 순수 함수 단위 테스트 (plan-pr2.4 D-148) ───
+      # ─── Gate 2-T: Swift 단위·통합 테스트 (plan-pr2.4 D-148·plan-pr2.5 §5.1) ───
       - name: "Gate 2-T: Swift unit tests"
         run: swift test --package-path apps/desktop-native/OpenMakeCompanion
-
-      # ─── Gate 2-S: 후속 앱 교체 스크립트 — 가짜 dmg 로 실제 스크립트를 돈다 (plan-pr2.4 §3.4) ───
-      - name: "Gate 2-S: Successor replace script"
-        run: bash apps/desktop-native/tests/successor-replace.test.sh
 
       # ─── Gate 3: .app 조립 + ad-hoc 서명 + dmg ───
       # build.sh 가 Gate 1-R·1-B·2 를 다시 돌린 뒤 dmg 까지 만든다(이미 빌드돼 있어 빠르다). 서버 게시는 아래 release job → 서버 파이프라인.
@@ -96,8 +92,8 @@ jobs:
       - name: Upload dmg
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: OpenMake-Companion-dmg
-          path: apps/desktop-native/dist/OpenMake-Companion-*.dmg
+          name: OpenMake-Code-dmg
+          path: apps/desktop-native/dist/OpenMake-Code-*.dmg
           if-no-files-found: error
           retention-days: 30
 
@@ -161,7 +157,7 @@ jobs:
         if: steps.gate.outputs.publish == 'true'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: OpenMake-Companion-dmg
+          name: OpenMake-Code-dmg
           path: release-assets
 
       - name: Release manifest
