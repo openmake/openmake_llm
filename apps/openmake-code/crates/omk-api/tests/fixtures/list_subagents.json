@@ -1,0 +1,35 @@
+{
+  "success": true,
+  "data": {
+    "traces": [
+      {
+        "traceId": "tr-synth",
+        "origin": "delegate",
+        "subIndex": 0,
+        "label": null,
+        "status": "completed",
+        "startedAt": "2026-01-01T00:00:00.000Z",
+        "finishedAt": "2026-01-01T00:00:05.000Z",
+        "steps": [
+          {
+            "seq": 1,
+            "type": "tool_call",
+            "tool": "read_file",
+            "content": null,
+            "at": "2026-01-01T00:00:01.000Z"
+          },
+          {
+            "seq": 2,
+            "type": "final",
+            "tool": null,
+            "content": "합성",
+            "at": "2026-01-01T00:00:05.000Z"
+          }
+        ]
+      }
+    ]
+  },
+  "meta": {
+    "timestamp": "2026-01-01T00:00:00.000Z"
+  }
+}

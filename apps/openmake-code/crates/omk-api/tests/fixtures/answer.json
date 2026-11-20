@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "data": {
+    "approvalId": "ap-synth-2",
+    "answered": true,
+    "resumed": false
+  },
+  "meta": {
+    "timestamp": "2026-01-01T00:00:00.000Z"
+  }
+}
