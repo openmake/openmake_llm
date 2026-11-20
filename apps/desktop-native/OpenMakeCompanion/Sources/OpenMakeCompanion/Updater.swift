@@ -1,4 +1,4 @@
-// 자체 업데이터 — 서버 매니페스트(native 채널, 후속 앱은 macos 블록 — UpdateChoice) 확인 → dmg 다운로드 → sha256 검증 →
+// 자체 업데이터 — 서버 매니페스트(macos 블록 — UpdateChoice) 확인 → dmg 다운로드 → sha256 검증 →
 // 분리 프로세스가 앱 교체 + 재실행 (Electron updater.js 와 동일 흐름·동일 안전장치).
 //
 // 보안:
@@ -39,28 +39,17 @@ final class Updater: ObservableObject {
             }
             let (data, _) = try await URLSession.shared.data(from: url)
             let payload = (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["data"] as? [String: Any]
-            // 판단은 순수 함수(UpdateChoice) — macos 블록이 없으면 종전 native 판단과 같다(D-144).
-            let choice = UpdateChoice.decide(
-                payload: payload, current: currentVersion, interactive: interactive,
-                failedSuccessorVersion: UserDefaults.standard.string(forKey: AppIdentity.successorFailedVersionKey),
-                successorRunning: !NSRunningApplication.runningApplications(withBundleIdentifier: AppIdentity.successorBundleId).isEmpty)
+            // 판단은 순수 함수(UpdateChoice) — macos 블록만 본다(plan-pr2.5 D-155).
             let block: UpdateBlock
-            let successor: Bool
-            switch choice {
+            switch UpdateChoice.decide(payload: payload, current: currentVersion) {
             case .none:
                 if interactive { info(L("update.none.title"), L("update.none.body", currentVersion)) }
                 return
             case .latest:
                 if interactive { info(L("update.latest.title"), L("update.latest.body", currentVersion)) }
                 return
-            case let .successorRunning(b):
-                // §3.2.1 단계 0 — 받지 않는다. 실패 버전으로 적지 않는다(그 버전의 결함이 아니라 지금 상태다).
-                if interactive { info(L("update.successor.running.title", b.version), L("update.successor.running.body")) }
-                return
-            case let .sameIdentity(b):
-                (block, successor) = (b, false)
-            case let .successor(b):
-                (block, successor) = (b, true)
+            case let .update(b):
+                block = b
             }
             let version = block.version, file = block.file, sha256 = block.sha256
             // 교체는 앱 옆에 새 버전을 복사해 바꿔치기한다 — 그 폴더에 쓸 수 없으면(디스크 이미지에서 바로 실행 등) 받지 않고 안내만 한다.
@@ -72,13 +61,8 @@ final class Updater: ObservableObject {
             // 테스트 훅(개발/E2E 전용): 다이얼로그 없이 즉시 진행 — OMK_COMPANION_* env 훅 계열.
             if ProcessInfo.processInfo.environment["OMK_COMPANION_AUTO_UPDATE"] != "1" {
                 let alert = NSAlert()
-                if successor {
-                    alert.messageText = L("update.successor.title", version, currentVersion)
-                    alert.informativeText = L("update.successor.body")
-                } else {
-                    alert.messageText = L("update.available.title", version, currentVersion)
-                    alert.informativeText = L("update.available.body")
-                }
+                alert.messageText = L("update.available.title", version, currentVersion)
+                alert.informativeText = L("update.available.body")
                 alert.addButton(withTitle: L("update.install"))
                 alert.addButton(withTitle: L("update.later"))
                 NSApp.activate(ignoringOtherApps: true)
@@ -97,16 +81,10 @@ final class Updater: ObservableObject {
             let hex = digest.map { String(format: "%02x", $0) }.joined()
             guard hex == sha256.lowercased() else {
                 try? FileManager.default.removeItem(at: dmgURL)
-                // D-145: 후속 교체 실패 — 다음 기동의 자동 확인은 이 버전을 건너뛴다(수동 확인은 다시 시도).
-                if successor { UserDefaults.standard.set(version, forKey: AppIdentity.successorFailedVersionKey) }
                 throw UpdateError.message(L("update.checksum"))
             }
 
-            if successor {
-                try spawnSuccessorScript(dmgPath: dmgURL.path, version: version)
-            } else {
-                try spawnReplaceScript(dmgPath: dmgURL.path)
-            }
+            try spawnReplaceScript(dmgPath: dmgURL.path)
             HelperManager.shared.stopHelper()
             NSApp.terminate(nil)
         } catch let e as UpdateError {
@@ -145,7 +123,7 @@ final class Updater: ObservableObject {
             throw UpdateError.message(L("update.noBundle"))
         }
         let ts = Int(Date().timeIntervalSince1970)
-        let logPath = NSTemporaryDirectory() + "openmake-companion-update-\(ts).log"
+        let logPath = NSTemporaryDirectory() + "openmake-code-update-\(ts).log"
         let script = """
         #!/bin/bash
         exec >>"\(logPath)" 2>&1
@@ -166,11 +144,11 @@ final class Updater: ObservableObject {
         sleep 2
         MNT=$(hdiutil attach -nobrowse "$DMG" | grep -o '/Volumes/.*' | tail -1)
         [ -n "$MNT" ] || fail "$OMK_UPD_MOUNT"
-        [ -d "$MNT/OpenMake Companion.app" ] || { hdiutil detach "$MNT" -quiet; fail "$OMK_UPD_NO_APP"; }
+        [ -d "$MNT/\(AppIdentity.appName).app" ] || { hdiutil detach "$MNT" -quiet; fail "$OMK_UPD_NO_APP"; }
 
         STAGE="$APP.new"
         rm -rf "$STAGE"
-        if ! ditto "$MNT/OpenMake Companion.app" "$STAGE"; then
+        if ! ditto "$MNT/\(AppIdentity.appName).app" "$STAGE"; then
           rm -rf "$STAGE"; hdiutil detach "$MNT" -quiet
           fail "$OMK_UPD_COPY"
         fi
@@ -202,7 +180,7 @@ final class Updater: ObservableObject {
         echo "OK: updated $APP"
         rm -f "$0"
         """
-        let shPath = NSTemporaryDirectory() + "openmake-companion-update-\(ts).sh"
+        let shPath = NSTemporaryDirectory() + "openmake-code-update-\(ts).sh"
         try script.write(toFile: shPath, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: shPath)
         let p = Process()
@@ -220,57 +198,6 @@ final class Updater: ObservableObject {
         let stdin = Pipe()
         p.standardInput = stdin
         try p.run() // detached 성격 — 부모 종료 후에도 계속 실행됨(스크립트가 sleep 후 교체)
-        try? stdin.fileHandleForWriting.write(contentsOf: keyLine)
-        try? stdin.fileHandleForWriting.close()
-    }
-
-    /** 후속 교체 스크립트 문구(plan-pr2.4 §3.3) — 종전 문구는 같은 키를 다시 쓴다. */
-    private static let successorMessages: [String: String] = [
-        "OMK_UPD_FAIL_TITLE": "update.script.failTitle",
-        "OMK_UPD_LOG": "update.script.log",
-        "OMK_SUCC_MSG_MOUNT": "update.script.mount",
-        "OMK_SUCC_MSG_NO_APP": "update.script.noApp",
-        "OMK_SUCC_MSG_COPY": "update.script.copy",
-        "OMK_SUCC_MSG_REPLACE": "update.script.replace",
-        "OMK_SUCC_MSG_BUNDLE_ID": "update.successor.badBundleId",
-        "OMK_SUCC_MSG_VERSION": "update.successor.badVersion",
-        "OMK_SUCC_MSG_RUNNING": "update.successor.running.body",
-        "OMK_SUCC_MSG_PREPARE": "update.successor.prepare",
-        "OMK_SUCC_MSG_START_TIME": "update.successor.startTime",
-        "OMK_SUCC_MSG_BACKUP_LEFT": "update.successor.backupLeft",
-        "OMK_SUCC_MSG_LAUNCH": "update.successor.launch",
-        "OMK_SUCC_MSG_KILL_FAILED": "update.successor.killFailed",
-    ]
-
-    /** 후속 앱 교체(D-143) — 번들 안 successor-replace.sh 를 띄운다. 값은 전부 환경 변수, 키는 stdin 으로만(D-146). */
-    private func spawnSuccessorScript(dmgPath: String, version: String) throws {
-        guard Bundle.main.bundlePath.hasSuffix(".app"),
-              let script = Bundle.main.path(forResource: "successor-replace", ofType: "sh") else {
-            throw UpdateError.message(L("update.noBundle"))
-        }
-        let ts = Int(Date().timeIntervalSince1970)
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/bash")
-        p.arguments = [script]
-        var env = ProcessInfo.processInfo.environment
-        for (name, key) in Self.successorMessages { env[name] = L(key) }
-        env["OMK_SUCC_APP"] = Bundle.main.bundlePath
-        env["OMK_SUCC_DMG"] = dmgPath
-        env["OMK_SUCC_NAME"] = AppIdentity.successorName
-        env["OMK_SUCC_BUNDLE_ID"] = AppIdentity.successorBundleId
-        env["OMK_SUCC_VERSION"] = version
-        env["OMK_SUCC_LOG"] = NSTemporaryDirectory() + "openmake-companion-successor-\(ts).log"
-        env["OMK_SUCC_PENDING"] = AppIdentity.successorPendingPath
-        env["OMK_SUCC_DEFAULTS_DOMAIN"] = AppIdentity.bundleId
-        env["OMK_SUCC_FAILED_KEY"] = AppIdentity.successorFailedVersionKey
-        env["OMK_KH"] = KeyHandoff.path
-        p.environment = env
-        p.standardOutput = FileHandle.nullDevice
-        p.standardError = FileHandle.nullDevice
-        let keyLine = Data(((Keychain.load() ?? "") + "\n").utf8)
-        let stdin = Pipe()
-        p.standardInput = stdin
-        try p.run()
         try? stdin.fileHandleForWriting.write(contentsOf: keyLine)
         try? stdin.fileHandleForWriting.close()
     }

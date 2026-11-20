@@ -99,7 +99,7 @@ A simple question goes straight to your chat model. A request that needs more �
 - **Ask for an image, a voice reading, or a transcript** — each request goes to the model assigned to that capability.
 - **Hand an agent a goal** — it plans, browses, edits files, runs code in a Docker sandbox, and stops for approval before risky steps.
 - **Connect external services through MCP** (Notion, Context7, Tavily, NotebookLM, and more) or install Claude Code–style plugins and skills.
-- **Run agent work on a folder on your own machine** through the OpenMake Companion app or the OpenMake Code CLI.
+- **Run agent work on a folder on your own machine** through the OpenMake Code app or the OpenMake Code CLI.
 
 | Domain | What it covers |
 |---|---|
@@ -161,7 +161,7 @@ An agent task pursues a goal across many tool-calling turns. Agents can:
 - ✓ Persisted tasks with pause, resume, cancel, and recovery after a server restart
 - ✓ An **Approvals** inbox for agent steps, skills, extensions, and MCP servers
 - ✓ Templates, scheduled runs, and shareable task results
-- ✓ Local execution through OpenMake Companion (macOS) or the OpenMake Code CLI — path-scoped, with a confirmation gate for commands and git-worktree isolation
+- ✓ Local execution through OpenMake Code (macOS) or the OpenMake Code CLI — path-scoped, with a confirmation gate for commands and git-worktree isolation
 
 **Opt-in** — these ship disabled. Enable them in `.env`:
 
@@ -208,7 +208,7 @@ docker --context colima-openmake build -t openmake-task-runtime:latest infra/tas
 flowchart TB
     subgraph clients["Clients"]
         WEB["Web app · Next.js"]
-        NATIVE["Companion (macOS) · Code CLI"]
+        NATIVE["Code app (macOS) · Code CLI"]
         APIC["OpenAI-compatible API · Discord bot"]
     end
     clients -->|"REST · WebSocket"| API["API server · Express 5 + TypeScript"]
@@ -242,7 +242,7 @@ flowchart TB
 | Data | PostgreSQL through raw parameterized SQL (no ORM), Redis |
 | LLM | vLLM, LiteLLM gateway, `openai` SDK |
 | Agents & tools | Model Context Protocol client v2, Docker-isolated sandboxes |
-| Native clients | SwiftUI (macOS Companion, iOS in progress), Node CLI — sharing `packages/local-bridge-core` |
+| Native clients | SwiftUI (macOS OpenMake Code, iOS in progress), Node CLI — sharing `packages/local-bridge-core` |
 
 ### Design principles
 
@@ -321,7 +321,7 @@ apps/
 ├── api/             Express 5 API — chat pipeline, orchestrator, agents, MCP, data
 ├── web/             Next.js web app
 ├── cli/             OpenMake Code — local bridge CLI
-├── desktop-native/  OpenMake Companion — SwiftUI menu-bar app (macOS)
+├── desktop-native/  OpenMake Code — SwiftUI menu-bar app (macOS)
 ├── ios/             SwiftUI iOS client (in progress)
 └── discord-bot/     Discord gateway bot
 packages/            shared types, API contracts, config, API client, local-bridge core
