@@ -1,6 +1,8 @@
 //! 실행 순서(PR-3.2 D-223) — 런타임 → 지원 폴더 → 잠금 → id → 호스트 → actor → 비우기 → 런타임 정리 → 잠금 해제.
 //! 헬퍼(`omk-helper`)와 FFI(`omk-ffi`)가 이 함수 하나를 부른다.
 
+use std::future::Future;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::time::Duration;
 
 use omk_bridge_conn::device_id::DeviceIdentity;
@@ -80,9 +82,25 @@ pub struct ServeArgs {
     pub env: Vec<(String, String)>,
 }
 
-/// 끝날 때까지 돌고 종료 코드를 돌려준다(0 정상, 1 기동 실패, 3 잠금). `on_runtime` 은 잠금·id 를 잡은 뒤 actor 직전에
-/// 런타임 문맥 안에서 한 번 불린다(헬퍼가 신호 처리기·stdin 읽기를 단다).
+/// 끝날 때까지 돌고 종료 코드를 돌려준다(0 정상, 1 기동 실패, 3 잠금, 101 actor 패닉). `on_runtime` 은 잠금·id 를 잡은 뒤
+/// actor 직전에 런타임 문맥 안에서 한 번 불린다(헬퍼가 신호 처리기·stdin 읽기를 단다).
 pub fn serve(args: ServeArgs, emit: Emit, tx: Tx, rx: Rx, on_runtime: impl FnOnce(&Tx)) -> i32 {
+    serve_with(args, emit, tx, rx, on_runtime, app::run)
+}
+
+/// [`serve`] 본문 — actor 를 인자로 받는다(시험이 패닉하는 actor 를 넣는다, PR-3.2 T-H8).
+pub(crate) fn serve_with<F, Fut>(
+    args: ServeArgs,
+    emit: Emit,
+    tx: Tx,
+    rx: Rx,
+    on_runtime: impl FnOnce(&Tx),
+    actor: F,
+) -> i32
+where
+    F: FnOnce(String, Host, Emit, Tx, Rx) -> Fut,
+    Fut: Future<Output = i32>,
+{
     let Ok(rt) = host_runtime() else {
         return START_FAILED_EXIT;
     };
@@ -114,7 +132,10 @@ pub fn serve(args: ServeArgs, emit: Emit, tx: Tx, rx: Rx, on_runtime: impl FnOnc
                         let _ctx = rt.enter();
                         on_runtime(&tx);
                     }
-                    rt.block_on(app::run(args.server, host, emit.clone(), tx, rx))
+                    // 패닉은 `block_on` 만 감싸 잡는다(PR-3.2 D-225(r2) ③) — 그 뒤도 정상과 같은 순서(비우기 → 1초 상한 런타임
+                    // 정리 → 잠금 해제)를 밟는다. 헬퍼는 패닉 훅이 먼저 프로세스를 끝내므로 여기 닿지 않는다.
+                    let run = actor(args.server, host, emit.clone(), tx, rx);
+                    catch_unwind(AssertUnwindSafe(|| rt.block_on(run))).unwrap_or(PANIC_EXIT)
                 }
                 Err(_) => START_FAILED_EXIT,
             }
@@ -141,4 +162,88 @@ pub fn serve(args: ServeArgs, emit: Emit, tx: Tx, rx: Rx, on_runtime: impl FnOnc
     rt.shutdown_timeout(Duration::from_millis(RUNTIME_SHUTDOWN_MS));
     drop(held_lock);
     code
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
+
+    use super::{Input, PANIC_EXIT, ServeArgs, channel, serve, serve_with};
+    use crate::event::{Emit, Event, LOCK_WAIT_TEXT};
+
+    const CHILD: &str = "OMK_HOST_PANIC_ACTOR_CHILD";
+
+    fn args(home: &str) -> ServeArgs {
+        ServeArgs {
+            server: "http://127.0.0.1:9".into(),
+            home: home.into(),
+            browser_enabled: false,
+            env: Vec::new(),
+        }
+    }
+
+    /// T-H8(PR-3.2 D-225(r2) ③) — actor 패닉은 `block_on` 만 감싸 잡는다 → 101. 그 뒤는 정상 순서(비우기 → 런타임 정리 1초
+    /// → 잠금 해제)라 반환 시점에 같은 홈의 둘째 `serve` 가 잠금 대기 없이 잡고, 반환까지 상한이 있다. 패닉 출력은 자식 프로세스로 격리.
+    #[test]
+    fn panicking_actor_returns_101_after_ordered_cleanup() {
+        if std::env::var_os(CHILD).is_none() {
+            let out = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "serve::tests::panicking_actor_returns_101_after_ordered_cleanup",
+                    "--test-threads=1",
+                ])
+                .env(CHILD, "1")
+                .output()
+                .unwrap();
+            let text = String::from_utf8_lossy(&out.stdout).into_owned();
+            assert!(out.status.success() && text.contains("1 passed"), "{text}");
+            return;
+        }
+        let home = std::env::temp_dir().join(format!("omk-host-panic-{}", std::process::id()));
+        std::fs::create_dir_all(&home).unwrap();
+        let home = home.to_string_lossy().into_owned();
+        let (tx, rx) = channel();
+        let t = Instant::now();
+        let code = serve_with(
+            args(&home),
+            Emit::new(|_| {}),
+            tx,
+            rx,
+            |_| {},
+            |_, _, _, _, _| async {
+                if t.elapsed() < Duration::from_secs(60) {
+                    panic!("actor 패닉");
+                }
+                0
+            },
+        );
+        assert_eq!(code, PANIC_EXIT);
+        let took = t.elapsed();
+        assert!(took <= Duration::from_millis(2500), "{took:?}");
+        // 둘째 — 잠금이 이미 풀려 대기 문구 없이 잡는다.
+        let seen: Arc<Mutex<Vec<Event>>> = Arc::default();
+        let s = Arc::clone(&seen);
+        let (tx, rx) = channel();
+        assert!(tx.send(Input::End));
+        let code = serve(
+            args(&home),
+            Emit::new(move |e| s.lock().unwrap().push(e)),
+            tx,
+            rx,
+            |_| {},
+        );
+        assert_eq!(code, 0);
+        let seen = seen.lock().unwrap();
+        assert!(
+            !seen
+                .iter()
+                .any(|e| matches!(e, Event::Status { text, .. } if text == LOCK_WAIT_TEXT)),
+            "{seen:?}"
+        );
+        let _ = std::fs::remove_dir_all(&home);
+    }
 }
