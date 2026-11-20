@@ -62,8 +62,8 @@ CI 모델 fixture는 네트워크·인증·채팅 연결 검증용입니다. 실
 
 ```bash
 # ~/.openmake/online/omk-paths.env
-OMK_LLM_DIR=/Volumes/DATA/openmake_llm
-OMK_BENCH_DIR=/Volumes/DATA/openmake_bench
+OMK_LLM_DIR=/srv/openmake/openmake_llm
+OMK_BENCH_DIR=/srv/openmake/openmake_bench
 ```
 
 포트·사용자·도메인·실제 경로는 해당 `.env`와 `omk env status`를 읽습니다. 호스트 이름이 환경 이름을 대신하지 않습니다. staging은 Tailscale 호스트와 프록시 포트로 접속하고, online의 외부 공개는 운영 Cloudflare/DNS 설정을 따릅니다. Base와 Add-on 분리, 앱 PM2 실행 방식은 유지합니다.
