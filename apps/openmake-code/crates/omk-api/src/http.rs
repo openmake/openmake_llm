@@ -123,7 +123,12 @@ impl Transport {
             .await
             .map_err(|e| {
                 if e.downcast_ref::<LengthLimitError>().is_some() {
-                    ApiError::ResponseTooLarge
+                    // 비-2xx 는 본문이 커도 status 범주를 지킨다(D-205).
+                    if (200..300).contains(&status) {
+                        ApiError::ResponseTooLarge
+                    } else {
+                        ApiError::from_status(ServerError::new(status, None, None))
+                    }
                 } else {
                     ApiError::Network
                 }
