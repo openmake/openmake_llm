@@ -99,12 +99,23 @@ test('the release job condition allows exactly main and release/desktop-bridge p
     assert.deepEqual(pr.split(',').map((s) => s.trim()), ['main', 'dev']);
 });
 
-test('the companion job runs the Swift unit tests and the successor replace script test before the dmg', () => {
+// plan-pr2.5 D-155·D-164: 새 앱(OpenMake Code)은 후속 교체 스크립트를 갖지 않는다 — 그 셸 테스트 단계(Gate 2-S)도 없다.
+test('the companion job runs the Swift tests before the dmg and has no successor replace script step', () => {
     const companion = workflow.slice(workflow.search(/^ {2}companion:$/m), workflow.search(/^ {2}release:$/m));
     const swiftTest = companion.search(/^ +run: swift test --package-path apps\/desktop-native\/OpenMakeCompanion$/m);
-    const succTest = companion.search(/^ +run: bash apps\/desktop-native\/tests\/successor-replace\.test\.sh$/m);
     const buildSh = companion.search(/^ +run: bash apps\/desktop-native\/build\.sh$/m);
     assert.ok(swiftTest > 0, 'swift test present');
-    assert.ok(succTest > 0, 'successor-replace test present');
-    assert.ok(buildSh > swiftTest && buildSh > succTest, 'tests before build.sh');
+    assert.ok(buildSh > swiftTest, 'swift test before build.sh');
+    assert.doesNotMatch(workflow, /successor-replace|Gate 2-S/);
+});
+
+test('the dmg artifact is OpenMake-Code-dmg on both upload and download, with the OpenMake-Code glob', () => {
+    const uploads = [...workflow.matchAll(/uses: actions\/upload-artifact@\S+.*\n {8}with:\n {10}name: (\S+)\n {10}path: (\S+)/g)];
+    const downloads = [...workflow.matchAll(/uses: actions\/download-artifact@\S+.*\n {8}with:\n {10}name: (\S+)/g)];
+    assert.equal(uploads.length, 1);
+    assert.equal(downloads.length, 1);
+    assert.equal(uploads[0][1], 'OpenMake-Code-dmg');
+    assert.equal(downloads[0][1], 'OpenMake-Code-dmg');
+    assert.equal(uploads[0][2], 'apps/desktop-native/dist/OpenMake-Code-*.dmg');
+    assert.doesNotMatch(workflow, /OpenMake-Companion-/);
 });

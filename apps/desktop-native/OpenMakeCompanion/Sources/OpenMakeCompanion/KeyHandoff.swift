@@ -6,6 +6,12 @@ import Darwin
 import Foundation
 
 enum KeyHandoff {
+    /** consume() 결과 — LaunchSequence 가 받아 기록한다. 값이 있어야 기동 조율을 부를 수 있어 순서가 타입으로 묶인다. */
+    enum Result: Equatable {
+        case received
+        case notReceived
+    }
+
     /** 헬퍼의 device-id 와 같은 지원 폴더. 교체 스크립트도 이 경로를 쓴다(Updater 가 환경 OMK_KH 로 넘긴다). */
     static let path = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Application Support/OpenMakeCompanion/key-handoff").path
@@ -17,18 +23,18 @@ enum KeyHandoff {
     /** 키 값 상한 — omk_live_* 는 훨씬 짧다. */
     private static let maxKeyBytes = 512
 
-    /** 주 스레드에서 동기 호출 — `reconnectIfPossible()` 보다 먼저. */
-    static func consume() {
+    /** 주 스레드에서 동기 호출 — applicationDidFinishLaunching 의 맨 앞, 어떤 Keychain 조회보다 먼저(D-119·§4.1 1). */
+    static func consume() -> Result {
         var st = stat()
-        guard lstat(path, &st) == 0 else { return }
+        guard lstat(path, &st) == 0 else { return .notReceived }
         defer { unlink(path) }
-        guard (st.st_mode & S_IFMT) == S_IFIFO, st.st_uid == getuid(), (st.st_mode & 0o777) == 0o600 else { return }
+        guard (st.st_mode & S_IFMT) == S_IFIFO, st.st_uid == getuid(), (st.st_mode & 0o777) == 0o600 else { return .notReceived }
         let fd = open(path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW)
-        guard fd >= 0 else { return }
+        guard fd >= 0 else { return .notReceived }
         defer { close(fd) }
         // lstat 과 open 사이에 바꿔치기됐으면 읽지 않는다.
         var fst = stat()
-        guard fstat(fd, &fst) == 0, fst.st_dev == st.st_dev, fst.st_ino == st.st_ino else { return }
+        guard fstat(fd, &fst) == 0, fst.st_dev == st.st_dev, fst.st_ino == st.st_ino else { return .notReceived }
 
         var bytes = [UInt8]()
         var buf = [UInt8](repeating: 0, count: 1024)
@@ -39,20 +45,25 @@ enum KeyHandoff {
             let n = read(fd, &buf, buf.count)
             if n > 0 {
                 bytes.append(contentsOf: buf[0..<n])
-                if bytes.count > readLimit { return }
+                if bytes.count > readLimit { return .notReceived }
                 continue
             }
             if n == 0, !bytes.isEmpty { break } // 쓰는 쪽이 닫음 = EOF
-            if n < 0, errno != EAGAIN, errno != EINTR { return }
+            if n < 0, errno != EAGAIN, errno != EINTR { return .notReceived }
             let remainingMs = Int32(max(0, deadline.timeIntervalSinceNow * 1000))
-            if remainingMs == 0 { return } // 시간 초과 — 받은 값은 쓰지 않는다
+            if remainingMs == 0 { return .notReceived } // 시간 초과 — 받은 값은 쓰지 않는다
             var pfd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
             _ = poll(&pfd, 1, min(remainingMs, 50))
         }
         guard bytes.count <= maxKeyBytes, let key = String(bytes: bytes, encoding: .utf8),
               !key.isEmpty, key.unicodeScalars.allSatisfy({ $0.value > 0x20 && $0.value != 0x7F && !CharacterSet.whitespacesAndNewlines.contains($0) && !CharacterSet.controlCharacters.contains($0) })
-        else { return }
-        // 저장이 실패해도 이번 실행은 넘겨받은 키로 동작한다(다음 기동은 종전처럼 키체인 창).
+        else { return .notReceived }
+        keep(key)
+        return .received
+    }
+
+    /** 저장이 실패해도 이번 실행은 넘겨받은 키로 동작한다(다음 기동은 종전처럼 키체인 창). */
+    static func keep(_ key: String) {
         if !Keychain.save(key) { Keychain.remember(key) }
     }
 }

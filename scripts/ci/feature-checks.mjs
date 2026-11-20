@@ -189,7 +189,7 @@ export function runFeatures(files, options = {}) {
   }
   // build.sh's node bundling functions (lib/node-bundle.sh): fake otool/curl/uname on PATH, so it runs on any platform.
   // The rest of build.sh (swift, codesign, hdiutil) is exercised by the desktop-native workflow's mac build.
-  // So is the successor replace script (apps/desktop-native/scripts, macOS only) — its shell test is that workflow's Gate 2-S.
+  // The successor replace script and its shell test were removed from main (plan-pr2.5 D-155); their mapping stays for the deletion diff.
   if (selection.desktopBuild) run(process.execPath, ['--test', 'apps/desktop-native/lib/node-bundle.test.mjs']);
   // The CLI workspace has no Jest project: its tsc build, then the fixtures that drive the built CLI.
   if (selection.cli) {
