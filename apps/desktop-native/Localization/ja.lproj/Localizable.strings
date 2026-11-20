@@ -78,7 +78,7 @@
 "update.insecure" = "アップデートは HTTPS（または localhost）のバックエンドからのみ許可されます";
 "update.badBackend" = "無効なバックエンドアドレス";
 "update.none.title" = "アップデートはありません";
-"update.none.body" = "native チャネルの配布がまだないか、マニフェストがありません。（現在 v%@）";
+"update.none.body" = "macOS アプリの配布がまだないか、マニフェストがありません。（現在 v%@）";
 "update.latest.title" = "最新バージョン";
 "update.latest.body" = "現在の v%@ が最新です。";
 "update.available.title" = "新しいバージョン v%1$@ があります（現在 v%2$@）";
