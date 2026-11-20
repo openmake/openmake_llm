@@ -101,7 +101,7 @@ Eine einfache Frage geht direkt an Ihr Chat-Modell. Eine Anfrage, die mehr brauc
 - **Ein Bild, eine Sprachausgabe oder eine Transkription anfordern** — jede Anfrage geht an das Modell, das dieser Fähigkeit zugewiesen ist.
 - **Einem Agenten ein Ziel übergeben** — er plant, recherchiert im Web, bearbeitet Dateien, führt Code in einer Docker-Sandbox aus und wartet vor riskanten Schritten auf eine Freigabe.
 - **Externe Dienste über MCP anbinden** (Notion, Context7, Tavily, NotebookLM und weitere) oder Plugins und Skills im Claude-Code-Format installieren.
-- **Agentenarbeit in einem Ordner auf Ihrem eigenen Rechner ausführen** — mit der App OpenMake Companion oder der OpenMake Code CLI.
+- **Agentenarbeit in einem Ordner auf Ihrem eigenen Rechner ausführen** — mit der App OpenMake Code oder der OpenMake Code CLI.
 
 | Bereich | Umfang |
 |---|---|
@@ -163,14 +163,14 @@ Eine Agentenaufgabe verfolgt ein Ziel über viele Runden mit Tool-Aufrufen. Agen
 - ✓ Persistente Aufgaben mit Pausieren, Fortsetzen, Abbrechen und Wiederherstellung nach einem Serverneustart
 - ✓ Ein **Freigaben**-Postfach für Agentenschritte, Skills, Erweiterungen und MCP-Server
 - ✓ Vorlagen, geplante Ausführungen und teilbare Aufgabenergebnisse
-- ✓ Lokale Ausführung über OpenMake Companion (macOS) oder die OpenMake Code CLI — mit Pfadbegrenzung, Bestätigung für Befehle und Isolation per Git-Worktree
+- ✓ Lokale Ausführung über OpenMake Code (macOS) oder die OpenMake Code CLI — mit Pfadbegrenzung, Bestätigung für Befehle und Isolation per Git-Worktree
 
 **Opt-in** — diese Funktionen sind standardmäßig deaktiviert. Aktivieren Sie sie in der `.env`:
 
 | Einstellung | Aktiviert | Voraussetzung |
 |---|---|---|
 | `TASK_SANDBOX_ENABLED=true` | Persistenter Docker-Workspace pro Aufgabe | Zuerst `infra/mcp-runtime`, dann `infra/task-runtime` bauen |
-| `LOCAL_EXECUTOR_ENABLED=true` | Tool-Aufrufe auf dem Rechner eines Nutzers | OpenMake Companion oder CLI mit einem API-Schlüssel mit `bridge`-Scope |
+| `LOCAL_EXECUTOR_ENABLED=true` | Tool-Aufrufe auf dem Rechner eines Nutzers | OpenMake Code oder CLI mit einem API-Schlüssel mit `bridge`-Scope |
 | `AGENT_TASK_QUEUE_ENABLED=true` | Globale Limits und Limits pro Nutzer für parallele Aufgaben | — |
 
 ```bash
@@ -209,7 +209,7 @@ docker build -t openmake-task-runtime:latest infra/task-runtime
 flowchart TB
     subgraph clients["Clients"]
         WEB["Web-App · Next.js"]
-        NATIVE["Companion (macOS) · Code CLI"]
+        NATIVE["Code app (macOS) · Code CLI"]
         APIC["OpenAI-kompatible API · Discord-Bot"]
     end
     clients -->|"REST · WebSocket"| API["API-Server · Express 5 + TypeScript"]
@@ -243,7 +243,7 @@ flowchart TB
 | Daten | PostgreSQL über rohes, parametrisiertes SQL (kein ORM), Redis |
 | LLM | vLLM, LiteLLM-Gateway, `openai` SDK |
 | Agenten & Tools | Model Context Protocol Client v2, Docker-isolierte Sandboxes |
-| Native Clients | SwiftUI (macOS Companion, iOS in Arbeit), Node-CLI — gemeinsam `packages/local-bridge-core` |
+| Native Clients | SwiftUI (macOS OpenMake Code, iOS in Arbeit), Node-CLI — gemeinsam `packages/local-bridge-core` |
 
 ### Designprinzipien
 
@@ -314,7 +314,7 @@ apps/
 ├── api/             Express-5-API — Chat-Pipeline, Orchestrator, Agenten, MCP, Daten
 ├── web/             Next.js-Web-App
 ├── cli/             OpenMake Code — Local-Bridge-CLI
-├── desktop-native/  OpenMake Companion — SwiftUI-Menüleisten-App (macOS)
+├── desktop-native/  OpenMake Code — SwiftUI-Menüleisten-App (macOS)
 ├── ios/             SwiftUI-iOS-Client (in Arbeit)
 └── discord-bot/     Discord-Gateway-Bot
 packages/            gemeinsame Typen, API-Verträge, Konfiguration, API-Client, Local-Bridge-Kern

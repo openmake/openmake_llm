@@ -1,5 +1,5 @@
 #!/bin/bash
-# OpenMake Companion 빌드 — 헬퍼 빌드(cargo) + 하네스 + Swift 빌드 + .app 조립 + ad-hoc 서명 + dmg.
+# OpenMake Code 빌드 — 헬퍼 빌드(cargo) + 하네스 + Swift 빌드 + .app 조립 + ad-hoc 서명 + dmg.
 # 사전: npm ci (하네스의 ws 패키지) + Rust 툴체인 (판은 apps/openmake-code/rust-toolchain.toml)
 # 사용: bash apps/desktop-native/build.sh [버전]   (기본 버전: VERSION 파일)
 # 버전을 주지 않으면 VERSION 파일의 값을 쓴다 — 종전 기본값 0.1.0 은 서버에 게시된 버전(0.2.8)보다 낮아,
@@ -9,8 +9,9 @@ cd "$(dirname "$0")"
 ROOT="$(cd ../.. && pwd)"
 VERSION="${1:-$(tr -d '[:space:]' < VERSION)}"
 [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || { echo "버전 형식이 잘못됐습니다: $VERSION"; exit 1; }
-APP_NAME="OpenMake Companion"
-BUNDLE_ID="cc.openmake.companion"
+# 정체성 글자의 원본은 OpenMakeCompanion/Sources/OpenMakeCompanion/AppIdentity.swift — 아래 두 줄은 IdentityTests 가 글자로 대조한다.
+APP_NAME="OpenMake Code"
+BUNDLE_ID="cc.openmake.code"
 OUT="dist"
 APP="$OUT/$APP_NAME.app"
 
@@ -33,15 +34,14 @@ bash check-l10n.sh
 # 4) .app 번들 조립
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp OpenMakeCompanion/.build/release/OpenMakeCompanion "$APP/Contents/MacOS/"
+# 실행 파일 이름 = 앱 이름(plan-pr2.5 D-154). SwiftPM 대상 이름 OpenMakeCompanion 은 그대로 두고 복사하며 바꾼다.
+cp OpenMakeCompanion/.build/release/OpenMakeCompanion "$APP/Contents/MacOS/$APP_NAME"
 cp "$HELPER_BIN" "$APP/Contents/MacOS/omk-helper"
 chmod +x "$APP/Contents/MacOS/omk-helper"
 # 앱 아이콘 — 구 Electron 앱에서 이설한 자산 (2026-08-23, apps/desktop 제거)
 cp "$ROOT/apps/desktop-native/assets/icon.icns" "$APP/Contents/Resources/icon.icns"
 # 다국어 표 — ko(개발 언어)·en·ja·zh-Hans·de (웹 LOCALES 와 같은 언어)
 cp -R Localization/*.lproj "$APP/Contents/Resources/"
-# 후속 앱 교체 스크립트(plan-pr2.4 D-143) — Updater 가 이 바이트를 그대로 띄운다(셸 테스트가 도는 것과 같은 파일).
-cp scripts/successor-replace.sh "$APP/Contents/Resources/successor-replace.sh"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -52,7 +52,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
-  <key>CFBundleExecutable</key><string>OpenMakeCompanion</string>
+  <key>CFBundleExecutable</key><string>$APP_NAME</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleDevelopmentRegion</key><string>ko</string>
   <key>CFBundleLocalizations</key><array><string>ko</string><string>en</string><string>ja</string><string>zh-Hans</string><string>de</string></array>
@@ -68,7 +68,7 @@ codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"
 
 # 6) dmg (파일명은 서버 FILE_PATTERN ^OpenMake-[A-Za-z0-9.-]+\.dmg$ 준수)
-DMG="$OUT/OpenMake-Companion-$VERSION-arm64.dmg"
+DMG="$OUT/OpenMake-Code-$VERSION-arm64.dmg"
 rm -f "$DMG"
 # hdiutil 은 GitHub macOS 실행기에서 "No space left on device" 로 간헐 실패한다(2026-10-05 하루 두 번, 디스크 여유와 무관 — 다시 돌리면 통과).
 # 몇 번 다시 시도하고, 끝내 실패하면 빌드를 실패시킨다.
