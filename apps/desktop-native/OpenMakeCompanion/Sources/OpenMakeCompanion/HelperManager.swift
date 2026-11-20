@@ -376,7 +376,8 @@ final class HelperManager: NSObject, ObservableObject {
         case let .browserControl(user):
             browserUserControl = user
         case let .confirm(id, command, taskId, base, _, sandbox):
-            presentConfirm(id: id, command: command, taskId: taskId, base: base, sandboxed: sandbox)
+            let asker = host // 물은 호스트에 답한다 — 창이 떠 있는 동안 호스트가 바뀌어도
+            Task { await presentConfirm(host: asker, id: id, command: command, taskId: taskId, base: base, sandboxed: sandbox) }
         case let .taskEnd(taskId, _):
             notifyTaskEnd(taskId: taskId)
         case let .approvalPending(taskId, toolName, _):
@@ -403,8 +404,10 @@ final class HelperManager: NSObject, ObservableObject {
         return L(key, arg ?? "")
     }
 
-    /** exec 승인 — 비우회 네이티브 다이얼로그. 실행될 명령 원문·실행 폴더를 그대로 보여준다. */
-    private func presentConfirm(id: UInt64, command: String, taskId: String?, base: String, sandboxed: Bool) {
+    /** exec 승인 — 비우회 네이티브 다이얼로그. 실행될 명령 원문·실행 폴더를 그대로 보여준다. 창은 main 큐 블록 밖에서 돈다
+        (AppTermination.runModal) — 종료 요청으로 끝난 창·띄우지 않은 창은 거부로 답한다. */
+    private func presentConfirm(host: BridgeHostProtocol?, id: UInt64, command: String, taskId: String?, base: String,
+                                sandboxed: Bool) async {
         let preview = command.count > 800 ? String(command.prefix(800)) + "…" : command
 
         let alert = NSAlert()
@@ -419,7 +422,7 @@ final class HelperManager: NSObject, ObservableObject {
         alert.addButton(withTitle: L("confirm.run"))
         if taskId != nil { alert.addButton(withTitle: L("confirm.runAll")) }
         alert.addButton(withTitle: L("confirm.deny"))
-        let r = showConfirm(alert)
+        let r = await AppTermination.runModal { self.showConfirm(alert) }
         let choice: ConfirmChoice
         if r == .alertFirstButtonReturn { choice = .yes }
         else if taskId != nil && r == .alertSecondButtonReturn { choice = .all }
