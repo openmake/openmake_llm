@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.145.0](https://github.com/openmake/openmake_llm/compare/v1.144.0...v1.145.0) (2026-11-20)
+
+
+### ✨ 기능
+
+* **desktop-native:** 작업 창 — 작업 목록·상세·스텝 타임라인 (openmake_code PR-3.3, 앱 0.7.0) ([cc5d0ab](https://github.com/openmake/openmake_llm/commit/cc5d0ab6ddc37a6aeaea622023f911599f968d51))
+
+
+### 🐛 버그 수정
+
+* **agent-tasks:** 목록 대기 사유 조회 실패를 로그로 남기고 헬퍼 주석을 바뀐 동작에 맞춘다 (PR [#1894](https://github.com/openmake/openmake_llm/issues/1894) Fable L-1·L-2) ([39804bc](https://github.com/openmake/openmake_llm/commit/39804bce104a2b13d428a8757a692d182b10d8ef))
+
 ## [1.144.0](https://github.com/openmake/openmake_llm/compare/v1.143.0...v1.144.0) (2026-11-20)
 
 
