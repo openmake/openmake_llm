@@ -39,7 +39,6 @@
 "status.folderOpenFailed" = "フォルダを開けませんでした: %@";
 "status.instance_conflict" = "別の OpenMake Code がすでに実行中です (%@)";
 "status.instance_lock_failed" = "アプリのデータフォルダをロックできなかったため接続しませんでした";
-"status.helperMissing" = "ヘルパーのリソースがありません（再インストールが必要です）";
 "status.helperExited" = "ヘルパーが終了しました — もう一度接続してください";
 "status.helperLaunchFailed" = "ヘルパーを起動できませんでした: %@";
 /* Connection status — 認証上の理由で切断 */

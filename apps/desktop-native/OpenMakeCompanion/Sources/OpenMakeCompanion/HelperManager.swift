@@ -1,15 +1,16 @@
-// HelperManager — 브리지 헬퍼(`omk-helper`, Rust) 프로세스의 유일한 spawn 주체.
+// HelperManager — 브리지 호스트(Rust `omk-ffi`, 같은 프로세스 안 — PR-3.2)의 유일한 시작 주체.
 //
 // 보안 설계 (plan §3·목표 원칙):
 //  - 로컬 실행 권한의 범위는 항상 "사용자가 NSOpenPanel 로 직접 지정한 폴더 + 하위" —
-//    경로 스코프 강제는 헬퍼(코어)의 realpath safe() 가 담당하고, 여기서는 발원만 담당한다.
+//    경로 스코프 강제는 호스트(코어)의 realpath safe() 가 담당하고, 여기서는 발원만 담당한다.
 //  - exec 승인/거절의 선택 주체는 항상 사용자(네이티브 다이얼로그, 비우회). 'all'(일괄 승인)
 //    은 그 작업 한정이며 회수는 코어가 관리, 여기서는 카운트 표시·즉시 해제만 제공한다.
-//  - API key 는 stdin 의 `auth` 명령으로 전달(인자·환경으로 넘기지 않는다), 저장은 Keychain.
-//  - 좀비 방지: 앱 종료 시 stdin 닫힘 → 헬퍼가 스스로 정리 종료(하네스 검증됨). 추가로
-//    terminate() 를 명시 호출한다. 헬퍼는 종료 때 자기가 띄운 Chrome 을 정리한 뒤 끝난다(최악 약 9초).
+//  - API key 는 BridgeHost.start 의 인자로만 전달(설정 struct·환경·로그에 넣지 않는다), 저장은 Keychain.
+//  - 정리: 호스트는 종료 때 자기가 띄운 Chrome·exec 자식을 정리한 뒤 exited 를 낸다(최악 약 9초). 같은 프로세스라
+//    앱이 먼저 끝나면 정리가 끊기므로 앱 종료·업데이트는 exited 를 기다린다(applicationShouldTerminate·stopHostAndWait).
 import AppKit
 import Foundation
+import OmkFfi
 import UserNotifications
 
 @MainActor
@@ -41,13 +42,15 @@ final class HelperManager: NSObject, ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: "browserEnabled") }
     }
 
-    private var process: Process?
-    private var stdinPipe: Pipe?
-    /** 끄는 중인(quit 을 보낸) 헬퍼들 — 재기동은 이것들이 모두 끝난 뒤에 새 헬퍼를 띄운다. */
-    private var retiring: [Process] = []
+    private var host: BridgeHost?
+    /** 호스트 세대 — 시작마다 +1. 옛 세대의 이벤트는 relay 가 거른다(exited 만 통과). */
+    private var hostGeneration = 0
+    /** exited 를 아직 내지 않은 호스트들의 세대(지금 것 + 끄는 중인 것) — 재기동·앱 종료는 이것이 빌 때까지 기다린다. */
+    private var liveGenerations: Set<Int> = []
     /** 재기동 세대 — 대기 중 재기동이 또 예약되면 마지막 것만 연결한다. */
     private var restartGeneration = 0
-    private var stdoutBuf = Data()
+    /** 끄는 호스트를 기다리는 상한 — 호스트 종료의 최악(Chrome 정리 포함 약 8.6초) + 여유. 같은 프로세스라 강제 종료가 없다. */
+    static let hostStopLimit: TimeInterval = 12
 
     // 서버 주소 — 사용자가 설정에 넣는 주소 하나. 브라우저에서 쓰는 주소(또는 API 주소)를 그대로 넣으면
     // 헬퍼(코어 endpoints)가 서버에 포트를 물어 연결 주소와 웹 주소를 정한다. 종전엔 선택지 2개
@@ -122,118 +125,94 @@ final class HelperManager: NSObject, ObservableObject {
         "device_conflict": "status.deviceConflict",
     ]
 
-    // ── 헬퍼 프로세스 lifecycle ──
-
-    private func helperURL() -> URL? {
-        // 번들 실행(정식) → Contents/MacOS/omk-helper, 개발 실행(swift run) → env 훅으로 실행 파일 경로 주입.
-        if let env = ProcessInfo.processInfo.environment["OMK_COMPANION_HELPER"] {
-            return URL(fileURLWithPath: env)
-        }
-        return Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("omk-helper")
-    }
+    // ── 호스트 lifecycle ──
 
     private func ensureHelper() -> Bool {
-        if let p = process, p.isRunning { return true }
+        if host != nil { return true }
         if instanceBlocked { return false } // 상태 문구(충돌·잠금 실패)를 그대로 둔다
         // 테스트 훅(개발/E2E 전용): env key 가 있으면 Keychain 대신 사용 — Electron 의
-        // OMK_BRIDGE_TOKEN 관행과 동일 계열. 정식 실행 경로는 Keychain 만 쓴다.
-        let envKey = ProcessInfo.processInfo.environment["OMK_COMPANION_API_KEY"]
-        guard let apiKey = envKey ?? Keychain.load(), !apiKey.isEmpty else {
+        // OMK_BRIDGE_TOKEN 관행과 동일 계열. ProcessSetup 이 기동 첫 줄에서 읽고 환경에서 지웠다(D-229).
+        // 정식 실행 경로는 Keychain 만 쓴다.
+        guard let apiKey = ProcessSetup.devApiKey ?? Keychain.load(), !apiKey.isEmpty else {
             statusText = L("status.apiKeyRequired")
             return false
         }
-        guard let helperURL = helperURL(), FileManager.default.isExecutableFile(atPath: helperURL.path) else {
-            statusText = L("status.helperMissing")
+        hostGeneration += 1
+        let generation = hostGeneration
+        let relay = HostEventRelay(
+            generation: generation,
+            current: { [weak self] in self?.hostGeneration ?? -1 },
+            onEvent: { [weak self] e in self?.handle(e) },
+            onExited: { [weak self] g, _ in self?.hostExited(generation: g) })
+        do {
+            host = try BridgeHost.start(
+                config: HostConfig(server: serverAddress, browserEnabled: browserEnabled), apiKey: apiKey, listener: relay)
+        } catch HostStartError.ApiKeyRequired {
+            statusText = L("status.apiKeyRequired")
             return false
-        }
-        let p = Process()
-        p.executableURL = helperURL
-        p.arguments = ["--server", serverAddress]
-        var env = ProcessInfo.processInfo.environment
-        // 키는 환경으로 넘기지 않는다 — 프로세스 시작 환경은 같은 사용자의 다른 프로세스가 읽을 수 있어,
-        // 샌드박스 안의 승인된 명령이 헬퍼의 키를 읽어 낼 수 있었다. 기동 직후 stdin 으로 준다(아래 auth).
-        env.removeValue(forKey: "OMK_COMPANION_API_KEY")
-        if browserEnabled { env["OMK_COMPANION_BROWSER"] = "1" } else { env.removeValue(forKey: "OMK_COMPANION_BROWSER") }
-        p.environment = env
-        let inPipe = Pipe(), outPipe = Pipe()
-        p.standardInput = inPipe
-        p.standardOutput = outPipe
-        p.standardError = FileHandle.nullDevice
-        outPipe.fileHandleForReading.readabilityHandler = { [weak self] h in
-            let d = h.availableData
-            // EOF — 헬퍼가 끝났다. 처리기를 풀어 빈 데이터로 계속 불리지 않게 한다.
-            guard !d.isEmpty else { h.readabilityHandler = nil; return }
-            Task { @MainActor in self?.consume(d) }
-        }
-        p.terminationHandler = { [weak self] proc in
-            Task { @MainActor in
-                // 지금의 헬퍼가 끝났을 때만 정리한다 — 끄는 중이던 옛 헬퍼가 늦게 끝나도 새 헬퍼의 상태를 지우지 않게.
-                guard let self, self.process === proc else { return }
-                self.process = nil
-                self.stdinPipe = nil
-                if !self.connectedFolders.isEmpty { self.statusText = L("status.helperExited") }
-                self.connectedFolders = []
-                self.rootStatus = [:]
-                self.authClosedFolders = []
-            }
-        }
-        do { try p.run() } catch {
+        } catch {
             statusText = L("status.helperLaunchFailed", error.localizedDescription)
             return false
         }
-        process = p
-        stdinPipe = inPipe
-        send(["cmd": "auth", "apiKey": apiKey])
+        liveGenerations.insert(generation)
         return true
     }
 
-    func stopHelper() {
-        send(["cmd": "quit"])
-        let p = process
-        retiring.removeAll { !$0.isRunning }
-        if let p { retiring.append(p) }
-        process = nil
-        stdinPipe = nil
+    /** 호스트가 끝났다(exited — 언제나 마지막 이벤트). 지금의 호스트가 스스로 끝났을 때만 상태를 지운다 — 끄는 중이던 옛 호스트가
+        늦게 끝나도 새 호스트의 상태를 지우지 않게. */
+    private func hostExited(generation: Int) {
+        liveGenerations.remove(generation)
+        guard generation == hostGeneration, host != nil else { return }
+        host = nil
+        if !connectedFolders.isEmpty { statusText = L("status.helperExited") }
         connectedFolders = []
         rootStatus = [:]
         authClosedFolders = []
-        // quit 처리(결과 flush 100ms) 뒤에도 살아 있으면 강제 종료 — 좀비 방지 2중선.
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) { if let p, p.isRunning { p.terminate() } }
     }
 
-    /** 헬퍼 재기동 — 옛 헬퍼(와 그가 띄운 Chrome)가 실제로 끝난 뒤 새 헬퍼로 폴더를 다시 연결한다. */
+    /** 끝나지 않은 호스트가 있는가(끄는 중 포함) — 앱 종료가 기다릴지 정한다. */
+    var hasLiveHost: Bool { !liveGenerations.isEmpty }
+
+    func stopHelper() {
+        try? host?.shutdown()
+        host = nil // 놓으면 입력 끝과 같다 — 이미 quit 했으므로 두 번째 계기는 무시된다
+        connectedFolders = []
+        rootStatus = [:]
+        authClosedFolders = []
+    }
+
+    /** 호스트를 끄고 모든 호스트의 exited 를 기다린다(상한 hostStopLimit) — 앱 종료·업데이트 교체 전(D-233). */
+    func stopHostAndWait() async {
+        stopHelper()
+        await waitForHostsToExit(restart: nil)
+    }
+
+    /** 끄는 호스트들이 모두 끝날 때까지 100ms 간격(상한). restart 가 있으면 그 사이 새 재기동이 예약됐는지 본다. */
+    private func waitForHostsToExit(restart: Int?) async {
+        let deadline = Date().addingTimeInterval(Self.hostStopLimit)
+        while !liveGenerations.isEmpty && Date() < deadline {
+            if let restart, restart != restartGeneration { return }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+    }
+
+    /** 호스트 재기동 — 옛 호스트(와 그가 띄운 Chrome)가 실제로 끝난 뒤 새 호스트로 폴더를 다시 연결한다. 상한을 넘기면 그냥 새
+        호스트를 띄운다 — 옛 호스트가 아직 잠금을 쥐었으면 새 호스트가 잠금을 15초 기다린다(D-234). */
     private func restartHelper() {
         let folders = connectedFolders.isEmpty ? lastFolders : connectedFolders
         stopHelper()
         restartGeneration += 1
         let generation = restartGeneration
         Task { @MainActor in
-            // 상한 12초 — 헬퍼 종료의 최악(Chrome 정리 포함 약 8.6초) + 여유. 넘으면 SIGKILL 뒤 1초 더 기다린다.
-            var deadline = Date().addingTimeInterval(12)
-            var killed = false
-            while true {
-                guard generation == self.restartGeneration else { return }
-                self.retiring.removeAll { !$0.isRunning }
-                if self.retiring.isEmpty { break }
-                if Date() >= deadline {
-                    if killed { break }
-                    for p in self.retiring where p.isRunning { kill(p.processIdentifier, SIGKILL) }
-                    killed = true
-                    deadline = Date().addingTimeInterval(1)
-                }
-                try? await Task.sleep(nanoseconds: 100_000_000)
-            }
-            self.retiring.removeAll { !$0.isRunning }
+            await self.waitForHostsToExit(restart: generation)
             guard generation == self.restartGeneration else { return }
             for f in folders { self.connect(folder: f) }
         }
     }
 
-    private func send(_ obj: [String: Any]) {
-        guard let pipe = stdinPipe,
-              let data = try? JSONSerialization.data(withJSONObject: obj) else { return }
-        pipe.fileHandleForWriting.write(data)
-        pipe.fileHandleForWriting.write(Data("\n".utf8))
+    /** 업데이트 교체 스크립트를 띄우지 못했다 — 앱이 끝나지 않으므로 끈 호스트를 되살린다(D-233(r2)). */
+    func restartAfterUpdateFailure() {
+        restartHelper()
     }
 
     // ── 사용자 액션 ──
@@ -256,7 +235,7 @@ final class HelperManager: NSObject, ObservableObject {
         var l = lastFolders
         if !l.contains(folder) { l.append(folder) }
         lastFolders = l
-        send(["cmd": "connect", "folder": folder])
+        try? host?.connect(folder: folder)
     }
 
     func reconnectIfPossible() {
@@ -269,14 +248,14 @@ final class HelperManager: NSObject, ObservableObject {
 
     /** 루트 개별 해제 — 자동 재연결 목록에서도 제거한다. */
     func disconnect(folder: String) {
-        send(["cmd": "disconnect", "folder": folder])
+        try? host?.disconnect(folder: folder)
         lastFolders = lastFolders.filter { $0 != folder && !folder.hasSuffix($0) && !$0.hasSuffix(folder) }
         connectedFolders.removeAll { $0 == folder }
         rootStatus[folder] = nil
     }
 
     func disconnectAll() {
-        send(["cmd": "disconnect"])
+        try? host?.disconnect(folder: nil)
         lastFolders = []
         connectedFolders = []
         rootStatus = [:]
@@ -290,14 +269,14 @@ final class HelperManager: NSObject, ObservableObject {
         if folders.isEmpty { _ = ensureHelper() } else { for f in folders { connect(folder: f) } }
     }
 
-    func clearAutoApprove() { send(["cmd": "clearAutoApprove"]) }
+    func clearAutoApprove() { try? host?.clearAutoApprove() }
 
     /** 브라우저 제어권 전환 — 넘겨받으면 에이전트 입력이 멈추고, 돌려주면 에이전트가 현재 화면을 다시 읽는다. */
-    func setBrowserUserControl(_ user: Bool) { send(["cmd": "browserControl", "user": user]) }
+    func setBrowserUserControl(_ user: Bool) { try? host?.setBrowserUserControl(user: user) }
     /** 실행 중인 브라우저 작업 즉시 중지. */
-    func stopBrowser() { send(["cmd": "browserStop"]) }
+    func stopBrowser() { try? host?.stopBrowser() }
 
-    /** 브라우저 사용 허용 변경 — 헬퍼 재기동(spawn env)으로 반영하고 연결을 되살린다. */
+    /** 브라우저 사용 허용 변경 — 호스트 재기동(시작 설정)으로 반영하고 연결을 되살린다. */
     func setBrowserEnabled(_ on: Bool) {
         guard on != browserEnabled else { return }
         browserEnabled = on
@@ -305,12 +284,12 @@ final class HelperManager: NSObject, ObservableObject {
         restartHelper()
     }
 
-    /** API key 변경 — 헬퍼 재기동(키는 기동 직후 stdin)으로 반영하고 연결을 되살린다. 키 폐기·만료로 멈춘 연결도 새 키로 다시 붙는다. */
+    /** API key 변경 — 호스트 재기동(키는 시작 인자)으로 반영하고 연결을 되살린다. 키 폐기·만료로 멈춘 연결도 새 키로 다시 붙는다. */
     func reloadApiKey() {
         restartHelper()
     }
 
-    /** 서버 주소 변경 — 헬퍼 재기동(주소는 spawn 인자) 후 재연결. 웹 주소는 새 헬퍼가 다시 알려 준다. */
+    /** 서버 주소 변경 — 호스트 재기동(주소는 시작 설정) 후 재연결. 웹 주소는 새 호스트가 다시 알려 준다. */
     func switchServer(_ address: String) {
         serverAddress = address
         resolvedWebUrl = nil
@@ -326,86 +305,56 @@ final class HelperManager: NSObject, ObservableObject {
         Task { if let url = URL(string: "\(await webUrl(for: server))/api-access") { NSWorkspace.shared.open(url) } }
     }
 
-    /** 이 서버 주소의 웹 주소 — 떠 있는 헬퍼가 이미 알려 줬으면 그것을, 아니면 헬퍼를 조회 전용(`--resolve`)으로 잠깐 돌려 묻는다.
-        실패하면 넣은 주소를 그대로 쓴다. */
+    /** 이 서버 주소의 웹 주소 — 떠 있는 호스트가 이미 알려 줬으면 그것을, 아니면 주소 찾기(resolveEndpoints, 블로킹 — 백그라운드
+        큐)로 묻는다. 실패하면 넣은 주소를 그대로 쓴다. */
     func webUrl(for server: String) async -> String {
         if server == serverAddress, let known = resolvedWebUrl { return known }
-        guard let helperURL = helperURL() else { return server }
         let resolved: String = await withCheckedContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
-                let p = Process()
-                p.executableURL = helperURL
-                p.arguments = ["--server", server, "--resolve"]
-                let out = Pipe()
-                p.standardOutput = out
-                p.standardError = FileHandle.nullDevice
-                p.standardInput = FileHandle.nullDevice
-                var result = server
-                if (try? p.run()) != nil {
-                    let data = out.fileHandleForReading.readDataToEndOfFile()
-                    p.waitUntilExit()
-                    if let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let w = o["webUrl"] as? String { result = w }
-                }
-                cont.resume(returning: result)
+                cont.resume(returning: (try? resolveEndpoints(server: server))?.webUrl ?? server)
             }
         }
         if server == serverAddress { resolvedWebUrl = resolved }
         return resolved
     }
 
-    // ── 헬퍼 이벤트 소비 ──
+    // ── 호스트 이벤트 소비 ──
 
-    private func consume(_ d: Data) {
-        stdoutBuf.append(d)
-        while let nl = stdoutBuf.firstIndex(of: 0x0A) {
-            let line = stdoutBuf.subdata(in: stdoutBuf.startIndex..<nl)
-            stdoutBuf.removeSubrange(stdoutBuf.startIndex...nl)
-            guard let ev = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
-                  let kind = ev["ev"] as? String else { continue }
-            handle(kind, ev)
-        }
-    }
-
-    private func handle(_ kind: String, _ ev: [String: Any]) {
-        switch kind {
-        case "status":
-            let code = ev["code"] as? String
-            var arg = ev["arg"] as? String
+    private func handle(_ e: HostEvent) {
+        switch e {
+        case let .status(folder, text, code, rawArg):
+            var arg = rawArg
             if code == "instance_conflict" || code == "instance_lock_failed" {
                 instanceBlocked = true
                 arg = arg.map(Self.appPath)
             }
-            let text = Self.statusText(code: code, arg: arg, fallback: ev["text"] as? String ?? "")
-            if let f = ev["folder"] as? String {
-                rootStatus[f] = text // 루트별 상태 (연결됨/재연결 중/서버 오류)
+            let shown = Self.statusText(code: code, arg: arg, fallback: text)
+            if let f = folder {
+                rootStatus[f] = shown // 루트별 상태 (연결됨/재연결 중/서버 오류)
                 if Self.isAuthClosed(code) { authClosedFolders.insert(f) } else { authClosedFolders.remove(f) }
             } else {
-                statusText = text
+                statusText = shown
                 if code == "idle" { connectedFolders = []; rootStatus = [:]; authClosedFolders = [] }
             }
-        case "connected":
-            if let f = ev["folder"] as? String, !connectedFolders.contains(f) { connectedFolders.append(f) }
-        case "disconnected":
-            if let f = ev["folder"] as? String {
-                connectedFolders.removeAll { $0 == f }
-                rootStatus[f] = nil
-                authClosedFolders.remove(f)
-            }
-        case "autoApprove":
-            autoApproveCount = ev["count"] as? Int ?? 0
-        case "endpoints":
-            if let w = ev["webUrl"] as? String { resolvedWebUrl = w }
-        case "browserControl":
-            browserUserControl = ev["user"] as? Bool ?? false
-        case "confirm":
-            presentConfirm(ev)
-        case "taskEnd":
-            notifyTaskEnd(taskId: ev["taskId"] as? String)
-        case "approvalPending":
-            if let taskId = ev["taskId"] as? String {
-                notifyApprovalPending(taskId: taskId, toolName: ev["toolName"] as? String ?? "")
-            }
-        default:
+        case let .connected(f):
+            if !connectedFolders.contains(f) { connectedFolders.append(f) }
+        case let .disconnected(f):
+            connectedFolders.removeAll { $0 == f }
+            rootStatus[f] = nil
+            authClosedFolders.remove(f)
+        case let .autoApprove(count):
+            autoApproveCount = Int(clamping: count)
+        case let .endpoints(_, webUrl, _):
+            resolvedWebUrl = webUrl
+        case let .browserControl(user):
+            browserUserControl = user
+        case let .confirm(id, command, taskId, base, _, sandbox):
+            presentConfirm(id: id, command: command, taskId: taskId, base: base, sandboxed: sandbox)
+        case let .taskEnd(taskId, _):
+            notifyTaskEnd(taskId: taskId)
+        case let .approvalPending(taskId, toolName, _):
+            notifyApprovalPending(taskId: taskId, toolName: toolName)
+        case .browserStopped, .exited:
             break
         }
     }
@@ -428,12 +377,7 @@ final class HelperManager: NSObject, ObservableObject {
     }
 
     /** exec 승인 — 비우회 네이티브 다이얼로그. 실행될 명령 원문·실행 폴더를 그대로 보여준다. */
-    private func presentConfirm(_ ev: [String: Any]) {
-        let id = ev["id"] as? Int ?? 0
-        let command = ev["command"] as? String ?? ""
-        let taskId = ev["taskId"] as? String
-        let base = ev["base"] as? String ?? ev["folder"] as? String ?? ""
-        let sandboxed = ev["sandbox"] as? Bool ?? false
+    private func presentConfirm(id: UInt64, command: String, taskId: String?, base: String, sandboxed: Bool) {
         let preview = command.count > 800 ? String(command.prefix(800)) + "…" : command
 
         let alert = NSAlert()
@@ -450,11 +394,11 @@ final class HelperManager: NSObject, ObservableObject {
         alert.addButton(withTitle: L("confirm.deny"))
         NSApp.activate(ignoringOtherApps: true)
         let r = alert.runModal()
-        let result: String
-        if r == .alertFirstButtonReturn { result = "yes" }
-        else if taskId != nil && r == .alertSecondButtonReturn { result = "all" }
-        else { result = "no" }
-        send(["cmd": "confirm", "id": id, "result": result])
+        let choice: ConfirmChoice
+        if r == .alertFirstButtonReturn { choice = .yes }
+        else if taskId != nil && r == .alertSecondButtonReturn { choice = .all }
+        else { choice = .no }
+        try? host?.answerConfirm(id: id, choice: choice)
     }
 
     /** 웹 작업 상세 딥링크 계약: /agent-tasks?task=<id> (admin/conversations 와 동일 패턴). */
