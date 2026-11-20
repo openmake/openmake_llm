@@ -1,0 +1,15 @@
+[package]
+name = "omk-ffi-bindgen"
+description = "omk-ffi 의 Swift 바인딩 생성기 — 빌드 시점 전용(앱에 링크되지 않는다, PR-3.2 D-230)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# omk-ffi 와 같은 판 글자.
+uniffi = { version = "=0.32.2", features = ["cli"] }
+
+[lints]
+workspace = true
