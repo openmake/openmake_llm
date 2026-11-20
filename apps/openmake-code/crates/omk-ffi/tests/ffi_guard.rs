@@ -43,7 +43,7 @@ fn toml_table(src: &str, table: &str) -> BTreeSet<String> {
     out
 }
 
-/// T-F9 — unsafe 는 lib.rs 의 허용 한 줄(생성 코드)과 cloexec.rs 뿐. 그 밖의 손 모듈은 맨 위 forbid. lints 표는 워크스페이스
+/// T-F9 — unsafe 는 lib.rs 의 허용 한 줄(생성 코드)과 cloexec.rs 뿐. 그 밖의 손 모듈은 맨 위 forbid(내보내는 선언 ffi.rs·api.rs 제외). lints 표는 워크스페이스
 /// clippy 값과 같고 unsafe 만 deny.
 #[test]
 fn unsafe_stays_in_its_two_places() {
@@ -59,7 +59,15 @@ fn unsafe_stays_in_its_two_places() {
         .collect();
     assert_eq!(
         names,
-        ["cloexec.rs", "convert.rs", "ffi.rs", "lib.rs", "run.rs"],
+        [
+            "api.rs",
+            "api_convert.rs",
+            "cloexec.rs",
+            "convert.rs",
+            "ffi.rs",
+            "lib.rs",
+            "run.rs"
+        ],
         "새 모듈이면 이 가드의 규칙을 정한다"
     );
     for (p, name) in files.iter().zip(&names) {
@@ -79,7 +87,8 @@ fn unsafe_stays_in_its_two_places() {
         } else {
             assert_eq!(tokens, 0, "{name}: unsafe 토큰");
         }
-        let exempt = ["lib.rs", "ffi.rs", "cloexec.rs"].contains(&name.as_str());
+        // api.rs 도 ffi.rs 처럼 내보내는 선언만(PR-3.3 D-250) — export 생성 코드가 unsafe 를 낸다.
+        let exempt = ["lib.rs", "ffi.rs", "api.rs", "cloexec.rs"].contains(&name.as_str());
         assert_eq!(
             s.contains("#![forbid(unsafe_code)]"),
             !exempt,
