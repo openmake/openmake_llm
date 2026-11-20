@@ -113,15 +113,18 @@ final class AppTerminationTests: XCTestCase {
     func testSignalAfterTerminationStartedDoesNothing() async {
         ProcessSetup.apply()
         let saved = AppTermination.terminate, savedRequested = AppTermination.requested
+        let savedEntered = AppTermination.entered
         let savedSignal = ProcessSetup.onTerminateSignal
         defer {
             AppTermination.terminate = saved
             AppTermination.requested = savedRequested
+            AppTermination.entered = savedEntered
             ProcessSetup.onTerminateSignal = savedSignal
         }
         AppTermination.requested = false
         _ = AppDelegate().applicationShouldTerminate(NSApplication.shared) // 시험 프로세스엔 살아 있는 호스트가 없다 — .terminateNow
         XCTAssertTrue(AppTermination.requested, "종료 진입이 요청됨을 남긴다")
+        XCTAssertTrue(AppTermination.entered, "실제 종료 진입을 남긴다")
         var calls = 0
         AppTermination.terminate = { calls += 1 }
         let hit = XCTestExpectation(description: "SIGTERM delivered")
