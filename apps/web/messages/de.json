@@ -940,7 +940,8 @@
     "status": {
       "running": "In Bearbeitung",
       "completed": "Abgeschlossen",
-      "pending": "Ausstehend"
+      "pending": "Ausstehend",
+      "waitingDevice": "Warten auf Gerät"
     },
     "statusRaw": {
       "pending": "Ausstehend",

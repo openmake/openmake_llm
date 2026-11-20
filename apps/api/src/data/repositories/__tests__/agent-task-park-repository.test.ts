@@ -52,3 +52,21 @@ describe('AgentTaskParkRepository.parkForDeviceRecovery', () => {
         expect(calls[0].params).toEqual(['t1', 'pending', 'server restarted', 'boot recovery claim', 'device_wait']);
     });
 });
+
+describe('AgentTaskParkRepository.getParkReasons', () => {
+    it('빈 목록이면 조회하지 않는다', async () => {
+        const { pool, calls } = fakePool([]);
+        await expect(new AgentTaskParkRepository(pool).getParkReasons([])).resolves.toEqual(new Map());
+        expect(calls).toHaveLength(0);
+    });
+
+    it('한 문장으로 여러 작업의 마지막 이벤트 사유를 읽고, 주차 사유가 아닌 것은 뺀다', async () => {
+        const { pool, calls } = fakePool([{ rows: [{ id: 'a', reason: 'device_wait' }, { id: 'b', reason: 'running again' }, { id: 'c', reason: null }] }]);
+        const got = await new AgentTaskParkRepository(pool).getParkReasons(['a', 'b', 'c']);
+        expect(got).toEqual(new Map([['a', 'device_wait']]));
+        expect(calls).toHaveLength(1);
+        expect(calls[0].sql).toContain('= ANY($1)');
+        expect(calls[0].sql).toContain("t.status = 'paused'");
+        expect(calls[0].params).toEqual([['a', 'b', 'c']]);
+    });
+});

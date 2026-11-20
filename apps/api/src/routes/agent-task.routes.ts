@@ -48,7 +48,7 @@ import { createBodyMw, storeMultipartInputFiles } from './agent-task-create-inpu
 import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
 import { resolveDuplicateCreate, normalizedCreateKey, rememberCreatedTask } from '../services/agent-task/create-idempotency';
-import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, sendWorkspaceFile, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
+import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, sendWorkspaceFile, toPublicTask, validateLocalExecutorInput, withWaitReasons } from './agent-task.helpers';
 import { approvalsRouter } from './agent-task-approvals.routes';
 import { forkRouter } from './agent-task-fork.routes';
 import { browserSessionRouter } from './agent-task-browser-session.routes';
@@ -239,7 +239,8 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
         : await db.getUserAgentTasks(userId);
     // ?executor=local&deviceId=…&status=failed,cancelled — CLI 목록용 부가 필터(권한 범위 무변경)
     const tasks = typeof req.query.chain === 'string' ? await chainTaskList(req) : await withChainSegmentCounts(filterTaskList(fetched, req.query)); // 루트 행에 세그먼트 수(agent-task-chain)
-    res.json(success({ tasks: tasks.map(t => toPublicTask(t as unknown as Record<string, unknown>)), total: tasks.length }));
+    const shown = await withWaitReasons(tasks); // 멈춘 작업의 대기 사유(웹 목록이 "기기 대기"를 진행중과 나눠 보인다)
+    res.json(success({ tasks: shown.map(t => toPublicTask(t as unknown as Record<string, unknown>)), total: shown.length }));
 }));
 
 /**

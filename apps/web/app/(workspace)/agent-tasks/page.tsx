@@ -71,6 +71,8 @@ interface AgentTask {
   goal: string;
   status: TaskStatus;
   rawStatus: ApiTaskStatus;
+  /** 멈춘 작업이 기다리는 것(ApiAgentTask.waitReason) — device_wait 면 목록 배지를 "기기 대기"로 나눠 보인다 */
+  waitReason?: string;
   model: string;
   elapsed: string;
   /** 시작(생성) 시각 ISO — 목록에서 경과시간과 함께 표시. */
@@ -147,7 +149,7 @@ interface ApiAgentTask {
   isolation?: AgentTaskIsolation | null;
   /** 대기열 순번(1 부터) — 대기 중일 때만 */
   queuePosition?: number;
-  /** 멈춘 작업이 기다리는 것 — device_wait(로컬 기기 연결) · hitl_parked(사용자 답) · model_wait(모델 서버 응답). 상세 응답에만 온다 */
+  /** 멈춘 작업이 기다리는 것 — device_wait(로컬 기기 연결) · hitl_parked(사용자 답) · model_wait(모델 서버 응답). 목록·상세 응답 모두 멈춘 작업에만 온다 */
   waitReason?: string;
   /** 실패 사유 (toPublicTask 가 노출하는 error 컬럼) */
   error?: string;
@@ -250,6 +252,7 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     goal: t.goal,
     status,
     rawStatus: t.status,
+    waitReason: t.waitReason,
     model: t.model || "Auto",
     elapsed: formatElapsed(tr, t.created_at, t.completed_at),
     startedAt: t.created_at,
@@ -1475,6 +1478,8 @@ export default function AgentTasksPage() {
                 ? task.chainSegmentCount ?? Math.max(1, tasks.filter((x) => x.chainRootId === task.id).length)
                 : 0;
               const handedOff = task.rawStatus === "completed" && task.completionPath === "continued";
+              // 기기 대기 주차(paused + device_wait) — 진행중으로 묶지 않고 따로 보인다(돌고 있지 않으니 회전 표시도 없다)
+              const deviceWait = task.rawStatus === "paused" && task.waitReason === "device_wait";
               const total = task.checklist.length;
               const completed = task.checklist.filter((c) => c.done).length;
               const pct = total ? Math.round((completed / total) * 100) : task.progress;
@@ -1492,12 +1497,13 @@ export default function AgentTasksPage() {
                         task.rawStatus === "cancelled" ? "warn"
                           : task.rawStatus === "failed" ? "danger"
                             : handedOff ? "accent"
-                              : meta.tone
+                              : deviceWait ? "warn"
+                                : meta.tone
                       }>
-                        {task.status === "running" && (
+                        {task.status === "running" && !deviceWait && (
                           <LoaderCircle className="h-3 w-3 animate-spin" />
                         )}
-                        {handedOff ? t("chainContinuedTag") : t(meta.labelKey)}
+                        {handedOff ? t("chainContinuedTag") : deviceWait ? t("status.waitingDevice") : t(meta.labelKey)}
                         {task.rawStatus === "failed" && ` (${t("failedTag")})`}
                         {task.rawStatus === "cancelled" && ` (${t("cancelledTag")})`}
                       </Badge>
