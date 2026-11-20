@@ -1,0 +1,57 @@
+{
+  "success": true,
+  "data": {
+    "tasks": [
+      {
+        "id": "task-synth-1",
+        "user_id": "user-synth",
+        "goal": "합성 목표",
+        "status": "completed",
+        "progress": 100,
+        "current_turn": 3,
+        "max_turns": 20,
+        "result": "합성 결과",
+        "error": null,
+        "executor": "local",
+        "device_id": "dev-synth-1",
+        "folder_rel": "sub/dir",
+        "created_at": "2026-01-01T00:00:00.000Z",
+        "updated_at": "2026-01-01T00:01:00.000Z",
+        "resumable": false,
+        "isolation": {
+          "state": "worktree",
+          "branch": "omk/task-synth-1",
+          "worktreeRel": ".worktrees/t1",
+          "rootRel": "sub/dir/.worktrees/t1",
+          "outcome": "kept",
+          "ignoredOnly": false
+        },
+        "auto_approve": false,
+        "priority": 0,
+        "input_files": [
+          {
+            "name": "a.txt",
+            "type": "text/plain",
+            "size": 3
+          }
+        ]
+      },
+      {
+        "id": "task-synth-3",
+        "goal": "합성",
+        "status": "failed",
+        "error": "합성 오류",
+        "resumable": true,
+        "isolation": {
+          "state": "direct",
+          "reason": "not_repo"
+        },
+        "queuePosition": null
+      }
+    ],
+    "total": 2
+  },
+  "meta": {
+    "timestamp": "2026-01-01T00:00:00.000Z"
+  }
+}

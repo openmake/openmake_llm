@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "data": {
+    "url": "https://viewer.invalid/a/view-synth/?k=tok_SYNTH"
+  },
+  "meta": {
+    "timestamp": "2026-01-01T00:00:00.000Z"
+  }
+}

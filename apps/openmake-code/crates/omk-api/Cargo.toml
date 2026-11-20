@@ -1,0 +1,33 @@
+[package]
+name = "omk-api"
+description = "OpenMake REST 클라이언트 — 에이전트 작업·승인·공유·브리지 상태 호출과 응답 해석(CLI api.ts 대응, PR-3.1)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# 접속·TLS(OS 신뢰 저장소, ring)와 UUID v4 를 그대로 쓴다 — 새 HTTP 추상화를 두지 않는다(D-203).
+omk-bridge-conn = { path = "../omk-bridge-conn" }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+# 런타임은 소유하지 않는다 — 호출자 런타임에서 spawn·timeout 만 쓴다.
+tokio = { version = "1.54.1", default-features = false, features = ["rt", "time"] }
+# 요청 하나당 HTTP/1 연결 하나 — 풀·HTTP/2·프록시·자동 재시도 없음.
+hyper = { version = "1.12.0", default-features = false, features = ["client", "http1"] }
+hyper-util = { version = "0.1.21", default-features = false, features = ["tokio"] }
+http-body-util = "0.1.5"
+url = "2.5.8"
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+
+[dev-dependencies]
+# 실제 Idempotency-Key 를 OpenAPI pattern 으로 검사한다(workspace patch 적용, 새 패키지 아님).
+regress = "0.12.0"
+# 자체 서명 TLS 거부 시험 — 키를 저장소에 두지 않는다.
+rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "ring"] }
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
+tokio = { version = "1.54.1", default-features = false, features = ["rt", "time", "net", "io-util", "sync"] }
+
+[lints]
+workspace = true

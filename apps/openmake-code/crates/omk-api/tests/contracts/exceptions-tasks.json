@@ -1,0 +1,238 @@
+{
+  "_comment": "미문서 operation·필드의 정확한 예외(D-201 A안·D-208). wildcard 금지. 문서가 생기면 테스트가 실패해 대조 대상으로 승격한다. 계약 보강은 U-10(단계 ④ 이후 별도 서버 PR).",
+  "exceptions": [
+    {
+      "operation": "CreateTask",
+      "kind": "fields",
+      "reason": "OpenAPI 의 생성 응답 task 는 id/goal/status 만 정의(additionalProperties=true 는 개별 필드 문서화가 아니다). 나머지 사용 필드는 서버 toPublicTask 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task.routes.ts:134,208,216 success({task: toPublicTask(...)}), apps/api/src/routes/agent-task.helpers.ts:123 toPublicTask, packages/shared-types/src/agent-task-isolation.ts:1 AgentTaskIsolation",
+      "consumerPR": [
+        "3.4",
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [],
+      "body": [],
+      "response": [
+        "data.task.created_at",
+        "data.task.device_id",
+        "data.task.error",
+        "data.task.executor",
+        "data.task.folder_rel",
+        "data.task.isolation",
+        "data.task.isolation.branch",
+        "data.task.isolation.ignoredOnly",
+        "data.task.isolation.outcome",
+        "data.task.isolation.reason",
+        "data.task.isolation.rootRel",
+        "data.task.isolation.state",
+        "data.task.isolation.worktreeRel",
+        "data.task.progress",
+        "data.task.result",
+        "data.task.resumable",
+        "data.task.updated_at"
+      ]
+    },
+    {
+      "operation": "GetTask",
+      "kind": "operation",
+      "method": "get",
+      "path": "/api/agent-tasks/{taskId}",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task.routes.ts:254 success(detailPayload), apps/api/src/routes/agent-task-chain.ts:91 detailPayload, apps/api/src/routes/agent-task.helpers.ts:123 toPublicTask, packages/shared-types/src/agent-task-isolation.ts:1 AgentTaskIsolation, apps/api/src/data/models/unified-database.types.ts:188 AgentTaskStep",
+      "consumerPR": [
+        "3.3",
+        "3.4",
+        "3.5",
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [],
+      "body": [],
+      "response": [
+        "data",
+        "data.steps",
+        "data.steps[]",
+        "data.steps[].content",
+        "data.steps[].created_at",
+        "data.steps[].step_number",
+        "data.steps[].step_type",
+        "data.steps[].tool_name",
+        "data.task",
+        "data.task.created_at",
+        "data.task.device_id",
+        "data.task.error",
+        "data.task.executor",
+        "data.task.folder_rel",
+        "data.task.goal",
+        "data.task.id",
+        "data.task.isolation",
+        "data.task.isolation.branch",
+        "data.task.isolation.ignoredOnly",
+        "data.task.isolation.outcome",
+        "data.task.isolation.reason",
+        "data.task.isolation.rootRel",
+        "data.task.isolation.state",
+        "data.task.isolation.worktreeRel",
+        "data.task.progress",
+        "data.task.result",
+        "data.task.resumable",
+        "data.task.status",
+        "data.task.updated_at",
+        "success"
+      ]
+    },
+    {
+      "operation": "ExecuteTask",
+      "kind": "operation",
+      "method": "post",
+      "path": "/api/agent-tasks/{taskId}/execute",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task.routes.ts:342 success({message,taskId,queued})",
+      "consumerPR": [
+        "3.4",
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [],
+      "body": [],
+      "response": [
+        "data",
+        "data.message",
+        "data.queued",
+        "data.taskId",
+        "success"
+      ]
+    },
+    {
+      "operation": "ListTasks",
+      "kind": "operation",
+      "method": "get",
+      "path": "/api/agent-tasks",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task.routes.ts:242 success({tasks,total}), apps/api/src/routes/agent-task.helpers.ts filterTaskList(executor/deviceId/status), apps/api/src/routes/agent-task.helpers.ts:123 toPublicTask, packages/shared-types/src/agent-task-isolation.ts:1 AgentTaskIsolation",
+      "consumerPR": [
+        "3.3",
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [
+        "deviceId",
+        "executor",
+        "status"
+      ],
+      "body": [],
+      "response": [
+        "data",
+        "data.tasks",
+        "data.tasks[]",
+        "data.tasks[].created_at",
+        "data.tasks[].device_id",
+        "data.tasks[].error",
+        "data.tasks[].executor",
+        "data.tasks[].folder_rel",
+        "data.tasks[].goal",
+        "data.tasks[].id",
+        "data.tasks[].isolation",
+        "data.tasks[].isolation.branch",
+        "data.tasks[].isolation.ignoredOnly",
+        "data.tasks[].isolation.outcome",
+        "data.tasks[].isolation.reason",
+        "data.tasks[].isolation.rootRel",
+        "data.tasks[].isolation.state",
+        "data.tasks[].isolation.worktreeRel",
+        "data.tasks[].progress",
+        "data.tasks[].result",
+        "data.tasks[].resumable",
+        "data.tasks[].status",
+        "data.tasks[].updated_at",
+        "data.total",
+        "success"
+      ]
+    },
+    {
+      "operation": "ListSteps",
+      "kind": "operation",
+      "method": "get",
+      "path": "/api/agent-tasks/{taskId}/steps",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task.routes.ts:266 success({steps,total}), apps/api/src/data/models/unified-database.types.ts:188 AgentTaskStep",
+      "consumerPR": [
+        "3.3",
+        "3.5",
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [],
+      "body": [],
+      "response": [
+        "data",
+        "data.steps",
+        "data.steps[]",
+        "data.steps[].content",
+        "data.steps[].created_at",
+        "data.steps[].step_number",
+        "data.steps[].step_type",
+        "data.steps[].tool_name",
+        "data.total",
+        "success"
+      ]
+    },
+    {
+      "operation": "ListSubagents",
+      "kind": "operation",
+      "method": "get",
+      "path": "/api/agent-tasks/{taskId}/subagents",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task-subagent.routes.ts:88 success({traces}) groupSubagentSteps",
+      "consumerPR": [
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [],
+      "body": [],
+      "response": [
+        "data",
+        "data.traces",
+        "data.traces[]",
+        "data.traces[].finishedAt",
+        "data.traces[].label",
+        "data.traces[].origin",
+        "data.traces[].startedAt",
+        "data.traces[].status",
+        "data.traces[].steps",
+        "data.traces[].steps[]",
+        "data.traces[].steps[].at",
+        "data.traces[].steps[].content",
+        "data.traces[].steps[].seq",
+        "data.traces[].steps[].tool",
+        "data.traces[].steps[].type",
+        "data.traces[].subIndex",
+        "data.traces[].traceId",
+        "success"
+      ]
+    },
+    {
+      "operation": "ResumeTask",
+      "kind": "operation",
+      "method": "post",
+      "path": "/api/agent-tasks/{taskId}/resume",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/agent-task.routes.ts:416 success({message,taskId,queued})",
+      "consumerPR": [
+        "3.5",
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [],
+      "body": [],
+      "response": [
+        "data",
+        "data.message",
+        "data.queued",
+        "data.taskId",
+        "success"
+      ]
+    }
+  ]
+}
