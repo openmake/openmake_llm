@@ -244,7 +244,8 @@ final class HelperManager: NSObject, ObservableObject {
 
     // ── 사용자 액션 ──
 
-    /** 폴더 연결 — 권한 부여의 유일한 발원: 사용자가 패널에서 직접 고른 폴더만 헬퍼로 전달된다. */
+    /** 폴더 연결 — 권한 부여의 유일한 발원: 사용자가 패널에서 직접 고른 폴더만 헬퍼로 전달된다. 패널은 main 큐 블록 밖에서
+        돌린다(AppTermination.runModal). */
     func chooseFolderAndConnect() {
         let panel = NSOpenPanel()
         panel.title = L("panel.title")
@@ -252,9 +253,11 @@ final class HelperManager: NSObject, ObservableObject {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
-        NSApp.activate(ignoringOtherApps: true)
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        connect(folder: url.path)
+        Task {
+            guard await AppTermination.runModal({ NSApp.activate(ignoringOtherApps: true); return panel.runModal() }) == .OK,
+                  let url = panel.url else { return }
+            connect(folder: url.path)
+        }
     }
 
     func connect(folder: String) {
