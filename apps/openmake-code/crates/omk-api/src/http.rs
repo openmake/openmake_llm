@@ -18,7 +18,7 @@ use url::Url;
 
 use crate::error::{ApiError, ServerError};
 
-/// 요청 한도 — 호출자가 반드시 정한다(제품 기본값은 3.2 호출부가 확정). 0 은 거부한다.
+/// 요청 한도 — 호출자가 반드시 정한다(제품 기본값은 소비자(앱: `omk-ffi` `api_convert.rs`, PR-3.3)가 정한다). 0 은 거부한다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RequestLimits {
     /// 접속부터 본문 끝까지 전체 시간.
