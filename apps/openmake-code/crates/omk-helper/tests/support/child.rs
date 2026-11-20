@@ -9,6 +9,9 @@ use serde_json::Value;
 
 use super::{TmpDir, WAIT};
 
+/// 종료 뒤 stderr EOF 를 기다리는 상한.
+const STDERR_WAIT: Duration = Duration::from_secs(5);
+
 #[derive(Default)]
 pub struct Out {
     /// stdout 원문 바이트 전부(키 검색용)
@@ -16,6 +19,7 @@ pub struct Out {
     pub events: Vec<Value>,
     pub stderr: Vec<u8>,
     pub stdout_closed: bool,
+    pub stderr_closed: bool,
 }
 
 pub struct Helper {
@@ -91,7 +95,11 @@ impl Helper {
         std::thread::spawn(move || {
             let mut v = Vec::new();
             let _ = se.read_to_end(&mut v);
-            o.0.lock().unwrap().stderr = v;
+            let (m, cv) = &*o;
+            let mut g = m.lock().unwrap();
+            g.stderr = v;
+            g.stderr_closed = true;
+            cv.notify_all();
         });
         let stdin = child.stdin.take();
         Helper {
@@ -172,10 +180,11 @@ impl Helper {
         while !g.stdout_closed && Instant::now() < end {
             g = cv.wait_timeout(g, Duration::from_millis(50)).unwrap().0;
         }
-        drop(g);
-        // stderr 스레드가 끝나기를 잠깐 기다린다
-        std::thread::sleep(Duration::from_millis(50));
-        let g = m.lock().unwrap();
+        // stderr 는 EOF 까지 읽혀야 한다 — 고정 50ms 대기는 부하 때 빈 stderr 로 읽혔다(PR-3.2 리뷰 r1 Low-2). 상한은 넉넉히.
+        let end = Instant::now() + STDERR_WAIT;
+        while !g.stderr_closed && Instant::now() < end {
+            g = cv.wait_timeout(g, Duration::from_millis(50)).unwrap().0;
+        }
         (g.raw.clone(), g.stderr.clone())
     }
 
