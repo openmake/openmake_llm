@@ -1,6 +1,6 @@
 //! 주 actor(D-92) — 상태(루트 표·확인 대기 표·확인 순번·종료 중 표식·주소 찾기 결과·쌓인 connect)를 혼자 쥔다. 자물쇠가 없다 —
-//! Node 의 단일 스레드와 같은 순서 보장. 들어오는 것은 채널 하나(stdin 줄·끝, 신호, 코어의 확인 요청, 일괄 승인 변화, 주소 찾기
-//! 완료). 콜백(상태·알림·작업 끝·일괄 승인 변화·확인)은 채널에 넣거나 `emit` 만 한다.
+//! Node 의 단일 스레드와 같은 순서 보장. 들어오는 것은 채널 하나(어댑터의 명령·입력 끝·패닉 알림, 코어의 확인 요청, 일괄 승인
+//! 변화, 주소 찾기 완료). 콜백(상태·알림·작업 끝·일괄 승인 변화·확인)은 채널에 넣거나 `emit` 만 한다.
 
 mod roots;
 mod shutdown;
@@ -17,14 +17,13 @@ use omk_bridge_core::exec::{ConfirmAnswer, ConfirmRequest};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Sleep;
 
-use crate::commands::{self, Command};
-use crate::events::{self, IDLE_TEXT};
+use crate::command::Command;
+use crate::event::{Emit, Event, IDLE_TEXT};
 use crate::host::{self, Host};
-use crate::stdio::{self, Emitter, Input};
+use crate::serve::{Input, Rx, Tx};
 
 pub(crate) enum Msg {
     Input(Input),
-    Signal,
     /// 주소 찾기와 호스트 이름 조회가 끝났다.
     Ready(ServerEndpoints, String),
     Confirm {
@@ -34,8 +33,6 @@ pub(crate) enum Msg {
     },
     AutoApproveChanged,
 }
-
-pub(crate) type Tx = mpsc::UnboundedSender<Msg>;
 
 /// 넣은 주소에서 연결·웹 주소를 정한다(5초 제한은 조회기 안). 잘못된 주소·조회기 생성 실패는 넣은 값 그대로(TS `catch`).
 pub async fn discover(server: &str) -> ServerEndpoints {
@@ -59,8 +56,8 @@ struct Ready {
 }
 
 pub(crate) struct App {
-    emit: Emitter,
-    tx: Tx,
+    emit: Emit,
+    tx: mpsc::UnboundedSender<Msg>,
     host: Arc<Host>,
     key: Arc<roots::Secret>,
     connector: Result<Arc<dyn Connector>, String>,
@@ -80,18 +77,14 @@ pub(crate) struct App {
 }
 
 /// 일반 실행 — 끝나면 종료 코드(언제나 0).
-pub async fn run(server: String, host: Host, emit: Emitter) -> i32 {
-    let (tx, rx) = mpsc::unbounded_channel();
-    shutdown::forward_signals(&tx);
-    emit.emit(events::status_global(IDLE_TEXT, "idle"));
-    let t = tx.clone();
+pub(crate) async fn run(server: String, host: Host, emit: Emit, tx: Tx, rx: Rx) -> i32 {
+    emit.emit(Event::status_global(IDLE_TEXT, "idle"));
+    let t = tx.0.clone();
     tokio::spawn(async move {
         let (e, h) = tokio::join!(discover(&server), host::hostname());
         let _ = t.send(Msg::Ready(e, h));
     });
-    let t = tx.clone();
-    stdio::spawn_stdin_reader(move |i| t.send(Msg::Input(i)).is_ok());
-    App::new(emit, tx, host).run_loop(rx).await
+    App::new(emit, tx.0, host).run_loop(rx.0).await
 }
 
 async fn stop_due(t: &mut Option<Pin<Box<Sleep>>>) {
@@ -102,7 +95,7 @@ async fn stop_due(t: &mut Option<Pin<Box<Sleep>>>) {
 }
 
 impl App {
-    fn new(emit: Emitter, tx: Tx, host: Host) -> App {
+    fn new(emit: Emit, tx: mpsc::UnboundedSender<Msg>, host: Host) -> App {
         App {
             emit,
             tx,
@@ -139,14 +132,10 @@ impl App {
 
     fn handle(&mut self, m: Msg) {
         match m {
-            Msg::Input(Input::Line(l)) => {
-                if let Some(c) = commands::parse(&l) {
-                    self.command(c);
-                }
-            }
-            Msg::Input(Input::End) | Msg::Signal => self.start_shutdown(),
+            Msg::Input(Input::Command(c)) => self.command(c),
+            Msg::Input(Input::End | Input::Abort) => self.start_shutdown(),
             Msg::Ready(e, hostname) => {
-                self.emit.emit(events::endpoints(&e));
+                self.emit.emit(Event::endpoints(&e));
                 self.ready = Some(Ready {
                     bridge_url: e.bridge_url,
                     hostname,
@@ -179,11 +168,11 @@ impl App {
             Command::ClearAutoApprove => self.roots.clear_auto_approve(),
             Command::BrowserControl(user) => {
                 self.roots.browser_control(user);
-                self.emit.emit(events::browser_control(user));
+                self.emit.emit(Event::browser_control(user));
             }
             Command::BrowserStop => {
                 self.roots.stop_browser();
-                self.emit.emit(events::browser_stopped());
+                self.emit.emit(Event::browser_stopped());
             }
             Command::Quit => self.start_shutdown(),
         }
@@ -203,7 +192,7 @@ impl App {
         self.confirm_seq += 1;
         let id = self.confirm_seq;
         self.confirms.insert(id, reply);
-        self.emit.emit(events::confirm(
+        self.emit.emit(Event::confirm(
             id,
             &req.command,
             req.task_id.as_deref(),
@@ -216,6 +205,6 @@ impl App {
     /// 낸 시점의 모든 루트 합(D-96·D-106-7).
     fn emit_auto_approve(&self) {
         self.emit
-            .emit(events::auto_approve(self.roots.auto_approved_total()));
+            .emit(Event::auto_approve(self.roots.auto_approved_total()));
     }
 }

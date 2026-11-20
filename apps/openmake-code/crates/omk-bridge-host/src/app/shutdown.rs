@@ -1,31 +1,13 @@
-//! 종료 정리(D-97) — stdin 끝·`quit`·SIGTERM·SIGINT 가 같은 길을 탄다. 이미 종료 중이면 무시한다(앱의 `stopHelper` 는
-//! `quit` 1초 뒤 `terminate()` 를 보낸다 — 두 번째 계기가 정리를 끊지 않는다).
+//! 종료 정리(D-97) — 입력 끝(stdin 끝·FFI 핸들 놓음·신호)·`quit`·패닉 알림이 같은 길을 탄다. 이미 종료 중이면 무시한다
+//! (두 번째 계기가 정리를 끊지 않는다). 신호 처리기는 이 크레이트가 달지 않는다 — 헬퍼가 달아 입력 끝으로 넣는다(PR-3.2 D-228).
 
 use std::time::Duration;
 
+use super::App;
 use omk_bridge_core::exec::ConfirmAnswer;
-use tokio::signal::unix::{SignalKind, signal};
-
-use super::{App, Msg, Tx};
 
 /// 거부 결과가 서버로 나갈 시간(TS `setTimeout 100`).
 pub const SHUTDOWN_FLUSH_MS: u64 = 100;
-
-/// SIGTERM·SIGINT → actor. 처리기를 달지 못하면 그 신호는 기본 동작(죽음)대로 둔다.
-pub(super) fn forward_signals(tx: &Tx) {
-    for kind in [SignalKind::terminate(), SignalKind::interrupt()] {
-        if let Ok(mut s) = signal(kind) {
-            let tx = tx.clone();
-            tokio::spawn(async move {
-                while s.recv().await.is_some() {
-                    if tx.send(Msg::Signal).is_err() {
-                        return;
-                    }
-                }
-            });
-        }
-    }
-}
 
 impl App {
     /// 1. 종료 중 표식, 확인 대기 전부 거부 → 2. 100ms 뒤 [`finish_shutdown`]. 그 사이 actor 는 메시지를 계속 처리한다.

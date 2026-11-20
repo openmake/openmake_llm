@@ -679,6 +679,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "omk-bridge-host"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "omk-bridge-conn",
+ "omk-bridge-core",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+]
+
+[[package]]
 name = "omk-helper"
 version = "0.1.0"
 dependencies = [
@@ -686,6 +698,7 @@ dependencies = [
  "log",
  "omk-bridge-conn",
  "omk-bridge-core",
+ "omk-bridge-host",
  "serde_json",
  "tokio",
  "tokio-tungstenite",

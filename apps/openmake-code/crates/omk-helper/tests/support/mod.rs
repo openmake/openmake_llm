@@ -8,6 +8,7 @@
 
 pub mod child;
 pub mod flow;
+#[path = "../../../omk-bridge-host/tests/support/server.rs"]
 pub mod server;
 
 use std::path::{Path, PathBuf};
