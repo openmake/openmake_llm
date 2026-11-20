@@ -94,7 +94,9 @@ final class Updater: ObservableObject {
                 HelperManager.shared.restartAfterUpdateFailure()
                 throw error
             }
-            NSApp.terminate(nil)
+            // 이 자리는 Task @MainActor(main 큐 작업) 안이다 — 호스트가 상한 안에 끝나지 않았거나 그 사이 새로 떴으면
+            // .terminateLater reply 가 교착하므로 run loop 소스로 넘긴다(R-10).
+            AppTermination.request()
         } catch let e as UpdateError {
             if case let .message(m) = e, interactive { info(L("update.failed.title"), m) }
         } catch {
