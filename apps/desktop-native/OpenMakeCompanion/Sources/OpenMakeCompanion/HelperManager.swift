@@ -42,13 +42,25 @@ final class HelperManager: NSObject, ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: "browserEnabled") }
     }
 
-    private var host: BridgeHost?
+    private var host: BridgeHostProtocol?
+    /** 호스트 시작 — 시험이 가짜 호스트로 바꾼다. */
+    var startHost: @MainActor (HostConfig, String, HostListener) throws -> BridgeHostProtocol = {
+        try BridgeHost.start(config: $0, apiKey: $1, listener: $2)
+    }
+    /** exec 승인 창 띄우기 — 시험이 바꾼다. */
+    var showConfirm: @MainActor (NSAlert) -> NSApplication.ModalResponse = {
+        NSApp.activate(ignoringOtherApps: true)
+        return $0.runModal()
+    }
     /** 호스트 세대 — 시작마다 +1. 옛 세대의 이벤트는 relay 가 거른다(exited 만 통과). */
     private var hostGeneration = 0
     /** exited 를 아직 내지 않은 호스트들의 세대(지금 것 + 끄는 중인 것) — 앱 종료는 이것이 빌 때까지, 재기동은 끈 세대가 빠질 때까지 기다린다. */
     private var liveGenerations: Set<Int> = []
     /** 재기동 세대 — 대기 중 재기동이 또 예약되면 마지막 것만 연결한다. */
     private var restartGeneration = 0
+    /** 앱 종료·업데이트 정리 중 — 새 호스트를 띄우지 않는다(폴더 연결·다시 시도·재기동). 업데이트 교체 실패로 앱을 계속 쓸 때만
+        푼다(Astra r1 M-1). */
+    private var terminating = false
     /** 끄는 호스트를 기다리는 상한 — 호스트 종료의 최악(Chrome 정리 포함 약 8.6초) + 여유. 같은 프로세스라 강제 종료가 없다. */
     static let hostStopLimit: TimeInterval = 12
 
@@ -129,6 +141,7 @@ final class HelperManager: NSObject, ObservableObject {
 
     private func ensureHelper() -> Bool {
         if host != nil { return true }
+        if terminating { return false }
         if instanceBlocked { return false } // 상태 문구(충돌·잠금 실패)를 그대로 둔다
         // 테스트 훅(개발/E2E 전용): env key 가 있으면 Keychain 대신 사용 — Electron 의
         // OMK_BRIDGE_TOKEN 관행과 동일 계열. ProcessSetup 이 기동 첫 줄에서 읽고 환경에서 지웠다(D-229).
@@ -145,8 +158,7 @@ final class HelperManager: NSObject, ObservableObject {
             onEvent: { [weak self] e in self?.handle(e) },
             onExited: { [weak self] g, _ in self?.hostExited(generation: g) })
         do {
-            host = try BridgeHost.start(
-                config: HostConfig(server: serverAddress, browserEnabled: browserEnabled), apiKey: apiKey, listener: relay)
+            host = try startHost(HostConfig(server: serverAddress, browserEnabled: browserEnabled), apiKey, relay)
         } catch HostStartError.ApiKeyRequired {
             statusText = L("status.apiKeyRequired")
             return false
@@ -181,8 +193,11 @@ final class HelperManager: NSObject, ObservableObject {
         authClosedFolders = []
     }
 
-    /** 호스트를 끄고 모든 호스트의 exited 를 기다린다(상한 hostStopLimit) — 앱 종료·업데이트 교체 전(D-233). */
+    /** 호스트를 끄고 모든 호스트의 exited 를 기다린다(상한 hostStopLimit) — 앱 종료·업데이트 교체 전(D-233). 예약된 재기동은
+        무효로 하고 새 호스트를 막는다 — 대기 중 새 호스트가 뜨면 정리 없이 끝나거나 상한까지 기다린다(Astra r1 M-1). */
     func stopHostAndWait() async {
+        terminating = true
+        restartGeneration += 1
         stopHelper()
         await waitForHostsToExit(retiring: nil, restart: nil)
     }
@@ -223,6 +238,7 @@ final class HelperManager: NSObject, ObservableObject {
 
     /** 업데이트 교체 스크립트를 띄우지 못했다 — 앱이 끝나지 않으므로 끈 호스트를 되살린다(D-233(r2)). */
     func restartAfterUpdateFailure() {
+        terminating = false
         restartHelper()
     }
 
@@ -403,8 +419,7 @@ final class HelperManager: NSObject, ObservableObject {
         alert.addButton(withTitle: L("confirm.run"))
         if taskId != nil { alert.addButton(withTitle: L("confirm.runAll")) }
         alert.addButton(withTitle: L("confirm.deny"))
-        NSApp.activate(ignoringOtherApps: true)
-        let r = alert.runModal()
+        let r = showConfirm(alert)
         let choice: ConfirmChoice
         if r == .alertFirstButtonReturn { choice = .yes }
         else if taskId != nil && r == .alertSecondButtonReturn { choice = .all }
