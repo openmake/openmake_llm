@@ -109,3 +109,24 @@ private func nestedModalDrainsMainQueue() -> Bool {
     }
     return drained
 }
+
+/** 같은 종류 후보(Astra r1 H-1 후속 3) — 호스트가 살아 있을 수 있는 자리의 모달은 모두 AppTermination.runModal 을 거친다.
+    남는 직접 runModal 은 둘뿐: 승인 창 기본 표시(runModal 안에서 불린다)와 이전 안내(LegacyMigration.alert — 호스트 기동 전). */
+final class ModalSitesTests: XCTestCase {
+    func testDirectRunModalOnlyInAllowedPlaces() throws {
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Sources/OpenMakeCompanion")
+        var direct: [String] = []
+        for f in try FileManager.default.contentsOfDirectory(at: sources, includingPropertiesForKeys: nil)
+        where f.pathExtension == "swift" {
+            for line in try String(contentsOf: f, encoding: .utf8).split(separator: "\n")
+            where line.contains("runModal()") && !line.contains("AppTermination.runModal") {
+                direct.append("\(f.lastPathComponent): \(line.trimmingCharacters(in: .whitespaces))")
+            }
+        }
+        XCTAssertEqual(direct.sorted(), [
+            "HelperManager.swift: return $0.runModal()",
+            "LegacyMigration.swift: return makeAlert(title, body, buttons: buttons).runModal() == .alertFirstButtonReturn",
+        ])
+    }
+}
