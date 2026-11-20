@@ -57,7 +57,7 @@ private func nestedLoopDrainsMainQueue() -> Bool {
 final class AppTerminationTests: XCTestCase {
     func testRequestInsideMainQueueBlockRunsAfterBlockAndCanDrainMainQueue() async {
         let saved = AppTermination.terminate
-        defer { AppTermination.terminate = saved }
+        defer { AppTermination.terminate = saved; AppTermination.requested = false }
         let done = XCTestExpectation(description: "terminate")
         var blockEnded = false
         var ranAfterBlock = false
@@ -81,7 +81,7 @@ final class AppTerminationTests: XCTestCase {
     func testSignalDefaultGoesThroughRequest() async {
         ProcessSetup.apply()
         let saved = AppTermination.terminate
-        defer { AppTermination.terminate = saved }
+        defer { AppTermination.terminate = saved; AppTermination.requested = false }
         let done = XCTestExpectation(description: "terminate via SIGTERM")
         var drained = false
         AppTermination.terminate = {
