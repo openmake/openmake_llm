@@ -39,7 +39,6 @@
 "status.folderOpenFailed" = "无法打开文件夹：%@";
 "status.instance_conflict" = "另一个 OpenMake Code 已在运行（%@）";
 "status.instance_lock_failed" = "无法锁定应用数据文件夹，因此未连接";
-"status.helperMissing" = "缺少辅助程序资源（需要重新安装）";
 "status.helperExited" = "辅助程序已停止 — 请重新连接";
 "status.helperLaunchFailed" = "无法启动辅助程序：%@";
 /* Connection status — 因认证原因断开 */

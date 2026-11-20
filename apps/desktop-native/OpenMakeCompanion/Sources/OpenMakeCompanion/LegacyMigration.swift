@@ -338,24 +338,33 @@ enum LegacyMigration {
         return .proceed(trash: plan.offerTrash ? bundle : nil)
     }
 
-    /** 휴지통 안내 한 번(D-160) — 답과 무관하게 상태는 이미 끝 상태로 적혀 있다. */
+    /** 휴지통 안내 한 번(D-160) — 답과 무관하게 상태는 이미 끝 상태로 적혀 있다. 호스트를 띄운 뒤라 창은 main 큐 블록 밖에서
+        돌린다(AppTermination.runModal) — 안에서 돌면 창이 떠 있는 동안 호스트 이벤트·신호가 멈춘다. */
     @MainActor
     static func offerTrash(_ url: URL) {
-        if alert(L("migration.trash.title"), L("migration.trash.body"), buttons: [L("migration.trash.move"), L("migration.trash.keep")]) {
+        let a = makeAlert(L("migration.trash.title"), L("migration.trash.body"), buttons: [L("migration.trash.move"), L("migration.trash.keep")])
+        Task {
+            guard await AppTermination.runModal({ NSApp.activate(ignoringOtherApps: true); return a.runModal() })
+                == .alertFirstButtonReturn else { return }
             NSWorkspace.shared.recycle([url]) { _, error in
                 if error != nil { NSLog("OpenMake Code migration: trash failed") }
             }
         }
     }
 
-    /** 첫 버튼을 눌렀으면 true. 버튼이 없으면 확인 버튼 하나. */
+    /** 첫 버튼을 눌렀으면 true. 버튼이 없으면 확인 버튼 하나. 이전 흐름(호스트 기동 전)에서만 바로 띄운다. */
     @MainActor @discardableResult
     static func alert(_ title: String, _ body: String, buttons: [String]) -> Bool {
+        NSApp.activate(ignoringOtherApps: true)
+        return makeAlert(title, body, buttons: buttons).runModal() == .alertFirstButtonReturn
+    }
+
+    @MainActor
+    static func makeAlert(_ title: String, _ body: String, buttons: [String]) -> NSAlert {
         let a = NSAlert()
         a.messageText = title
         a.informativeText = body
         for b in buttons { a.addButton(withTitle: b) }
-        NSApp.activate(ignoringOtherApps: true)
-        return a.runModal() == .alertFirstButtonReturn
+        return a
     }
 }

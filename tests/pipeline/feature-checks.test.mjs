@@ -420,6 +420,8 @@ test('the org-specific removal change set selects a real suite for every non-API
     'apps/desktop-native/build.sh': 'desktopBuild',
     'apps/desktop-native/lib/node-bundle.sh': 'desktopBuild',
     'apps/desktop-native/lib/node-bundle.test.mjs': 'desktopBuild',
+    'apps/desktop-native/lib/ffi.sh': 'desktopBuild',
+    'apps/desktop-native/lib/ffi.test.mjs': 'desktopBuild',
     'apps/desktop-windows/src/store.mjs': 'desktopWindows',
     'db/init/004-admin-user.sh': 'infra',
     'infra/db-init-admin-user.test.mjs': 'infra',
@@ -463,7 +465,7 @@ test('desktop, CLI and admin-init fixtures referenced by the new suites exist', 
   const { existsSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
   const root = fileURLToPath(new URL('../../', import.meta.url));
-  for (const file of ['apps/desktop-windows/test/store.test.mjs', 'apps/desktop-native/helper/harness.cjs', 'apps/desktop-native/lib/node-bundle.test.mjs', 'apps/cli/test/login-default.test.mjs',
+  for (const file of ['apps/desktop-windows/test/store.test.mjs', 'apps/desktop-native/helper/harness.cjs', 'apps/desktop-native/lib/node-bundle.test.mjs', 'apps/desktop-native/lib/ffi.test.mjs', 'apps/cli/test/login-default.test.mjs',
     'infra/db-init-admin-user.test.mjs', 'scripts/setup/gen-env.test.mjs', 'scripts/setup/colima-selection.test.sh']) {
     assert.ok(existsSync(`${root}${file}`), file);
   }
@@ -513,21 +515,23 @@ test('desktop helper fails when the bundle fails (any platform) or the harness f
   assert.throws(() => runFeatures(files, { cwd: harness.root, platform: 'darwin', stdio: 'ignore', env: childEnv }), /failed \(1\)/);
 });
 
-// build.sh → the node-bundle fixture (fake otool/curl, so no darwin split); a failing fixture fails the run.
-test('desktop build runs the node-bundle fixture on every platform and fails when it fails', async t => {
+// build.sh → the node-bundle and ffi fixtures (fake otool/curl, fake cargo/xcodebuild, so no darwin split); a failing fixture fails the run.
+test('desktop build runs the node-bundle and ffi fixtures on every platform and fails when either fails', async t => {
   const { runFeatures } = await import('../../scripts/ci/feature-checks.mjs');
   const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } = await import('node:fs');
   const { join } = await import('node:path');
   const { tmpdir } = await import('node:os');
-  for (const failing of [false, true]) {
+  for (const failing of [null, 'node-bundle', 'ffi']) {
     const root = mkdtempSync(join(tmpdir(), 'omk-desktop-build-'));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const log = join(root, 'ran.log');
     mkdirSync(join(root, 'apps/desktop-native/lib'), { recursive: true });
-    writeFileSync(join(root, 'apps/desktop-native/lib/node-bundle.test.mjs'), `import { appendFileSync } from 'node:fs';\nappendFileSync(${JSON.stringify(log)}, 'node-bundle\\n');${failing ? ' process.exit(1);' : ''}\n`);
+    for (const name of ['node-bundle', 'ffi']) {
+      writeFileSync(join(root, `apps/desktop-native/lib/${name}.test.mjs`), `import { appendFileSync } from 'node:fs';\nappendFileSync(${JSON.stringify(log)}, '${name}\\n');${failing === name ? ' process.exit(1);' : ''}\n`);
+    }
     const run = () => runFeatures(['apps/desktop-native/build.sh'], { cwd: root, platform: 'linux', stdio: 'ignore', env: childEnv });
     if (failing) assert.throws(run, /failed \(1\)/);
     else run();
-    assert.equal(readFileSync(log, 'utf8'), 'node-bundle\n');
+    assert.deepEqual(readFileSync(log, 'utf8').split('\n').filter(Boolean).sort(), ['ffi', 'node-bundle']);
   }
 });

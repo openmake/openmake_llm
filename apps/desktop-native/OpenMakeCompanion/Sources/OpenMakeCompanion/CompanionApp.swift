@@ -22,6 +22,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
+    /** 끝나지 않은 브리지 호스트가 있으면 끄고 exited 를 기다린 뒤(상한 12초) 끝낸다 — 같은 프로세스라 먼저 끝나면 Chrome·exec
+        자식 정리가 끊긴다(PR-3.2 D-233). 메뉴 종료·SIGTERM·SIGINT·로그아웃 모두 여기를 지난다. 종료 진입을 남겨(didEnter) 뒤따르는
+        신호·업데이트·메뉴 요청과 이미 예약된 종료 콜백이 대기 중 terminate 에 다시 들어가지 않게 하고, 대기 중 새 모달(승인 창)도
+        띄우지 않는다(Opus r4 M-1·L-1, Astra r3 H-1). */
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        MainActor.assumeIsolated {
+            AppTermination.didEnter()
+            let helper = HelperManager.shared
+            guard helper.hasLiveHost else { return .terminateNow }
+            Task { @MainActor in
+                await helper.stopHostAndWait()
+                NSApp.reply(toApplicationShouldTerminate: true)
+            }
+            return .terminateLater
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         Task { @MainActor in HelperManager.shared.stopHelper() }
     }
@@ -46,6 +63,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 struct CompanionApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var helper = HelperManager.shared
+
+    init() {
+        // 맨 먼저 — SIGPIPE·SIGTERM·SIGINT 와 개발 훅 키(환경에서 지움). HelperManager 보다 앞서야 한다(PR-3.2 D-229(r2)).
+        ProcessSetup.apply()
+    }
 
     var body: some Scene {
         MenuBarExtra("OpenMake", systemImage: !helper.connectedFolders.isEmpty ? "folder.badge.gearshape" : "folder.badge.questionmark") {
@@ -102,10 +124,7 @@ struct MenuContent: View {
             NSApp.activate(ignoringOtherApps: true)
         }
         Divider()
-        Button(L("menu.quit")) {
-            helper.stopHelper()
-            NSApp.terminate(nil)
-        }
+        Button(L("menu.quit")) { AppTermination.request() } // 정리는 applicationShouldTerminate(stopHostAndWait) — Astra r3 H-1
     }
 }
 

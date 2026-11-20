@@ -35,7 +35,7 @@ concurrency:
 
 jobs:
   companion:
-    name: OpenMake Code (omk-helper → harness → Swift build → dmg)
+    name: OpenMake Code (omk-helper → harness → omk-ffi → Swift build → dmg)
     runs-on: macos-latest
     timeout-minutes: 30
 
@@ -75,6 +75,10 @@ jobs:
       # ─── Gate 1-B: 다국어 표 (ko·en·ja·zh-Hans·de 키 집합 + 소스가 쓰는 L("키")) ───
       - name: "Gate 1-B: Localization tables"
         run: bash apps/desktop-native/check-l10n.sh
+
+      # ─── Gate 1-F: omk-ffi 정적 라이브러리 + Swift 바인딩 (PR-3.2 D-235) — Swift 패키지가 Generated/ 를 쓴다 ───
+      - name: "Gate 1-F: omk-ffi staticlib + Swift bindings"
+        run: bash apps/desktop-native/lib/ffi.sh
 
       # ─── Gate 2: Swift 릴리스 빌드 (무서명) ───
       - name: "Gate 2: Swift build"

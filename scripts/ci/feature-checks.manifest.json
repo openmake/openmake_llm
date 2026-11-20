@@ -53,6 +53,8 @@
     "apps/desktop-native/BRIDGE_VERSION": "pipeline",
     "apps/desktop-native/lib/node-bundle.sh": "desktopBuild",
     "apps/desktop-native/lib/node-bundle.test.mjs": "desktopBuild",
+    "apps/desktop-native/lib/ffi.sh": "desktopBuild",
+    "apps/desktop-native/lib/ffi.test.mjs": "desktopBuild",
     "apps/desktop-native/scripts/successor-replace.sh": "desktopBuild",
     "apps/desktop-native/tests/successor-replace.test.sh": "desktopBuild",
     "db/init/004-admin-user.sh": "infra",

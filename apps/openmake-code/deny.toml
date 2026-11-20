@@ -7,6 +7,13 @@ all-features = false
 # 보안 권고(취약점)는 항상 실패. 유지 중단·철회 권고도 실패로 다룬다.
 unmaintained = "all"
 yanked = "deny"
+# 유지 중단 권고는 "배포 바이너리에 링크되는가"로 나눈다(PR-3.2 D-231(r2)). 링크 여부 판정:
+#   cargo tree -p omk-ffi -e normal,no-proc-macro --target aarch64-apple-darwin --prefix none
+# 그 출력에 없는(빌드 시점 전용) 크레이트에서만 나온 유지 중단 권고를 아래에 사유와 함께 둔다. 취약점 권고는 두지 않는다.
+ignore = [
+    # basic-toml(unmaintained) — askama_derive(proc-macro) → askama → uniffi_bindgen(바인딩 생성기) 아래. 빌드 시점 전용, 배포물 미포함.
+    { id = "RUSTSEC-2026-0374", reason = "빌드 시점 전용(uniffi_bindgen 의 proc-macro 의존), 배포물 미포함" },
+]
 
 [licenses]
 # 실제 의존성 트리(regress·serde_json 계열)에 맞춘 허용 목록. 의존성을 더할 때 여기서 걸리면 검토한다.
@@ -20,5 +27,8 @@ allow = [
     "BSD-3-Clause",
     # omk-bridge-conn(PR-1.5): webpki-root-certs — rustls-platform-verifier 의 wasm32 대상 전용 의존(macOS 빌드에는 들어가지 않는다)
     "CDLA-Permissive-2.0",
+    # omk-ffi(PR-3.2): UniFFI(uniffi·uniffi_core·uniffi_pipeline 이 앱에 정적 링크, 나머지는 빌드 시점 전용) — 파일 단위 약한
+    # copyleft. 수정 없이 링크·배포하며 소스 얻는 방법은 apps/desktop-native/THIRD_PARTY_NOTICES.md 로 알린다(D-231·D-244).
+    "MPL-2.0",
 ]
 confidence-threshold = 0.9

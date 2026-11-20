@@ -39,7 +39,6 @@
 "status.folderOpenFailed" = "Could not open folder: %@";
 "status.instance_conflict" = "Another OpenMake Code is already running (%@)";
 "status.instance_lock_failed" = "Could not lock the app data folder, so no connection was made";
-"status.helperMissing" = "Helper resources missing (reinstall required)";
 "status.helperExited" = "Helper stopped — connect again";
 "status.helperLaunchFailed" = "Could not start helper: %@";
 /* Connection status — closed for an authentication reason */

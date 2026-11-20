@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 omk-bridge-core = { path = "../omk-bridge-core" }
 omk-bridge-conn = { path = "../omk-bridge-conn" }
+omk-bridge-host = { path = "../omk-bridge-host" }
 serde_json = "1.0.154"
 # 런타임은 연결 크레이트의 host_runtime() 하나 — #[tokio::main] 은 쓰지 않는다(D-92). 로거는 달지 않는다(D-98).
 tokio = { version = "1.54.1", default-features = false, features = ["rt", "rt-multi-thread", "sync", "time", "process", "signal", "macros"] }
