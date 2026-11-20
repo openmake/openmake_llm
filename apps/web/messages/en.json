@@ -940,7 +940,8 @@
     "status": {
       "running": "In progress",
       "completed": "Completed",
-      "pending": "Pending"
+      "pending": "Pending",
+      "waitingDevice": "Waiting for device"
     },
     "statusRaw": {
       "pending": "Pending",
