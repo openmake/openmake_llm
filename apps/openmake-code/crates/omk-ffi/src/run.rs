@@ -173,8 +173,10 @@ where
     std::thread::Builder::new()
         .name("omk-ffi-events".into())
         .spawn(move || {
+            // 이벤트 하나 단위로 패닉을 막는다 — listener(UniFFI 콜백)가 패닉해도 스레드가 살아 `Exited` 가 반드시 닿는다
+            // (끊기면 앱이 끄는 호스트를 상한까지 기다린다). 패닉한 이벤트는 버린다.
             for e in ev_rx {
-                listener.on_event(e);
+                let _ = catch_unwind(AssertUnwindSafe(|| listener.on_event(e)));
             }
         })
         .map_err(|_| HostStartError::ThreadFailed)?;
@@ -429,6 +431,42 @@ mod tests {
             matches!(&evs[0], HostEvent::Status { code, .. } if code == "instance_lock_failed")
         );
         assert_eq!(evs.last(), Some(&HostEvent::Exited { code: 3 }));
+    }
+
+    /// 이벤트에서 패닉하는 listener(UniFFI 콜백 오류 등) — 패닉한 이벤트는 버리고 나머지를 모은다.
+    struct PanicOnStatus(Seen);
+
+    impl HostListener for PanicOnStatus {
+        fn on_event(&self, e: HostEvent) {
+            assert!(!matches!(e, HostEvent::Status { .. }), "listener 패닉");
+            Collect(Arc::clone(&self.0)).on_event(e);
+        }
+    }
+
+    /// 리뷰 r1 Low-3 — listener 가 패닉해도 디스패처가 살아 그 뒤 이벤트와 `Exited` 가 닿는다.
+    #[test]
+    fn listener_panic_still_delivers_exited() {
+        let seen: Seen = Arc::default();
+        let _tx = start_with(
+            config(),
+            "omk_live_ffi_test".into(),
+            Box::new(PanicOnStatus(Arc::clone(&seen))),
+            Some("/nonexistent".into()),
+            |_: ServeArgs, emit: Emit, _: Tx, _: Rx| -> i32 {
+                emit.emit(Event::status_global("앞", "idle"));
+                emit.emit(Event::auto_approve(1));
+                0
+            },
+        )
+        .unwrap();
+        let evs = wait(&seen, exited);
+        assert_eq!(
+            evs,
+            [
+                HostEvent::AutoApprove { count: 1 },
+                HostEvent::Exited { code: 0 }
+            ]
+        );
     }
 
     const F6: &str = "OMK_FFI_F6_CHILD";
