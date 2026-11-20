@@ -1,7 +1,7 @@
 # OpenMake Code (SwiftUI 네이티브 데스크톱)
 
 메뉴바 상주 **로컬 에이전트 컴패니언** — 폴더 연결·디바이스 상태·exec 승인·작업 알림(종료·승인 대기)·웹 딥링크만 담당한다.
-채팅 등 깊은 UI 는 웹(chat.example.com)이 전담한다 (plan §1 비목표: 채팅 UI 재구현 금지).
+채팅 등 깊은 UI 는 웹(chat.example.com)이 전담한다 (plan §1 비목표: 채팅 UI 재구현 금지). 에이전트 작업 목록·상세(읽기)는 앱에도 있다(단계 ③, 0.7.0).
 Plan: `docs/proposals/2026-08-22-desktop-native-companion-plan.md` (로컬 보관).
 
 ## 구조
@@ -9,11 +9,11 @@ Plan: `docs/proposals/2026-08-22-desktop-native-companion-plan.md` (로컬 보�
 ```
 helper/src/helper.mjs    # Node 헬퍼 — @openmake/local-bridge-core 의 stdio JSON-lines 어댑터 (앱은 0.4.0 부터 쓰지 않는다 — PR-2.2 에서 삭제)
 helper/harness.cjs       # 헬퍼 회귀 하네스 (build.sh 가 게이트로 실행). `--helper <실행 파일>` 로 omk-helper 등 다른 헬퍼를 같은 단언으로
-OpenMakeCompanion/       # SwiftPM 앱 (MenuBarExtra + 설정 + HelperManager + Updater + LegacyMigration) — SwiftPM 이름은 그대로
+OpenMakeCompanion/       # SwiftPM 앱 (MenuBarExtra + 설정 + HelperManager + Updater + LegacyMigration + 작업 창 Tasks*·TaskDisplay·TaskApiClient) — SwiftPM 이름은 그대로
   Generated/             # lib/ffi.sh 생성물(커밋 안 함) — OmkFfiCore.xcframework(libomk_ffi.a) + OmkFfi/omk_ffi.swift
 lib/ffi.sh               # omk-ffi 정적 라이브러리 → UniFFI Swift 바인딩·XCFramework (build.sh·CI 공용, 가짜 도구 시험 lib/ffi.test.mjs)
 THIRD_PARTY_NOTICES.md   # 앱에 링크되는 MPL-2.0 크레이트(uniffi) 고지 — build.sh 가 Contents/Resources 로 복사
-Localization/            # <lang>.lproj/Localizable.strings — ko(개발 언어)·en·ja·zh-Hans
+Localization/            # <lang>.lproj/Localizable.strings — ko(개발 언어)·en·ja·zh-Hans·de
 check-l10n.sh            # 다국어 표 게이트 (build.sh·CI 공용)
 build.sh                 # omk-helper 릴리스 빌드(cargo) → 하네스(--helper, 게이트) → l10n 게이트 → lib/ffi.sh → swift build → .app 조립 → ad-hoc 서명·검증 → dmg
 ```
@@ -44,6 +44,7 @@ build.sh                 # omk-helper 릴리스 빌드(cargo) → 하네스(--he
 - 업데이트: `GET /api/desktop/latest` 의 `macos` 블록 — sha256 검증 후 분리 스크립트가 교체·재실행 (구 Electron updater.js 에서 이식). **macOS 는 네이티브 앱만 배포한다(2026-09-11)** — 매니페스트의 macOS 블록은 `native`(옛 정체성 OpenMake Companion — 다리 0.4.x)와 `macos`(이 앱 OpenMake Code) 둘이고, 이 앱은 `macos` 만 읽는다. 옛 앱은 다리(0.4.4)부터 `macos` 블록을 보고 이 앱으로 갈아탄다. 최상위(기본) 값은 `native` 를 따르며, 구 Electron dmg 는 게시·다운로드에서 제거됐다. 서버 브리지 등록도 API key(bridge 스코프) 연결만 받는다(쿠키 로그인 연결 = 구 Electron 앱 경로 차단).
 
 - **같은 프로세스 브리지 호스트(0.6.0)**: 기능은 0.5.0 과 같다. 앱이 `Contents/MacOS/omk-helper` 를 띄우는 대신 같은 Rust 호스트 로직(`omk-bridge-host`)을 정적 라이브러리 `omk-ffi`(UniFFI)로 앱 안에서 돌린다 — 번들에 `omk-helper` 가 없다. 호스트는 종료 때 Chrome·exec 자식을 정리한 뒤 `exited` 를 내므로, 앱 종료(메뉴·SIGTERM·SIGINT·로그아웃)와 업데이트 교체는 그것을 기다린다(상한 12초). 지원 폴더 잠금·키 넘김·업데이트 경로는 그대로다. 되돌리기는 0.5.0 코드로 더 높은 `VERSION` 을 게시한다. 링크되는 MPL-2.0 크레이트 고지는 `Contents/Resources/THIRD_PARTY_NOTICES.md`.
+- **작업 창(0.7.0)**: 메뉴 "작업 보기…" 가 "작업" 창(AppKit 창 + SwiftUI 내용, Dock 아이콘 없음)을 연다 — 왼쪽은 이 계정의 최근 로컬 실행 작업(`executor=local`, 서버 순서·개수 그대로), 오른쪽은 상태·목표·폴더·격리(브랜치)·시각·오류·스텝 타임라인. 읽기 전용이고 서버 값만 그린다(상태·격리 문구는 웹과 같은 값 → 문구 대응, 모르는 값은 원문/미표시). 앱 키로 Rust `omk-ffi` 의 `TaskApi`(동기, 직렬 큐에서 호출, 20초·16 MiB 한도)가 `GET /api/agent-tasks`·`GET /api/agent-tasks/:id` 를 부른다. 창을 열 때·새로고침(⌘R)·행 선택·이 Mac 의 작업 끝·승인 대기 이벤트·키/주소 변경 때만 부르고 주기 폴링은 없다. 키가 없으면 "설정 열기…" 를 보인다. 실행·승인·재개는 웹에서 한다.
 ## 빌드 / 게시
 
 ```bash
