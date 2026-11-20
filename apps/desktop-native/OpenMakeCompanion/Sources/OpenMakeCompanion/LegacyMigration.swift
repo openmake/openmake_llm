@@ -338,10 +338,9 @@ enum LegacyMigration {
         return .proceed(trash: plan.offerTrash ? bundle : nil)
     }
 
-    /** 휴지통 안내 한 번(D-160) — 답과 무관하게 상태는 이미 끝 상태로 적혀 있다. */
+    /** 휴지통 안내 한 번(D-160) — 답과 무관하게 상태는 이미 끝 상태로 적혀 있다. 호스트를 띄운 뒤라 창은 main 큐 블록 밖에서
+        돌린다(AppTermination.runModal) — 안에서 돌면 창이 떠 있는 동안 호스트 이벤트·신호가 멈춘다. */
     @MainActor
-    /** 호스트를 띄운 뒤라 창은 main 큐 블록 밖에서 돌린다(AppTermination.runModal) — 안에서 돌면 창이 떠 있는 동안 호스트
-        이벤트·신호가 멈춘다. */
     static func offerTrash(_ url: URL) {
         let a = makeAlert(L("migration.trash.title"), L("migration.trash.body"), buttons: [L("migration.trash.move"), L("migration.trash.keep")])
         Task {
