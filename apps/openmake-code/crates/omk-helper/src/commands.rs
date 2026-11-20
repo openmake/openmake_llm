@@ -1,48 +1,12 @@
 //! 앱 → 헬퍼 줄 해석(TS `helper.mjs:153~183`) — JS 판정을 그대로 옮긴다. 처리할 것이 없는 줄(JSON 이 아님·객체가 아님·
 //! 모르는 `cmd`·조건에 맞지 않는 값)은 `None` 이다. JSON `null` 줄도 버린다(TS 는 `null.cmd` 로 죽는다 — D-106-2).
 
-use std::fmt;
-
 use omk_bridge_core::exec::ConfirmAnswer;
+pub use omk_bridge_host::command::Command;
 use serde_json::Value;
 
 /// JS 의 정확한 정수 상한(`Number.MAX_SAFE_INTEGER`) — 확인 순번이 이를 넘을 일은 없다.
 const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
-
-#[derive(PartialEq, Eq)]
-pub enum Command {
-    /// 비어 있지 않은 문자열 키(`typeof m.apiKey === 'string' && m.apiKey`).
-    Auth(String),
-    Connect(String),
-    /// 문자열이면 그 폴더, 아니면(없음·다른 형) 전체.
-    Disconnect(Option<String>),
-    /// 수로 찾을 수 있는 id 만 — `"1"`·없음은 어떤 대기와도 맞지 않는다(JS `Map.get`).
-    Confirm {
-        id: u64,
-        answer: ConfirmAnswer,
-    },
-    ClearAutoApprove,
-    /// `m.user === true`
-    BrowserControl(bool),
-    BrowserStop,
-    Quit,
-}
-
-/// 키는 찍지 않는다.
-impl fmt::Debug for Command {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Command::Auth(_) => f.write_str("Auth(<가림>)"),
-            Command::Connect(p) => write!(f, "Connect({p:?})"),
-            Command::Disconnect(p) => write!(f, "Disconnect({p:?})"),
-            Command::Confirm { id, answer } => write!(f, "Confirm({id}, {answer:?})"),
-            Command::ClearAutoApprove => f.write_str("ClearAutoApprove"),
-            Command::BrowserControl(u) => write!(f, "BrowserControl({u})"),
-            Command::BrowserStop => f.write_str("BrowserStop"),
-            Command::Quit => f.write_str("Quit"),
-        }
-    }
-}
 
 /// JS 수 비교 — `1` 과 `1.0`(`1e0`)은 같은 id. 소수부가 있거나 음수·범위 밖이면 맞는 대기가 없다.
 fn confirm_id(v: &Value) -> Option<u64> {

@@ -184,3 +184,5 @@ data/desktop-updates/
 apps/desktop-native/dist/
 apps/desktop-native/helper/dist/
 apps/desktop-native/OpenMakeCompanion/.build/
+# omk-ffi 생성물(XCFramework·Swift 바인딩) — apps/desktop-native/lib/ffi.sh 가 만든다(PR-3.2 D-230)
+apps/desktop-native/OpenMakeCompanion/Generated*/

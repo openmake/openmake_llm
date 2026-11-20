@@ -15,7 +15,7 @@ use omk_bridge_core::node_path;
 use tokio::sync::{Notify, oneshot};
 
 use super::{App, Msg};
-use crate::events::{self, API_KEY_REQUIRED_TEXT, IDLE_TEXT};
+use crate::event::{API_KEY_REQUIRED_TEXT, Event, IDLE_TEXT};
 
 /// 해제한 연결을 닫힘 알림까지 쥐는 한도 — 연결 크레이트의 닫기 한도(30초)보다 조금 길게. 핸들을 바로 버리면 닫기 절차와
 /// 늦은 `status closed` 가 사라진다(TS 는 `ws.close()` 뒤에도 그 소켓의 닫힘을 알린다 — §12-4).
@@ -118,7 +118,7 @@ impl App {
         let Some(ready) = &self.ready else { return };
         let (bridge_url, hostname) = (ready.bridge_url.clone(), ready.hostname.clone());
         if self.key.get().is_empty() {
-            self.emit.emit(events::status_global(
+            self.emit.emit(Event::status_global(
                 API_KEY_REQUIRED_TEXT,
                 "api_key_required",
             ));
@@ -127,14 +127,14 @@ impl App {
         let real = match node_realpath_sync(folder) {
             Ok(r) => r,
             Err(msg) => {
-                self.emit.emit(events::status_folder_open_failed(&msg));
+                self.emit.emit(Event::status_folder_open_failed(&msg));
                 return;
             }
         };
         let connector = match &self.connector {
             Ok(c) => Arc::clone(c),
             Err(msg) => {
-                self.emit.emit(events::status_global(
+                self.emit.emit(Event::status_global(
                     &format!("서버 오류: {msg}"),
                     "server_error",
                 ));
@@ -146,7 +146,7 @@ impl App {
             Err(msg) => {
                 // TS 는 생성자가 던져 잡히지 않은 거부로 죽는 자리(그 사이 폴더가 사라진 경우) — 폴더 열기 실패로 알린다.
                 // 같은 루트의 옛 연결은 그대로 둔다(코어를 먼저 만들고 성공한 뒤에 꺼낸다 — 리뷰 r1 L-2).
-                self.emit.emit(events::status_folder_open_failed(&msg));
+                self.emit.emit(Event::status_folder_open_failed(&msg));
                 return;
             }
         };
@@ -174,14 +174,14 @@ impl App {
         o.host_id = Some(self.host.identity.base().to_owned());
         let (emit, f, e) = (self.emit.clone(), real.clone(), Arc::clone(&ended));
         o.on_status = Some(Box::new(move |s| {
-            emit.emit(events::status_root(&f, s));
+            emit.emit(Event::status_root(&f, s));
             if matches!(s.code, StatusCode::Closed | StatusCode::Idle) {
                 e.notify_one();
             }
         }));
         let (emit, f) = (self.emit.clone(), real.clone());
         o.on_notice = Some(Box::new(move |n| {
-            emit.emit(events::approval_pending(&n.task_id, &n.tool_name, &f));
+            emit.emit(Event::approval_pending(&n.task_id, &n.tool_name, &f));
         }));
         let a = Arc::clone(&alive);
         o.should_reconnect = Some(Box::new(move || a.load(Ordering::SeqCst)));
@@ -199,7 +199,7 @@ impl App {
             None => self.roots.0.push((real.clone(), root)),
         }
         // `connected` 를 먼저 낸다 — 접속을 먼저 시작하면 연결 태스크의 `연결 중…` 이 앞설 수 있다(TS 순서: connected → connecting).
-        self.emit.emit(events::connected(&real));
+        self.emit.emit(Event::connected(&real));
         if let Some((_, r)) = self.roots.0.iter().find(|(k, _)| *k == real) {
             r.conn.connect();
         }
@@ -238,7 +238,7 @@ impl App {
         });
         let (emit, folder) = (self.emit.clone(), real.to_owned());
         let on_task_end = Box::new(move |task: Option<&str>| {
-            emit.emit(events::task_end(task, &folder));
+            emit.emit(Event::task_end(task, &folder));
         });
         self.host.build_core(real, confirm, on_change, on_task_end)
     }
@@ -262,10 +262,10 @@ impl App {
         };
         let (key, root) = self.roots.0.remove(i);
         root.retire();
-        self.emit.emit(events::disconnected(&key));
+        self.emit.emit(Event::disconnected(&key));
         self.emit_auto_approve();
         if self.roots.is_empty() {
-            self.emit.emit(events::status_global(IDLE_TEXT, "idle"));
+            self.emit.emit(Event::status_global(IDLE_TEXT, "idle"));
         }
     }
 }
@@ -278,8 +278,8 @@ mod tests {
     use tokio::sync::mpsc;
 
     use super::super::{App, Ready};
+    use crate::event::Emit;
     use crate::host::Host;
-    use crate::stdio::Emitter;
 
     /// 리뷰 r1 L-2 — 같은 루트 재연결에서 코어 생성이 실패하면 옛 루트는 표에 남는다(조용히 해제하지 않는다 — 부모는 연결된 줄 안다).
     /// 실패는 폴더 열기 실패로만 알리고 `disconnected`·`idle` 은 내지 않는다.
@@ -299,8 +299,17 @@ mod tests {
             .into_owned();
         rt.block_on(async {
             let identity = DeviceIdentity::load_or_create(&support).unwrap();
-            let host = Host::from_env(tmp.to_string_lossy().into_owned(), &support, identity);
-            let (emit, lines) = Emitter::capture();
+            let host = Host::new(
+                tmp.to_string_lossy().into_owned(),
+                &support,
+                identity,
+                false,
+                Vec::new(),
+            );
+            let (lines_tx, lines) = std::sync::mpsc::channel();
+            let emit = Emit::new(move |e| {
+                let _ = lines_tx.send(format!("{e:?}"));
+            });
             let (tx, _rx) = mpsc::unbounded_channel();
             let mut app = App::new(emit, tx, host);
             app.ready = Some(Ready {
@@ -319,7 +328,7 @@ mod tests {
             );
             let (_, old) = &app.roots.0[0];
             assert!(old.alive.load(std::sync::atomic::Ordering::SeqCst));
-            // 쓰기 스레드가 따로 돈다 — 폴더 열기 실패 줄이 올 때까지 받는다
+            // 폴더 열기 실패 이벤트가 올 때까지 받는다(이벤트는 Debug 글자로 모은다)
             let mut evs = Vec::new();
             while let Ok(l) = lines.recv_timeout(std::time::Duration::from_secs(2)) {
                 let done = l.contains("folder_open_failed");
@@ -334,7 +343,7 @@ mod tests {
             );
             assert!(
                 !evs.iter()
-                    .any(|e| e.contains("\"disconnected\"") || e.contains("\"idle\"")),
+                    .any(|e| e.starts_with("Disconnected") || e.contains("\"idle\"")),
                 "{evs:?}"
             );
             app.disconnect(None);

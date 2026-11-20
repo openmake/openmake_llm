@@ -43,10 +43,10 @@ final class Updater: ObservableObject {
             let block: UpdateBlock
             switch UpdateChoice.decide(payload: payload, current: currentVersion) {
             case .none:
-                if interactive { info(L("update.none.title"), L("update.none.body", currentVersion)) }
+                if interactive { await info(L("update.none.title"), L("update.none.body", currentVersion)) }
                 return
             case .latest:
-                if interactive { info(L("update.latest.title"), L("update.latest.body", currentVersion)) }
+                if interactive { await info(L("update.latest.title"), L("update.latest.body", currentVersion)) }
                 return
             case let .update(b):
                 block = b
@@ -55,7 +55,7 @@ final class Updater: ObservableObject {
             // 교체는 앱 옆에 새 버전을 복사해 바꿔치기한다 — 그 폴더에 쓸 수 없으면(디스크 이미지에서 바로 실행 등) 받지 않고 안내만 한다.
             // 종전엔 내려받은 뒤 교체 스크립트가 "Read-only file system" 으로 실패했다(2026-10-05).
             guard canReplaceInPlace() else {
-                info(L("update.readOnly.title", version, currentVersion), L("update.readOnly.body"))
+                await info(L("update.readOnly.title", version, currentVersion), L("update.readOnly.body"))
                 return
             }
             // 테스트 훅(개발/E2E 전용): 다이얼로그 없이 즉시 진행 — OMK_COMPANION_* env 훅 계열.
@@ -65,8 +65,9 @@ final class Updater: ObservableObject {
                 alert.informativeText = L("update.available.body")
                 alert.addButton(withTitle: L("update.install"))
                 alert.addButton(withTitle: L("update.later"))
-                NSApp.activate(ignoringOtherApps: true)
-                guard alert.runModal() == .alertFirstButtonReturn else { return }
+                // 모달은 main 큐 블록 밖에서 — 이 자리는 Task(main 큐 작업)라 안에서 돌면 창이 떠 있는 동안 호스트 이벤트·신호가 멈춘다.
+                guard await AppTermination.runModal({ NSApp.activate(ignoringOtherApps: true); return alert.runModal() })
+                    == .alertFirstButtonReturn else { return }
             }
 
             let dmgURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(file)
@@ -84,13 +85,23 @@ final class Updater: ObservableObject {
                 throw UpdateError.message(L("update.checksum"))
             }
 
-            try spawnReplaceScript(dmgPath: dmgURL.path)
-            HelperManager.shared.stopHelper()
-            NSApp.terminate(nil)
+            // 호스트를 먼저 끄고 exited 를 기다린다 — 교체 스크립트는 앱 종료를 기다리지 않고 2초 뒤 번들을 바꾸므로 그 안에 앱이
+            // 끝나 있어야 한다. 스크립트의 키 파이프도 Rust 의 자식 띄우기와 겹치지 않는다(PR-3.2 D-233).
+            await HelperManager.shared.stopHostAndWait()
+            do {
+                try spawnReplaceScript(dmgPath: dmgURL.path)
+            } catch {
+                // 앱이 끝나지 않으므로 끈 호스트를 되살리고 기존 실패 안내로 간다(D-233(r2)).
+                HelperManager.shared.restartAfterUpdateFailure()
+                throw error
+            }
+            // 이 자리는 Task @MainActor(main 큐 작업) 안이다 — 호스트가 상한 안에 끝나지 않았거나 그 사이 새로 떴으면
+            // .terminateLater reply 가 교착하므로 run loop 소스로 넘긴다(R-10).
+            AppTermination.request()
         } catch let e as UpdateError {
-            if case let .message(m) = e, interactive { info(L("update.failed.title"), m) }
+            if case let .message(m) = e, interactive { await info(L("update.failed.title"), m) }
         } catch {
-            if interactive { info(L("update.failed.title"), error.localizedDescription) }
+            if interactive { await info(L("update.failed.title"), error.localizedDescription) }
         }
     }
 
@@ -202,12 +213,11 @@ final class Updater: ObservableObject {
         try? stdin.fileHandleForWriting.close()
     }
 
-    private func info(_ title: String, _ body: String) {
+    private func info(_ title: String, _ body: String) async {
         let a = NSAlert()
         a.messageText = title
         a.informativeText = body
-        NSApp.activate(ignoringOtherApps: true)
-        a.runModal()
+        _ = await AppTermination.runModal { NSApp.activate(ignoringOtherApps: true); return a.runModal() }
     }
 }
 

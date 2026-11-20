@@ -1,13 +1,16 @@
-//! 헬퍼 → 앱 줄 10종(D-93) — `JSON.stringify` 가 내는 **키 순서 그대로** 쓴다. `serde_json` 의 `preserve_order` 는 켜지
-//! 않는다(workspace 전체의 맵 종류가 바뀐다) — 키마다 값의 JSON 글자를 이어 붙인다. 문구는 TS 와 글자 단위로 같다.
+//! 헬퍼 → 앱 줄 10종(D-93) — 호스트의 [`Event`] 를 `JSON.stringify` 가 내는 **키 순서 그대로** 쓴다. `serde_json` 의
+//! `preserve_order` 는 켜지 않는다(workspace 전체의 맵 종류가 바뀐다) — 키마다 값의 JSON 글자를 이어 붙인다. 문구는 TS 와
+//! 글자 단위로 같다(문구 상수·이벤트 값은 `omk-bridge-host`, 줄 글자는 여기 — PR-3.2 D-223).
 
 use omk_bridge_conn::endpoints::ServerEndpoints;
+#[cfg(test)]
 use omk_bridge_conn::status::Status;
+use omk_bridge_host::event::Event;
+pub use omk_bridge_host::event::{
+    API_KEY_REQUIRED_TEXT, IDLE_TEXT, INSTANCE_CONFLICT_TEXT, INSTANCE_LOCK_FAILED_TEXT,
+    LOCK_WAIT_TEXT,
+};
 use serde_json::Value;
-
-/// 기동·마지막 루트 해제의 전역 상태 글.
-pub const IDLE_TEXT: &str = "미연결";
-pub const API_KEY_REQUIRED_TEXT: &str = "API key 필요 — 앱 설정에서 입력";
 
 /// JSON 문자열 글자 — `Value` 의 `Display` 는 실패하지 않는다.
 fn s(v: &str) -> String {
@@ -32,50 +35,6 @@ fn ev(name: &str, mut rest: Vec<(&'static str, String)>) -> String {
     obj(&rest)
 }
 
-/// 폴더 없는 상태 — `미연결`/`idle`, `API key 필요 …`/`api_key_required`.
-pub fn status_global(text: &str, code: &str) -> String {
-    ev("status", vec![("text", s(text)), ("code", s(code))])
-}
-
-/// 잠금 대기 중(다른 헬퍼가 쥠) — 앱은 `연결 중…` 으로 보인다.
-pub const LOCK_WAIT_TEXT: &str = "연결 중…";
-/// 다른 헬퍼가 잠금을 끝까지 쥠 — `arg` 는 그 주인의 실행 경로.
-pub const INSTANCE_CONFLICT_TEXT: &str = "다른 OpenMake Companion 이 이미 실행 중입니다";
-pub const INSTANCE_LOCK_FAILED_TEXT: &str = "앱 데이터 폴더를 잠그지 못해 연결하지 않았습니다";
-
-/// 폴더 없는 상태 + `arg`.
-pub fn status_global_arg(text: &str, code: &str, arg: &str) -> String {
-    ev(
-        "status",
-        vec![("text", s(text)), ("code", s(code)), ("arg", s(arg))],
-    )
-}
-
-/// realpath 실패(폴더 필드 없음 — TS 그대로).
-pub fn status_folder_open_failed(message: &str) -> String {
-    ev(
-        "status",
-        vec![
-            ("text", s(&format!("폴더 열기 실패: {message}"))),
-            ("code", s("folder_open_failed")),
-            ("arg", s(message)),
-        ],
-    )
-}
-
-/// 루트 연결의 상태 — `arg` 가 없으면 키 자체가 없다.
-pub fn status_root(folder: &str, st: &Status) -> String {
-    let mut f = vec![
-        ("folder", s(folder)),
-        ("text", s(&st.text)),
-        ("code", s(st.code.as_str())),
-    ];
-    if let Some(a) = &st.arg {
-        f.push(("arg", s(a)));
-    }
-    ev("status", f)
-}
-
 fn endpoint_fields(e: &ServerEndpoints) -> Vec<(&'static str, String)> {
     vec![
         ("bridgeUrl", s(&e.bridge_url)),
@@ -84,8 +43,68 @@ fn endpoint_fields(e: &ServerEndpoints) -> Vec<(&'static str, String)> {
     ]
 }
 
-pub fn endpoints(e: &ServerEndpoints) -> String {
-    ev("endpoints", endpoint_fields(e))
+/// 이벤트 하나의 줄(줄바꿈 없음). 상태의 `folder`·`arg` 는 값이 없으면 키 자체가 없다(TS 그대로).
+pub fn line(e: &Event) -> String {
+    match e {
+        Event::Status {
+            folder,
+            text,
+            code,
+            arg,
+        } => {
+            let mut f = Vec::new();
+            if let Some(d) = folder {
+                f.push(("folder", s(d)));
+            }
+            f.push(("text", s(text)));
+            f.push(("code", s(code)));
+            if let Some(a) = arg {
+                f.push(("arg", s(a)));
+            }
+            ev("status", f)
+        }
+        Event::Endpoints(e) => ev("endpoints", endpoint_fields(e)),
+        Event::Connected { folder } => ev("connected", vec![("folder", s(folder))]),
+        Event::Disconnected { folder } => ev("disconnected", vec![("folder", s(folder))]),
+        // `id` 는 JSON 정수, 작업이 없으면 `taskId: null`.
+        Event::Confirm {
+            id,
+            command,
+            task_id,
+            base,
+            folder,
+            sandbox,
+        } => ev(
+            "confirm",
+            vec![
+                ("id", id.to_string()),
+                ("command", s(command)),
+                ("taskId", opt(task_id.as_deref())),
+                ("base", s(base)),
+                ("folder", s(folder)),
+                ("sandbox", sandbox.to_string()),
+            ],
+        ),
+        Event::AutoApprove { count } => ev("autoApprove", vec![("count", count.to_string())]),
+        Event::TaskEnd { task_id, folder } => ev(
+            "taskEnd",
+            vec![("taskId", opt(task_id.as_deref())), ("folder", s(folder))],
+        ),
+        Event::ApprovalPending {
+            task_id,
+            tool_name,
+            folder,
+        } => ev(
+            "approvalPending",
+            vec![
+                ("taskId", s(task_id)),
+                ("toolName", s(tool_name)),
+                ("folder", s(folder)),
+            ],
+        ),
+        Event::BrowserControl { user } => ev("browserControl", vec![("user", user.to_string())]),
+        Event::BrowserStopped => ev("browserStopped", Vec::new()),
+    }
 }
 
 /// `--resolve` 의 한 줄(`ev` 없음).
@@ -93,16 +112,40 @@ pub fn resolve_line(e: &ServerEndpoints) -> String {
     obj(&endpoint_fields(e))
 }
 
-pub fn connected(folder: &str) -> String {
-    ev("connected", vec![("folder", s(folder))])
+// 아래 줄 빌더는 Node fixture 대조 테스트가 쓴다 — 호스트의 `Event` 생성자와 [`line`] 을 함께 고정한다.
+
+#[cfg(test)]
+fn status_global(text: &str, code: &str) -> String {
+    line(&Event::status_global(text, code))
 }
 
-pub fn disconnected(folder: &str) -> String {
-    ev("disconnected", vec![("folder", s(folder))])
+#[cfg(test)]
+fn status_folder_open_failed(message: &str) -> String {
+    line(&Event::status_folder_open_failed(message))
 }
 
-/// 확인 요청 — `id` 는 JSON 정수, 작업이 없으면 `taskId: null`.
-pub fn confirm(
+#[cfg(test)]
+fn status_root(folder: &str, st: &Status) -> String {
+    line(&Event::status_root(folder, st))
+}
+
+#[cfg(test)]
+fn endpoints(e: &ServerEndpoints) -> String {
+    line(&Event::endpoints(e))
+}
+
+#[cfg(test)]
+fn connected(folder: &str) -> String {
+    line(&Event::connected(folder))
+}
+
+#[cfg(test)]
+fn disconnected(folder: &str) -> String {
+    line(&Event::disconnected(folder))
+}
+
+#[cfg(test)]
+fn confirm(
     id: u64,
     command: &str,
     task_id: Option<&str>,
@@ -110,47 +153,32 @@ pub fn confirm(
     folder: &str,
     sandbox: bool,
 ) -> String {
-    ev(
-        "confirm",
-        vec![
-            ("id", id.to_string()),
-            ("command", s(command)),
-            ("taskId", opt(task_id)),
-            ("base", s(base)),
-            ("folder", s(folder)),
-            ("sandbox", sandbox.to_string()),
-        ],
-    )
+    line(&Event::confirm(id, command, task_id, base, folder, sandbox))
 }
 
-pub fn auto_approve(count: usize) -> String {
-    ev("autoApprove", vec![("count", count.to_string())])
+#[cfg(test)]
+fn auto_approve(count: usize) -> String {
+    line(&Event::auto_approve(count))
 }
 
-pub fn task_end(task_id: Option<&str>, folder: &str) -> String {
-    ev(
-        "taskEnd",
-        vec![("taskId", opt(task_id)), ("folder", s(folder))],
-    )
+#[cfg(test)]
+fn task_end(task_id: Option<&str>, folder: &str) -> String {
+    line(&Event::task_end(task_id, folder))
 }
 
-pub fn approval_pending(task_id: &str, tool_name: &str, folder: &str) -> String {
-    ev(
-        "approvalPending",
-        vec![
-            ("taskId", s(task_id)),
-            ("toolName", s(tool_name)),
-            ("folder", s(folder)),
-        ],
-    )
+#[cfg(test)]
+fn approval_pending(task_id: &str, tool_name: &str, folder: &str) -> String {
+    line(&Event::approval_pending(task_id, tool_name, folder))
 }
 
-pub fn browser_control(user: bool) -> String {
-    ev("browserControl", vec![("user", user.to_string())])
+#[cfg(test)]
+fn browser_control(user: bool) -> String {
+    line(&Event::browser_control(user))
 }
 
-pub fn browser_stopped() -> String {
-    ev("browserStopped", Vec::new())
+#[cfg(test)]
+fn browser_stopped() -> String {
+    line(&Event::browser_stopped())
 }
 
 #[cfg(test)]

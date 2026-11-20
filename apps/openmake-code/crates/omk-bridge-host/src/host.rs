@@ -1,4 +1,4 @@
-//! 호스트 값(D-99) — 코어는 환경을 읽지 않는다. 헬퍼가 기동 때 한 번 읽어 코어에 넘긴다. 이름·기본값은 TS 와 같은 표.
+//! 호스트 값(D-99) — 코어는 환경을 읽지 않는다. 호스트가 기동 때 한 번 읽어 코어에 넘긴다. 이름·기본값은 TS 와 같은 표.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -85,11 +85,31 @@ pub struct Host {
     browser: Option<(String, BrowserEnv)>,
 }
 
+/// 프로세스 환경 전체(UTF-8 인 것만) — exec·도구 자식 환경의 원본(코어가 허용 목록으로 거른다).
+pub fn env_snapshot() -> Vec<(String, String)> {
+    std::env::vars_os()
+        .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?)))
+        .collect()
+}
+
+/// 환경 `OMK_COMPANION_BROWSER=1` — 헬퍼(사이드카)가 앱 설정 "브라우저 사용 허용" 을 받는 길.
+pub fn browser_from_env() -> bool {
+    var(BROWSER_ENV).as_deref() == Some("1")
+}
+
 impl Host {
-    pub fn from_env(home: String, support: &std::path::Path, identity: DeviceIdentity) -> Host {
+    /// `OMK_BRIDGE_*` 시간 제한·샌드박스·자동 승인과 브라우저 환경은 프로세스 환경에서 읽는다(헬퍼는 앱 환경을 물려받았다 —
+    /// FFI 도 같은 값). `env` 는 exec 자식 환경의 원본, `browser_enabled` 는 앱 설정.
+    pub fn new(
+        home: String,
+        support: &std::path::Path,
+        identity: DeviceIdentity,
+        browser_enabled: bool,
+        env: Vec<(String, String)>,
+    ) -> Host {
         let support_dir = support.to_string_lossy().into_owned();
         let (platform, platform_name) = PLATFORM;
-        let browser = (var(BROWSER_ENV).as_deref() == Some("1")).then(|| {
+        let browser = browser_enabled.then(|| {
             let profile = support
                 .join("browser-profile")
                 .to_string_lossy()
@@ -97,9 +117,7 @@ impl Host {
             (profile, BrowserEnv::from_env(&var, platform_name, &home))
         });
         Host {
-            env: std::env::vars_os()
-                .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?)))
-                .collect(),
+            env,
             platform,
             sandbox_enabled: sandbox_enabled(platform, var("OMK_BRIDGE_SANDBOX").as_deref()),
             auto_approve_all: auto_approve_from_env(var("OMK_BRIDGE_AUTO_APPROVE").as_deref()),
@@ -144,5 +162,37 @@ impl Host {
             Some((profile, env)) => core.with_browser_profile(profile.clone(), env.clone()),
             None => core,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use omk_bridge_conn::device_id::DeviceIdentity;
+    use omk_bridge_core::exec_env::build_exec_env;
+
+    use super::{API_KEY_ENV, Host};
+
+    /// PR-3.2 D-229 ① — 호스트 환경에 키 이름이 있어도 exec 자식 환경(코어 허용 목록)에는 없다.
+    #[test]
+    fn api_key_env_never_reaches_exec_children() {
+        let tmp = std::env::temp_dir().join(format!("omk-host-env-{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let identity = DeviceIdentity::load_or_create(&tmp).unwrap();
+        let env = vec![
+            (API_KEY_ENV.to_owned(), "omk_live_synthetic".to_owned()),
+            ("HOME".to_owned(), "/tmp".to_owned()),
+            ("LANG".to_owned(), "ko_KR.UTF-8".to_owned()),
+        ];
+        let host = Host::new("/tmp".into(), &tmp, identity, false, env);
+        let child = build_exec_env(host.env.clone(), "/usr/bin:/bin", host.platform, &[]);
+        assert!(child.contains_key("HOME"), "{child:?}");
+        assert!(!child.contains_key(API_KEY_ENV), "{child:?}");
+        assert!(
+            !child.values().any(|v| v.contains("omk_live_")),
+            "{child:?}"
+        );
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }
