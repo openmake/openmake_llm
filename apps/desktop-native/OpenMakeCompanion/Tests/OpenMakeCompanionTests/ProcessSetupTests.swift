@@ -38,3 +38,58 @@ final class ProcessSetupTests: XCTestCase {
         }
     }
 }
+
+/** main 큐 작업 하나를 띄우고 중첩 run loop 로 그것이 실행되는지 본다(상한 1초) — applicationShouldTerminate 의 .terminateLater
+    가 reply(Task @MainActor)를 기다리는 모양. main 디스패치 큐 블록 안이면 거짓(교착 모양), run loop 소스 안이면 참. */
+@MainActor
+private func nestedLoopDrainsMainQueue() -> Bool {
+    var drained = false
+    DispatchQueue.main.async { drained = true }
+    let deadline = Date().addingTimeInterval(1)
+    while !drained && Date() < deadline {
+        _ = RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
+    return drained
+}
+
+/** R-10(PR-3.2 r3) — 종료 요청은 main 큐 블록 밖(run loop 소스)에서 terminate 를 부른다. */
+@MainActor
+final class AppTerminationTests: XCTestCase {
+    func testRequestInsideMainQueueBlockRunsAfterBlockAndCanDrainMainQueue() async {
+        let saved = AppTermination.terminate
+        defer { AppTermination.terminate = saved }
+        let done = XCTestExpectation(description: "terminate")
+        var blockEnded = false
+        var ranAfterBlock = false
+        var drained = false
+        AppTermination.terminate = {
+            ranAfterBlock = blockEnded
+            drained = nestedLoopDrainsMainQueue()
+            done.fulfill()
+        }
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                AppTermination.request()
+                blockEnded = true
+            }
+        }
+        await fulfillment(of: [done], timeout: 5)
+        XCTAssertTrue(ranAfterBlock, "terminate 는 요청한 main 큐 블록이 끝난 뒤에 불려야 한다")
+        XCTAssertTrue(drained, "terminate 안의 중첩 run loop 가 main 큐 작업(reply Task)을 실행할 수 있어야 한다")
+    }
+
+    func testSignalDefaultGoesThroughRequest() async {
+        ProcessSetup.apply()
+        let saved = AppTermination.terminate
+        defer { AppTermination.terminate = saved }
+        let done = XCTestExpectation(description: "terminate via SIGTERM")
+        var drained = false
+        AppTermination.terminate = {
+            drained = nestedLoopDrainsMainQueue()
+            done.fulfill()
+        }
+        kill(getpid(), SIGTERM)
+        await fulfillment(of: [done], timeout: 5)
+        XCTAssertTrue(drained, "신호 처리기(main 큐 블록)에서 바로 부르면 reply 를 기다리는 중첩 루프가 교착한다")
+    }
+}

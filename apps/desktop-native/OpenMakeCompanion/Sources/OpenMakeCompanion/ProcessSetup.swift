@@ -6,8 +6,9 @@ import Darwin
 enum ProcessSetup {
     /** 개발 훅 키(환경 OMK_COMPANION_API_KEY) — apply() 가 읽어 담고 환경에서 지운다. 정식 실행 경로는 Keychain 만 쓴다. */
     private(set) static var devApiKey: String?
-    /** SIGTERM·SIGINT 를 받았을 때(main 큐) — 기본은 정상 종료 경로(applicationShouldTerminate → 호스트 정리). 시험이 바꾼다. */
-    static var onTerminateSignal: @MainActor () -> Void = { NSApp.terminate(nil) }
+    /** SIGTERM·SIGINT 를 받았을 때(main 큐 블록) — 기본은 정상 종료 경로(applicationShouldTerminate → 호스트 정리). 이 블록
+        안에서 바로 terminate 하면 .terminateLater 가 교착하므로 AppTermination.request() 로 run loop 소스에 넘긴다(R-10). 시험이 바꾼다. */
+    static var onTerminateSignal: @MainActor () -> Void = { AppTermination.request() }
     private static var signalSources: [DispatchSourceSignal] = []
 
     /** 멱등 — 신호 설정은 한 번, 개발 훅 키는 부를 때마다 환경에 있으면 옮긴다. */
