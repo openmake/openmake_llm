@@ -58,6 +58,14 @@ CI 모델 fixture는 네트워크·인증·채팅 연결 검증용입니다. 실
 | 인프라 | macOS Colima / Linux Docker | 같은 플랫폼 규칙 | 같은 플랫폼 규칙 |
 | 갱신 | 에이전트의 개발 작업 | pipeline 스케줄, 검증 중 hold | 검증 릴리스 pipeline 스케줄 |
 
+클론을 기본 위치(`$OMK_ROOT/<env>/llm`·`bench`)가 아닌 곳(예: 외장 디스크)에 두려면 링크 대신 환경 디렉터리에 `omk-paths.env`를 둡니다. 절대 경로만 따르고, 파일이 없거나 값이 절대 경로가 아니면 기본 위치를 씁니다. `omk` 래퍼·소유권 검사도 이 경로를 따릅니다. `omk env reset`은 환경 디렉터리(이 파일 포함)만 지우고 바깥 클론은 남깁니다.
+
+```bash
+# ~/.openmake/online/omk-paths.env
+OMK_LLM_DIR=/Volumes/DATA/openmake_llm
+OMK_BENCH_DIR=/Volumes/DATA/openmake_bench
+```
+
 포트·사용자·도메인·실제 경로는 해당 `.env`와 `omk env status`를 읽습니다. 호스트 이름이 환경 이름을 대신하지 않습니다. staging은 Tailscale 호스트와 프록시 포트로 접속하고, online의 외부 공개는 운영 Cloudflare/DNS 설정을 따릅니다. Base와 Add-on 분리, 앱 PM2 실행 방식은 유지합니다.
 
 ## staging 설치·검증·사람 확인

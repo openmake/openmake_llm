@@ -30,6 +30,13 @@ eq "volumes online" "$(docker_volumes online)"     "openmake_pgdata openmake_red
 eq "volumes staging" "$(docker_volumes staging)"   "openmake-staging_pgdata openmake-staging_redisdata"
 eq "bench pm2"      "$(bench_pm2_name staging)" "openmake-bench-staging"
 eq "dirs"           "$(llm_dir staging)|$(bench_dir staging)" "$OMK_ROOT/staging/llm|$OMK_ROOT/staging/bench"
+# omk-paths.env(선택): 절대 경로만 따르고, 없거나 상대 경로면 기본 위치 — 다른 테스트의 OMK_ROOT 와 섞이지 않게 따로 둔다
+PROOT="$TMP/proot"; mkdir -p "$PROOT/qa-p" "$PROOT/qa-r"
+printf 'OMK_LLM_DIR=%s\nOMK_BENCH_DIR="%s"\n' "$TMP/ext/llm" "$TMP/ext/bench" > "$PROOT/qa-p/omk-paths.env"
+printf 'OMK_LLM_DIR=ext/llm\n' > "$PROOT/qa-r/omk-paths.env"
+eq "dirs: omk-paths.env"          "$(OMK_ROOT="$PROOT"; llm_dir qa-p)|$(OMK_ROOT="$PROOT"; bench_dir qa-p)" "$TMP/ext/llm|$TMP/ext/bench"
+eq "dirs: 상대 경로는 기본 위치"  "$(OMK_ROOT="$PROOT"; llm_dir qa-r)|$(OMK_ROOT="$PROOT"; bench_dir qa-r)" "$PROOT/qa-r/llm|$PROOT/qa-r/bench"
+eq "dirs: 파일 없으면 기본 위치"  "$(OMK_ROOT="$PROOT"; llm_dir qa-x)" "$PROOT/qa-x/llm"
 eq "ref staging"    "$(env_default_ref staging)" "main"
 eq "ref online"     "$(env_default_ref online)"  "release"
 eq "ref dev"        "$(env_default_ref dev)"     "dev"
@@ -296,6 +303,10 @@ ok "own: env dir itself"      '! is_foreign_path "$OMK_ROOT/staging" "$OMK_ROOT/
 ok "foreign: legacy layout"   'is_foreign_path "$OMK_ROOT/chat-staging/infra" "$OMK_ROOT/staging"'
 ok "foreign: prefix sibling"  'is_foreign_path "$OMK_ROOT/staging2/llm" "$OMK_ROOT/staging"'
 ok "unknown owner passes"     '! is_foreign_path "" "$OMK_ROOT/staging"'
+ok "own: 기본 배치"                     '! is_foreign_to_env "$OMK_ROOT/staging/llm/infra" staging'
+ok "own: omk-paths.env 로 밖에 둔 llm"   '( OMK_ROOT="$PROOT"; ! is_foreign_to_env "$TMP/ext/llm/infra" qa-p )'
+ok "own: omk-paths.env 로 밖에 둔 bench" '( OMK_ROOT="$PROOT"; ! is_foreign_to_env "$TMP/ext/bench" qa-p )'
+ok "foreign: 밖의 다른 경로"             '( OMK_ROOT="$PROOT"; is_foreign_to_env "$TMP/ext/other" qa-p )'
 
 # ── .env 백업 복원: 설치 전에만, 있는 .env 는 덮지 않는다 ──
 BK="$TMP/bk"; mkdir -p "$BK" "$TMP/r1" "$TMP/r2"; printf 'POSTGRES_PASSWORD=old\n' > "$BK/llm.env"
@@ -671,6 +682,9 @@ eq "wrapper: 클론 안이라도 env 는 설치본"       "$(cd "$WC" && bash "$
 eq "wrapper: 클론 밖의 dev 는 설치본"           "$(cd "$TMP" && bash "$W" dev up)"            "installed dev up"
 eq "wrapper: ~/.openmake 안의 클론은 설치본"    "$(cd "$OMK_ROOT/staging/llm" && bash "$W" dev up)" "installed dev up"
 eq "wrapper: omk.sh 없는 클론은 설치본"         "$(cd "$NC" && bash "$W" dev up)"             "installed dev up"
+WR="$TMP/wroot"; ( OMK_ROOT="$WR"; install_wrapper >/dev/null ); mkdir -p "$WR/online"; fake_omk "$TMP/ext/wllm" external
+printf 'OMK_LLM_DIR="%s"\n' "$TMP/ext/wllm" > "$WR/online/omk-paths.env"
+eq "wrapper: omk-paths.env 의 llm 클론"         "$(cd "$TMP" && OMK_ROOT="$WR" bash "$WR/bin/omk" env status online)" "external env status online"
 # 환경을 설치하지 않고 작업 클론만 쓰는 장비 — 'dev setup' 이 래퍼를 깐다 (무거운 단계는 가짜로)
 printf '#!/usr/bin/env bash\nexit 0\n' > "$WC/install.sh"; chmod +x "$WC/install.sh"
 DS_ROOT="$TMP/dsroot"

@@ -25,6 +25,7 @@
 # 디렉터리:
 #   $OMK_ROOT/<env>/llm      openmake_llm 클론 (.env 포함)
 #   $OMK_ROOT/<env>/bench    openmake_bench 클론 (.env, data/ 포함)
+#   $OMK_ROOT/<env>/omk-paths.env  선택 — OMK_LLM_DIR·OMK_BENCH_DIR(절대 경로)로 위 두 클론을 다른 곳에 둔다
 #   $OMK_ROOT/<env>/logs     PM2 로그
 #   $OMK_ROOT/caddy          프록시 설정 (Caddyfile + caddy.d/<env>.caddy)
 #   $OMK_ROOT/bin            caddy 바이너리(필요 시), omk 래퍼
@@ -215,8 +216,13 @@ validate_env() {
     [[ "$1" != "$OMK_LOCAL_INSTANCE" ]] || usage_die "'$1' 은 작업 클론의 로컬 개발('omk dev …')이 쓰는 이름입니다 — 다른 환경 이름을 고르세요"
 }
 env_dir()    { printf '%s/%s' "$OMK_ROOT" "$1"; }
-llm_dir()    { printf '%s/%s/llm' "$OMK_ROOT" "$1"; }
-bench_dir()  { printf '%s/%s/bench' "$OMK_ROOT" "$1"; }
+# 선택: 환경 디렉터리의 omk-paths.env 에 절대 경로가 있으면 그 클론을 쓴다(링크 없이 다른 디스크에 둘 때). 없으면 기본 위치.
+env_path_or() { # $1=env $2=key $3=기본 경로
+    local v; v="$(dotenv_get "$OMK_ROOT/$1/omk-paths.env" "$2")"
+    case "$v" in /*) printf '%s' "$v" ;; *) printf '%s' "$3" ;; esac
+}
+llm_dir()    { env_path_or "$1" OMK_LLM_DIR "$OMK_ROOT/$1/llm"; }
+bench_dir()  { env_path_or "$1" OMK_BENCH_DIR "$OMK_ROOT/$1/bench"; }
 logs_dir()   { printf '%s/%s/logs' "$OMK_ROOT" "$1"; }
 proxy_dir()  { printf '%s/caddy' "$OMK_ROOT"; }
 env_suffix() { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf '' || printf -- '-%s' "$1"; }
@@ -340,6 +346,9 @@ is_foreign_path() { # $1=실제 소유 경로 $2=이 환경의 디렉터리 → 
     [[ -n "$1" ]] || return 1
     case "$1" in "$2"|"$2"/*) return 1 ;; *) return 0 ;; esac
 }
+is_foreign_to_env() { # $1=실제 소유 경로 $2=env → 환경 디렉터리·llm·bench 클론(omk-paths.env 로 밖에 둔 것 포함) 어디에도 없으면 0
+    is_foreign_path "$1" "$(env_dir "$2")" && is_foreign_path "$1" "$(llm_dir "$2")" && is_foreign_path "$1" "$(bench_dir "$2")"
+}
 # compose 가 띄운 것은 compose 라벨로, omk 가 docker run 으로 띄운 것(SearXNG)은 omk.owner_dir 라벨로 주인을 안다.
 container_workdir() { docker inspect -f '{{ or (index .Config.Labels "com.docker.compose.project.working_dir") (index .Config.Labels "omk.owner_dir") }}' "$1" 2>/dev/null || true; }
 pm2_app_cwd() { # $1=name
@@ -358,16 +367,16 @@ pm2_dump_has_any() { # $1="name name …" → 0 이면 dump 에 그중 하나가
 }
 assert_env_owned() { # $1=env
     [[ "${OMK_FORCE_FOREIGN:-}" == "1" ]] && return 0
-    local env="$1" edir c n owner; edir="$(env_dir "$1")"
+    local env="$1" c n owner
     if has docker; then
         for c in $(docker_containers "$env"); do
             owner="$(container_workdir "$c")"
-            is_foreign_path "$owner" "$edir" && die "컨테이너 $c 는 다른 설치본($owner)의 것입니다 — 환경 '$env' 와 인스턴스 이름이 겹칩니다. 다른 환경 이름을 쓰거나 그 설치본을 먼저 정리하세요(그 디렉터리에서 ./uninstall.sh). 그래도 진행하려면 OMK_FORCE_FOREIGN=1"
+            is_foreign_to_env "$owner" "$env" && die "컨테이너 $c 는 다른 설치본($owner)의 것입니다 — 환경 '$env' 와 인스턴스 이름이 겹칩니다. 다른 환경 이름을 쓰거나 그 설치본을 먼저 정리하세요(그 디렉터리에서 ./uninstall.sh). 그래도 진행하려면 OMK_FORCE_FOREIGN=1"
         done
     fi
     for n in $(pm2_names "$env"); do
         owner="$(pm2_app_cwd "$n")"
-        is_foreign_path "$owner" "$edir" && die "PM2 앱 $n 은 다른 설치본($owner)의 것입니다 — 환경 '$env' 와 인스턴스 이름이 겹칩니다. OMK_FORCE_FOREIGN=1 로만 진행합니다."
+        is_foreign_to_env "$owner" "$env" && die "PM2 앱 $n 은 다른 설치본($owner)의 것입니다 — 환경 '$env' 와 인스턴스 이름이 겹칩니다. OMK_FORCE_FOREIGN=1 로만 진행합니다."
     done
     return 0
 }
@@ -709,7 +718,9 @@ if [[ "${1:-}" == dev ]]; then
     esac
 fi
 for e in online staging $(ls -1 "$root" 2>/dev/null); do
-    s="$root/$e/llm/scripts/env/omk.sh"
+    d="$(sed -n 's/^OMK_LLM_DIR=//p' "$root/$e/omk-paths.env" 2>/dev/null | tail -1)"; d="${d//[\"\']/}"   # omk.sh 의 llm_dir 과 같은 규칙
+    case "$d" in /*) ;; *) d="$root/$e/llm" ;; esac
+    s="$d/scripts/env/omk.sh"
     [[ -f "$s" ]] && exec bash "$s" "$@"
 done
 echo "omk.sh 를 찾을 수 없습니다 — 먼저 환경을 설치하세요: curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.sh | bash -s -- env install <env>" >&2
