@@ -163,7 +163,9 @@ impl ProcEnd {
 /// 명령이 끝나도 파이프가 그 자식이 끝날 때까지 닫히지 않는다(설계 2026-11-15 D-5, `tests/exec_spawn_race.rs`).
 /// 이 크레이트에서 자식을 띄우는 모든 자리(`run`·`kill_group`·Chrome)가 이것을 거친다. `spawn()` 호출 동안만 쥔다.
 /// 알려진 범위: `spawn` 이 막히면(막힌 볼륨의 cwd 등) 그동안 다른 띄우기도 모두 기다린다.
-/// 소켓(`socket()` 뒤 `FD_CLOEXEC`)의 같은 창과 `omk-helper` 의 기동 때 `hostname` 은 다루지 않는다.
+/// 소켓(`socket()` 뒤 `FD_CLOEXEC`)의 같은 창과 호스트(헬퍼·FFI) 기동 때 `hostname`(`omk-bridge-host`)은 다루지 않는다 —
+/// `hostname` 은 이 잠금·[`SpawnHook`] 밖이라 FFI 에선 앱의 비-CLOEXEC fd 를 잠깐 물려받지만, 시스템 바이너리(절대경로,
+/// 환경 없음)가 곧 끝나므로 위험을 무시한다.
 static SPAWN_LOCK: Mutex<()> = Mutex::new(());
 
 /// 띄우기 직전 `std::process::Command` 를 고치는 훅(PR-3.2 D-241(r3)) — 앱 프로세스 안(FFI)에서 띄울 때 앱이 연 비-CLOEXEC

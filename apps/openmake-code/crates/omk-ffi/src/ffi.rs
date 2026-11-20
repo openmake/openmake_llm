@@ -203,6 +203,7 @@ impl Drop for BridgeHost {
 /// 기존 `--resolve` — 넣은 주소에서 연결·웹 주소를 정한다(블로킹, 5초 제한 — Swift 는 백그라운드 큐에서 부른다).
 #[uniffi::export]
 pub fn resolve_endpoints(server: String) -> Result<Endpoints, HostError> {
+    run::install_panic_hook();
     run::resolve(&server).ok_or(HostError::Internal)
 }
 
