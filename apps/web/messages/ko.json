@@ -940,7 +940,8 @@
     "status": {
       "running": "진행중",
       "completed": "완료",
-      "pending": "대기"
+      "pending": "대기",
+      "waitingDevice": "기기 연결 대기"
     },
     "statusRaw": {
       "pending": "대기",
