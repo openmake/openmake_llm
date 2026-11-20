@@ -185,6 +185,8 @@ impl Helper {
         while !g.stderr_closed && Instant::now() < end {
             g = cv.wait_timeout(g, Duration::from_millis(50)).unwrap().0;
         }
+        // 상한을 넘겨 덜 읽힌 stderr 로 assert_stderr_empty 가 가짜 통과하지 않게(PR-3.2 리뷰 r2 Nit-3).
+        assert!(g.stderr_closed, "stderr EOF 없음 ({STDERR_WAIT:?} 상한)");
         (g.raw.clone(), g.stderr.clone())
     }
 
