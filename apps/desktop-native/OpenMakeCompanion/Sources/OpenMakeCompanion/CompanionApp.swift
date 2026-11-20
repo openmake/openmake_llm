@@ -115,6 +115,10 @@ struct MenuContent: View {
             Button(L("menu.browser.stop")) { helper.stopBrowser() }
         }
         Divider()
+        // 작업 창(PR-3.3) — 설정 열기는 이 Scene 의 openSettings 를 넘긴다(D-268, NSHostingView 안 환경 값에 기대지 않는다).
+        Button(L("menu.openTasks")) {
+            TasksWindow.shared.show(openSettings: { openSettings(); NSApp.activate(ignoringOtherApps: true) })
+        }
         Button(L("menu.openWeb")) { helper.openWeb() }
         Button(L("menu.checkUpdates")) {
             Task { await Updater.shared.check(backendUrl: helper.serverAddress, interactive: true) }

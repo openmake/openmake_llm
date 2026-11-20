@@ -148,4 +148,27 @@ final class FfiRoundTripTests: XCTestCase {
         let e = try resolveEndpoints(server: unreachableServer)
         XCTAssertEqual(e, Endpoints(bridgeUrl: unreachableServer, webUrl: unreachableServer, discovered: false))
     }
+
+    /** PR-3.3 T-S10 — TaskApi 생성 바인딩: 잘못된 주소 → InvalidInput(연관 값 없음), 닫힌 포트 → Network. */
+    func testTaskApiRoundTrip() throws {
+        XCTAssertThrowsError(try TaskApi(server: "ftp://x", apiKey: "k")) {
+            XCTAssertEqual($0 as? ApiCallError, .InvalidInput)
+        }
+        let api = try TaskApi(server: "http://127.0.0.1:1", apiKey: "omk_test_SYNTH")
+        XCTAssertThrowsError(try api.listTasks()) { XCTAssertEqual($0 as? ApiCallError, .Network) }
+        XCTAssertThrowsError(try api.getTask(taskId: "t")) { XCTAssertEqual($0 as? ApiCallError, .Network) }
+    }
+
+    /** PR-3.3 T-S10 — 앱 경로(TaskApiClient: 직렬 큐 + continuation)로 같은 결과, 낡은 요청은 FFI 를 부르지 않고 취소. */
+    func testTaskApiClient() async throws {
+        let client = TaskApiClient()
+        do {
+            _ = try await client.listTasks(server: "http://127.0.0.1:1", key: "omk_test_SYNTH", isCurrent: { true })
+            XCTFail("닫힌 포트")
+        } catch { XCTAssertEqual(error as? ApiCallError, .Network) }
+        do {
+            _ = try await client.getTask(server: "http://127.0.0.1:1", key: "omk_test_SYNTH", id: "t", isCurrent: { false })
+            XCTFail("낡은 요청")
+        } catch { XCTAssertTrue(error is CancellationError) }
+    }
 }

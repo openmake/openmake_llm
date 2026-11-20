@@ -19,10 +19,15 @@ omk-bridge-core = { path = "../omk-bridge-core" }
 uniffi = "=0.32.2"
 # cloexec.rs 의 fcntl·getdtablesize(PR-3.2 D-241(r3) ①) — 이미 Cargo.lock 에 있는 판.
 libc = "0.2"
+# 작업 목록·상세 읽기(PR-3.3 D-250) — 워크스페이스 크레이트, 새 링크 크레이트 없음(T0 ①). 런타임은 TaskApi 가 소유(D-251).
+omk-api = { path = "../omk-api" }
+tokio = { version = "1.54.1", default-features = false, features = ["rt", "net", "time"] }
 
 [dev-dependencies]
-# T-F7 — 호스트 런타임에 패닉하는 태스크를 넣는다.
-tokio = { version = "1.54.1", default-features = false, features = ["rt", "time"] }
+# T-F7 — 호스트 런타임에 패닉하는 태스크를 넣는다. PR-3.3 — omk-api 목 서버(tests/support)를 별도 multi-thread 런타임에서 돌린다.
+tokio = { version = "1.54.1", default-features = false, features = ["rt", "rt-multi-thread", "time", "net", "io-util", "sync"] }
+# omk-api 목 서버(tests/support/mod.rs)가 쓴다 — 이미 Cargo.lock 에 있는 판, 앱에 링크되지 않는다.
+serde_json = "1.0.154"
 
 # unsafe 예외는 이 크레이트 하나(PR-3.2 D-224) — 워크스페이스의 forbid 는 하위 allow 로 못 풀므로 lints 표를 통째로 쓴다.
 # 허용 자리는 lib.rs 의 #![allow(unsafe_code)](UniFFI 생성 코드)와 cloexec.rs 뿐이고 tests/ffi_guard.rs 가 고정한다.
