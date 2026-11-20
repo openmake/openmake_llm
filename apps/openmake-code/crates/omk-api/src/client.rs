@@ -16,6 +16,9 @@ use crate::types::{
     ActionResult, CreateResult, StepList, SubagentList, SubagentTrace, TaskDetail, TaskList,
 };
 
+pub(crate) const API_KEY_HEADER: &str = "x-api-key";
+pub(crate) const IDEMPOTENCY_HEADER: &str = "idempotency-key";
+
 /// `Send + Sync` — 3.2 가 `Arc<ApiClient>` 로 공유한다. TLS 설정은 생성 때 한 번 만든다.
 /// 키를 담으므로 Debug 를 두지 않는다.
 pub struct ApiClient {
@@ -42,13 +45,13 @@ impl ApiClient {
     pub(crate) async fn call<T: DeserializeOwned>(&self, p: Prepared) -> Result<T, ApiError> {
         let url = build_url(&self.base, &p)?;
         let mut headers = vec![(
-            HeaderName::from_static("x-api-key"),
+            HeaderName::from_static(API_KEY_HEADER),
             self.key.header_value(),
         )];
         if let Some(k) = &p.idempotency_key {
             let v = HeaderValue::from_str(k)
                 .map_err(|_| ApiError::InvalidInput("제출 키가 올바르지 않습니다"))?;
-            headers.push((HeaderName::from_static("idempotency-key"), v));
+            headers.push((HeaderName::from_static(IDEMPOTENCY_HEADER), v));
         }
         let json_body = match &p.body {
             Some(b) => Some(
@@ -78,8 +81,7 @@ impl ApiClient {
     }
 
     pub async fn get_task(&self, task_id: &str) -> Result<TaskDetail, ApiError> {
-        self.call(Prepared::new(Operation::GetTask).param(task_id))
-            .await
+        self.call(req_get_task(task_id)).await
     }
 
     pub async fn execute_task(&self, task_id: &str) -> Result<ActionResult, ApiError> {
@@ -96,14 +98,11 @@ impl ApiClient {
     }
 
     pub async fn list_steps(&self, task_id: &str) -> Result<StepList, ApiError> {
-        self.call(Prepared::new(Operation::ListSteps).param(task_id))
-            .await
+        self.call(req_list_steps(task_id)).await
     }
 
     pub async fn list_subagents(&self, task_id: &str) -> Result<Vec<SubagentTrace>, ApiError> {
-        let r: SubagentList = self
-            .call(Prepared::new(Operation::ListSubagents).param(task_id))
-            .await?;
+        let r: SubagentList = self.call(req_list_subagents(task_id)).await?;
         Ok(r.traces)
     }
 
@@ -117,6 +116,18 @@ pub(crate) fn req_create_task(s: &CreateSubmission) -> Prepared {
     let mut p = Prepared::new(Operation::CreateTask).body(s.body().clone());
     p.idempotency_key = Some(s.key().to_owned());
     p
+}
+
+pub(crate) fn req_get_task(task_id: &str) -> Prepared {
+    Prepared::new(Operation::GetTask).param(task_id)
+}
+
+pub(crate) fn req_list_steps(task_id: &str) -> Prepared {
+    Prepared::new(Operation::ListSteps).param(task_id)
+}
+
+pub(crate) fn req_list_subagents(task_id: &str) -> Prepared {
+    Prepared::new(Operation::ListSubagents).param(task_id)
 }
 
 pub(crate) fn req_execute(task_id: &str) -> Prepared {

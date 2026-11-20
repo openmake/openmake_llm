@@ -33,7 +33,7 @@ impl ApiClient {
     }
 
     pub async fn list_pending(&self) -> Result<Vec<PendingApproval>, ApiError> {
-        let r: PendingList = self.call(Prepared::new(Operation::ListPending)).await?;
+        let r: PendingList = self.call(req_list_pending()).await?;
         Ok(r.pending)
     }
 
@@ -60,6 +60,10 @@ pub(crate) fn req_auto_approve(task_id: &str, enabled: bool) -> Prepared {
     Prepared::new(Operation::SetAutoApprove)
         .param(task_id)
         .body(json!({ "enabled": enabled }))
+}
+
+pub(crate) fn req_list_pending() -> Prepared {
+    Prepared::new(Operation::ListPending)
 }
 
 pub(crate) fn req_decision(approval_id: &str, decision: ApprovalDecision) -> Prepared {

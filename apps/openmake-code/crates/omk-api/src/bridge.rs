@@ -7,7 +7,7 @@ use crate::types::{BridgeStatus, FolderList};
 
 impl ApiClient {
     pub async fn bridge_status(&self) -> Result<BridgeStatus, ApiError> {
-        self.call(Prepared::new(Operation::BridgeStatus)).await
+        self.call(req_bridge_status()).await
     }
 
     /// 연결 루트 하위 폴더 열거 — path 는 이전 응답의 rel 만(서버가 검증한다). 둘 다 없으면 최근 디바이스의 루트.
@@ -18,6 +18,10 @@ impl ApiClient {
     ) -> Result<FolderList, ApiError> {
         self.call(req_list_folders(device_id, path)).await
     }
+}
+
+pub(crate) fn req_bridge_status() -> Prepared {
+    Prepared::new(Operation::BridgeStatus)
 }
 
 pub(crate) fn req_list_folders(device_id: Option<&str>, path: Option<&str>) -> Prepared {

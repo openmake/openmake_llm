@@ -1,0 +1,61 @@
+{
+  "_comment": "미문서 operation·필드의 정확한 예외(D-201 A안·D-208). wildcard 금지. 문서가 생기면 테스트가 실패해 대조 대상으로 승격한다. 계약 보강은 U-10(단계 ④ 이후 별도 서버 PR).",
+  "exceptions": [
+    {
+      "operation": "BridgeStatus",
+      "kind": "operation",
+      "method": "get",
+      "path": "/api/local-bridge/status",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/local-bridge.routes.ts:21 success({enabled,connected,label,folderName,devices}) — label/folderName 구 필드는 읽지 않음",
+      "consumerPR": [
+        "3.4",
+        "4.1"
+      ],
+      "followup": "U-10",
+      "query": [],
+      "body": [],
+      "response": [
+        "data",
+        "data.connected",
+        "data.devices",
+        "data.devices[]",
+        "data.devices[].connectedAt",
+        "data.devices[].deviceId",
+        "data.devices[].folderName",
+        "data.devices[].hostId",
+        "data.devices[].label",
+        "data.enabled",
+        "success"
+      ]
+    },
+    {
+      "operation": "ListFolders",
+      "kind": "operation",
+      "method": "get",
+      "path": "/api/local-bridge/folders",
+      "reason": "OpenAPI(packages/api-contracts/openapi.v1.json)에 이 operation 이 없다 — 단계 ①~④ 서버 무수정 원칙(D-201 A안). 서버 소스 근거로 대조한다.",
+      "source": "apps/api/src/routes/local-bridge.routes.ts:67 success({deviceId,path,folders,truncated})",
+      "consumerPR": [
+        "3.4"
+      ],
+      "followup": "U-10",
+      "query": [
+        "deviceId",
+        "path"
+      ],
+      "body": [],
+      "response": [
+        "data",
+        "data.deviceId",
+        "data.folders",
+        "data.folders[]",
+        "data.folders[].name",
+        "data.folders[].rel",
+        "data.path",
+        "data.truncated",
+        "success"
+      ]
+    }
+  ]
+}

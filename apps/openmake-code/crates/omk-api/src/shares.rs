@@ -14,9 +14,7 @@ use crate::types::{
 impl ApiClient {
     /// 현재 공유 상태 — 없으면 None.
     pub async fn get_share(&self, task_id: &str) -> Result<Option<ShareState>, ApiError> {
-        let r: ShareLookup = self
-            .call(Prepared::new(Operation::GetShare).param(task_id))
-            .await?;
+        let r: ShareLookup = self.call(req_get_share(task_id)).await?;
         Ok(r.share)
     }
 
@@ -78,11 +76,17 @@ impl ApiClient {
 
     /// 공유 해제 — 지운 공유가 있었으면 true.
     pub async fn unshare(&self, task_id: &str) -> Result<bool, ApiError> {
-        let r: Unshared = self
-            .call(Prepared::new(Operation::Unshare).param(task_id))
-            .await?;
+        let r: Unshared = self.call(req_unshare(task_id)).await?;
         Ok(r.unshared)
     }
+}
+
+pub(crate) fn req_get_share(task_id: &str) -> Prepared {
+    Prepared::new(Operation::GetShare).param(task_id)
+}
+
+pub(crate) fn req_unshare(task_id: &str) -> Prepared {
+    Prepared::new(Operation::Unshare).param(task_id)
 }
 
 fn toggles(steps: bool, diff: bool, artifacts: bool) -> serde_json::Value {
