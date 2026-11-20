@@ -188,9 +188,10 @@ export function runFeatures(files, options = {}) {
     desktopHelper = { platform, bundled: true, executed: platform === 'darwin' ? [harness] : [], delegatedToMacJob: platform === 'darwin' ? [] : [harness] };
   }
   // build.sh's node bundling functions (lib/node-bundle.sh): fake otool/curl/uname on PATH, so it runs on any platform.
+  // build.sh's omk-ffi binding step (lib/ffi.sh): fake cargo/xcodebuild on PATH, so it also runs on any platform (PR-3.2 D-235).
   // The rest of build.sh (swift, codesign, hdiutil) is exercised by the desktop-native workflow's mac build.
   // The successor replace script and its shell test were removed from main (plan-pr2.5 D-155); their mapping stays for the deletion diff.
-  if (selection.desktopBuild) run(process.execPath, ['--test', 'apps/desktop-native/lib/node-bundle.test.mjs']);
+  if (selection.desktopBuild) run(process.execPath, ['--test', 'apps/desktop-native/lib/node-bundle.test.mjs', 'apps/desktop-native/lib/ffi.test.mjs']);
   // The CLI workspace has no Jest project: its tsc build, then the fixtures that drive the built CLI.
   if (selection.cli) {
     run('npm', ['run', 'build', '--workspace=@openmake/cli']);

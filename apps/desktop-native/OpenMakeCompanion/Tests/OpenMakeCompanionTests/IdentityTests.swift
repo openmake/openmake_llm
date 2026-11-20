@@ -56,4 +56,14 @@ final class IdentityTests: XCTestCase {
             XCTAssertFalse(try read(f).contains("cc.openmake.companion"), f.lastPathComponent)
         }
     }
+
+    /** PR-3.2 T-S8 — 사이드카 헬퍼를 띄우지 않는다(번들·소스), Swift 서드파티 패키지 0. */
+    func testS5NoSidecarHelperAndNoThirdPartyPackages() throws {
+        for f in try sourceFiles() {
+            XCTAssertFalse(try read(f).contains("omk-helper"), f.lastPathComponent)
+        }
+        XCTAssertFalse(try read(sources.appendingPathComponent("HelperManager.swift")).contains("Process()"))
+        XCTAssertFalse(try read(appRoot.appendingPathComponent("build.sh")).contains("Contents/MacOS/omk-helper"))
+        XCTAssertFalse(try read(appRoot.appendingPathComponent("OpenMakeCompanion/Package.swift")).contains(".package("))
+    }
 }

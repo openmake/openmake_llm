@@ -1,0 +1,102 @@
+{
+  "_comment": "문서화된 operation 의 사용 필드 대조 목록(D-208). required = 이 크레이트 decoder 가 필수로 읽는지(요청은 항상 보내는지). 예외는 exceptions.json.",
+  "documented": [
+    {
+      "operation": "CreateTask",
+      "method": "post",
+      "path": "/api/agent-tasks",
+      "headers": [
+        "Idempotency-Key"
+      ],
+      "request": [
+        {
+          "path": "goal",
+          "required": true
+        },
+        {
+          "path": "executor",
+          "required": true
+        },
+        {
+          "path": "deviceId",
+          "required": true
+        },
+        {
+          "path": "folderRel",
+          "required": false
+        }
+      ],
+      "responseStatuses": [
+        "200",
+        "201"
+      ],
+      "response": [
+        {
+          "path": "success",
+          "required": true
+        },
+        {
+          "path": "data",
+          "required": true
+        },
+        {
+          "path": "data.task",
+          "required": true
+        },
+        {
+          "path": "data.task.id",
+          "required": true
+        },
+        {
+          "path": "data.task.goal",
+          "required": false
+        },
+        {
+          "path": "data.task.status",
+          "required": true
+        },
+        {
+          "path": "data.concurrentActive",
+          "required": true
+        },
+        {
+          "path": "data.warnings",
+          "required": true
+        },
+        {
+          "path": "data.warnings[]",
+          "required": true
+        },
+        {
+          "path": "data.deduplicated",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "failure": {
+    "schema": "#/components/schemas/ApiFailure",
+    "fields": [
+      {
+        "path": "success",
+        "required": true
+      },
+      {
+        "path": "error",
+        "required": true
+      },
+      {
+        "path": "error.code",
+        "required": true
+      },
+      {
+        "path": "error.message",
+        "required": true
+      }
+    ]
+  },
+  "security": {
+    "scheme": "apiKeyAuth",
+    "header": "X-API-Key"
+  }
+}

@@ -6,12 +6,12 @@ OpenMake Companion 헬퍼 실행 파일 — Node 헬퍼(`apps/desktop-native/hel
 | 파일 | 내용 |
 |---|---|
 | `src/main.rs` | 인자 → `run` → 종료 코드, 패닉 훅 |
-| `src/lib.rs` | `run`(기동·`--resolve`·stdout 비우기), stderr 고정 문구 |
-| `src/args.rs` · `src/commands.rs` · `src/events.rs` | 인자·명령 해석·이벤트 줄(순수 함수) |
-| `src/instance.rs` | 지원 폴더 잠금(`instance.lock`, `flock`) — 한 지원 폴더를 헬퍼 하나만 쓴다 |
-| `src/host.rs` | 호스트 값(지원 폴더·호스트 이름·환경 사본·샌드박스·시간 제한·브라우저) → 코어 조립 |
+| `src/lib.rs` | `run`(→ `omk_bridge_host::serve::serve`, 신호·stdin 읽기 연결, `--resolve`), stderr 고정 문구 |
+| `src/args.rs` · `src/commands.rs` · `src/events.rs` | 인자·명령 줄 해석(→ `Command`)·이벤트(`Event`) → JSON 줄(순수 함수) |
 | `src/stdio.rs` | stdin 읽기 스레드·stdout 쓰기 스레드 |
-| `src/app/` | 주 actor — 루트 표·확인 대기·connect/disconnect·종료 |
+
+호스트 로직(지원 폴더 잠금·호스트 값·주 actor·종료 순서)은 PR-3.2 에서 `crates/omk-bridge-host` 로 옮겼다 — 이 헬퍼와 앱 안 호스트(`crates/omk-ffi`)가
+같은 코드를 쓴다. 이 크레이트는 stdio JSON-lines 어댑터다(하네스·Windows 사이드카용, 0.6.0 macOS 앱 번들에는 없다).
 
 ## 그대로 옮긴 Node 동작 (이상해 보여도 바꾸지 않았다)
 

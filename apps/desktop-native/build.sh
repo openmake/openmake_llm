@@ -1,6 +1,7 @@
 #!/bin/bash
-# OpenMake Code 빌드 — 헬퍼 빌드(cargo) + 하네스 + Swift 빌드 + .app 조립 + ad-hoc 서명 + dmg.
-# 사전: npm ci (하네스의 ws 패키지) + Rust 툴체인 (판은 apps/openmake-code/rust-toolchain.toml)
+# OpenMake Code 빌드 — 헬퍼 빌드(cargo)·하네스(게이트) + omk-ffi 바인딩 + Swift 빌드 + .app 조립 + ad-hoc 서명 + dmg.
+# 0.6.0 부터 브리지 호스트는 앱 프로세스 안 Rust 정적 라이브러리(omk-ffi)다 — omk-helper 는 하네스 게이트로만 빌드하고 번들에 넣지 않는다(PR-3.2 D-232).
+# 사전: npm ci (하네스의 ws 패키지) + Rust 툴체인 (판은 apps/openmake-code/rust-toolchain.toml) + Xcode(xcodebuild)
 # 사용: bash apps/desktop-native/build.sh [버전]   (기본 버전: VERSION 파일)
 # 버전을 주지 않으면 VERSION 파일의 값을 쓴다 — 종전 기본값 0.1.0 은 서버에 게시된 버전(0.2.8)보다 낮아,
 # CI 가 만든 새 빌드가 게시본을 "새 버전"으로 보고 구버전으로 되돌아갔다(2026-10-05).
@@ -28,6 +29,9 @@ test -d "$ROOT/node_modules/ws" || { echo "하네스의 ws 패키지 없음 — 
 # 2-B) 다국어 표 게이트 (전 언어 키 집합·소스 사용 키 — 실패 시 빌드 중단)
 bash check-l10n.sh
 
+# 2-C) omk-ffi 정적 라이브러리 + Swift 바인딩(OpenMakeCompanion/Generated, 커밋하지 않음)
+bash lib/ffi.sh
+
 # 3) Swift 릴리스 빌드
 (cd OpenMakeCompanion && swift build -c release)
 
@@ -36,12 +40,12 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # 실행 파일 이름 = 앱 이름(plan-pr2.5 D-154). SwiftPM 대상 이름 OpenMakeCompanion 은 그대로 두고 복사하며 바꾼다.
 cp OpenMakeCompanion/.build/release/OpenMakeCompanion "$APP/Contents/MacOS/$APP_NAME"
-cp "$HELPER_BIN" "$APP/Contents/MacOS/omk-helper"
-chmod +x "$APP/Contents/MacOS/omk-helper"
 # 앱 아이콘 — 구 Electron 앱에서 이설한 자산 (2026-08-23, apps/desktop 제거)
 cp "$ROOT/apps/desktop-native/assets/icon.icns" "$APP/Contents/Resources/icon.icns"
 # 다국어 표 — ko(개발 언어)·en·ja·zh-Hans·de (웹 LOCALES 와 같은 언어)
 cp -R Localization/*.lproj "$APP/Contents/Resources/"
+# 링크된 MPL-2.0 크레이트(uniffi) 고지 — 소스 주소 안내(MPL-2.0 §3.2, D-244)
+cp THIRD_PARTY_NOTICES.md "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

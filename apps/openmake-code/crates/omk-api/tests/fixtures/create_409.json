@@ -1,0 +1,10 @@
+{
+  "success": false,
+  "error": {
+    "code": "CONFLICT",
+    "message": "같은 작업 생성 요청을 처리하고 있습니다"
+  },
+  "meta": {
+    "timestamp": "2026-01-01T00:00:00.000Z"
+  }
+}

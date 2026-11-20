@@ -5,32 +5,32 @@
 //! 로거는 설치하지 않는다(D-98) — 의존 크레이트의 `log` 기록(핸드셰이크의 Authorization·CDP 프레임)이 찍힐 길이 없다.
 //! stderr 에 쓰는 것은 고정 문구 셋뿐이다: 기동 실패, `OMK_COMPANION_API_KEY` 가 환경에 있음, 패닉 위치.
 
-mod app;
 pub mod args;
 pub mod commands;
 pub mod events;
-pub mod host;
-pub mod instance;
 pub mod stdio;
 
 use std::time::Duration;
 
-use omk_bridge_conn::device_id::DeviceIdentity;
 use omk_bridge_conn::runtime::host_runtime;
+use omk_bridge_host::event::{Emit, Event, INSTANCE_LOCK_FAILED_TEXT};
+use omk_bridge_host::host;
+use omk_bridge_host::serve::{self, Input, ServeArgs, Tx};
+use tokio::signal::unix::{SignalKind, signal};
 
 /// 종료 직전 stdout 을 비우는 한도.
-pub const STDOUT_FLUSH_MS: u64 = 500;
+pub const STDOUT_FLUSH_MS: u64 = serve::FLUSH_MS;
 /// 종료 때 런타임이 태스크를 버리고 블록된 작업을 기다리는 한도.
-pub const RUNTIME_SHUTDOWN_MS: u64 = 1000;
+pub const RUNTIME_SHUTDOWN_MS: u64 = serve::RUNTIME_SHUTDOWN_MS;
 /// 패닉 종료 코드(Rust 기본과 같다).
-pub const PANIC_EXIT: i32 = 101;
+pub const PANIC_EXIT: i32 = serve::PANIC_EXIT;
 /// 잠금을 못 잡아 끝남(`instance_conflict`·`instance_lock_failed`).
-pub const INSTANCE_EXIT: i32 = 3;
+pub const INSTANCE_EXIT: i32 = serve::INSTANCE_EXIT;
 
 /// stderr 고정 문구 ① — 입력·경로·오류 원문을 싣지 않는다.
 fn start_failed() -> i32 {
     eprintln!("omk-helper: 기동 실패");
-    1
+    serve::START_FAILED_EXIT
 }
 
 /// 패닉 훅 — 기본 훅은 패닉 메시지(값이 섞일 수 있다)를 찍는다. 위치만 찍고 프로세스를 끝낸다(태스크 하나만 죽고 프로세스가
@@ -41,6 +41,23 @@ pub fn install_panic_hook() {
         eprintln!("omk-helper: 내부 오류 ({file}:{line})");
         std::process::exit(PANIC_EXIT);
     }));
+}
+
+/// SIGTERM·SIGINT → actor 의 입력 끝(stdin 끝과 같은 종료). 처리기를 달지 못하면 그 신호는 기본 동작(죽음)대로 둔다.
+/// 신호 처리기는 헬퍼(사이드카 프로세스)만 단다 — 호스트 크레이트는 앱 프로세스 안에서도 돌기 때문이다(PR-3.2 D-228).
+fn forward_signals(tx: &Tx) {
+    for kind in [SignalKind::terminate(), SignalKind::interrupt()] {
+        if let Ok(mut s) = signal(kind) {
+            let tx = tx.clone();
+            tokio::spawn(async move {
+                while s.recv().await.is_some() {
+                    if !tx.send(Input::End) {
+                        return;
+                    }
+                }
+            });
+        }
+    }
 }
 
 /// 프로그램 이름을 뺀 인자로 실행하고 종료 코드를 돌려준다.
@@ -54,62 +71,68 @@ pub fn run(argv: &[String]) -> i32 {
         );
         return 2;
     }
+    let out = stdio::Emitter::spawn();
+    if args.resolve {
+        return resolve(&args.server, &out);
+    }
+    // 홈을 못 찾으면 지원 폴더를 못 만든 것과 같은 신호(잠금 실패)로 끝난다 — 종전과 같다.
+    let Some(home) = std::env::home_dir().and_then(|h| h.to_str().map(str::to_owned)) else {
+        out.emit(events::line(&Event::status_global(
+            INSTANCE_LOCK_FAILED_TEXT,
+            "instance_lock_failed",
+        )));
+        out.flush(Duration::from_millis(STDOUT_FLUSH_MS));
+        return INSTANCE_EXIT;
+    };
+    let flush_out = out.clone();
+    let emit = Emit::new(move |e| out.emit(events::line(&e)))
+        .with_flush(move |limit| flush_out.flush(limit));
+    let (tx, rx) = serve::channel();
+    let code = serve::serve(
+        ServeArgs {
+            server: args.server,
+            home,
+            browser_enabled: host::browser_from_env(),
+            env: host::env_snapshot(),
+        },
+        emit,
+        tx,
+        rx,
+        |tx| {
+            forward_signals(tx);
+            let t = tx.clone();
+            // stdin 읽기는 OS 스레드라 런타임 정리가 기다리지 않는다.
+            stdio::spawn_stdin_reader(move |i| {
+                t.send(match i {
+                    stdio::Input::Line(l) => match commands::parse(&l) {
+                        Some(c) => Input::Command(c),
+                        None => return true,
+                    },
+                    stdio::Input::End => Input::End,
+                })
+            });
+        },
+    );
+    if code == serve::START_FAILED_EXIT {
+        return start_failed();
+    }
+    code
+}
+
+/// `--resolve` — 한 줄만(`status idle`·`endpoints` 이벤트를 섞지 않는다 — 앱은 stdout 전체를 JSON 하나로 읽는다). stdin 을
+/// 읽지 않는다.
+fn resolve(server: &str, out: &stdio::Emitter) -> i32 {
     let Ok(rt) = host_runtime() else {
         return start_failed();
     };
-    let support_dir = host::prepare_support_dir();
-    if args.resolve && support_dir.is_none() {
+    if host::prepare_support_dir().is_none() {
         return start_failed();
     }
-    let emit = stdio::Emitter::spawn();
-    // 잠금은 런타임 정리가 끝난 뒤에 푼다 — 정리 중인 Chrome·exec 자식·FS 작업이 남은 동안 다음 헬퍼가 같은 id·프로필을 잡지 않게.
-    let mut held_lock = None;
-    let code = if args.resolve {
-        // 한 줄만 — `status idle`·`endpoints` 이벤트를 섞지 않는다(앱은 stdout 전체를 JSON 하나로 읽는다). stdin 을 읽지 않는다.
-        let e = rt.block_on(app::discover(&args.server));
-        emit.emit(events::resolve_line(&e));
-        0
-    } else {
-        // 잠금 → id → 호스트 → 연결(설계 §3.3). 잠그기 전에는 id 파일·브라우저 프로필을 읽지도 쓰지도 않는다. 지원 폴더를
-        // 못 만들면 잠금 실패와 같은 신호로 끝난다(앱이 안내와 "다시 시도" 를 보인다).
-        let outcome = match &support_dir {
-            Some((_, support)) => instance::acquire(support, || {
-                emit.emit(events::status_global(events::LOCK_WAIT_TEXT, "connecting"));
-            }),
-            None => instance::Outcome::Failed,
-        };
-        match (outcome, support_dir) {
-            (instance::Outcome::Held(lock), Some((home, support))) => {
-                held_lock = Some(lock);
-                let Ok(identity) = DeviceIdentity::load_or_create(&support) else {
-                    return start_failed();
-                };
-                let host = host::Host::from_env(home, &support, identity);
-                rt.block_on(app::run(args.server, host, emit.clone()))
-            }
-            (instance::Outcome::Conflict(owner), _) => {
-                emit.emit(events::status_global_arg(
-                    events::INSTANCE_CONFLICT_TEXT,
-                    "instance_conflict",
-                    &owner,
-                ));
-                INSTANCE_EXIT
-            }
-            _ => {
-                emit.emit(events::status_global(
-                    events::INSTANCE_LOCK_FAILED_TEXT,
-                    "instance_lock_failed",
-                ));
-                INSTANCE_EXIT
-            }
-        }
-    };
-    emit.flush(Duration::from_millis(STDOUT_FLUSH_MS));
-    // 남은 태스크를 버린다 — 띄우는 중인 Chrome·실행 중인 exec 자식은 `kill_on_drop` 으로 꺼진다. `shutdown_background` 는
-    // 버리기 전에 프로세스가 끝나 경주였다(리뷰 r1 M-1). 블록된 FS 호출은 상한에서 포기한다. stdin 읽기는 OS 스레드라 기다리지 않는다.
+    let e = rt.block_on(omk_bridge_host::discover(server));
+    out.emit(events::resolve_line(&e));
+    out.flush(Duration::from_millis(STDOUT_FLUSH_MS));
     rt.shutdown_timeout(Duration::from_millis(RUNTIME_SHUTDOWN_MS));
-    drop(held_lock);
-    code
+    0
 }
 
 #[cfg(test)]

@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "data": {
+    "deviceId": "dev-synth-1",
+    "path": "",
+    "folders": [
+      {
+        "rel": "sub",
+        "name": "sub"
+      },
+      {
+        "rel": "sub/dir",
+        "name": "dir"
+      }
+    ],
+    "truncated": false
+  },
+  "meta": {
+    "timestamp": "2026-01-01T00:00:00.000Z"
+  }
+}
