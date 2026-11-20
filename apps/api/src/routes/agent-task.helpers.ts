@@ -120,6 +120,14 @@ export async function waitReasonOf(t: { id?: unknown; status?: unknown }): Promi
     } catch { return {}; } // 표시용 — 조회 실패가 상세 응답을 막지 않는다
 }
 
+/** {@link waitReasonOf} 의 목록판 — 멈춘 작업만 한 번에 읽는다. 조회 실패면 목록을 그대로 돌려준다(표시용). */
+export async function withWaitReasons<T extends { id: string; status?: unknown }>(tasks: T[]): Promise<Array<T & { waitReason?: string }>> {
+    const paused = tasks.filter((t) => t.status === 'paused').map((t) => t.id);
+    if (paused.length === 0) return tasks;
+    const reasons = await new AgentTaskParkRepository(getPool()).getParkReasons(paused).catch(() => new Map<string, string>());
+    return tasks.map((t) => (reasons.has(t.id) ? { ...t, waitReason: reasons.get(t.id) } : t));
+}
+
 export function toPublicTask(t: Record<string, unknown>) {
     const { checkpoint, input_files, input_images, create_idempotency_key, terminal_notify_pending, lease_owner, lease_until, in_flight_tool_call_id, ...rest } = t;
     void input_images; // dataURL 배열 — 응답에서 제외(팽창 방지)
