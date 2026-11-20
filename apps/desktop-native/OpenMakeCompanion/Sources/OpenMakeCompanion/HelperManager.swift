@@ -236,8 +236,10 @@ final class HelperManager: NSObject, ObservableObject {
         }
     }
 
-    /** 업데이트 교체 스크립트를 띄우지 못했다 — 앱이 끝나지 않으므로 끈 호스트를 되살린다(D-233(r2)). */
+    /** 업데이트 교체 스크립트를 띄우지 못했다 — 앱이 끝나지 않으므로 끈 호스트를 되살린다(D-233(r2)). 그 사이 앱 종료가 진행
+        중이면(메뉴 종료·신호) 되살리지 않는다 — 새 호스트가 뜨면 종료 대기가 상한까지 가고 정리 없이 끝난다(Opus r4 L-2). */
     func restartAfterUpdateFailure() {
+        guard !AppTermination.requested else { return }
         terminating = false
         restartHelper()
     }

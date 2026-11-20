@@ -22,7 +22,11 @@ final class FakeHost: BridgeHostProtocol, @unchecked Sendable {
 final class FakeHosts {
     let helper = HelperManager()
     var started: [(FakeHost, HostListener)] = []
+    // 시험 전 전역 상태 — restoreDefaults 가 되돌린다(Astra r2 L-1).
     private let savedFolders = UserDefaults.standard.stringArray(forKey: "lastFolders")
+    private let savedFolder = UserDefaults.standard.string(forKey: "lastFolder")
+    private let savedEnvKey = getenv("OMK_COMPANION_API_KEY").map { String(cString: $0) }
+    private let savedDevKey = ProcessSetup.devApiKey
 
     init() {
         setenv("OMK_COMPANION_API_KEY", "omk_live_lifecycle_synthetic", 1)
@@ -37,7 +41,13 @@ final class FakeHosts {
     /** n 번째(0부터) 호스트가 끝났다고 낸다 — 실제 relay 경로(main 큐)로. */
     func exit(_ n: Int) { started[n].1.onEvent(event: .exited(code: 0)) }
 
-    func restoreDefaults() { UserDefaults.standard.set(savedFolders, forKey: "lastFolders") }
+    /** 바꾼 전역 상태(defaults·환경 키·개발 훅 키)를 시험 전 값으로 되돌린다. */
+    func restoreDefaults() {
+        UserDefaults.standard.set(savedFolders, forKey: "lastFolders")
+        UserDefaults.standard.set(savedFolder, forKey: "lastFolder")
+        if let k = savedEnvKey { setenv("OMK_COMPANION_API_KEY", k, 1) } else { unsetenv("OMK_COMPANION_API_KEY") }
+        ProcessSetup.restoreDevApiKeyForTests(savedDevKey)
+    }
 }
 
 @MainActor
@@ -84,5 +94,25 @@ final class HelperLifecycleTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 300_000_000)
         XCTAssertEqual(f.started.count, 2, "교체 실패 뒤에는 되살린다")
         XCTAssertTrue(f.helper.hasLiveHost)
+    }
+
+    /** Opus r4 L-2 — 앱 종료 대기와 업데이트 교체 실패가 겹치면 되살리지 않는다(새 호스트가 뜨면 정리 없이 끝난다). */
+    func testUpdateFailureDuringAppTerminationDoesNotRestart() async {
+        let f = FakeHosts()
+        let savedRequested = AppTermination.requested
+        defer { f.restoreDefaults(); AppTermination.requested = savedRequested }
+        f.helper.connect(folder: folder)
+        f.helper.connectedFolders = [folder]
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            f.exit(0)
+        }
+        await f.helper.stopHostAndWait()
+        AppTermination.requested = true // 그 사이 메뉴 종료·SIGTERM
+        f.helper.restartAfterUpdateFailure()
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        f.helper.connect(folder: folder)
+        XCTAssertEqual(f.started.count, 1, "앱 종료 중에는 새 호스트를 띄우지 않는다")
+        XCTAssertFalse(f.helper.hasLiveHost)
     }
 }
