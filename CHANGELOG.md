@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.141.0](https://github.com/openmake/openmake_llm/compare/v1.140.1...v1.141.0) (2026-11-19)
+
+
+### ✨ 기능
+
+* **companion:** OpenMake Code 로 넘어가는 다리 릴리스 — macOS 0.4.4 (PR-2.4) ([e28fc7e](https://github.com/openmake/openmake_llm/commit/e28fc7e4981049e6f211df0c1d3d0bef40d2be90))
+
+
+### 🐛 버그 수정
+
+* **companion:** 다리 교체 — FIFO 준비 실패·남은 .old·문구 원인 분리, 키 수신 검증 (PR-2.4 r1) ([58cc0ce](https://github.com/openmake/openmake_llm/commit/58cc0ce7133925808e30ca3b78b6c4c87c5ed401))
+
 ## [1.140.1](https://github.com/openmake/openmake_llm/compare/v1.140.0...v1.140.1) (2026-11-18)
 
 
