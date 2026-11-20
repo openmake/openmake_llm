@@ -133,6 +133,10 @@ pub(crate) fn install_panic_hook() {
         std::panic::set_hook(Box::new(|info| {
             let (file, line) = info.location().map_or(("?", 0), |l| (l.file(), l.line()));
             eprintln!("omk-ffi: 내부 오류 ({file}:{line})");
+            // 작업 API 호출 구간(호스트와 공유 상태 없음)은 `Internal` 로 끝난다 — 호스트를 끊지 않는다(PR-3.3 D-265).
+            if crate::api_convert::in_api_call() {
+                return;
+            }
             // 이 스레드가 등록표를 쥐고 있으면 다시 잡지 않는다(교착) — 놓을 때 처리된다.
             if HOLDING.try_with(Cell::get).unwrap_or(true) {
                 PENDING_ABORT.store(true, Ordering::SeqCst);
@@ -546,5 +550,41 @@ mod tests {
         assert_eq!(e1.last(), Some(&HostEvent::Exited { code: 101 }));
         assert_eq!(e2.last(), Some(&HostEvent::Exited { code: 101 }));
         assert_eq!(registered(), 0);
+    }
+
+    const A11: &str = "OMK_FFI_A11_CHILD";
+
+    /// T-A11(PR-3.3 D-265) — API 호출 구간(호출 스레드·그 런타임의 blocking 스레드)의 패닉은 호스트를 끊지 않는다.
+    #[test]
+    fn api_panic_spares_hosts() {
+        if std::env::var_os(A11).is_none() {
+            in_child("run::tests::api_panic_spares_hosts", A11);
+            return;
+        }
+        install_panic_hook();
+        let (home, seen): (Home, Seen) = (Home::new("a11"), Arc::default());
+        let c = Box::new(Collect(Arc::clone(&seen)));
+        let tx = start_with(
+            config(),
+            "omk_live_ffi_test".into(),
+            c,
+            home.s(),
+            serve_product,
+        );
+        wait(&seen, |e| {
+            e.iter().any(|x| matches!(x, HostEvent::Endpoints { .. }))
+        });
+        let rt = crate::api_convert::runtime().unwrap();
+        let r = crate::api_convert::call::<()>(&rt, async { panic!("api") });
+        assert_eq!(r, Err(crate::api::ApiCallError::Internal));
+        assert!(rt.block_on(rt.spawn_blocking(|| panic!("dns"))).is_err());
+        std::thread::sleep(Duration::from_millis(500));
+        assert!(!exited(&seen.0.lock().unwrap()));
+        assert_eq!(registered(), 1);
+        BridgeHost { tx: tx.unwrap() }.shutdown().unwrap();
+        assert_eq!(
+            wait(&seen, exited).last(),
+            Some(&HostEvent::Exited { code: 0 })
+        );
     }
 }

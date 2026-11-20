@@ -146,7 +146,7 @@ final class HelperManager: NSObject, ObservableObject {
         // 테스트 훅(개발/E2E 전용): env key 가 있으면 Keychain 대신 사용 — Electron 의
         // OMK_BRIDGE_TOKEN 관행과 동일 계열. ProcessSetup 이 기동 첫 줄에서 읽고 환경에서 지웠다(D-229).
         // 정식 실행 경로는 Keychain 만 쓴다.
-        guard let apiKey = ProcessSetup.devApiKey ?? Keychain.load(), !apiKey.isEmpty else {
+        guard let apiKey = currentApiKey() else {
             statusText = L("status.apiKeyRequired")
             return false
         }
@@ -168,6 +168,12 @@ final class HelperManager: NSObject, ObservableObject {
         }
         liveGenerations.insert(generation)
         return true
+    }
+
+    /** 지금 쓰는 키(개발 훅 우선, 빈 값은 없음) — 호스트 시작과 작업 창(PR-3.3 D-255)이 같은 기준으로 읽는다. */
+    func currentApiKey() -> String? {
+        guard let k = ProcessSetup.devApiKey ?? Keychain.load(), !k.isEmpty else { return nil }
+        return k
     }
 
     /** 호스트가 끝났다(exited — 언제나 마지막 이벤트). 지금의 호스트가 스스로 끝났을 때만 상태를 지운다 — 끄는 중이던 옛 호스트가
@@ -319,6 +325,7 @@ final class HelperManager: NSObject, ObservableObject {
     /** API key 변경 — 호스트 재기동(키는 시작 인자)으로 반영하고 연결을 되살린다. 키 폐기·만료로 멈춘 연결도 새 키로 다시 붙는다. */
     func reloadApiKey() {
         restartHelper()
+        TasksModel.shared.sessionChanged() // 작업 창의 옛 키 결과를 지운다(PR-3.3 D-267)
     }
 
     /** 서버 주소 변경 — 호스트 재기동(주소는 시작 설정) 후 재연결. 웹 주소는 새 호스트가 다시 알려 준다. */
@@ -326,6 +333,7 @@ final class HelperManager: NSObject, ObservableObject {
         serverAddress = address
         resolvedWebUrl = nil
         restartHelper()
+        TasksModel.shared.sessionChanged() // 작업 창의 옛 서버 값을 지운다(PR-3.3 D-267)
     }
 
     func openWeb() {
@@ -385,8 +393,10 @@ final class HelperManager: NSObject, ObservableObject {
             Task { await presentConfirm(host: asker, id: id, command: command, taskId: taskId, base: base, sandboxed: sandbox) }
         case let .taskEnd(taskId, _):
             notifyTaskEnd(taskId: taskId)
+            TasksModel.shared.serverSignaled() // 작업 창이 보이면 다시 읽는다(PR-3.3 D-256 ④)
         case let .approvalPending(taskId, toolName, _):
             notifyApprovalPending(taskId: taskId, toolName: toolName)
+            TasksModel.shared.serverSignaled()
         case .browserStopped, .exited:
             break
         }
@@ -439,6 +449,9 @@ final class HelperManager: NSObject, ObservableObject {
     private func taskUrl(_ taskId: String?) -> String {
         taskId.map { "\(webUrl)/agent-tasks?task=\($0)" } ?? webUrl
     }
+
+    /** 작업 창의 "웹에서 열기"(PR-3.3) — 알림과 같은 URL 규칙. */
+    func taskWebUrl(_ taskId: String) -> String { taskUrl(taskId) }
 
     /** 작업 종료 알림 — 클릭 시 웹 작업 상세로 핸드오프(상세 UI 는 웹 단일 구현 원칙).
         남아 있던 그 작업의 승인 대기 알림은 거둔다(이미 끝난 작업의 승인을 누르러 가지 않게). */

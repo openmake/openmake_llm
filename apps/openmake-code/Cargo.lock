@@ -909,9 +909,11 @@ name = "omk-ffi"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "omk-api",
  "omk-bridge-conn",
  "omk-bridge-core",
  "omk-bridge-host",
+ "serde_json",
  "tokio",
  "uniffi",
 ]
