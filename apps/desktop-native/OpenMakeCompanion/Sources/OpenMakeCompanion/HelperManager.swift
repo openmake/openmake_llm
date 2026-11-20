@@ -184,13 +184,12 @@ final class HelperManager: NSObject, ObservableObject {
     /** 호스트를 끄고 모든 호스트의 exited 를 기다린다(상한 hostStopLimit) — 앱 종료·업데이트 교체 전(D-233). */
     func stopHostAndWait() async {
         stopHelper()
-        await waitForHostsToExit(restart: nil)
+        await waitForHostsToExit(retiring: nil, restart: nil)
     }
 
-    /** 끄는 호스트들이 끝날 때까지 100ms 간격(상한). restart 가 있으면 그 사이 새 재기동이 예약됐는지 보고, 대기를 시작할 때의
-        세대들만 기다린다 — 대기 중 새로 뜬 호스트(폴더 연결·다시 시도)는 기다리지 않는다(리뷰 r1 Low-1). 없으면 전부. */
-    private func waitForHostsToExit(restart: Int?) async {
-        let retiring = restart == nil ? nil : liveGenerations
+    /** 끄는 호스트들이 끝날 때까지 100ms 간격(상한). retiring 이 있으면 그 세대들만 기다린다 — 그 뒤에 새로 뜬 호스트(폴더
+        연결·다시 시도)는 기다리지 않는다(리뷰 r1 Low-1). 없으면 전부. restart 가 있으면 그 사이 새 재기동이 예약됐는지 본다. */
+    private func waitForHostsToExit(retiring: Set<Int>?, restart: Int?) async {
         await Self.waitUntilExited(retiring, live: { self.liveGenerations }, limit: Self.hostStopLimit,
                                    cancelled: { restart.map { $0 != self.restartGeneration } ?? false })
     }
@@ -212,10 +211,11 @@ final class HelperManager: NSObject, ObservableObject {
     private func restartHelper() {
         let folders = connectedFolders.isEmpty ? lastFolders : connectedFolders
         stopHelper()
+        let retiring = liveGenerations // 끈 순간에 잡는다 — Task 가 돌기 전에 뜬 새 세대가 섞이지 않게(리뷰 r2 Nit-1)
         restartGeneration += 1
         let generation = restartGeneration
         Task { @MainActor in
-            await self.waitForHostsToExit(restart: generation)
+            await self.waitForHostsToExit(retiring: retiring, restart: generation)
             guard generation == self.restartGeneration else { return }
             for f in folders { self.connect(folder: f) }
         }
