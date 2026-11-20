@@ -29,6 +29,9 @@ enum ProcessSetup {
         }
     }
 
+    /** 시험이 바꾼 개발 훅 키를 시험 전 값으로 되돌린다 — 시험 격리 전용(Astra r2 L-1). */
+    static func restoreDevApiKeyForTests(_ key: String?) { devApiKey = key }
+
     /** 키는 환경에 남기지 않는다 — Chrome 은 프로세스 환경을 물려받는다(D-229). */
     private static func takeDevApiKey() {
         guard let raw = getenv("OMK_COMPANION_API_KEY") else { return }
