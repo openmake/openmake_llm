@@ -45,7 +45,7 @@ final class HelperManager: NSObject, ObservableObject {
     private var host: BridgeHost?
     /** 호스트 세대 — 시작마다 +1. 옛 세대의 이벤트는 relay 가 거른다(exited 만 통과). */
     private var hostGeneration = 0
-    /** exited 를 아직 내지 않은 호스트들의 세대(지금 것 + 끄는 중인 것) — 재기동·앱 종료는 이것이 빌 때까지 기다린다. */
+    /** exited 를 아직 내지 않은 호스트들의 세대(지금 것 + 끄는 중인 것) — 앱 종료는 이것이 빌 때까지, 재기동은 끈 세대가 빠질 때까지 기다린다. */
     private var liveGenerations: Set<Int> = []
     /** 재기동 세대 — 대기 중 재기동이 또 예약되면 마지막 것만 연결한다. */
     private var restartGeneration = 0
@@ -187,11 +187,22 @@ final class HelperManager: NSObject, ObservableObject {
         await waitForHostsToExit(restart: nil)
     }
 
-    /** 끄는 호스트들이 모두 끝날 때까지 100ms 간격(상한). restart 가 있으면 그 사이 새 재기동이 예약됐는지 본다. */
+    /** 끄는 호스트들이 끝날 때까지 100ms 간격(상한). restart 가 있으면 그 사이 새 재기동이 예약됐는지 보고, 대기를 시작할 때의
+        세대들만 기다린다 — 대기 중 새로 뜬 호스트(폴더 연결·다시 시도)는 기다리지 않는다(리뷰 r1 Low-1). 없으면 전부. */
     private func waitForHostsToExit(restart: Int?) async {
-        let deadline = Date().addingTimeInterval(Self.hostStopLimit)
-        while !liveGenerations.isEmpty && Date() < deadline {
-            if let restart, restart != restartGeneration { return }
+        let retiring = restart == nil ? nil : liveGenerations
+        await Self.waitUntilExited(retiring, live: { self.liveGenerations }, limit: Self.hostStopLimit,
+                                   cancelled: { restart.map { $0 != self.restartGeneration } ?? false })
+    }
+
+    /** `retiring` 세대들(nil 이면 살아 있는 전부)이 `live` 에서 빠질 때까지 100ms 간격으로 기다린다(상한 `limit`). */
+    static func waitUntilExited(_ retiring: Set<Int>?, live: () -> Set<Int>, limit: TimeInterval,
+                                cancelled: () -> Bool = { false }) async {
+        let deadline = Date().addingTimeInterval(limit)
+        while Date() < deadline {
+            let l = live()
+            if retiring.map({ l.isDisjoint(with: $0) }) ?? l.isEmpty { return }
+            if cancelled() { return }
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
     }
