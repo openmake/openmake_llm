@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.142.0](https://github.com/openmake/openmake_llm/compare/v1.141.0...v1.142.0) (2026-11-20)
+
+
+### ✨ 기능
+
+* **companion:** 새 앱 OpenMake Code 0.5.0 — 정체성 뒤집기·첫 실행 이전 (PR-2.5) ([8298cb5](https://github.com/openmake/openmake_llm/commit/8298cb532535d55d5d7ed537709e373242d6b0a8))
+* **pipeline:** BRIDGE_VERSION 0.4.4 — 다리 보충 기준 (PR-2.5) ([6c5d97c](https://github.com/openmake/openmake_llm/commit/6c5d97c11e734efe7c4ddb67e6b7a5adaa528a25))
+* **pipeline:** 데스크톱 게시기 다리 보충 — BRIDGE_VERSION 의 native 를 본 판정보다 먼저 (PR-2.5) ([2d0cb33](https://github.com/openmake/openmake_llm/commit/2d0cb33f3ac946c87e7f10090b5d22d2dcc3e781))
+
+
+### 🐛 버그 수정
+
+* **companion:** 업데이트 없음 문구에서 native 채널 이름을 빼고 macOS 앱 배포로 (PR-2.5 r4 로컬 회귀 ⓗ) ([4391008](https://github.com/openmake/openmake_llm/commit/4391008831e8e89bd047b1682e366a227517f437))
+* **companion:** 옮긴 키를 메모리 캐시에도 맞추고 FIFO 소비를 기동 맨 앞 동기로 (PR-2.5 리뷰 r1) ([6b635e5](https://github.com/openmake/openmake_llm/commit/6b635e5a87c960897f97266ed8a662b5fef77ab7))
+* **companion:** 휴지통 대상은 같은 폴더의 옛 번들만, Keychain 삭제 실패 OSStatus 로그 (PR-2.5 r2 D-175·D-176) ([8b0a29f](https://github.com/openmake/openmake_llm/commit/8b0a29fa322970b42b0bb7b94732e1c9e0dd9079))
+
 ## [1.141.0](https://github.com/openmake/openmake_llm/compare/v1.140.1...v1.141.0) (2026-11-19)
 
 
