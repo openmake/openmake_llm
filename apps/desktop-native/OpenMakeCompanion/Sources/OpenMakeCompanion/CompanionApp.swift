@@ -23,9 +23,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     /** 끝나지 않은 브리지 호스트가 있으면 끄고 exited 를 기다린 뒤(상한 12초) 끝낸다 — 같은 프로세스라 먼저 끝나면 Chrome·exec
-        자식 정리가 끊긴다(PR-3.2 D-233). 메뉴 종료·SIGTERM·SIGINT·로그아웃 모두 여기를 지난다. */
+        자식 정리가 끊긴다(PR-3.2 D-233). 메뉴 종료·SIGTERM·SIGINT·로그아웃 모두 여기를 지난다. 종료 진행을 남겨(requested) 뒤따르는
+        신호·업데이트 요청이 대기 중 terminate 에 다시 들어가지 않게 하고, 대기 중 새 모달(승인 창)도 띄우지 않는다(Opus r4 M-1·L-1). */
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         MainActor.assumeIsolated {
+            AppTermination.requested = true
             let helper = HelperManager.shared
             guard helper.hasLiveHost else { return .terminateNow }
             Task { @MainActor in
