@@ -133,13 +133,23 @@ impl Mock {
     }
 
     /// Hang·PartialBody 연결이 클라이언트 쪽에서 닫힌 횟수가 n 이 될 때까지 기다린다.
+    /// 5초 안에 닫히지 않으면 멈추지 않고 실패한다.
     pub async fn wait_closed(&self, n: usize) {
-        loop {
-            let notified = self.state.closed_notify.notified();
-            if self.state.closed.load(Ordering::SeqCst) >= n {
-                return;
+        let wait = async {
+            loop {
+                let notified = self.state.closed_notify.notified();
+                if self.state.closed.load(Ordering::SeqCst) >= n {
+                    return;
+                }
+                notified.await;
             }
-            notified.await;
+        };
+        if tokio::time::timeout(Duration::from_secs(5), wait)
+            .await
+            .is_err()
+        {
+            let closed = self.closed();
+            panic!("연결이 닫히지 않았다: 기대 {n}, 실제 {closed}");
         }
     }
 

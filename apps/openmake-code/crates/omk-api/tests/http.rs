@@ -361,6 +361,31 @@ fn body_over_limit_is_too_large() {
 }
 
 #[test]
+fn non_2xx_body_over_limit_keeps_status() {
+    run(async {
+        let page = format!("<html>{}</html>", "x".repeat(2048));
+        let m = Mock::start(vec![Behavior::Reply(
+            502,
+            page.into_bytes(),
+            vec![("content-type".into(), "text/html".into())],
+        )])
+        .await;
+        let e = client_with(&m.base, short(2000, 1024))
+            .bridge_status()
+            .await
+            .unwrap_err();
+        assert_eq!(format!("{e:?}"), "Server(status=502)");
+        assert_eq!(
+            (
+                e.server().unwrap().server_code(),
+                e.server().unwrap().server_message()
+            ),
+            (None, None)
+        );
+    });
+}
+
+#[test]
 fn cancelled_future_closes_connection() {
     run(async {
         let m = Mock::start(vec![Behavior::Hang]).await;
