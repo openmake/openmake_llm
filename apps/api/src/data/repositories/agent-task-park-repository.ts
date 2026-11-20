@@ -45,6 +45,21 @@ export class AgentTaskParkRepository extends BaseRepository {
         return reason && AGENT_TASK_PARK_REASONS.includes(reason) ? reason : null;
     }
 
+    /** {@link getParkReason} 의 목록판 — 한 문장으로 읽는다. 주차 중이 아닌 작업은 결과에 없다. */
+    async getParkReasons(taskIds: string[]): Promise<Map<string, string>> {
+        if (taskIds.length === 0) return new Map();
+        const r = await this.query<{ id: string; reason: string | null }>(
+            `SELECT t.id, (SELECT e.reason FROM agent_task_events e WHERE e.task_id = t.id ORDER BY e.id DESC LIMIT 1) AS reason
+               FROM agent_tasks t WHERE t.id = ANY($1) AND t.status = 'paused'`,
+            [taskIds],
+        );
+        const out = new Map<string, string>();
+        for (const row of r.rows) {
+            if (row.reason && AGENT_TASK_PARK_REASONS.includes(row.reason)) out.set(row.id, row.reason);
+        }
+        return out;
+    }
+
     /** 그 사용자의 작업 중 주어진 사유로 주차된 것 — 지정 기기와 함께(넘겨받기를 돌려받으면 재개를 시도한다). */
     async listParkedTaskIdsByReason(userId: string, reason: string, limit = 50): Promise<Array<{ id: string; device_id: string | null }>> {
         const r = await this.query<{ id: string; device_id: string | null }>(

@@ -940,7 +940,8 @@
     "status": {
       "running": "実行中",
       "completed": "完了",
-      "pending": "待機"
+      "pending": "待機",
+      "waitingDevice": "デバイス接続待ち"
     },
     "statusRaw": {
       "pending": "待機",
