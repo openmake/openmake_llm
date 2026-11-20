@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.143.0](https://github.com/openmake/openmake_llm/compare/v1.142.0...v1.143.0) (2026-11-20)
+
+
+### ✨ 기능
+
+* **desktop-native:** lib/ffi.sh — omk-ffi 정적 라이브러리·Swift 바인딩·XCFramework 생성, 가짜 도구 시험 (PR-3.2 D-230·T-B1) ([522a16b](https://github.com/openmake/openmake_llm/commit/522a16b3b618cd8afc857cbb8812f06eebef42de))
+* **desktop-native:** 브리지 호스트를 앱 프로세스 안 omk-ffi 로 — 사이드카 omk-helper 제거 (PR-3.2 D-226~D-234·D-238·D-244) ([0ead4c2](https://github.com/openmake/openmake_llm/commit/0ead4c29c23dd9d38a0880ea793c44f1f9ffb444))
+* **omk-api:** REST 클라이언트 — 19개 호출·엄격 envelope 해석·키 마스킹 (PR-3.1) ([826c59d](https://github.com/openmake/openmake_llm/commit/826c59d501d693596106ba9e5c15cb01f03a261c))
+* **omk-bridge-core:** proc::spawn 전역 띄우기 훅 set_spawn_hook (PR-3.2 D-241(r3) ①) ([b824d77](https://github.com/openmake/openmake_llm/commit/b824d775de33be7e436015b410b8af42409edc6b))
+* **omk-bridge-host:** actor 패닉은 block_on 만 잡아 101 + 정상 정리 순서, serve 시험 T-H2~H8 (PR-3.2 D-225·D-239) ([e542ce8](https://github.com/openmake/openmake_llm/commit/e542ce8b1879639f2e2dba78fc57f2d7edd85e41))
+* **omk-ffi:** UniFFI 표면 BridgeHost·HostListener·resolve_endpoints + 바인딩 생성기 (PR-3.2 D-220~D-231·D-241·D-244) ([04bc467](https://github.com/openmake/openmake_llm/commit/04bc46789d742d108b209c7e3308d64bf21260c5))
+* **openmake-code:** omk-api REST 클라이언트 (PR-3.1) ([4724fda](https://github.com/openmake/openmake_llm/commit/4724fdaaf41b9221ba69e4967a071be5b0084b43))
+
+
+### 🐛 버그 수정
+
+* **desktop-native:** SIGTERM·SIGINT 종료는 main 큐 블록 밖(run loop 소스)에서 부른다 — .terminateLater reply 교착 방지 (PR-3.2 로컬 회귀 R-10) ([65fd730](https://github.com/openmake/openmake_llm/commit/65fd7307edfdd63ad791d83edcfbe909ad131cc7))
+* **desktop-native:** 승인 창은 main 큐 블록 밖에서 돌리고, 종료 요청은 떠 있는 창을 거부로 끝낸다 (PR-3.2 Astra r1 H-1 후속) ([253ef61](https://github.com/openmake/openmake_llm/commit/253ef61dd5ff8be1d23d5a80fd379e55a8bd5642))
+* **desktop-native:** 앱 종료 중 업데이트 교체 실패는 호스트를 되살리지 않고, lifecycle 시험은 바꾼 전역 상태를 되돌린다 (PR-3.2 Opus r4 L-2, Astra r2 L-1) ([813dfb9](https://github.com/openmake/openmake_llm/commit/813dfb9f8f0f743d48f67fef0ff364e283d3127a))
+* **desktop-native:** 업데이트 교체 뒤 종료도 AppTermination.request() 로 — Task @MainActor 안 terminate 교착 방지 (PR-3.2 로컬 회귀 R-10) ([a526fe9](https://github.com/openmake/openmake_llm/commit/a526fe9c257452355c09c7dfabd89be12e4a7a0b))
+* **desktop-native:** 예약된 종료 콜백·모달 재확인 타이머는 이미 시작된 종료에 terminate 를 다시 부르지 않고, 메뉴 종료도 공통 요청 경로로 (PR-3.2 Astra r3 H-1) ([8619a30](https://github.com/openmake/openmake_llm/commit/8619a30a672eefdd0c1727a13d0c65ed34ef7ffb))
+* **desktop-native:** 재기동 대기 세대는 호스트를 끈 순간에 잡는다 — Task 가 돌기 전에 뜬 새 세대가 섞이지 않게 (PR-3.2 리뷰 r2 Nit-1) ([808dede](https://github.com/openmake/openmake_llm/commit/808dede8940a816549ebfbec03bb6015139e58fd))
+* **desktop-native:** 재기동은 대기 시작 때의 세대만 기다린다 — 대기 중 새 호스트가 떠도 옛 호스트가 끝나면 바로 재연결 (PR-3.2 리뷰 r1 Low-1) ([a4c91f4](https://github.com/openmake/openmake_llm/commit/a4c91f4f77a42853d0b59827e60de8a54977bcac))
+* **desktop-native:** 종료 요청을 멱등으로 — 두 번째 신호·메뉴 종료 뒤 신호가 .terminateLater 정리를 끊지 않는다 (PR-3.2 Opus r4 M-1·L-1·N-1·N-2, Astra r2 H-1) ([cf7fc85](https://github.com/openmake/openmake_llm/commit/cf7fc85cdca1054f73832455ca2601b8f8d3ce3b))
+* **desktop-native:** 종료·업데이트 정리 대기 중 예약된 재기동을 무효로 하고 새 호스트를 막는다 (PR-3.2 Astra r1 M-1) ([11c020e](https://github.com/openmake/openmake_llm/commit/11c020e84ae6f308961d1b0fc0b3dfb5a59b3da0))
+* **desktop-native:** 호스트가 살아 있을 수 있는 자리의 모달(업데이트 안내·휴지통 안내·폴더 고르기)도 main 큐 블록 밖에서 돌린다 (PR-3.2 Astra r1 H-1 후속 3) ([2524395](https://github.com/openmake/openmake_llm/commit/25243957395fe247b0a5c35583068b0465031b80))
+* **omk-api:** 비-2xx 큰 본문도 status 범주 유지·wait_closed 5초 제한 (PR-3.1 r1 L-1·L-2) ([f858c0b](https://github.com/openmake/openmake_llm/commit/f858c0bf1070712ba70f3793b75082c6c479f4bc))
+* **omk-ffi:** 이벤트 디스패처가 listener 패닉에도 살아 Exited 를 전달 (PR-3.2 리뷰 r1 Low-3) ([1d6c108](https://github.com/openmake/openmake_llm/commit/1d6c1081cae7fcaec8d526d850f453e3af550529))
+
+
+### ♻️ 리팩터링
+
+* **omk-bridge-host:** 헬퍼 호스트 로직을 새 크레이트로 옮김 — 타입 있는 입력·이벤트 (PR-3.2 D-223) ([f60faba](https://github.com/openmake/openmake_llm/commit/f60faba4dfad6b1f8dcbdadad9a615bce2f273d2))
+
 ## [1.142.0](https://github.com/openmake/openmake_llm/compare/v1.141.0...v1.142.0) (2026-11-20)
 
 
