@@ -84,8 +84,16 @@ final class Updater: ObservableObject {
                 throw UpdateError.message(L("update.checksum"))
             }
 
-            try spawnReplaceScript(dmgPath: dmgURL.path)
-            HelperManager.shared.stopHelper()
+            // 호스트를 먼저 끄고 exited 를 기다린다 — 교체 스크립트는 앱 종료를 기다리지 않고 2초 뒤 번들을 바꾸므로 그 안에 앱이
+            // 끝나 있어야 한다. 스크립트의 키 파이프도 Rust 의 자식 띄우기와 겹치지 않는다(PR-3.2 D-233).
+            await HelperManager.shared.stopHostAndWait()
+            do {
+                try spawnReplaceScript(dmgPath: dmgURL.path)
+            } catch {
+                // 앱이 끝나지 않으므로 끈 호스트를 되살리고 기존 실패 안내로 간다(D-233(r2)).
+                HelperManager.shared.restartAfterUpdateFailure()
+                throw error
+            }
             NSApp.terminate(nil)
         } catch let e as UpdateError {
             if case let .message(m) = e, interactive { info(L("update.failed.title"), m) }
