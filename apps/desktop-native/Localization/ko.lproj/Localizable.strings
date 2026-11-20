@@ -78,7 +78,7 @@
 "update.insecure" = "업데이트는 HTTPS(또는 로컬호스트) 백엔드에서만 허용됩니다";
 "update.badBackend" = "잘못된 백엔드 주소";
 "update.none.title" = "업데이트 없음";
-"update.none.body" = "native 채널 배포가 아직 없거나 매니페스트가 없습니다. (현재 v%@)";
+"update.none.body" = "아직 macOS 앱 배포가 없거나 매니페스트가 없습니다. (현재 v%@)";
 "update.latest.title" = "최신 버전";
 "update.latest.body" = "현재 v%@ 가 최신입니다.";
 "update.available.title" = "새 버전 v%1$@ 이 있습니다 (현재 v%2$@)";

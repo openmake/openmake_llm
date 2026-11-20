@@ -78,7 +78,7 @@
 "update.insecure" = "Updates sind nur von einem HTTPS-Backend (oder localhost) erlaubt";
 "update.badBackend" = "Ungültige Backend-Adresse";
 "update.none.title" = "Keine Updates";
-"update.none.body" = "Im nativen Kanal gibt es noch kein Release, oder das Manifest fehlt. (Aktuell v%@)";
+"update.none.body" = "Es gibt noch kein Release der macOS-App, oder das Manifest fehlt. (Aktuell v%@)";
 "update.latest.title" = "Auf dem neuesten Stand";
 "update.latest.body" = "v%@ ist die neueste Version.";
 "update.available.title" = "Version v%1$@ ist verfügbar (aktuell v%2$@)";

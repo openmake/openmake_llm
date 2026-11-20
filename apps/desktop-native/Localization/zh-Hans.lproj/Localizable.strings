@@ -78,7 +78,7 @@
 "update.insecure" = "仅允许从 HTTPS（或 localhost）后端更新";
 "update.badBackend" = "后端地址无效";
 "update.none.title" = "没有更新";
-"update.none.body" = "native 通道尚无发布，或缺少清单。（当前 v%@）";
+"update.none.body" = "尚无 macOS 应用发布，或缺少清单。（当前 v%@）";
 "update.latest.title" = "已是最新版本";
 "update.latest.body" = "当前 v%@ 已是最新版本。";
 "update.available.title" = "有新版本 v%1$@（当前 v%2$@）";
