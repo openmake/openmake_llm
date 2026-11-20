@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.144.0](https://github.com/openmake/openmake_llm/compare/v1.143.0...v1.144.0) (2026-11-20)
+
+
+### ✨ 기능
+
+* **agent-tasks:** 작업 목록에서 기기 대기(paused + device_wait)를 진행중과 나눠 보인다 ([65e3a32](https://github.com/openmake/openmake_llm/commit/65e3a325faa584e4930835643a8370692524e301))
+
 ## [1.143.0](https://github.com/openmake/openmake_llm/compare/v1.142.0...v1.143.0) (2026-11-20)
 
 
