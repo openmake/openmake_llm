@@ -94,12 +94,18 @@ enum TaskDisplay {
         return .raw(f)
     }
 
+    /** 호출마다 만들지 않는다 — 소수 초 있음/없음 두 가지(리뷰 Low-1). */
+    private static let isoFrac: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoPlain = ISO8601DateFormatter()
+
     /** ISO 8601(소수 초 있음/없음) → locale 의 날짜·시각. 해석 실패면 원문. */
     static func dateText(_ s: String?, locale: Locale) -> String? {
         guard let s else { return nil }
-        let frac = ISO8601DateFormatter()
-        frac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let d = frac.date(from: s) ?? ISO8601DateFormatter().date(from: s) else { return s }
+        guard let d = isoFrac.date(from: s) ?? isoPlain.date(from: s) else { return s }
         return d.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(locale))
     }
 
