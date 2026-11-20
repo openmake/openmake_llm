@@ -109,6 +109,21 @@ test('the companion job runs the Swift tests before the dmg and has no successor
     assert.doesNotMatch(workflow, /successor-replace|Gate 2-S/);
 });
 
+// plan-pr3.2 D-235(r2)·T-B3: Swift 패키지는 lib/ffi.sh 가 만든 Generated/ 에 기댄다 — 하네스 뒤, swift build·test 앞.
+test('the companion job generates the omk-ffi bindings after the harness and before the Swift build and tests', () => {
+    const companion = workflow.slice(workflow.search(/^ {2}companion:$/m), workflow.search(/^ {2}release:$/m));
+    const at = (re) => companion.search(re);
+    const harness = at(/^ +node apps\/desktop-native\/helper\/harness\.cjs --helper apps\/openmake-code\/target\/release\/omk-helper$/m);
+    const ffi = at(/^ +run: bash apps\/desktop-native\/lib\/ffi\.sh$/m);
+    const swiftBuild = at(/^ +run: swift build -c release --package-path apps\/desktop-native\/OpenMakeCompanion$/m);
+    const swiftTest = at(/^ +run: swift test --package-path apps\/desktop-native\/OpenMakeCompanion$/m);
+    const buildSh = at(/^ +run: bash apps\/desktop-native\/build\.sh$/m);
+    assert.ok(harness > 0, 'harness present');
+    assert.ok(ffi > harness, 'harness before ffi.sh');
+    assert.ok(swiftBuild > ffi && swiftTest > ffi, 'ffi.sh before swift build and swift test');
+    assert.ok(buildSh > swiftTest, 'swift test before build.sh');
+});
+
 test('the dmg artifact is OpenMake-Code-dmg on both upload and download, with the OpenMake-Code glob', () => {
     const uploads = [...workflow.matchAll(/uses: actions\/upload-artifact@\S+.*\n {8}with:\n {10}name: (\S+)\n {10}path: (\S+)/g)];
     const downloads = [...workflow.matchAll(/uses: actions\/download-artifact@\S+.*\n {8}with:\n {10}name: (\S+)/g)];

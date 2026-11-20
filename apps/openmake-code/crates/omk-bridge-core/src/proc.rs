@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 use std::future::{Future, poll_fn};
 use std::pin::{Pin, pin};
 use std::process::{ExitStatus, Stdio};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::task::{Context, Poll};
 use std::time::Duration;
 
@@ -163,11 +163,29 @@ impl ProcEnd {
 /// 명령이 끝나도 파이프가 그 자식이 끝날 때까지 닫히지 않는다(설계 2026-11-15 D-5, `tests/exec_spawn_race.rs`).
 /// 이 크레이트에서 자식을 띄우는 모든 자리(`run`·`kill_group`·Chrome)가 이것을 거친다. `spawn()` 호출 동안만 쥔다.
 /// 알려진 범위: `spawn` 이 막히면(막힌 볼륨의 cwd 등) 그동안 다른 띄우기도 모두 기다린다.
-/// 소켓(`socket()` 뒤 `FD_CLOEXEC`)의 같은 창과 `omk-helper` 의 기동 때 `hostname` 은 다루지 않는다.
+/// 소켓(`socket()` 뒤 `FD_CLOEXEC`)의 같은 창과 호스트(헬퍼·FFI) 기동 때 `hostname`(`omk-bridge-host`)은 다루지 않는다 —
+/// `hostname` 은 이 잠금·[`SpawnHook`] 밖이라 FFI 에선 앱의 비-CLOEXEC fd 를 잠깐 물려받지만, 시스템 바이너리(절대경로,
+/// 환경 없음)가 곧 끝나므로 위험을 무시한다.
 static SPAWN_LOCK: Mutex<()> = Mutex::new(());
+
+/// 띄우기 직전 `std::process::Command` 를 고치는 훅(PR-3.2 D-241(r3)) — 앱 프로세스 안(FFI)에서 띄울 때 앱이 연 비-CLOEXEC
+/// fd 가 자식(샌드박스 명령·Chrome)에 넘어가지 않게 `omk-ffi` 가 단다. 비-CLOEXEC fd 는 프로세스 전체의 성질이라 전역 하나다.
+/// 헬퍼(사이드카)는 달지 않는다.
+pub type SpawnHook = Arc<dyn Fn(&mut std::process::Command) + Send + Sync>;
+
+static SPAWN_HOOK: OnceLock<SpawnHook> = OnceLock::new();
+
+/// 띄우기 훅을 단다 — 프로세스에서 한 번만. 이미 있으면 `false`(바꾸지 않는다).
+pub fn set_spawn_hook(hook: SpawnHook) -> bool {
+    SPAWN_HOOK.set(hook).is_ok()
+}
 
 pub(crate) fn spawn(cmd: &mut tokio::process::Command) -> std::io::Result<tokio::process::Child> {
     let _held = SPAWN_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+    // 호출부가 환경·stdio·그룹을 다 정한 뒤 — 훅이 그 위에 덧댄다.
+    if let Some(hook) = SPAWN_HOOK.get() {
+        hook(cmd.as_std_mut());
+    }
     cmd.spawn()
 }
 
@@ -276,7 +294,70 @@ async fn kill_group(_pgid: u32) {}
 
 #[cfg(test)]
 mod tests {
-    use super::cut_at_char_boundary;
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use std::collections::BTreeMap;
+    use std::process::Stdio;
+    use std::sync::Arc;
+
+    use super::{
+        ProcEnd, ProcSpec, Stderr, Stdin, cut_at_char_boundary, run, set_spawn_hook, spawn,
+    };
+
+    const HOOK_CHILD: &str = "OMK_SPAWN_HOOK_CHILD";
+
+    /// T-C2(PR-3.2 D-241(r3)) — 띄우기 훅은 exec 경로(`run`, `env_clear` 뒤)와 Chrome 경로 모양(`spawn` 직접) 둘 다에 걸리고,
+    /// 두 번째 설정은 거절된다. 전역 `OnceLock` 이라 자식 프로세스(이 테스트 바이너리 재실행)에서 본다.
+    #[test]
+    fn spawn_hook_applies() {
+        if std::env::var_os(HOOK_CHILD).is_none() {
+            let out = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "proc::tests::spawn_hook_applies",
+                    "--test-threads=1",
+                ])
+                .env(HOOK_CHILD, "1")
+                .output()
+                .unwrap();
+            let text = String::from_utf8_lossy(&out.stdout).into_owned();
+            assert!(out.status.success() && text.contains("1 passed"), "{text}");
+            return;
+        }
+        assert!(set_spawn_hook(Arc::new(|cmd| {
+            cmd.env("OMK_HOOK_SEEN", "1");
+        })));
+        assert!(!set_spawn_hook(Arc::new(|_| {})));
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let (exec, chrome) = rt.block_on(async {
+            let exec = run(ProcSpec {
+                file: "/usr/bin/env".to_owned(),
+                args: Vec::new(),
+                cwd: None,
+                env: BTreeMap::from([("PATH".to_owned(), "/usr/bin:/bin".to_owned())]),
+                timeout_ms: 10_000,
+                max_buffer: 1 << 20,
+                stdin: Stdin::Null,
+                stderr: Stderr::Null,
+            })
+            .await;
+            assert!(matches!(exec.end, ProcEnd::Exited(0)), "{:?}", exec.end);
+            let mut cmd = tokio::process::Command::new("/usr/bin/env");
+            cmd.kill_on_drop(true)
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped());
+            let chrome = spawn(&mut cmd).unwrap().wait_with_output().await.unwrap();
+            (
+                exec.stdout,
+                String::from_utf8_lossy(&chrome.stdout).into_owned(),
+            )
+        });
+        assert!(exec.lines().any(|l| l == "OMK_HOOK_SEEN=1"), "{exec}");
+        assert!(chrome.lines().any(|l| l == "OMK_HOOK_SEEN=1"), "{chrome}");
+    }
 
     #[test]
     fn cut_backs_off_to_char_start() {

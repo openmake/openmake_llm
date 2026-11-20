@@ -1,0 +1,43 @@
+{
+  "success": true,
+  "data": {
+    "pending": [
+      {
+        "approvalId": "ap-synth-1",
+        "taskId": "task-synth-1",
+        "userId": "user-synth",
+        "toolName": "write_file",
+        "args": {
+          "path": "a.txt",
+          "content": "[REDACTED]"
+        },
+        "createdAt": 1767225600000,
+        "riskClass": "write",
+        "sensitive": false,
+        "preview": "--- a\n+++ b\n"
+      },
+      {
+        "approvalId": "ap-synth-2",
+        "taskId": "task-synth-1",
+        "userId": "user-synth",
+        "toolName": "ask_human",
+        "args": {
+          "question": "합성 질문?",
+          "questions": [
+            {
+              "id": "q1",
+              "text": "합성"
+            }
+          ]
+        },
+        "createdAt": 1767225601000,
+        "riskClass": "future_class",
+        "sensitive": true,
+        "assigneeUserId": "user-synth-2"
+      }
+    ]
+  },
+  "meta": {
+    "timestamp": "2026-01-01T00:00:00.000Z"
+  }
+}

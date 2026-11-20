@@ -1,0 +1,18 @@
+{
+  "success": true,
+  "data": {
+    "share": {
+      "shareId": "sh-synth",
+      "visibility": "link",
+      "shareToken": "tok_SYNTH",
+      "includeSteps": true,
+      "includeDiff": false,
+      "includeArtifacts": true,
+      "sharedAt": "2026-01-01T00:00:00.000Z",
+      "path": "/shared/task/sh-synth?token=tok_SYNTH"
+    }
+  },
+  "meta": {
+    "timestamp": "2026-01-01T00:00:00.000Z"
+  }
+}

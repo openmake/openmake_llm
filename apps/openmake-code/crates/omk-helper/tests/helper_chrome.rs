@@ -86,14 +86,17 @@ impl Drop for KillProfileChrome {
 }
 
 fn wait_gone(profile: &str, limit: Duration) -> bool {
+    // 한 번은 본다 — 헬퍼 종료가 부하로 `GONE_WITHIN` 을 넘기면 남은 상한이 0 이다(헬퍼는 Chrome 을 끈 뒤 끝난다).
     let end = Instant::now() + limit;
-    while Instant::now() < end {
+    loop {
         if chrome_pids(profile).is_empty() {
             return true;
         }
+        if Instant::now() >= end {
+            return false;
+        }
         std::thread::sleep(Duration::from_millis(100));
     }
-    false
 }
 
 /// `RUST_LOG=trace` — CDP 구간에서도 stderr 가 비어 있는지 본다(로거 없음, D-98 — 리뷰 r1 L-5).
@@ -142,7 +145,10 @@ fn launched_chrome_is_gone_after(trigger: &str) {
         "term" => h.signal("TERM"),
         _ => unreachable!(),
     }
-    let st = h.wait_exit(Duration::from_secs(10));
+    // 상한은 시험 여유다 — 평소 약 5.2초(`Browser.close` 뒤 `BROWSER_EXIT_WAIT_MS` 5초에 SIGKILL, PR 전과 같음), 제품 타이머 합의
+    // 최악은 약 8.5초(연결 대기 1 + close 응답 1 + 종료 대기 5 + flush 0.5 + 런타임 1). 워크스페이스 전체 시험 부하에서 10초를
+    // 한 번 넘겼다(PR-3.2 리뷰 r1 Low-2) — 제품 동작이 아니라 CPU 부족의 지연이라 상한만 넓힌다.
+    let st = h.wait_exit(Duration::from_secs(20));
     assert_eq!(st.code(), Some(0), "{trigger}: {st:?}");
     assert_stderr_empty(&h);
     assert!(
