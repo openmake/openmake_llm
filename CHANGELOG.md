@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.145.1](https://github.com/openmake/openmake_llm/compare/v1.145.0...v1.145.1) (2026-11-21)
+
+
+### 🐛 버그 수정
+
+* **env:** LiteLLM 1.110.2 로 올리고 게이트웨이 BYOK provider 를 앱 .env 에 편입한다 ([a8caae3](https://github.com/openmake/openmake_llm/commit/a8caae3a2fc54ca83cfde70fd98dc1e6937b1e2e))
+* **env:** 기존 게이트웨이 venv 도 고정 LiteLLM 버전으로 맞춘다 ([f9ae4a4](https://github.com/openmake/openmake_llm/commit/f9ae4a485062a7c77067c31421234021852385a5))
+* **setup/mac:** Homebrew node 판이 고정 버전과 다르면 mise 의 node 를 쓴다 ([6d749b0](https://github.com/openmake/openmake_llm/commit/6d749b01747f40cd0b0f5898d510468050b58b2b))
+
 ## [1.145.0](https://github.com/openmake/openmake_llm/compare/v1.144.0...v1.145.0) (2026-11-20)
 
 
