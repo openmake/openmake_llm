@@ -206,6 +206,7 @@ eq "litellm sync: 설치된 버전이 고정과 다르면 실패 → 기존 유�
 eq "litellm sync: 다르면 새 venv 로 교체·옛 것은 venv.prev·shebang 은 새 경로" \
    "$rc|$(litellm_installed_version "$VS/venv")|$(litellm_installed_version "$VS/venv.prev")|$(head -1 "$VS/venv/bin/litellm")" \
    "0|$OMK_LITELLM_VERSION|1.100.1|#!$VS/venv/bin/python"
+# shellcheck disable=SC2034  # litellm_venv_sync 가 읽는다
 ( litellm_venv_relink() { return 1; }; OMK_LITELLM_SPEC='litellm[proxy]==3.0.0'; FAKE_LITELLM_VER=3.0.0; litellm_venv_sync "$VS" >/dev/null 2>&1 ); rc=$?
 eq "litellm sync: 전환 실패 → 원래 venv 로 되돌림" "$rc|$(litellm_installed_version "$VS/venv")" "1|$OMK_LITELLM_VERSION"
 ( litellm_venv_install() { echo called > "$VS/called"; }; litellm_venv_sync "$VS" >/dev/null 2>&1 ); rc=$?
