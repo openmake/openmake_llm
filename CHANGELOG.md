@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.145.2](https://github.com/openmake/openmake_llm/compare/v1.145.1...v1.145.2) (2026-11-21)
+
+
+### 🐛 버그 수정
+
+* **omk:** env update 가 새 .node-version 에 맞춰 node·pm2·toolchain.env·PM2 데몬을 먼저 맞춘다 ([2e6db02](https://github.com/openmake/openmake_llm/commit/2e6db02cd9214d1d6bf54aef2e21fa163ac4f9e3))
+* **omk:** mise 없는 호스트는 nodejs.org 배포본, PM2 부팅 등록도 새 node 로 ([ff56836](https://github.com/openmake/openmake_llm/commit/ff568364e4c5211e6195a6158d9fb74e13ad97bd))
+
 ## [1.145.1](https://github.com/openmake/openmake_llm/compare/v1.145.0...v1.145.1) (2026-11-21)
 
 
