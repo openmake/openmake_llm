@@ -181,19 +181,19 @@ eq "node sync: 앞 v 는 지운다"                   "$(ns_run "$NS/new/bin" 26
 eq "update target: upstream 없는 비릴리스는 HEAD" "$(update_target_ref "$NR" main)" "HEAD"
 # PM2 부팅 복구 등록 — 다른 node 를 가리킬 때만 같은 Docker 옵션으로 mac-pm2-boot.sh --apply
 if [[ "$(uname -s)" == Darwin ]] && has plutil; then
-    BA="$TMP/ba"; mkdir -p "$BA/home/Library/LaunchAgents" "$BA/ldir/scripts/setup"
+    BA="$TMP/ba"; mkdir -p "$BA/fakehome/Library/LaunchAgents" "$BA/ldir/scripts/setup"
     printf 'echo "apply $* node=$(command -v node)" >> "%s/calls"\n' "$BA" > "$BA/ldir/scripts/setup/mac-pm2-boot.sh"
     ba_plist() { # $1=node $2=docker
-        printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>ProgramArguments</key><array><string>/bin/bash</string><string>g</string><string>run</string><string>%s</string><string>pm2</string><string>%s</string></array></dict></plist>\n' "$1" "$2" > "$BA/home/Library/LaunchAgents/com.openmake.pm2.plist"
+        printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>ProgramArguments</key><array><string>/bin/bash</string><string>g</string><string>run</string><string>%s</string><string>pm2</string><string>%s</string></array></dict></plist>\n' "$1" "$2" > "$BA/fakehome/Library/LaunchAgents/com.openmake.pm2.plist"
     }
-    ba_run() { rm -f "$BA/calls"; ( HOME="$BA/home" pm2_boot_agent_sync "$BA/ldir" "$NS/new/bin" >/dev/null 2>&1 ); tr '\n' ';' < "$BA/calls" 2>/dev/null; }
+    ba_run() { rm -f "$BA/calls"; ( HOME="$BA/fakehome" pm2_boot_agent_sync "$BA/ldir" "$NS/new/bin" >/dev/null 2>&1 ); tr '\n' ';' < "$BA/calls" 2>/dev/null; }
     ba_plist "$NS/new/bin/node" /opt/homebrew/bin/docker
     eq "boot agent: 이미 새 node 면 그대로"          "$(ba_run)" ""
     ba_plist /opt/homebrew/opt/node@24/bin/node /opt/homebrew/bin/docker
     eq "boot agent: 옛 node → 다시 등록(새 node PATH)" "$(ba_run)" "apply --apply node=$NS/new/bin/node;"
     ba_plist /opt/homebrew/opt/node@24/bin/node -
     eq "boot agent: Docker 없이 등록된 호스트는 --no-docker 유지" "$(ba_run)" "apply --apply --no-docker node=$NS/new/bin/node;"
-    rm -f "$BA/home/Library/LaunchAgents/com.openmake.pm2.plist"
+    rm -f "$BA/fakehome/Library/LaunchAgents/com.openmake.pm2.plist"
     eq "boot agent: 등록이 없으면 아무것도 안 함"      "$(ba_run)" ""
 fi
 
