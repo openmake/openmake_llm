@@ -91,7 +91,7 @@ readonly OMK_DEFAULT_REPO_URL="https://github.com/openmake/openmake_llm.git"
 readonly OMKB_DEFAULT_REPO_URL="https://github.com/openmake/openmake_bench.git"
 readonly OMK_DEFAULT_ENV="online"                 # 기본(무접미사) 인스턴스로 매핑되는 환경 이름
 readonly OMK_PROXY_APP="omk-proxy"                # PM2 에 등록되는 Caddy 앱 이름 (호스트당 1개)
-readonly CADDY_VERSION_FALLBACK="2.10.0"          # GitHub API 조회가 막힌 폐쇄망에서만 쓰는 최후 값
+CADDY_PINNED_VERSION="2.11.9"                     # 직접 받는 caddy 의 고정 판 — scripts/ci/toolchain-bump.mjs 가 올린다(OMK_CADDY_VERSION 으로 덮어씀)
 
 OMK_ROOT="${OMK_ROOT:-$HOME/.openmake}"
 OMK_REPO_URL="${OMK_REPO_URL:-$OMK_DEFAULT_REPO_URL}"
@@ -449,6 +449,16 @@ pm2_boot_agent_sync() { # $1=llm dir $2=node bin
     esac
     return 0
 }
+pm2_daemon_pm2_version() { # 돌고 있는 데몬의 pm2 판(꺼져 있으면 빈값)
+    local pid_file="${PM2_HOME:-$HOME/.pm2}/pm2.pid" pid
+    [[ -f "$pid_file" ]] || return 0
+    pid="$(tr -d '[:space:]' < "$pid_file" 2>/dev/null)"
+    [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null || return 0
+    pm2 report 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | awk '
+        /^--- Daemon -/ { d = 1; next }
+        /^--- /         { d = 0 }
+        d && /^pm2d version/ { sub(/^[^:]*:[[:space:]]*/, ""); gsub(/[[:space:]]/, ""); print; exit }' || true
+}
 pm2_daemon_switch_now() { # $1=node bin — 이 셸이 PM2 자식이 아닐 때
     PATH="$1:$PATH" "$1/pm2" update >/dev/null 2>&1
 }
@@ -459,11 +469,14 @@ pm2_daemon_switch_detached() { # $1=node bin $2=로그 파일 $3=기다릴 잠�
         PATH="$1:$PATH" "$1/pm2" update' _ "$1" "${3:-}" > "$2" 2>&1 < /dev/null & )
 }
 node_runtime_sync() { # $1=llm dir $2=ref → 0 준비됨 · 75 데몬 교체 예약 · 1 실패
-    local ldir="$1" want cur bin pm2v daemon log lock
-    want="$(git -C "$ldir" show "$2:.node-version" 2>/dev/null | tr -d '[:space:]')"; want="${want#v}"
+    local ldir="$1" want cur bin pm2v pm2want daemon dpm2 log lock
+    want="$(git -C "$ldir" show "$2:.node-version" 2>/dev/null | tr -d '[:space:]' || true)"; want="${want#v}"
     [[ "$want" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 0   # 고정값이 없는 소스 — 할 일 없음
     cur="$(node -p 'process.versions.node' 2>/dev/null || true)"
     pm2v="$(pm2 -v 2>/dev/null | tail -1 || true)"
+    # pm2 판 — 갱신할 ref 의 .pm2-version(없으면 지금 쓰던 판). scripts/ci/toolchain-bump.mjs 가 올린다.
+    pm2want="$(git -C "$ldir" show "$2:.pm2-version" 2>/dev/null | tr -d '[:space:]' || true)"
+    [[ "$pm2want" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || pm2want="$pm2v"
     if [[ "$cur" != "$want" ]]; then
         log_step "Node ${cur:-없음} → $want (.node-version)"
         if has mise; then
@@ -478,25 +491,27 @@ node_runtime_sync() { # $1=llm dir $2=ref → 0 준비됨 · 75 데몬 교체 �
         log_ok "node $want — $ldir/.openmake/toolchain.env"
     fi
     bin="$(dirname "$(command -v node)")"
-    # 전역 pm2 는 node 마다 따로다 — 새 node 에 없으면 지금 쓰던 판을 깐다(데몬과 CLI 판이 어긋나지 않게).
-    if [[ ! -x "$bin/pm2" ]]; then
-        "$bin/npm" install -g --no-audit --no-fund "pm2${pm2v:+@$pm2v}" >/dev/null 2>&1 || { log_err "pm2${pm2v:+@$pm2v} 설치 실패 ($bin)"; return 1; }
-        log_ok "pm2 ${pm2v:-latest} → $bin"
+    # 전역 pm2 는 node 마다 따로다 — 이 node 에 없거나 판이 다르면 고정 판을 깐다.
+    if [[ ! -x "$bin/pm2" || ( -n "$pm2want" && "$("$bin/pm2" -v 2>/dev/null | tail -1)" != "$pm2want" ) ]]; then
+        "$bin/npm" install -g --no-audit --no-fund "pm2${pm2want:+@$pm2want}" >/dev/null 2>&1 || { log_err "pm2${pm2want:+@$pm2want} 설치 실패 ($bin)"; return 1; }
+        log_ok "pm2 ${pm2want:-latest} → $bin"
     fi
     # shellcheck source=/dev/null
     [[ -f "$ldir/scripts/lib/node-version.sh" ]] && . "$ldir/scripts/lib/node-version.sh"
     daemon="$(PATH="$bin:$PATH" pm2_daemon_node_version 2>/dev/null || true)"
-    if [[ -z "$daemon" || "$daemon" == "$want" ]]; then   # 데몬이 꺼져 있으면 다음 기동이 새 node 로 뜬다
+    dpm2="$(PATH="$bin:$PATH" pm2_daemon_pm2_version 2>/dev/null || true)"
+    # 데몬이 꺼져 있으면 다음 기동이 새 node·pm2 로 뜬다. 데몬의 pm2 판이 CLI 와 다르면 그것도 pm2 update 로 맞춘다.
+    if [[ -z "$daemon" || ( "$daemon" == "$want" && ( -z "$pm2want" || -z "$dpm2" || "$dpm2" == "$pm2want" ) ) ]]; then
         pm2_boot_agent_sync "$ldir" "$bin"; return 0
     fi
     if [[ -n "${pm_id:-}" ]]; then
         log="$ldir/logs/pm2-node-switch.log"; mkdir -p "$ldir/logs"
         lock=""; [[ -n "${OMK_PIPELINE_LOCK_ENV:-}" ]] && declare -F pipeline_dir >/dev/null && lock="$(pipeline_dir "$OMK_PIPELINE_LOCK_ENV")/lock"
         pm2_daemon_switch_detached "$bin" "$log" "$lock"
-        log_warn "PM2 데몬 node $daemon → $want 교체를 예약했습니다 (예약 실행은 PM2 자식이라 제자리에서 못 바꿉니다 · $log)"
+        log_warn "PM2 데몬(node ${daemon}·pm2 ${dpm2:-?}) → node ${want}·pm2 ${pm2want:-?} 교체를 예약했습니다 (예약 실행은 PM2 자식이라 제자리에서 못 바꿉니다 · $log)"
         return "$NODE_SYNC_DEFERRED"
     fi
-    log_step "PM2 데몬 node $daemon → $want (pm2 update — 관리 중인 프로세스가 다시 뜹니다)"
+    log_step "PM2 데몬(node ${daemon}·pm2 ${dpm2:-?}) → node ${want}·pm2 ${pm2want:-?} (pm2 update — 관리 중인 프로세스가 다시 뜹니다)"
     pm2_daemon_switch_now "$bin" || { log_err "pm2 update 실패 — 'PATH=$bin:\$PATH pm2 update' 를 직접 실행하세요"; return 1; }
     log_ok "PM2 데몬 node $want"
     pm2_boot_agent_sync "$ldir" "$bin"
@@ -686,26 +701,29 @@ caddy_platform() { # → "<os> <arch>" (caddy 릴리스 파일명 규칙)
     case "$(uname -m)" in x86_64|amd64) arch=amd64 ;; aarch64|arm64) arch=arm64 ;; armv7l) arch=armv7 ;; *) return 1 ;; esac
     printf '%s %s' "$os" "$arch"
 }
-caddy_latest_version() {
-    [[ -n "${OMK_CADDY_VERSION:-}" ]] && { printf '%s' "${OMK_CADDY_VERSION#v}"; return 0; }
-    local v
-    v="$(curl -fsSL --max-time 8 https://api.github.com/repos/caddyserver/caddy/releases/latest 2>/dev/null \
-        | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p' | head -1)"
-    printf '%s' "${v:-$CADDY_VERSION_FALLBACK}"
-}
+caddy_version() { local v="${OMK_CADDY_VERSION:-$CADDY_PINNED_VERSION}"; printf '%s' "${v#v}"; }
+# 이미 PATH 에 caddy(brew 등)가 있으면 그것을 쓴다 — 판은 그 패키지 관리자가 맞춘다. omk 가 받은 것($OMK_ROOT/bin/caddy)은
+# 고정 판과 다르면 다시 받는다(CADDY_REPLACED=1 → 돌고 있는 프록시는 reload 대신 재시작해 새 바이너리로 뜬다).
+CADDY_REPLACED=0
 proxy_ensure_binary() {
     if has caddy; then CADDY_BIN="$(command -v caddy)"; return 0; fi
     CADDY_BIN="$OMK_ROOT/bin/caddy"
-    [[ -x "$CADDY_BIN" ]] && return 0
-    local plat os arch ver url tmp
+    local plat os arch ver url tmp have
+    ver="$(caddy_version)"
+    if [[ -x "$CADDY_BIN" ]]; then
+        have="$("$CADDY_BIN" version 2>/dev/null | awk '{print $1}')"; have="${have#v}"
+        [[ "$have" == "$ver" ]] && return 0
+        log_info "caddy ${have:-?} → $ver"
+    fi
     plat="$(caddy_platform)" || die "이 플랫폼용 caddy 바이너리를 자동으로 받을 수 없습니다 — caddy 를 직접 설치해 PATH 에 두세요."
-    os="${plat% *}"; arch="${plat#* }"; ver="$(caddy_latest_version)"
+    os="${plat% *}"; arch="${plat#* }"
     url="https://github.com/caddyserver/caddy/releases/download/v${ver}/caddy_${ver}_${os}_${arch}.tar.gz"
     log_info "caddy $ver 다운로드 ($os/$arch) → $CADDY_BIN"
     mkdir -p "$OMK_ROOT/bin"; tmp="$(mktemp -d)"
-    curl -fsSL "$url" -o "$tmp/caddy.tgz" || die "caddy 다운로드 실패: $url (OMK_CADDY_VERSION 으로 버전 지정 가능)"
-    tar -xzf "$tmp/caddy.tgz" -C "$tmp" caddy && mv "$tmp/caddy" "$CADDY_BIN" && chmod +x "$CADDY_BIN"
-    rm -rf "$tmp"
+    curl -fsSL "$url" -o "$tmp/caddy.tgz" || { rm -rf "$tmp"; die "caddy 다운로드 실패: $url (OMK_CADDY_VERSION 으로 버전 지정 가능)"; }
+    tar -xzf "$tmp/caddy.tgz" -C "$tmp" caddy && chmod +x "$tmp/caddy" && mv "$tmp/caddy" "$CADDY_BIN" \
+        || { rm -rf "$tmp"; die "caddy 설치 실패: $CADDY_BIN"; }
+    rm -rf "$tmp"; CADDY_REPLACED=1
 }
 proxy_template() {
     # 레포 안의 템플릿이 SoT. 레포 밖(curl 실행)이면 설치된 llm 의 것을 쓴다.
@@ -779,6 +797,9 @@ proxy_start_or_reload() {
         || die "Caddyfile 검증 실패: $dir/Caddyfile"
     if proxy_running && ! proxy_is_ours; then
         die "프록시($OMK_PROXY_APP)가 다른 OMK_ROOT($(pm2_app_cwd "$OMK_PROXY_APP"))에서 돌고 있습니다 — 이쪽 설정으로 덮어쓰지 않습니다."
+    fi
+    if proxy_is_ours && [[ $CADDY_REPLACED -eq 1 ]]; then
+        pm2 restart "$OMK_PROXY_APP" >/dev/null && { log_ok "프록시 재시작 (caddy $(caddy_version))"; return 0; }
     fi
     if proxy_is_ours; then
         "$CADDY_BIN" reload --config "$dir/Caddyfile" --adapter caddyfile --address "$OMK_CADDY_ADMIN" >/dev/null 2>&1 \
@@ -1377,9 +1398,28 @@ litellm_render_config() { # $1=레포 config $2=litellm.env $3=출력
             }
             done = 1 }' "$1" > "$3"
 }
+# LiteLLM 은 python >= 3.10 이 필요하다. 예약 실행(PM2)의 PATH 에는 ~/.local/bin 이 없어 uv 를 못 찾고 macOS 의
+# /usr/bin/python3(3.9)로 venv 를 만들어 설치가 실패했다 — uv 는 흔한 위치까지 찾고, 없으면 3.10 이상인 python 만 쓴다.
+litellm_uv() {
+    local c
+    for c in "$(command -v uv 2>/dev/null)" "$HOME/.local/bin/uv" "$HOME/.cargo/bin/uv" /opt/homebrew/bin/uv /usr/local/bin/uv; do
+        [[ -n "$c" && -x "$c" ]] && { printf '%s' "$c"; return 0; }
+    done
+    return 1
+}
+litellm_python() { # → 3.10 이상인 python 경로
+    local c
+    for c in python3.13 python3.12 python3.11 python3.10 python3 "$HOME/.local/bin/python3.13" "$HOME/.local/bin/python3.12" "$HOME/.local/bin/python3.11" "$HOME/.local/bin/python3.10"; do
+        c="$(command -v "$c" 2>/dev/null)" || continue
+        "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null && { printf '%s' "$c"; return 0; }
+    done
+    return 1
+}
 litellm_venv_install() { # $1=venv 경로 — OMK_LITELLM_SPEC 를 새 venv 에 설치
-    if has uv; then uv venv -q --python 3.12 "$1" && uv pip install -q --python "$1/bin/python" "$OMK_LITELLM_SPEC"
-    else python3 -m venv "$1" && "$1/bin/pip" install -q --upgrade pip "$OMK_LITELLM_SPEC"; fi
+    local uv py
+    if uv="$(litellm_uv)"; then "$uv" venv -q --python 3.12 "$1" && "$uv" pip install -q --python "$1/bin/python" "$OMK_LITELLM_SPEC"
+    elif py="$(litellm_python)"; then "$py" -m venv "$1" && "$1/bin/pip" install -q --upgrade pip "$OMK_LITELLM_SPEC"
+    else log_warn "LiteLLM 에는 python 3.10 이상이 필요합니다 — uv(https://docs.astral.sh/uv/) 또는 python3.12 를 설치하세요"; return 1; fi
 }
 litellm_pinned_version() { [[ "$OMK_LITELLM_SPEC" =~ ==([0-9A-Za-z.+-]+)$ ]] && printf '%s' "${BASH_REMATCH[1]}"; }
 litellm_installed_version() { # $1=venv 경로
