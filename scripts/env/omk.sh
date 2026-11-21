@@ -348,7 +348,7 @@ container_workdir() { docker inspect -f '{{ or (index .Config.Labels "com.docker
 pm2_app_cwd() { # $1=name
     has pm2 && has node || return 0
     pm2 jlist 2>/dev/null | node -e '
-        const n=process.argv[1]; let l=[]; try{l=JSON.parse(require("fs").readFileSync(0,"utf8"))}catch{}
+        const n=process.argv[1]; let l=[]; try{l=(s=>JSON.parse(s.slice(Math.max(0,s.search(/^\[/m)))))(require("fs").readFileSync(0,"utf8"))}catch{}
         const p=l.find(x=>x.name===n); process.stdout.write(p?String(p.pm2_env.pm_cwd||""):"")' "$1" 2>/dev/null || true
 }
 pm2_dump_has_any() { # $1="name name …" → 0 이면 dump 에 그중 하나가 저장돼 있다
@@ -459,6 +459,7 @@ pm2_daemon_pm2_version() { # 돌고 있는 데몬의 pm2 판(꺼져 있으면 �
         /^--- /         { d = 0 }
         d && /^pm2d version/ { sub(/^[^:]*:[[:space:]]*/, ""); gsub(/[[:space:]]/, ""); print; exit }' || true
 }
+pm2_daemon_outdated() { pm2 ping 2>&1 | grep -q 'In-memory PM2 is out-of-date'; }
 pm2_daemon_switch_now() { # $1=node bin — 이 셸이 PM2 자식이 아닐 때
     PATH="$1:$PATH" "$1/pm2" update >/dev/null 2>&1
 }
@@ -501,6 +502,9 @@ node_runtime_sync() { # $1=llm dir $2=ref → 0 준비됨 · 75 데몬 교체 �
     daemon="$(PATH="$bin:$PATH" pm2_daemon_node_version 2>/dev/null || true)"
     dpm2="$(PATH="$bin:$PATH" pm2_daemon_pm2_version 2>/dev/null || true)"
     # 데몬이 꺼져 있으면 다음 기동이 새 node·pm2 로 뜬다. 데몬의 pm2 판이 CLI 와 다르면 그것도 pm2 update 로 맞춘다.
+    # 판 숫자를 못 읽어도(staging 예약 실행에서 빈값이었다) CLI 가 내는 'out-of-date' 안내로 어긋남을 안다 — 그대로 두면
+    # 모든 pm2 jlist 출력 앞에 안내가 붙어 JSON 을 읽는 곳(프록시 소유 판정 등)이 깨졌다.
+    if [[ -n "$daemon" ]] && PATH="$bin:$PATH" pm2_daemon_outdated; then dpm2="${dpm2:-old}"; [[ "$dpm2" != "$pm2want" ]] || dpm2="old"; fi
     if [[ -z "$daemon" || ( "$daemon" == "$want" && ( -z "$pm2want" || -z "$dpm2" || "$dpm2" == "$pm2want" ) ) ]]; then
         pm2_boot_agent_sync "$ldir" "$bin"; return 0
     fi
@@ -1442,8 +1446,9 @@ litellm_venv_sync() { # $1=litellm dir
     log_ok "LiteLLM $want (이전 venv: $1/venv.prev)"
 }
 # venv 안의 스크립트는 만든 경로(venv.new)를 shebang 에 박는다 — 옮긴 뒤 litellm 실행 파일을 다시 만든다
-litellm_venv_relink() { # $1=venv 경로
-    if has uv; then uv pip install -q --python "$1/bin/python" --reinstall-package litellm "$OMK_LITELLM_SPEC"
+litellm_venv_relink() { # $1=venv 경로 — uv 가 만든 venv 에는 pip 이 없다: 만들 때와 같은 방법(litellm_uv)으로 다시 깐다
+    local uv
+    if uv="$(litellm_uv)"; then "$uv" pip install -q --python "$1/bin/python" --reinstall-package litellm "$OMK_LITELLM_SPEC"
     else "$1/bin/pip" install -q --force-reinstall --no-deps "$OMK_LITELLM_SPEC"; fi
     [[ -x "$1/bin/litellm" ]] && head -1 "$1/bin/litellm" | grep -qF "$1/bin/"
 }
@@ -2233,7 +2238,7 @@ cmd_env_reset() {
 pm2_status_of() { # $1=name → online|stopped|errored|-(없음)
     has pm2 || { printf -- '-'; return 0; }
     pm2 jlist 2>/dev/null | node -e '
-        const n=process.argv[1]; let l=[]; try{l=JSON.parse(require("fs").readFileSync(0,"utf8"))}catch{}
+        const n=process.argv[1]; let l=[]; try{l=(s=>JSON.parse(s.slice(Math.max(0,s.search(/^\[/m)))))(require("fs").readFileSync(0,"utf8"))}catch{}
         const p=l.find(x=>x.name===n); process.stdout.write(p?p.pm2_env.status:"-")' "$1" 2>/dev/null || printf -- '-'
 }
 env_summary() { # $1=env

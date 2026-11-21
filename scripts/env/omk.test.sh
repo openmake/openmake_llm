@@ -138,6 +138,7 @@ ns_run() { # $1=PATH 앞부분 $2=데몬 버전 $3=pm_id(빈값=사람이 직접
     ( PATH="$1:/usr/bin:/bin"; export PATH; pm_id="$3"
       pm2_daemon_node_version() { printf '%s' "$NS_DAEMON"; }
       pm2_daemon_pm2_version() { printf '%s' "${NS_DPM2:-}"; }
+      pm2_daemon_outdated() { [[ -n "${NS_OUTDATED:-}" ]]; }
       pm2_daemon_switch_now() { echo "switch-now $1" >> "$NS/calls"; }
       pm2_boot_agent_sync() { :; }
       pm2_daemon_switch_detached() { echo "switch-detached $1${3:+ lock}" >> "$NS/calls"; }
@@ -187,6 +188,8 @@ eq "pm2 pin: 판이 다르면 고정 판을 깔고 데몬 교체" "$(NS_DPM2=7.1
 printf '#!/bin/sh\necho 7.2.0\n' > "$NS/new/bin/pm2"
 eq "pm2 pin: CLI 는 맞고 데몬만 옛 판이면 데몬만 교체" "$(NS_DPM2=7.1.2 ns_run "$NS/new/bin" 26.13.1 "")" "0|switch-now $NS/new/bin;"
 eq "pm2 pin: 모두 맞으면 아무것도 안 함"           "$(NS_DPM2=7.2.0 ns_run "$NS/new/bin" 26.13.1 "")" "0|"
+eq "pm2 pin: 데몬 판을 못 읽어도 out-of-date 안내면 교체" "$(NS_DPM2='' NS_OUTDATED=1 ns_run "$NS/new/bin" 26.13.1 "")" "0|switch-now $NS/new/bin;"
+eq "pm2 pin: 판을 못 읽고 안내도 없으면 그대로"      "$(NS_DPM2='' ns_run "$NS/new/bin" 26.13.1 "")" "0|"
 eq "pm2 pin: 예약 실행이면 데몬 교체를 떼어 예약"   "$(NS_DPM2=7.1.2 ns_run "$NS/new/bin" 26.13.1 5)" "75|switch-detached $NS/new/bin;"
 ( cd "$NR" && git rm -q .pm2-version && git -c user.email=t@t -c user.name=t commit -qm unpin-pm2 )
 printf '#!/bin/sh\necho 7.1.2\n' > "$NS/new/bin/pm2"
@@ -200,6 +203,8 @@ printf '#!/bin/sh\nexit 1\n' > "$LP/bin/python3.13"
 for v in 12 11 10; do printf '#!/bin/sh\nexit 1\n' > "$LP/bin/python3.$v"; chmod 755 "$LP/bin/python3.$v"; done
 printf '#!/bin/sh\nexit 1\n' > "$LP/bin/python3"; chmod 755 "$LP/bin/python3"
 eq "litellm python: 3.9 뿐이면 실패"            "$(HOME="$LP/nohome" PATH="$LP/bin" litellm_python; echo "rc=$?")" "rc=1"
+# pm2 CLI·데몬 판이 다르면 jlist 앞에 안내가 붙는다 — JSON 을 읽는 곳은 '[' 로 시작하는 첫 줄부터 읽는다
+eq "pm2 jlist: 앞의 out-of-date 안내를 건너뛴다" "$( pm2() { printf '>>>> In-memory PM2 is out-of-date, do:\n>>>> $ pm2 update\n\033[33mIn memory PM2 version: 7.0.3\033[39m\n[{"name":"omk-proxy","pm2_env":{"pm_cwd":"/x/caddy"}}]\n'; }; pm2_app_cwd omk-proxy )" "/x/caddy"
 # caddy 고정 판
 eq "caddy: 기본은 고정 판"                       "$(caddy_version)" "$CADDY_PINNED_VERSION"
 eq "caddy: OMK_CADDY_VERSION 이 덮고 앞 v 는 지운다" "$(OMK_CADDY_VERSION=v2.0.1 caddy_version)" "2.0.1"
