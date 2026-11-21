@@ -95,7 +95,7 @@ omk env verify staging --list
 
 새 pipeline은 운영 게이트를 강제합니다. 기존 `env update`·`autoupdate`는 호환/복구용 명령이며 8단계 완료 근거로 대신 사용하지 않습니다. 기본 설치·기존 설치본 이관은 아래 별도 절차이며, 첫 운영 설치도 검증된 릴리스인지 확인한 후 수행합니다. 백업 실패·검증 부재·태그/설치 SHA 불일치·스모크 실패는 완료로 처리하지 않습니다. 운영 자동 갱신의 OS 자동기동 권한·재부팅 검증은 별도 실제 호스트 검증입니다.
 
-**Node 판 올리기는 갱신이 맞춘다.** `env update` 는 소스를 바꾸기 **전에** 갱신할 ref(릴리스 태그 또는 upstream)의 `.node-version` 을 읽어, 지금 node 와 다르면 mise 로 그 판을 깔고 그 node 에 pm2(쓰던 판)를 깔고 `.openmake/toolchain.env` 끝에 `# omk:node` 한 줄로 PATH 를 고정한다. PM2 데몬 node 가 다르면 `pm2 update` 로 바꾼다 — 관리 중인 프로세스가 모두 다시 뜬다. 예약 실행(pipeline·autoupdate)은 그 자신이 PM2 자식이라 교체를 프로세스 트리에서 떨어진 작업(`<llm>/logs/pm2-node-switch.log` — 파이프라인 잠금이 풀린 뒤 실행)에 맡기고 소스를 바꾸기 전에 실패로 멈춘다 — 데몬이 되살린 예약 앱과 다음 주기가 같은 갱신을 처음부터 한다. mise 가 없는 호스트는 멈추고 안내한다.
+**Node 판 올리기는 갱신이 맞춘다.** `env update` 는 소스를 바꾸기 **전에** 갱신할 ref(릴리스 태그 또는 upstream)의 `.node-version` 을 읽어, 지금 node 와 다르면 mise 로 그 판을 깔고 그 node 에 pm2(쓰던 판)를 깔고 `.openmake/toolchain.env` 끝에 `# omk:node` 한 줄로 PATH 를 고정한다. PM2 데몬 node 가 다르면 `pm2 update` 로 바꾼다 — 관리 중인 프로세스가 모두 다시 뜬다. 예약 실행(pipeline·autoupdate)은 그 자신이 PM2 자식이라 교체를 프로세스 트리에서 떨어진 작업(`<llm>/logs/pm2-node-switch.log` — 파이프라인 잠금이 풀린 뒤 실행)에 맡기고 소스를 바꾸기 전에 실패로 멈춘다 — 데몬이 되살린 예약 앱과 다음 주기가 같은 갱신을 처음부터 한다. mise 가 없는 호스트(Homebrew `node@NN` 만 쓰는 곳)는 nodejs.org 공식 배포본을 `SHASUMS256.txt` 로 확인한 뒤 `~/.openmake/node-dist/v<판>` 에 푼다. 데몬이 새 node 로 돌면 PM2 부팅 복구 등록(`com.openmake.pm2`)이 옛 node 를 가리킬 때 `mac-pm2-boot.sh --apply`(같은 `--no-docker` 여부)로 다시 등록한다 — 재부팅 뒤 옛 node 로 되살아나지 않게(`<llm>/logs/pm2-boot-resync.log`).
 
 staging·online pipeline의 갱신 단계가 실패하면 `env update --report`와 같은 표식(`<환경 디렉터리>/.omk-update-failed`)을 남기고, 다음 주기에는 HEAD가 같아도 `--redeploy`로 다시 빌드·배포합니다(성공하면 표식을 지웁니다).
 
