@@ -4,11 +4,16 @@
 # .github/workflows/toolchain-bump.yml 이 올린다 — 그래서 docker 의 node 이미지는 여기서 뺀다(.node-version 과 같이 움직여야 한다).
 # PR 은 dev 로 올린다(target-branch) — 지정하지 않으면 기본 브랜치(main)로 올라와 feature → dev → main 흐름을 건너뛴다
 # (2026-10-03 #1038 eslint 10 이 main 에 바로 들어가 dev 와 어긋났다). 이 파일은 기본 브랜치의 것이 적용된다.
+# 서버에 실리는 것(루트 npm·infra 이미지)은 fix(deps) 로 커밋해 릴리스가 열리게 한다. 데스크톱·openmake-code·actions 는 서버 릴리스와 무관해 기본값.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: "/"
     target-branch: dev
+    commit-message:   # 운영에 실리는 의존성은 fix(deps) — release-please 가 패치 릴리스로 묶는다(build(deps) 는 릴리스를 만들지 않았다)
+      prefix: fix
+      prefix-development: chore
+      include: scope
     schedule:
       interval: weekly
       day: monday
@@ -49,6 +54,10 @@ updates:
   - package-ecosystem: docker
     directories: ["/infra/egress-proxy", "/infra/mcp-runtime", "/infra/task-runtime"]
     target-branch: dev
+    commit-message:   # 운영에 실리는 의존성은 fix(deps) — release-please 가 패치 릴리스로 묶는다(build(deps) 는 릴리스를 만들지 않았다)
+      prefix: fix
+      prefix-development: chore
+      include: scope
     schedule:
       interval: weekly
       day: monday
@@ -58,6 +67,10 @@ updates:
   - package-ecosystem: docker-compose
     directories: ["/infra", "/infra/artifact-viewer"]
     target-branch: dev
+    commit-message:   # 운영에 실리는 의존성은 fix(deps) — release-please 가 패치 릴리스로 묶는다(build(deps) 는 릴리스를 만들지 않았다)
+      prefix: fix
+      prefix-development: chore
+      include: scope
     schedule:
       interval: weekly
       day: monday

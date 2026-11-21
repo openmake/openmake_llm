@@ -25,7 +25,7 @@ export function eligiblePull(pr, sha, repo) {
 // 0.x 는 마이너 변경을 깨지는 변경으로 본다. 묶음 PR 은 dependabot.yml 이 minor-and-patch 묶음만 만든다.
 export function dependabotUpdate(title) {
     const t = String(title ?? '');
-    if (/^build\(deps(-dev)?\): bump the minor-and-patch group\b/.test(t)) {
+    if (/^(build|fix|chore)\(deps(-dev)?\): bump the minor-and-patch group\b/.test(t)) {
         return 'minor';
     }
     const m = /\bfrom v?(\d+)\.(\d+)\S* to v?(\d+)\.(\d+)\S*/.exec(t);

@@ -23,6 +23,10 @@ test('Dependabot PRs merge only for patch/minor updates by dependabot itself', (
     const pr = { state: 'open', draft: false, user: { login: 'dependabot[bot]' }, title: 'build(deps): bump pgvector/pgvector from 0.8.3-pg16-trixie to 0.8.7-pg16-trixie in /infra', head: { sha: 'a', ref: 'dependabot/docker_compose/infra/dev/pgvector', repo: { full_name: 'o/r' } }, base: { ref: 'dev' } };
     assert.equal(eligiblePull(pr, 'a', 'o/r'), true);
     assert.equal(eligiblePull({ ...pr, title: 'build(deps): bump the minor-and-patch group with 10 updates' }, 'a', 'o/r'), true);
+    // .github/dependabot.yml 이 서버 의존성을 fix(deps)·개발 의존성을 chore(deps-dev) 로 커밋한다
+    assert.equal(eligiblePull({ ...pr, title: 'fix(deps): bump the minor-and-patch group with 3 updates' }, 'a', 'o/r'), true);
+    assert.equal(eligiblePull({ ...pr, title: 'chore(deps-dev): bump the minor-and-patch group with 2 updates' }, 'a', 'o/r'), true);
+    assert.equal(eligiblePull({ ...pr, title: 'fix(deps): bump redis from 7.4.12-alpine to 8.10.3-alpine in /infra' }, 'a', 'o/r'), false);
     assert.equal(eligiblePull({ ...pr, title: 'build(deps): bump redis from 7.4.12-alpine to 8.10.3-alpine in /infra' }, 'a', 'o/r'), false);
     assert.equal(eligiblePull({ ...pr, title: 'build(deps-dev): bump electron from 38.8.6 to 45.3.4 in /apps/desktop-windows' }, 'a', 'o/r'), false);
     assert.equal(eligiblePull({ ...pr, user: { login: 'someone' } }, 'a', 'o/r'), false);

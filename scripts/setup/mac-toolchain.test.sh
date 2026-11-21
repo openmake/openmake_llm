@@ -322,5 +322,26 @@ printf 'REDIS_PORT=6379\nREDIS_URL=redis://127.0.0.1:6379\n' > "$ENV_FILE"
 update_env_port REDIS_PORT 6381
 eq "redis url: 비밀번호 없는 주소 포트" "$(grep '^REDIS_URL=' "$ENV_FILE")" "REDIS_URL=redis://127.0.0.1:6381"
 
+# ── ensure_node: brew node@N 이 .node-version 과 다르고 mise 가 없으면 nodejs.org 배포본(체크섬 확인)으로 맞춘다 ──
+PINNED="$(node_version_pinned "$SCRIPT_DIR")"
+fake_node() { # $1=디렉터리 $2=판 — -v / -p process.versions.node 에 그 판을 답하는 대역 node
+    mkdir -p "$1"; printf '#!/bin/sh\ncase "$1" in -v|--version) echo "v%s" ;; -p) echo "%s" ;; esac\n' "$2" "$2" > "$1/node"; chmod +x "$1/node"
+    printf '#!/bin/sh\necho 11.0.0\n' > "$1/npm"; chmod +x "$1/npm"
+}
+EN="$TMP/en"; mkdir -p "$EN/brew/opt/node@26/bin"; fake_node "$EN/brew/opt/node@26/bin" "26.0.0"
+case "$(uname -m)" in arm64|aarch64) EA=arm64 ;; *) EA=x64 ;; esac
+case "$(uname -s)" in Darwin) EO=darwin ;; *) EO=linux ;; esac
+DN="node-v$PINNED-$EO-$EA"; mkdir -p "$EN/dist/v$PINNED" "$EN/pkg/$DN/bin"; fake_node "$EN/pkg/$DN/bin" "$PINNED"
+tar -czf "$EN/dist/v$PINNED/$DN.tar.gz" -C "$EN/pkg" "$DN"
+( cd "$EN/dist/v$PINNED" && shasum -a 256 "$DN.tar.gz" > SHASUMS256.txt )
+en_run() { # $1=배포본 주소 → "rc|OMK_NODE_BIN"
+    ( brew() { [[ "$1" == --prefix ]] && echo "$EN/brew"; }; persist_path() { :; }
+      export OMK_NODE_DIST_BASE="$1" OMK_ROOT="$EN/root"; PATH="/usr/bin:/bin"
+      out="$( ( ensure_node >/dev/null 2>&1; printf '%s' "${OMK_NODE_BIN#"$EN/"}" ) )"; rc=$?; printf '%s|%s' "$rc" "$out" )
+}
+eq "ensure_node: brew 판이 다르면 배포본으로" "$(en_run "file://$EN/dist")" "0|root/node-dist/v$PINNED/bin"
+printf 'x' >> "$EN/dist/v$PINNED/$DN.tar.gz"; rm -rf "$EN/root"
+eq "ensure_node: 체크섬이 틀리면 멈춘다" "$(en_run "file://$EN/dist" | cut -d'|' -f1)" "2"
+
 echo ""; echo "toolchain.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]
