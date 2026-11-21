@@ -37,8 +37,9 @@ ensure_node() {
 
 ensure_pm2() {
     log_step "PM2"
-    if ! has pm2; then
-        npm install -g pm2 >/dev/null 2>&1 || die "pm2 설치 실패 — 'npm i -g pm2' 를 직접 실행한 뒤 재시도하세요."
+    local want; want="$(pm2_version_pinned "$SCRIPT_DIR" 2>/dev/null || true)"   # .pm2-version — 없으면 최신
+    if ! has pm2 || [[ -n "$want" && "$(pm2 -v 2>/dev/null | tail -1)" != "$want" ]]; then
+        npm install -g "pm2${want:+@$want}" >/dev/null 2>&1 || die "pm2${want:+@$want} 설치 실패 — 'npm i -g pm2${want:+@$want}' 를 직접 실행한 뒤 재시도하세요."
     fi
     log_ok "pm2 $(pm2 -v 2>/dev/null)"
 }

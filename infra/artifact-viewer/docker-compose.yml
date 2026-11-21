@@ -12,7 +12,7 @@
 
 services:
   artifact-viewer:
-    image: nginx:alpine
+    image: nginx:1.31.9-alpine
     container_name: openmake-artifact-viewer
     ports:
       - "${ARTIFACT_VIEWER_BIND:-127.0.0.1}:${ARTIFACT_VIEWER_PORT:-8088}:80"

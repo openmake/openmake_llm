@@ -15,6 +15,13 @@ node_version_pinned() {
     sed -e 's/[[:space:]]//g' -e 's/^v//' "$file" | tr -d '\n'
 }
 
+# <repo_root>/.pm2-version 의 pm2 고정 판. 파일이 없으면 return 1 (설치는 그때의 최신).
+pm2_version_pinned() {
+    local file="$1/.pm2-version"
+    [[ -f "$file" ]] || return 1
+    tr -d '[:space:]' < "$file"
+}
+
 # 지금 PATH 의 node 버전 (node 가 없으면 빈 문자열).
 node_version_current() {
     command -v node >/dev/null 2>&1 || return 0

@@ -51,6 +51,9 @@
   "exactFiles": {
     "apps/desktop-native/build.sh": "desktopBuild",
     "apps/desktop-native/BRIDGE_VERSION": "pipeline",
+    ".github/dependabot.yml": "pipeline",
+    ".pm2-version": "pipeline",
+    "scripts/lib/node-version.sh": "pipeline",
     "apps/desktop-native/lib/node-bundle.sh": "desktopBuild",
     "apps/desktop-native/lib/node-bundle.test.mjs": "desktopBuild",
     "apps/desktop-native/lib/ffi.sh": "desktopBuild",
