@@ -97,6 +97,18 @@ omk env verify staging --list
 
 **Node 판 올리기는 갱신이 맞춘다.** `env update` 는 소스를 바꾸기 **전에** 갱신할 ref(릴리스 태그 또는 upstream)의 `.node-version` 을 읽어, 지금 node 와 다르면 mise 로 그 판을 깔고 그 node 에 pm2(쓰던 판)를 깔고 `.openmake/toolchain.env` 끝에 `# omk:node` 한 줄로 PATH 를 고정한다. PM2 데몬 node 가 다르면 `pm2 update` 로 바꾼다 — 관리 중인 프로세스가 모두 다시 뜬다. 예약 실행(pipeline·autoupdate)은 그 자신이 PM2 자식이라 교체를 프로세스 트리에서 떨어진 작업(`<llm>/logs/pm2-node-switch.log` — 파이프라인 잠금이 풀린 뒤 실행)에 맡기고 소스를 바꾸기 전에 실패로 멈춘다 — 데몬이 되살린 예약 앱과 다음 주기가 같은 갱신을 처음부터 한다. mise 가 없는 호스트(Homebrew `node@NN` 만 쓰는 곳)는 nodejs.org 공식 배포본을 `SHASUMS256.txt` 로 확인한 뒤 `~/.openmake/node-dist/v<판>` 에 푼다. 데몬이 새 node 로 돌면 PM2 부팅 복구 등록(`com.openmake.pm2`)이 옛 node 를 가리킬 때 `mac-pm2-boot.sh --apply`(같은 `--no-docker` 여부)로 다시 등록한다 — 재부팅 뒤 옛 node 로 되살아나지 않게(`<llm>/logs/pm2-boot-resync.log`).
 
+**고정 판과 정기 갱신.** 설치는 그때의 최신을 받지 않고 저장소에 고정한 판을 받는다 — CI·staging 검증·운영이 같은 조합을 돌게 하려는 것이다. 최신 유지는 PR 로 한다.
+
+| 대상 | 고정한 곳 | 올리는 것 | 서버 반영 |
+|---|---|---|---|
+| npm(루트·`apps/desktop-windows`)·cargo·GitHub Actions·Docker 이미지(node 제외)·compose 이미지 | lockfile·Dockerfile·compose | Dependabot (매주 월) | 배포의 `npm ci`·이미지 재빌드 |
+| Node | `.node-version`(+`mise.toml`·runtime Dockerfile) — 지금 메이저 안에서만 | `toolchain-bump.yml` (매주 월) | `env update` 가 mise 또는 공식 배포본으로 설치, PM2 데몬 교체 |
+| pm2 | `.pm2-version` | `toolchain-bump.yml` | `env update` 가 그 판을 깔고 데몬 판이 다르면 `pm2 update` |
+| LiteLLM | `omk.sh` `OMK_LITELLM_VERSION` | `toolchain-bump.yml` | `env update` 가 옆에 새 venv |
+| caddy | `omk.sh` `CADDY_PINNED_VERSION` | `toolchain-bump.yml` | omk 가 받은 바이너리만 바꾸고 프록시 재시작(brew 등은 그 관리자에 맡김) |
+
+Node 메이저(예: 26 → 28)는 자동으로 올리지 않는다 — engines·호환성 점검을 사람이 하는 PR 로 한다. `toolchain-bump.yml` 의 PR 이 CI 를 일으키려면 `OMK_AUTOMATION_TOKEN`(또는 `OMK_PROMOTE_TOKEN`)이 있어야 한다.
+
 staging·online pipeline의 갱신 단계가 실패하면 `env update --report`와 같은 표식(`<환경 디렉터리>/.omk-update-failed`)을 남기고, 다음 주기에는 HEAD가 같아도 `--redeploy`로 다시 빌드·배포합니다(성공하면 표식을 지웁니다).
 
 ### 데스크톱 앱 게시
@@ -242,7 +254,7 @@ Base 에는 웹 검색을 끄는 스위치가 아직 없다(모델은 오프라�
   Router 재시도는 앱이 요청마다 `x-litellm-num-retries: 0` 으로 끈다(`apps/api/src/llm/gateway-headers.ts`).
 - 빼려면 `--no-litellm` (`.env` 의 `OMK_LITELLM=off`).
 - `env update` 는 **이미 게이트웨이가 있는 환경만** 갱신한다 — 기존 환경의 `LLM_BASE_URL` 을 가로채지 않는다.
-- python 은 `uv` 가 있으면 `uv venv --python 3.12`, 없으면 `python3 -m venv`. 버전 고정은 `OMK_LITELLM_VERSION=X.Y.Z`(기본 1.110.2), 고정 해제는 `OMK_LITELLM_SPEC='litellm[proxy]'`.
+- python 은 `uv`(PATH·`~/.local/bin`·`~/.cargo/bin`)가 있으면 `uv venv --python 3.12`, 없으면 3.10 이상인 `python3.x -m venv`(3.9 뿐이면 설치를 건너뛰고 기존 venv 로 계속). 버전 고정은 `OMK_LITELLM_VERSION=X.Y.Z`(기본 1.110.2), 고정 해제는 `OMK_LITELLM_SPEC='litellm[proxy]'`.
 
 ## 기본 모델 — 아무것도 주지 않아도 채팅이 된다
 
@@ -619,7 +631,7 @@ omk env status online
 | `OMK_DESKTOP_PUBLISH` (`.env`) | 없음(꺼짐) | `1` 이면 staging·online pipeline 이 데스크톱 앱 릴리스 자산을 게시한다(위 "데스크톱 앱 게시") |
 | `OMK_GITHUB_WEB` | `https://github.com` | 데스크톱 앱 릴리스 자산을 받는 곳(토큰 없이) |
 | `OMK_SMOKE_READY_WAIT` | `60` | 스모크의 `/ready` 가 200 이 될 때까지 기다리는 최대 시간(초) — 재기동 직후 LLM 노드 첫 확인 |
-| `OMK_CADDY_VERSION` | 최신 릴리스 | caddy 버전 고정 (폐쇄망) |
+| `OMK_CADDY_VERSION` | `2.11.9` | omk 가 직접 받는 caddy 판(PATH 에 brew 등의 caddy 가 있으면 그것을 쓴다). 기본값은 매주 갱신 PR 이 올린다 |
 | `OMK_CADDY_ADMIN` | `localhost:2019` | caddy admin 주소 |
 | `OMKB_PORT_BASE` / `OMK_PROXY_PORT_BASE` / `OMK_LITELLM_PORT_BASE` | `9400` / `33000` / `13401` | bench·프록시·LiteLLM 빈 포트 탐색 시작점 |
 | `OMK_SEARXNG_PORT_BASE` / `OMK_LLAMACPP_PORT_BASE` | `8888` / `18080` | SearXNG·기본 모델 서버 빈 포트 탐색 시작점 |
