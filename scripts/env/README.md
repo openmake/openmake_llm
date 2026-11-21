@@ -631,7 +631,7 @@ omk env status online
 | `OMK_DESKTOP_PUBLISH` (`.env`) | 없음(꺼짐) | `1` 이면 staging·online pipeline 이 데스크톱 앱 릴리스 자산을 게시한다(위 "데스크톱 앱 게시") |
 | `OMK_GITHUB_WEB` | `https://github.com` | 데스크톱 앱 릴리스 자산을 받는 곳(토큰 없이) |
 | `OMK_SMOKE_READY_WAIT` | `60` | 스모크의 `/ready` 가 200 이 될 때까지 기다리는 최대 시간(초) — 재기동 직후 LLM 노드 첫 확인 |
-| `OMK_CADDY_VERSION` | `2.11.9` | omk 가 직접 받는 caddy 판(PATH 에 brew 등의 caddy 가 있으면 그것을 쓴다). 기본값은 매주 갱신 PR 이 올린다 |
+| `OMK_CADDY_VERSION` | `2.11.9` | omk 가 직접 받는 caddy 판. PATH 에 brew 등의 caddy 가 있으면 그것을 쓴다 — macOS 설치(`install_mac.sh`)는 brew 로 caddy 를 깔므로 판은 brew 가 정하고 이 고정값은 적용되지 않는다. 기본값은 매주 갱신 PR 이 올린다 |
 | `OMK_CADDY_ADMIN` | `localhost:2019` | caddy admin 주소 |
 | `OMKB_PORT_BASE` / `OMK_PROXY_PORT_BASE` / `OMK_LITELLM_PORT_BASE` | `9400` / `33000` / `13401` | bench·프록시·LiteLLM 빈 포트 탐색 시작점 |
 | `OMK_SEARXNG_PORT_BASE` / `OMK_LLAMACPP_PORT_BASE` | `8888` / `18080` | SearXNG·기본 모델 서버 빈 포트 탐색 시작점 |

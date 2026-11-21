@@ -15,12 +15,24 @@ ensure_node() {
     brew_bin="$(brew --prefix)/opt/node@$NODE_MAJOR/bin"
     bin="$brew_bin"
     pinned="$(node_version_pinned "$SCRIPT_DIR")"
-    if [[ "$("$brew_bin/node" -v 2>/dev/null || true)" != "v$pinned" ]] && command -v mise >/dev/null 2>&1; then
-        if selected="$(mise where "node@$pinned" 2>/dev/null)" && [[ -x "$selected/bin/node" ]]; then
-            bin="$selected/bin"
+    # brew node@N 이 .node-version 과 다르면(brew 가 먼저 올렸거나 고정값이 먼저 올라감) mise → nodejs.org 배포본 순서로 맞춘다.
+    # 배포본은 omk env update 와 같은 함수(node_dist_install: SHASUMS256 검증, $OMK_ROOT/node-dist/v<판>)로 받는다.
+    if [[ "$("$brew_bin/node" -v 2>/dev/null || true)" != "v$pinned" ]]; then
+        bin=""
+        if command -v mise >/dev/null 2>&1; then
+            selected="$(mise where "node@$pinned" 2>/dev/null || true)"
+            if [[ ! -x "$selected/bin/node" ]]; then
+                log_info "mise 로 Node $pinned 설치 시도"
+                mise install "node@$pinned" >/dev/null 2>&1 && selected="$(mise where "node@$pinned" 2>/dev/null || true)"
+            fi
+            [[ -x "$selected/bin/node" ]] && bin="$selected/bin"
+        fi
+        if [[ -z "$bin" ]]; then
+            log_info "nodejs.org 배포본으로 Node $pinned 설치 (SHA256 확인)"
+            bin="$(OMK_ROOT="$OMK_ROOT" OMK_SOURCE_ONLY=1 bash -c '. "$1/scripts/env/omk.sh"; node_dist_install "$2"' _ "$SCRIPT_DIR" "$pinned")" || bin=""
         fi
     fi
-    [[ -x "$bin/node" ]] || die "Node.js $pinned 가 없습니다 (mise install node@$pinned)"
+    [[ -n "$bin" && -x "$bin/node" ]] || die "Node.js $pinned 를 준비하지 못했습니다 — 'mise install node@$pinned' 또는 nodejs.org 에서 $pinned 을 설치한 뒤 다시 실행하세요."
     # keg-only formula 라 PATH 에 직접 올린다 — PM2 가 기동 시점 PATH 의 node 를 쓴다.
     export PATH="$bin:$PATH"
     OMK_NODE_BIN="$bin"

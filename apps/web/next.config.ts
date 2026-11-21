@@ -2,7 +2,6 @@ import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { PORTS } from "@openmake/config";
 
 /**
  * 포트 단일 출처 — 루트 scripts/resolve-ports.cjs (우선순위: 셸 환경 > 루트 .env > 기본값).
@@ -45,7 +44,9 @@ const publicSetting = (key: string): string => process.env[key] || rootEnv[key] 
  *   same-site 라 SameSite=Lax 쿠키가 전송되고, origin(localhost:3000)은 백엔드 CORS_ORIGINS 에 등록돼 있다.
  *   운영은 same-origin(location.host)로 연결 → Caddy 가 업그레이드 프록시.
  */
-const API_PROXY_TARGET = process.env.API_PROXY_TARGET || `http://localhost:${PORTS.API}`;
+// 기본값도 포트 단일 출처(resolve-ports: 셸 > 루트 .env > 52416)를 따른다 — rewrites 는 빌드 때 굳으므로, 예전처럼
+// @openmake/config 의 PORTS.API(고정 52416)를 쓰면 맨 `npm run build` 가 .env 의 PORT(예: 52417)를 무시하고 /api 가 500 이 됐다.
+const API_PROXY_TARGET = process.env.API_PROXY_TARGET || `http://localhost:${apiPort}`;
 
 /**
  * 위 rewrites 프록시의 응답 대기 상한(ms). Next 기본값 30초로는 긴 동기 요청(파일 업로드 뒤 색인, 비스트림 생성 등)이
