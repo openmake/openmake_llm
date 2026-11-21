@@ -240,7 +240,7 @@ Base 에는 웹 검색을 끄는 스위치가 아직 없다(모델은 오프라�
   Router 재시도는 앱이 요청마다 `x-litellm-num-retries: 0` 으로 끈다(`apps/api/src/llm/gateway-headers.ts`).
 - 빼려면 `--no-litellm` (`.env` 의 `OMK_LITELLM=off`).
 - `env update` 는 **이미 게이트웨이가 있는 환경만** 갱신한다 — 기존 환경의 `LLM_BASE_URL` 을 가로채지 않는다.
-- python 은 `uv` 가 있으면 `uv venv --python 3.12`, 없으면 `python3 -m venv`. 버전 고정은 `OMK_LITELLM_SPEC='litellm[proxy]==X.Y.Z'`.
+- python 은 `uv` 가 있으면 `uv venv --python 3.12`, 없으면 `python3 -m venv`. 버전 고정은 `OMK_LITELLM_VERSION=X.Y.Z`(기본 1.110.2), 고정 해제는 `OMK_LITELLM_SPEC='litellm[proxy]'`.
 
 ## 기본 모델 — 아무것도 주지 않아도 채팅이 된다
 
@@ -273,7 +273,7 @@ omk 를 직접 쓸 때도 같은 옵션을 줄 수 있다. **주지 않으면 �
 | `--artifact-viewer` | 아티팩트 공유 뷰어(nginx 컨테이너 `:8088`, HTTPS 면 `:8443`). nginx.conf 가 백엔드 `:52416` 고정이라 기본 인스턴스 전용 | `OMK_ARTIFACT_VIEWER=1` |
 | `--discord-token T` | Discord 봇 빌드·등록. 앱 API 키(discord 스코프)는 설치 후 발급해 `DISCORD_BOT_API_KEY` 에 넣는다 — 운영 봇 토큰 재사용 금지(두 서버가 같은 봇으로 붙는다) | — |
 
-LiteLLM 버전은 `OMK_LITELLM_SPEC` 로 고정한다 — 설치 스크립트는 `litellm[proxy]==1.110.2` 를 넘긴다. 1.102 부터 `/v1/models` 가 1.100.1 보다 약 50% 느리다(2026-11-21 같은 config 로컬 실측 p50 28→43ms, 동시 10건 280→433ms) — 1.102 때 운영이 롤백한 회귀가 1.110.2 에서도 고쳐지지 않았다.
+LiteLLM 버전은 omk 의 `OMK_LITELLM_VERSION`(기본 1.110.2)으로 고정한다 — 설치와 `omk env update` 모두 venv 의 버전이 다르면 옆에 새 venv 를 만들어 성공할 때만 바꿔 끼운다(옛 것은 `venv.prev`). 1.102 부터 `/v1/models` 가 1.100.1 보다 약 50% 느리다(2026-11-21 같은 config 로컬 실측 p50 28→43ms, 동시 10건 280→433ms) — 1.102 때 운영이 롤백한 회귀가 1.110.2 에서도 고쳐지지 않았다.
 
 ### DGX 채팅 모델 바꾸기 — 정식 이름 + 옛 이름 호환
 
@@ -623,7 +623,8 @@ omk env status online
 | `OMK_SEARXNG_PORT_BASE` / `OMK_LLAMACPP_PORT_BASE` | `8888` / `18080` | SearXNG·기본 모델 서버 빈 포트 탐색 시작점 |
 | `OMK_SEARXNG_IMAGE` | `searxng/searxng:latest` | SearXNG 이미지 |
 | `OMK_NET_PROBE_URLS` / `OMK_SEARCH_PROBE_QUERY` | DDG·Bing·Wikipedia / `wikipedia` | 외부 연결 점검 대상(하나라도 열리면 온라인) · 검색 동작 확인용 질의 |
-| `OMK_LITELLM_SPEC` | `litellm[proxy]` | LiteLLM pip 설치 대상 — 버전 고정에 쓴다 |
+| `OMK_LITELLM_VERSION` | `1.110.2` | LiteLLM 고정 버전 — 설치·update 가 이 버전으로 맞춘다 |
+| `OMK_LITELLM_SPEC` | `litellm[proxy]==$OMK_LITELLM_VERSION` | LiteLLM pip 설치 대상 — `==X.Y.Z` 가 없으면 버전을 맞추지 않는다 |
 | `OMK_LLAMACPP_TAG` | `b10964` | 기본 모델 서버(llama.cpp) 릴리스 태그 |
 | `OMK_DEFAULT_MODEL_HF` / `_NAME` / `_CTX` | `Qwen/Qwen3-1.7B-GGUF:Q8_0` / `qwen3-1.7b` / `16384` | 기본 모델 — 준 값은 `~/.openmake/llamacpp/model.conf` 에 기억된다 |
 | `OMK_DGX_MODEL` | vLLM 에서 감지 → 기억된 값 → `retired-chat-model` | `--dgx-host` 일 때 DGX 채팅 모델의 정식 이름 — 앱 기본 모델과 게이트웨이 정식 항목. 준 값은 환경의 `litellm.env` 에 기억된다([모델 바꾸기](#dgx-채팅-모델-바꾸기--정식-이름--옛-이름-호환)) |

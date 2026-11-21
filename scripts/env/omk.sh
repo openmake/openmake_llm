@@ -108,7 +108,10 @@ OMK_SEARXNG_IMAGE="${OMK_SEARXNG_IMAGE:-searxng/searxng:latest}"
 OMK_SEARXNG_PORT_BASE="${OMK_SEARXNG_PORT_BASE:-8888}"   # .env.example 의 SEARXNG_URL 예시 포트. 점유 시 다음 빈 포트
 OMK_BACKUP_CRON="${OMK_BACKUP_CRON:-30 3 * * *}"          # omk env backup --schedule 의 기본 주기 (매일 03:30)
 OMK_LITELLM_PORT_BASE="${OMK_LITELLM_PORT_BASE:-13401}"  # LiteLLM 게이트웨이 빈 포트 탐색 시작점
-OMK_LITELLM_SPEC="${OMK_LITELLM_SPEC:-litellm[proxy]}"    # pip 설치 대상 — 버전 고정: 'litellm[proxy]==X.Y.Z'
+# LiteLLM 고정 버전 — 설치·update 모두 이 버전으로 맞춘다(다르면 새 venv 로 교체). 1.102~1.110.2 는 /v1/models 가 1.100.1 보다
+# ~50% 느리다(2026-11-21 같은 config 로컬 실측 p50 28→43ms) — 감수하고 올림. 고정을 풀려면 OMK_LITELLM_SPEC='litellm[proxy]'.
+OMK_LITELLM_VERSION="${OMK_LITELLM_VERSION:-1.110.2}"
+OMK_LITELLM_SPEC="${OMK_LITELLM_SPEC:-litellm[proxy]==$OMK_LITELLM_VERSION}"    # pip 설치 대상
 # 기본 모델 — 업스트림을 주지 않은 설치본도 바로 채팅이 되게 하는 최소 모델. 호스트당 llama.cpp 서버 하나(PM2), 환경들이 공유한다.
 # 작업 클론의 로컬 개발('omk dev up' · 핫 리로드)이 쓰는 인스턴스 이름 — 환경 'dev'(~/.openmake/dev)와 컨테이너·볼륨·포트가
 # 겹치지 않게 따로 둔다. 같은 호스트에서 로컬 개발과 환경 dev 를 동시에 쓸 수 있다.
@@ -1254,6 +1257,36 @@ litellm_render_config() { # $1=레포 config $2=litellm.env $3=출력
             }
             done = 1 }' "$1" > "$3"
 }
+litellm_venv_install() { # $1=venv 경로 — OMK_LITELLM_SPEC 를 새 venv 에 설치
+    if has uv; then uv venv -q --python 3.12 "$1" && uv pip install -q --python "$1/bin/python" "$OMK_LITELLM_SPEC"
+    else python3 -m venv "$1" && "$1/bin/pip" install -q --upgrade pip "$OMK_LITELLM_SPEC"; fi
+}
+litellm_pinned_version() { [[ "$OMK_LITELLM_SPEC" =~ ==([0-9A-Za-z.+-]+)$ ]] && printf '%s' "${BASH_REMATCH[1]}"; }
+litellm_installed_version() { # $1=venv 경로
+    "$1/bin/python" -c 'import importlib.metadata as m; print(m.version("litellm"))' 2>/dev/null
+}
+# 이미 있는 venv 가 고정 버전과 다르면 옆에 새 venv 를 만들어 성공했을 때만 바꿔 끼운다 — 실패하면 기존 venv 로 계속 돈다.
+# 제자리 업그레이드는 하지 않는다: 옛 venv 의 python 이 새 버전 요구(>=3.10)보다 낮을 수 있다. 옛 것은 venv.prev 에 하나만 남긴다.
+litellm_venv_sync() { # $1=litellm dir
+    local want have; want="$(litellm_pinned_version)" || return 0
+    have="$(litellm_installed_version "$1/venv")"
+    [[ "$have" != "$want" ]] || return 0
+    log_info "LiteLLM ${have:-?} → $want"
+    rm -rf "$1/venv.new"
+    if ! litellm_venv_install "$1/venv.new" || [[ "$(litellm_installed_version "$1/venv.new")" != "$want" ]]; then
+        rm -rf "$1/venv.new"; log_warn "LiteLLM $want 설치 실패 — ${have:-기존} 버전으로 계속합니다"; return 1
+    fi
+    rm -rf "$1/venv.prev"; mv "$1/venv" "$1/venv.prev" && mv "$1/venv.new" "$1/venv"
+    litellm_venv_relink "$1/venv" \
+        || { rm -rf "$1/venv"; mv "$1/venv.prev" "$1/venv"; log_warn "LiteLLM $want 전환 실패 — ${have:-기존} 버전으로 되돌렸습니다"; return 1; }
+    log_ok "LiteLLM $want (이전 venv: $1/venv.prev)"
+}
+# venv 안의 스크립트는 만든 경로(venv.new)를 shebang 에 박는다 — 옮긴 뒤 litellm 실행 파일을 다시 만든다
+litellm_venv_relink() { # $1=venv 경로
+    if has uv; then uv pip install -q --python "$1/bin/python" --reinstall-package litellm "$OMK_LITELLM_SPEC"
+    else "$1/bin/pip" install -q --force-reinstall --no-deps "$OMK_LITELLM_SPEC"; fi
+    [[ -x "$1/bin/litellm" ]] && head -1 "$1/bin/litellm" | grep -qF "$1/bin/"
+}
 LITELLM_CHANGED=0
 litellm_ensure() { # $1=llm dir $2=env [$3=QWEN base $4=BGE base $5=vLLM key $6=업스트림 base $7=업스트림 key $8=업스트림 model]
     local ldir="$1" env="$2" envf="$1/.env" d lenv port key url i dgx why
@@ -1270,9 +1303,10 @@ litellm_ensure() { # $1=llm dir $2=env [$3=QWEN base $4=BGE base $5=vLLM key $6=
     mkdir -p "$d"; chmod 700 "$d"
     log_step "LiteLLM 게이트웨이: $d"
     if [[ ! -x "$d/venv/bin/litellm" ]]; then
-        if has uv; then uv venv -q --python 3.12 "$d/venv" && uv pip install -q --python "$d/venv/bin/python" "$OMK_LITELLM_SPEC"
-        else python3 -m venv "$d/venv" && "$d/venv/bin/pip" install -q --upgrade pip "$OMK_LITELLM_SPEC"; fi \
+        litellm_venv_install "$d/venv" \
             || { log_warn "LiteLLM 설치 실패 — 건너뜁니다 (나중에 'omk env update $env')"; rm -rf "$d/venv"; return 0; }
+    else
+        litellm_venv_sync "$d" || true
     fi
     [[ -f "$lenv" ]] || { : > "$lenv"; }
     chmod 600 "$lenv"
