@@ -137,6 +137,7 @@ ns_run() { # $1=PATH 앞부분 $2=데몬 버전 $3=pm_id(빈값=사람이 직접
     # shellcheck disable=SC2034  # node_runtime_sync 가 읽는다(PM2 가 자식에 넣는 변수)
     ( PATH="$1:/usr/bin:/bin"; export PATH; pm_id="$3"
       pm2_daemon_node_version() { printf '%s' "$NS_DAEMON"; }
+      pm2_daemon_pm2_version() { printf '%s' "${NS_DPM2:-}"; }
       pm2_daemon_switch_now() { echo "switch-now $1" >> "$NS/calls"; }
       pm2_boot_agent_sync() { :; }
       pm2_daemon_switch_detached() { echo "switch-detached $1${3:+ lock}" >> "$NS/calls"; }
@@ -179,6 +180,29 @@ eq "node sync: .node-version 없는 소스는 건너뜀"  "$(ns_run "$NS/old/bin
 printf 'v26.13.1\n' > "$NR/.node-version"; ( cd "$NR" && git -c user.email=t@t -c user.name=t commit -qam v )
 eq "node sync: 앞 v 는 지운다"                   "$(ns_run "$NS/new/bin" 26.13.1 "")" "0|"
 eq "update target: upstream 없는 비릴리스는 HEAD" "$(update_target_ref "$NR" main)" "HEAD"
+# pm2 고정 판(.pm2-version) — 다르면 그 판을 깔고, 데몬의 pm2 판만 달라도 데몬을 바꾼다
+printf '7.2.0\n' > "$NR/.pm2-version"; ( cd "$NR" && git add .pm2-version && git -c user.email=t@t -c user.name=t commit -qm pm2 )
+printf '#!/bin/sh\necho 7.1.2\n' > "$NS/new/bin/pm2"; chmod 755 "$NS/new/bin/pm2"
+eq "pm2 pin: 판이 다르면 고정 판을 깔고 데몬 교체" "$(NS_DPM2=7.1.2 ns_run "$NS/new/bin" 26.13.1 "")" "0|npm install -g --no-audit --no-fund pm2@7.2.0;switch-now $NS/new/bin;"
+printf '#!/bin/sh\necho 7.2.0\n' > "$NS/new/bin/pm2"
+eq "pm2 pin: CLI 는 맞고 데몬만 옛 판이면 데몬만 교체" "$(NS_DPM2=7.1.2 ns_run "$NS/new/bin" 26.13.1 "")" "0|switch-now $NS/new/bin;"
+eq "pm2 pin: 모두 맞으면 아무것도 안 함"           "$(NS_DPM2=7.2.0 ns_run "$NS/new/bin" 26.13.1 "")" "0|"
+eq "pm2 pin: 예약 실행이면 데몬 교체를 떼어 예약"   "$(NS_DPM2=7.1.2 ns_run "$NS/new/bin" 26.13.1 5)" "75|switch-detached $NS/new/bin;"
+( cd "$NR" && git rm -q .pm2-version && git -c user.email=t@t -c user.name=t commit -qm unpin-pm2 )
+printf '#!/bin/sh\necho 7.1.2\n' > "$NS/new/bin/pm2"
+# LiteLLM python — uv 는 PATH 밖 흔한 위치까지, 없으면 3.10 이상 python 만
+LP="$TMP/lp"; mkdir -p "$LP/fakehome/.local/bin" "$LP/bin"
+printf '#!/bin/sh\nexit 0\n' > "$LP/fakehome/.local/bin/uv"; chmod 755 "$LP/fakehome/.local/bin/uv"
+eq "litellm uv: PATH 에 없어도 ~/.local/bin/uv"  "$(HOME="$LP/fakehome" PATH="/usr/bin:/bin" litellm_uv)" "$LP/fakehome/.local/bin/uv"
+printf '#!/bin/sh\nexit 0\n' > "$LP/bin/python3.13"; chmod 755 "$LP/bin/python3.13"
+eq "litellm python: 3.10 이상을 고른다"          "$(HOME="$LP/nohome" PATH="$LP/bin:/usr/bin:/bin" litellm_python)" "$LP/bin/python3.13"
+printf '#!/bin/sh\nexit 1\n' > "$LP/bin/python3.13"
+for v in 12 11 10; do printf '#!/bin/sh\nexit 1\n' > "$LP/bin/python3.$v"; chmod 755 "$LP/bin/python3.$v"; done
+printf '#!/bin/sh\nexit 1\n' > "$LP/bin/python3"; chmod 755 "$LP/bin/python3"
+eq "litellm python: 3.9 뿐이면 실패"            "$(HOME="$LP/nohome" PATH="$LP/bin" litellm_python; echo "rc=$?")" "rc=1"
+# caddy 고정 판
+eq "caddy: 기본은 고정 판"                       "$(caddy_version)" "$CADDY_PINNED_VERSION"
+eq "caddy: OMK_CADDY_VERSION 이 덮고 앞 v 는 지운다" "$(OMK_CADDY_VERSION=v2.0.1 caddy_version)" "2.0.1"
 # PM2 부팅 복구 등록 — 다른 node 를 가리킬 때만 같은 Docker 옵션으로 mac-pm2-boot.sh --apply
 if [[ "$(uname -s)" == Darwin ]] && has plutil; then
     BA="$TMP/ba"; mkdir -p "$BA/fakehome/Library/LaunchAgents" "$BA/ldir/scripts/setup"

@@ -74,6 +74,11 @@ NODE_PINNED_VERSION=""
     && NODE_PINNED_VERSION="$(sed -e 's/[[:space:]]//g' -e 's/^v//' "$SCRIPT_DIR/.node-version" | tr -d '\n')"
 readonly NODE_PINNED_VERSION
 readonly NODE_PINNED_MAJOR="${NODE_PINNED_VERSION%%.*}"
+# pm2 고정 판(.pm2-version) — 없으면(레포 밖) 그때의 최신.
+PM2_PINNED_VERSION=""
+[[ -f "$SCRIPT_DIR/.pm2-version" ]] && PM2_PINNED_VERSION="$(tr -d '[:space:]' < "$SCRIPT_DIR/.pm2-version")"
+readonly PM2_PINNED_VERSION
+readonly PM2_PKG="pm2${PM2_PINNED_VERSION:+@$PM2_PINNED_VERSION}"
 readonly TOOLCHAIN_DIR="$SCRIPT_DIR/.openmake"
 readonly TOOLCHAIN_ENV="$TOOLCHAIN_DIR/toolchain.env"
 readonly HEALTH_RETRIES=45
@@ -741,12 +746,12 @@ PM2_BIN=""
 
 ensure_pm2() {
     log_step "3/8 PM2"
-    if has pm2; then
+    if has pm2 && [[ -z "$PM2_PINNED_VERSION" || "$(pm2 -v 2>/dev/null | tail -1)" == "$PM2_PINNED_VERSION" ]]; then
         PM2_BIN="pm2"; log_ok "pm2 $(pm2 -v 2>/dev/null)"; return 0
     fi
 
-    log_info "pm2 전역 설치 시도 (npm i -g pm2)"
-    if npm install -g pm2 >/dev/null 2>&1 && has pm2; then
+    log_info "pm2 전역 설치 시도 (npm i -g $PM2_PKG)"
+    if npm install -g "$PM2_PKG" >/dev/null 2>&1 && has pm2; then
         PM2_BIN="pm2"; log_ok "pm2 $(pm2 -v) 설치 완료"; return 0
     fi
 
@@ -754,8 +759,8 @@ ensure_pm2() {
     log_warn "전역 설치 실패 — 홈 디렉터리에 설치합니다 (~/.openmake/npm-global)"
     local prefix="$HOME/.openmake/npm-global"
     mkdir -p "$prefix"
-    npm install -g --prefix "$prefix" pm2 >/dev/null 2>&1 \
-        || die "pm2 설치 실패 — 'npm i -g pm2' 를 직접 실행한 뒤 재시도하세요."
+    npm install -g --prefix "$prefix" "$PM2_PKG" >/dev/null 2>&1 \
+        || die "pm2 설치 실패 — 'npm i -g $PM2_PKG' 를 직접 실행한 뒤 재시도하세요."
     export PATH="$prefix/bin:$PATH"; persist_path "$prefix/bin"
     has pm2 || die "pm2 설치 후에도 실행 파일을 찾을 수 없습니다."
     PM2_BIN="pm2"
