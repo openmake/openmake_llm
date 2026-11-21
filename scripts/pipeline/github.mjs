@@ -13,7 +13,30 @@ export function latestCI(runs, sha) {
     return latest?.conclusion === 'success';
 }
 export function eligiblePull(pr, sha, repo) {
-    return pr.state === 'open' && !pr.draft && pr.head.sha === sha && pr.head.repo?.full_name === repo && pr.base.ref === 'dev' && /^(feature|feat|fix|docs|chore|test|refactor)\/.+/.test(pr.head.ref);
+    if (!(pr.state === 'open' && !pr.draft && pr.head.sha === sha && pr.head.repo?.full_name === repo && pr.base.ref === 'dev')) {
+        return false;
+    }
+    if (/^(feature|feat|fix|docs|chore|test|refactor)\/.+/.test(pr.head.ref)) {
+        return true;
+    }
+    return pr.head.ref.startsWith('dependabot/') && pr.user?.login === 'dependabot[bot]' && dependabotUpdate(pr.title) === 'minor';
+}
+// Dependabot PR 제목의 갱신 폭: 'minor'(패치·마이너 — 자동 병합) · 'major'(사람 검토) · null(읽지 못함 — 사람 검토).
+// 0.x 는 마이너 변경을 깨지는 변경으로 본다. 묶음 PR 은 dependabot.yml 이 minor-and-patch 묶음만 만든다.
+export function dependabotUpdate(title) {
+    const t = String(title ?? '');
+    if (/^build\(deps(-dev)?\): bump the minor-and-patch group\b/.test(t)) {
+        return 'minor';
+    }
+    const m = /\bfrom v?(\d+)\.(\d+)\S* to v?(\d+)\.(\d+)\S*/.exec(t);
+    if (!m) {
+        return null;
+    }
+    const [from, fromMinor, to, toMinor] = m.slice(1).map(Number);
+    if (from !== to || (from === 0 && fromMinor !== toMinor)) {
+        return 'major';
+    }
+    return 'minor';
 }
 export function metadataOnly(before, after, path, allowed, lockWorkspaces = []) {
     if (before === null || after === null || !allowed.has(path)) {
@@ -145,6 +168,19 @@ export async function orchestrate(mode, commandGh, wait = sleep) {
             throw new Error(`${name} must require strict CI Gate (Test → Build → Size → Lint) before automation`);
         }
     };
+    const reviewAndMerge = async (pr, sha, proof) => {
+        const files = JSON.parse(gh(['api', '--paginate', '--slurp', `repos/${repo}/pulls/${pr.number}/files?per_page=100`])).flat();
+        // Deterministic structural review; this does not claim a semantic or LLM review.
+        if (!files.length || files.some(f => f.status === 'removed' && f.filename === 'package.json' || f.filename.includes('\n') || f.changes > 20000)) {
+            throw new Error(`Structural quality review blocked PR #${pr.number}; manual review required`);
+        }
+        console.log(`Structural quality review passed PR #${pr.number} head ${sha}, ${files.length} files; ${proof}`);
+        protection('dev');
+        if (api(`pulls/${pr.number}`).head.sha !== sha) {
+            throw new Error('PR head changed during review');
+        }
+        await merge(pr, sha);
+    };
     if (mode === 'feature') {
         const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
         const run = event.workflow_run;
@@ -156,17 +192,31 @@ export async function orchestrate(mode, commandGh, wait = sleep) {
             if (!eligiblePull(pr, run.head_sha, repo) || !ci(pr.head.sha, 'pull_request')) {
                 continue;
             }
-            const files = JSON.parse(gh(['api', '--paginate', '--slurp', `repos/${repo}/pulls/${pr.number}/files?per_page=100`])).flat();
-            // Deterministic structural review; this does not claim a semantic or LLM review.
-            if (!files.length || files.some(f => f.status === 'removed' && f.filename === 'package.json' || f.filename.includes('\n') || f.changes > 20000)) {
-                throw new Error(`Structural quality review blocked PR #${pr.number}; manual review required`);
+            await reviewAndMerge(pr, run.head_sha, `CI run ${run.id}`);
+        }
+    }
+    else if (mode === 'dependabot') {
+        // Dependabot 이 일으킨 CI 의 workflow_run 에는 저장소 비밀값이 오지 않아 위 feature 경로가 병합하지 못한다.
+        // 예약 실행(일반 권한)이 열린 Dependabot PR 중 패치·마이너이고 지금 head 의 PR CI 가 통과한 것만 병합한다.
+        for (const pr of pulls('dev')) {
+            if (!pr.head.ref.startsWith('dependabot/')) {
+                continue;
             }
-            console.log(`Structural quality review passed PR #${pr.number} head ${pr.head.sha}, ${files.length} files; CI run ${run.id}`);
-            protection('dev');
-            if (api(`pulls/${pr.number}`).head.sha !== run.head_sha) {
-                throw new Error('PR head changed during review');
+            const kind = dependabotUpdate(pr.title);
+            if (!eligiblePull(pr, pr.head.sha, repo)) {
+                console.log(`Skip PR #${pr.number}: ${kind === 'minor' ? 'not eligible' : `${kind ?? 'unknown'} update needs human review`}`);
+                continue;
             }
-            await merge(pr, run.head_sha);
+            if (!ci(pr.head.sha, 'pull_request')) {
+                console.log(`Skip PR #${pr.number}: PR CI has not passed at ${pr.head.sha}`);
+                continue;
+            }
+            try {
+                await reviewAndMerge(pr, pr.head.sha, 'dependabot sweep');
+            }
+            catch (error) {
+                console.log(`PR #${pr.number}: ${error instanceof Error ? error.message : error}`);
+            }
         }
     }
     else if (mode === 'promote') {
