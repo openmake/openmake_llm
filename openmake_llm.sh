@@ -511,7 +511,7 @@ show_status() {
         local pm2_raw=""
         if pm2_raw="$(pm2 jlist 2>/dev/null | node -e "
             let raw='';process.stdin.on('data',c=>raw+=c).on('end',()=>{
-                try { const arr=JSON.parse(raw||'[]');
+                try { const arr=JSON.parse(raw.slice(Math.max(0,raw.search(/^\[/m)))||'[]');
                     const app=arr.find(a=>a.name==='$APP_NAME');
                     if(!app){console.log('not-registered');return;}
                     console.log(app.pm2_env.status);
@@ -1006,7 +1006,7 @@ pm2_env_check() { # $1=key
     want="$(env_val "$1")"; [[ -n "$want" ]] || return 0
     command -v node >/dev/null 2>&1 || return 0
     got="$(pm2 jlist 2>/dev/null | node -e '
-        let l = []; try { l = JSON.parse(require("fs").readFileSync(0, "utf8")); } catch {}
+        let l = []; try { l = ((s) => JSON.parse(s.slice(Math.max(0, s.search(/^\[/m)))))(require("fs").readFileSync(0, "utf8")); } catch {}
         const p = (Array.isArray(l) ? l : []).find((x) => x && x.name === process.argv[1]);
         if (!p) process.exit(3);
         const e = p.pm2_env || {}, k = process.argv[2];
