@@ -37,7 +37,7 @@
 #   - PostgreSQL/Redis는 docker compose 로 관리 (2026-06-21 brew postgresql@16 제거 → docker 단독)
 #     · compose 위치: ./infra/docker-compose.yml (COMPOSE_FILE env 로 override 가능)
 #   - OpenMake LLM 앱은 PM2로 관리
-#   - Node 24+ 활성화 상태 (mise / nvm / fnm, 또는 install.sh 가 준비한 .openmake/toolchain.env)
+#   - Node 26(.node-version) 활성화 상태 (mise / nvm / fnm, 또는 install.sh 가 준비한 .openmake/toolchain.env)
 #
 # 종료 코드:
 #   0  성공

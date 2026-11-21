@@ -48,7 +48,7 @@
 curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash
 ```
 
-在全新的机器上，安装脚本会安装前置条件和完整技术栈（见下文）。加上 `bash -s -- --minimal` 则只安装应用：检查工具链（Node.js 24、Docker、PM2），用新生成的密钥写入 `.env`，启动 PostgreSQL 和 Redis，构建 OpenMake，用 PM2 启动，并执行健康检查。
+在全新的机器上，安装脚本会安装前置条件和完整技术栈（见下文）。加上 `bash -s -- --minimal` 则只安装应用：检查工具链（Node.js 26、Docker、PM2），用新生成的密钥写入 `.env`，启动 PostgreSQL 和 Redis，构建 OpenMake，用 PM2 启动，并执行健康检查。
 
 然后打开它输出的地址，以管理员身份登录并连接模型——本地 vLLM 或 Ollama 服务器，或任何 OpenAI 兼容端点均可。
 
@@ -237,7 +237,7 @@ flowchart TB
 
 | 层 | 技术 |
 |---|---|
-| 后端 | Node.js 24、Express 5、TypeScript（strict）、Zod、Winston |
+| 后端 | Node.js 26、Express 5、TypeScript（strict）、Zod、Winston |
 | 前端 | Next.js 16、React 19、Zustand、Tailwind CSS 4、`next-intl`（ko · en · ja · zh · de） |
 | 数据 | 通过参数化原生 SQL 访问 PostgreSQL（不使用 ORM）、Redis |
 | LLM | vLLM、LiteLLM 网关、`openai` SDK |

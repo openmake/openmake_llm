@@ -5,7 +5,7 @@
 # macOS 는 install_mac.sh 를 쓴다 — install.sh(입구)가 OS 를 판별해 자동으로 넘긴다.
 # 새 서버에서 이 스크립트 하나로 운영과 같은 구성을 만든다. 역할은 셋으로 나뉜다:
 #
-#   1) 이 스크립트  — Linux 사전 준비: 호스트 패키지(apt/dnf…) · uv · 절전 해제 · Node 24 · PM2
+#   1) 이 스크립트  — Linux 사전 준비: 호스트 패키지(apt/dnf…) · uv · 절전 해제 · Node 26 · PM2
 #                     · Docker Engine(+ docker 그룹 재진입) · 질문(한 번에) · (선택) Tailscale
 #   2) omk          — 스택 (scripts/env/omk.sh env install): LiteLLM 게이트웨이 · SearXNG ·
 #                     샌드박스 이미지 · 운영 기능 프로필 · DGX 연결 · 내부망 HTTPS · 뷰어 · Discord
@@ -503,7 +503,7 @@ persist_path() {
 # 지금 PATH 의 node 가 .node-version 과 정확히 같은가 (메이저만 맞으면 장비마다 다른 판이 섞인다).
 node_is_pinned() { [[ -n "$NODE_PINNED_VERSION" && "$(node -p 'process.versions.node' 2>/dev/null)" == "$NODE_PINNED_VERSION" ]]; }
 
-# 버전 관리자(mise/fnm/nvm/asdf)가 있으면 그것으로 Node 24 를 활성화한다.
+# 버전 관리자(mise/fnm/nvm/asdf)가 있으면 그것으로 .node-version 의 Node 를 활성화한다.
 try_node_version_manager() {
     if has mise; then
         log_info "mise 로 Node $NODE_PINNED_VERSION 설치 시도 (mise.toml 핀)"
