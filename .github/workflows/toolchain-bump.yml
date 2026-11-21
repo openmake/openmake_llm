@@ -4,7 +4,8 @@
 # 대상: Node(.node-version·mise.toml·runtime Dockerfile, 지금 메이저 안에서만), pm2(.pm2-version),
 #       LiteLLM(omk.sh OMK_LITELLM_VERSION), caddy(omk.sh CADDY_PINNED_VERSION). 구성요소마다 PR 하나.
 # 설치 시점의 최신을 받지 않고 고정해 두는 이유: CI → staging 검증 → 승인 → 운영이 같은 조합을 돌려야 한다.
-# PR 은 dev 로 올리고 브랜치는 chore/ — CI 가 통과하면 auto-merge 흐름을 그대로 탄다. 서버는 omk env update 가 맞춘다.
+# PR 은 dev 로 올리고 브랜치는 chore/ — CI 가 통과하면 auto-merge 흐름을 그대로 탄다. 커밋은 fix(deps) — 서버 도구 판이
+# 바뀌므로 release-please 가 패치 릴리스를 연다(chore 는 릴리스를 만들지 않는다). 서버는 omk env update 가 맞춘다.
 # PR 이 CI 를 일으키려면 GITHUB_TOKEN 이 아닌 자격(OMK_AUTOMATION_TOKEN, 이전 OMK_PROMOTE_TOKEN)이 필요하다.
 name: toolchain-bump
 
@@ -68,10 +69,10 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git checkout -b "$branch"
-          git commit -qam "chore(deps): $COMPONENT $CURRENT → $LATEST"
+          git commit -qam "fix(deps): $COMPONENT $CURRENT → $LATEST"
           git push -q origin "$branch"
           gh pr create --base dev --head "$branch" \
-            --title "chore(deps): $COMPONENT $CURRENT → $LATEST" \
+            --title "fix(deps): $COMPONENT $CURRENT → $LATEST" \
             --body "scripts/ci/toolchain-bump.mjs 가 연 정기 갱신 PR (.github/workflows/toolchain-bump.yml).
 
           - $COMPONENT: \`$CURRENT\` → \`$LATEST\`
