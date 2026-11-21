@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.145.5](https://github.com/openmake/openmake_llm/compare/v1.145.4...v1.145.5) (2026-11-21)
+
+
+### 🐛 버그 수정
+
+* **deps:** redis 8.10·Electron 45 갱신을 운영 릴리스에 싣는다 ([26806c3](https://github.com/openmake/openmake_llm/commit/26806c34dae962a37f8fe969fcaa139791509a56))
+* **deps:** redis 8.10·Electron 45 갱신을 운영 릴리스에 싣는다 ([327ee9f](https://github.com/openmake/openmake_llm/commit/327ee9f0e0fca62c58f2db674a2d9df30fbaeb9e))
+
 ## [1.145.4](https://github.com/openmake/openmake_llm/compare/v1.145.3...v1.145.4) (2026-11-21)
 
 
