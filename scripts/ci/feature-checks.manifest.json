@@ -64,6 +64,7 @@
     "install_linux.sh": "pipeline",
     "openmake_llm.sh": "pipeline",
     "scripts/lib/dgx-model.sh": "pipeline",
+    "scripts/setup/common/stack.sh": "pipeline",
     "packages/api-client/src/index.ts": "web",
     "packages/config/src/browser-flow.ts": "bridge",
     "packages/config/src/browser-site-policy.ts": "bridge",
