@@ -121,6 +121,82 @@ ok "backup dir 는 환경 밖" '[[ "$(backup_dir staging)" != "$(env_dir staging
 mkdir -p "$(llm_dir bk)"; printf 'BACKUP_DIR=/mnt/backup/omk\n' > "$(llm_dir bk)/.env"
 eq "backup dir: .env 우선" "$(backup_dir bk)" "/mnt/backup/omk"; rm -rf "$(env_dir bk)"
 
+# ── Node 런타임 맞추기: 갱신할 ref 의 .node-version → mise·pm2·toolchain.env·데몬 ──
+# 가짜 node·npm·pm2·mise — 버전과 호출 기록은 NS 아래 파일로 주고받는다. 실제 PM2·mise 는 건드리지 않는다.
+NS="$TMP/ns"; mkdir -p "$NS/old/bin" "$NS/new/bin" "$NS/mise-bin"
+ns_node() { printf '#!/bin/sh\n[ "$1" = -p ] && echo %s\n' "$2" > "$1/node"; chmod 755 "$1/node"; }
+ns_node "$NS/old/bin" 24.22.2; ns_node "$NS/new/bin" 26.13.1
+printf '#!/bin/sh\necho "npm $*" >> "%s/calls"\nprintf "#!/bin/sh\\necho 7.1.2\\n" > "%s/new/bin/pm2"; chmod 755 "%s/new/bin/pm2"\n' "$NS" "$NS" "$NS" > "$NS/new/bin/npm"; chmod 755 "$NS/new/bin/npm"
+printf '#!/bin/sh\necho 7.1.2\n' > "$NS/old/bin/pm2"; chmod 755 "$NS/old/bin/pm2"
+printf '#!/bin/sh\necho "mise $*" >> "%s/calls"\ncase "$1" in install) [ -f "%s/mise-fail" ] && exit 1; exit 0;; where) echo "%s/new";; esac\n' "$NS" "$NS" "$NS" > "$NS/mise-bin/mise"; chmod 755 "$NS/mise-bin/mise"
+NR="$TMP/nr"; git init -q "$NR"; printf '26.13.1\n' > "$NR/.node-version"
+( cd "$NR" && git add .node-version && git -c user.email=t@t -c user.name=t commit -q -m pin )
+# 데몬 버전·교체 함수는 가짜로 — 실제 pm2 report/update 를 부르지 않는다.
+ns_run() { # $1=PATH 앞부분 $2=데몬 버전 $3=pm_id(빈값=사람이 직접) → rc|호출
+    rm -f "$NS/calls"
+    # shellcheck disable=SC2034  # node_runtime_sync 가 읽는다(PM2 가 자식에 넣는 변수)
+    ( PATH="$1:/usr/bin:/bin"; export PATH; pm_id="$3"
+      pm2_daemon_node_version() { printf '%s' "$NS_DAEMON"; }
+      pm2_daemon_switch_now() { echo "switch-now $1" >> "$NS/calls"; }
+      pm2_boot_agent_sync() { :; }
+      pm2_daemon_switch_detached() { echo "switch-detached $1${3:+ lock}" >> "$NS/calls"; }
+      pipeline_dir() { printf '%s/pl' "$NS"; }
+      NS_DAEMON="$2"; rm -f "$NR/scripts/lib/node-version.sh"
+      node_runtime_sync "$NR" HEAD >/dev/null 2>&1; echo "$?|$(tr '\n' ';' < "$NS/calls" 2>/dev/null)" )
+}
+printf '#!/bin/sh\necho 7.1.2\n' > "$NS/new/bin/pm2"; chmod 755 "$NS/new/bin/pm2"
+eq "node sync: 이미 같으면 아무것도 안 함"   "$(ns_run "$NS/new/bin" 26.13.1 "")" "0|"
+eq "node sync: 데몬 꺼짐이면 node 만 보고 통과" "$(ns_run "$NS/new/bin" "" "")" "0|"
+rm -f "$NR/.openmake/toolchain.env" "$NS/new/bin/pm2"
+eq "node sync: node 다름 → mise 설치·pm2 설치·데몬 교체(직접 실행)" \
+   "$(ns_run "$NS/mise-bin:$NS/old/bin" 24.22.2 "")" \
+   "0|mise install node@26.13.1;mise where node@26.13.1;npm install -g --no-audit --no-fund pm2@7.1.2;switch-now $NS/new/bin;"
+eq "node sync: toolchain.env 마지막 줄이 새 node" "$(tail -1 "$NR/.openmake/toolchain.env")" "export PATH=\"$NS/new/bin:\$PATH\"  # omk:node (.node-version)"
+printf 'export PATH="/old/node/bin:$PATH"\n' > "$NR/.openmake/toolchain.env"
+ns_run "$NS/mise-bin:$NS/old/bin" 24.22.2 "" >/dev/null; ns_run "$NS/mise-bin:$NS/old/bin" 24.22.2 "" >/dev/null
+eq "node sync: 두 번 돌아도 표식 줄은 하나·기존 줄은 그대로" "$(grep -c 'omk:node' "$NR/.openmake/toolchain.env")|$(head -1 "$NR/.openmake/toolchain.env")" "1|export PATH=\"/old/node/bin:\$PATH\""
+eq "node sync: PM2 자식이면 교체를 떼어 예약하고 75" "$(ns_run "$NS/new/bin" 24.21.0 3)" "75|switch-detached $NS/new/bin;"
+eq "node sync: 잠금 안에서는 잠금이 풀린 뒤로 예약" "$(OMK_PIPELINE_LOCK_ENV=online ns_run "$NS/new/bin" 24.21.0 3)" "75|switch-detached $NS/new/bin lock;"
+eq "node sync: 사람이 직접이면 그 자리에서 교체"     "$(ns_run "$NS/new/bin" 24.21.0 "")" "0|switch-now $NS/new/bin;"
+rm -f "$NS/new/bin/pm2"
+eq "node sync: 새 node 에 pm2 가 없으면 쓰던 판을 깐다" "$(ns_run "$NS/new/bin:$NS/old/bin" 26.13.1 "")" "0|npm install -g --no-audit --no-fund pm2@7.1.2;"
+touch "$NS/mise-fail"
+eq "node sync: mise install 실패 → 1(교체 안 함)" "$(ns_run "$NS/mise-bin:$NS/old/bin" 24.22.2 "")" "1|mise install node@26.13.1;"
+rm -f "$NS/mise-fail"
+eq "node sync: mise 없고 배포본도 실패하면 1"    "$(OMK_NODE_DIST_BASE="file://$NS/nodist" ns_run "$NS/old/bin" 24.22.2 "")" "1|"
+# 가짜 nodejs.org — file:// 로 tarball·SHASUMS256 을 준다(mise 없는 호스트의 공식 배포본 경로)
+ND_OS="$(uname -s | tr 'A-Z' 'a-z')"; ND_ARCH="$(uname -m)"; [[ "$ND_ARCH" == x86_64 ]] && ND_ARCH=x64; [[ "$ND_ARCH" == aarch64 ]] && ND_ARCH=arm64
+ND="node-v26.13.1-$ND_OS-$ND_ARCH"; mkdir -p "$NS/dist/v26.13.1" "$NS/pkg/$ND/bin"; cp "$NS/new/bin/node" "$NS/new/bin/npm" "$NS/pkg/$ND/bin/"
+( cd "$NS/pkg" && tar -czf "$NS/dist/v26.13.1/$ND.tar.gz" "$ND" && cd "$NS/dist/v26.13.1" && shasum -a 256 "$ND.tar.gz" > SHASUMS256.txt )
+eq "node sync: mise 없으면 공식 배포본(체크섬 확인)" \
+   "$(OMK_ROOT="$NS/root" OMK_NODE_DIST_BASE="file://$NS/dist" ns_run "$NS/old/bin" 24.22.2 "" | sed "s#$NS/root/node-dist/v26.13.1#DIST#g")" \
+   "0|npm install -g --no-audit --no-fund pm2@7.1.2;switch-now DIST/bin;"
+printf 'bad  %s.tar.gz\n' "$ND" > "$NS/dist/v26.13.1/SHASUMS256.txt"; rm -rf "$NS/root/node-dist"
+eq "node sync: 체크섬이 틀리면 풀지 않고 1"        "$(OMK_ROOT="$NS/root" OMK_NODE_DIST_BASE="file://$NS/dist" ns_run "$NS/old/bin" 24.22.2 "")|$([[ -d "$NS/root/node-dist/v26.13.1" ]] && echo unpacked)" "1||"
+( cd "$NR" && git rm -q .node-version && git -c user.email=t@t -c user.name=t commit -q -m unpin )
+eq "node sync: .node-version 없는 소스는 건너뜀"  "$(ns_run "$NS/old/bin" 24.22.2 "")" "0|"
+( cd "$NR" && git checkout -q HEAD~1 -- .node-version && git -c user.email=t@t -c user.name=t commit -q -m repin )
+printf 'v26.13.1\n' > "$NR/.node-version"; ( cd "$NR" && git -c user.email=t@t -c user.name=t commit -qam v )
+eq "node sync: 앞 v 는 지운다"                   "$(ns_run "$NS/new/bin" 26.13.1 "")" "0|"
+eq "update target: upstream 없는 비릴리스는 HEAD" "$(update_target_ref "$NR" main)" "HEAD"
+# PM2 부팅 복구 등록 — 다른 node 를 가리킬 때만 같은 Docker 옵션으로 mac-pm2-boot.sh --apply
+if [[ "$(uname -s)" == Darwin ]] && has plutil; then
+    BA="$TMP/ba"; mkdir -p "$BA/fakehome/Library/LaunchAgents" "$BA/ldir/scripts/setup"
+    printf 'echo "apply $* node=$(command -v node)" >> "%s/calls"\n' "$BA" > "$BA/ldir/scripts/setup/mac-pm2-boot.sh"
+    ba_plist() { # $1=node $2=docker
+        printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>ProgramArguments</key><array><string>/bin/bash</string><string>g</string><string>run</string><string>%s</string><string>pm2</string><string>%s</string></array></dict></plist>\n' "$1" "$2" > "$BA/fakehome/Library/LaunchAgents/com.openmake.pm2.plist"
+    }
+    ba_run() { rm -f "$BA/calls"; ( HOME="$BA/fakehome" pm2_boot_agent_sync "$BA/ldir" "$NS/new/bin" >/dev/null 2>&1 ); tr '\n' ';' < "$BA/calls" 2>/dev/null; }
+    ba_plist "$NS/new/bin/node" /opt/homebrew/bin/docker
+    eq "boot agent: 이미 새 node 면 그대로"          "$(ba_run)" ""
+    ba_plist /opt/homebrew/opt/node@24/bin/node /opt/homebrew/bin/docker
+    eq "boot agent: 옛 node → 다시 등록(새 node PATH)" "$(ba_run)" "apply --apply node=$NS/new/bin/node;"
+    ba_plist /opt/homebrew/opt/node@24/bin/node -
+    eq "boot agent: Docker 없이 등록된 호스트는 --no-docker 유지" "$(ba_run)" "apply --apply --no-docker node=$NS/new/bin/node;"
+    rm -f "$BA/fakehome/Library/LaunchAgents/com.openmake.pm2.plist"
+    eq "boot agent: 등록이 없으면 아무것도 안 함"      "$(ba_run)" ""
+fi
+
 # ── LiteLLM: 환경별 이름·위치, off 면 아무것도 안 함 ──
 eq "litellm names" "$(litellm_pm2_name staging)|$(litellm_pm2_name online)|$(litellm_dir dev)" "openmake-litellm-staging|openmake-litellm|$OMK_ROOT/dev/litellm"
 LX="$TMP/lx"; mkdir -p "$LX"; printf 'OMK_LITELLM=off\nLLM_BASE_URL=http://x\n' > "$LX/.env"
