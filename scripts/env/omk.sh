@@ -382,6 +382,78 @@ load_toolchain() { # $1=llm dir
 }
 require_pm2() { has pm2 || die "pm2 를 찾을 수 없습니다 — 해당 환경의 llm 을 먼저 설치하세요 (install.sh 가 PM2 를 준비합니다)"; }
 
+# ── Node 런타임 맞추기 (env update 가 소스를 바꾸기 전에) ──────────────────────────────
+# openmake_llm.sh deploy 는 셸·PM2 데몬의 node 가 .node-version 과 정확히 같아야 빌드한다. 새 버전이 .node-version 을
+# 올리면 자동 갱신이 그 검사에서 멈췄다 — 갱신할 ref 의 .node-version 을 먼저 읽어 node·pm2·toolchain.env·데몬을 맞춘다.
+# 데몬 교체(pm2 update)는 PM2 가 관리하는 프로세스를 모두 다시 띄운다. 예약 실행(omk-pipeline·updater)은 그 자신이 PM2
+# 자식이라 제자리에서 바꾸면 스스로 죽는다 — 프로세스 트리에서 떨어진 작업에 교체를 맡기고 소스를 바꾸기 전에 멈춘다(75).
+# 실패 기록이 남아 다음 예약 실행이 같은 갱신을 처음부터 다시 한다.
+NODE_SYNC_DEFERRED=75
+TOOLCHAIN_NODE_MARK="# omk:node"
+# toolchain.env 에서 node 경로를 이 한 줄로 고정한다 — 앞줄들이 옛 node 를 PATH 앞에 넣어도 마지막 줄이 이긴다.
+toolchain_node_set() { # $1=llm dir $2=node bin 디렉터리
+    local f="$1/.openmake/toolchain.env" tmp
+    mkdir -p "$1/.openmake"; touch "$f"
+    tmp="$(mktemp)"; grep -vF "$TOOLCHAIN_NODE_MARK" "$f" > "$tmp" || true
+    printf 'export PATH="%s:$PATH"  %s (.node-version)\n' "$2" "$TOOLCHAIN_NODE_MARK" >> "$tmp"
+    mv "$tmp" "$f"
+}
+# 갱신 뒤 소스가 될 ref — release 는 따라갈 태그, 그 밖에는 upstream(없으면 HEAD).
+update_target_ref() { # $1=llm dir $2=track
+    if [[ "$2" == "release" ]]; then
+        if release_behind "$1"; then printf '%s' "$RELEASE_TAG"; else printf 'HEAD'; fi
+        return 0
+    fi
+    git -C "$1" fetch -q 2>/dev/null || true
+    git -C "$1" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || printf 'HEAD'
+}
+pm2_daemon_switch_now() { # $1=node bin — 이 셸이 PM2 자식이 아닐 때
+    PATH="$1:$PATH" "$1/pm2" update >/dev/null 2>&1
+}
+# 서브셸이 끝나 작업은 launchd/init 아래로 옮겨진다. 지금 실행이 잡은 파이프라인 잠금이 풀린 뒤에 바꾼다 — 실행 도중
+# 데몬을 바꾸면 잠금 디렉터리가 남아 다음 주기가 'pipeline busy' 로 멈춘다. 잠금이 15분 넘게 남으면 그냥 바꾼다.
+pm2_daemon_switch_detached() { # $1=node bin $2=로그 파일 $3=기다릴 잠금 디렉터리(없으면 빈값)
+    ( nohup bash -c 'i=0; while [[ -n "$2" && -d "$2" && $i -lt 900 ]]; do sleep 1; i=$((i+1)); done; sleep 2
+        PATH="$1:$PATH" "$1/pm2" update' _ "$1" "${3:-}" > "$2" 2>&1 < /dev/null & )
+}
+node_runtime_sync() { # $1=llm dir $2=ref → 0 준비됨 · 75 데몬 교체 예약 · 1 실패
+    local ldir="$1" want cur bin pm2v daemon log lock
+    want="$(git -C "$ldir" show "$2:.node-version" 2>/dev/null | tr -d '[:space:]')"; want="${want#v}"
+    [[ "$want" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 0   # 고정값이 없는 소스 — 할 일 없음
+    cur="$(node -p 'process.versions.node' 2>/dev/null || true)"
+    pm2v="$(pm2 -v 2>/dev/null | tail -1 || true)"
+    if [[ "$cur" != "$want" ]]; then
+        has mise || { log_err "node ${cur:-없음} → $want 가 필요한데 mise 가 없습니다 — Node $want 를 설치하고 $ldir/.openmake/toolchain.env 를 맞춘 뒤 다시 실행하세요"; return 1; }
+        log_step "Node ${cur:-없음} → $want (.node-version)"
+        mise install "node@$want" >/dev/null 2>&1 || { log_err "mise install node@$want 실패"; return 1; }
+        bin="$(mise where "node@$want" 2>/dev/null)/bin"
+        [[ -x "$bin/node" ]] || { log_err "mise 의 node@$want 를 찾지 못했습니다 ($bin)"; return 1; }
+        toolchain_node_set "$ldir" "$bin"
+        export PATH="$bin:$PATH"
+        log_ok "node $want — $ldir/.openmake/toolchain.env"
+    fi
+    bin="$(dirname "$(command -v node)")"
+    # 전역 pm2 는 node 마다 따로다 — 새 node 에 없으면 지금 쓰던 판을 깐다(데몬과 CLI 판이 어긋나지 않게).
+    if [[ ! -x "$bin/pm2" ]]; then
+        "$bin/npm" install -g --no-audit --no-fund "pm2${pm2v:+@$pm2v}" >/dev/null 2>&1 || { log_err "pm2${pm2v:+@$pm2v} 설치 실패 ($bin)"; return 1; }
+        log_ok "pm2 ${pm2v:-latest} → $bin"
+    fi
+    # shellcheck source=/dev/null
+    [[ -f "$ldir/scripts/lib/node-version.sh" ]] && . "$ldir/scripts/lib/node-version.sh"
+    daemon="$(PATH="$bin:$PATH" pm2_daemon_node_version 2>/dev/null || true)"
+    [[ -z "$daemon" || "$daemon" == "$want" ]] && return 0   # 데몬이 꺼져 있으면 다음 기동이 새 node 로 뜬다
+    if [[ -n "${pm_id:-}" ]]; then
+        log="$ldir/logs/pm2-node-switch.log"; mkdir -p "$ldir/logs"
+        lock=""; [[ -n "${OMK_PIPELINE_LOCK_ENV:-}" ]] && declare -F pipeline_dir >/dev/null && lock="$(pipeline_dir "$OMK_PIPELINE_LOCK_ENV")/lock"
+        pm2_daemon_switch_detached "$bin" "$log" "$lock"
+        log_warn "PM2 데몬 node $daemon → $want 교체를 예약했습니다 (예약 실행은 PM2 자식이라 제자리에서 못 바꿉니다 · $log)"
+        return "$NODE_SYNC_DEFERRED"
+    fi
+    log_step "PM2 데몬 node $daemon → $want (pm2 update — 관리 중인 프로세스가 다시 뜹니다)"
+    pm2_daemon_switch_now "$bin" || { log_err "pm2 update 실패 — 'PATH=$bin:\$PATH pm2 update' 를 직접 실행하세요"; return 1; }
+    log_ok "PM2 데몬 node $want"
+}
+
 # ── 포트 ─────────────────────────────────────────────────────────────────────
 port_in_use()   { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 find_free_port() { # $1=start
@@ -1962,6 +2034,13 @@ cmd_env_update_unlocked() {
     dgx_update_sync "$ldir" "$env"
     # 맞출 값이 정해졌으면 쓰기 단계가 두 파일을 같은 값으로 만든다 — 지금의 어긋남으로 멈추지 않는다.
     [[ -n "$DGX_SYNC_TARGET" ]] || dgx_update_guard "$ldir" "$env"
+    # Node 런타임 — 새 소스의 .node-version 에 맞춘 뒤에야 소스를 바꾼다(deploy 의 Node 검사에서 멈추지 않게).
+    local nrc=0; node_runtime_sync "$ldir" "$(update_target_ref "$ldir" "$track")" || nrc=$?
+    if [[ $nrc -eq $NODE_SYNC_DEFERRED ]]; then
+        die "PM2 데몬 교체 뒤 다음 실행이 갱신을 이어갑니다 — 소스는 그대로입니다 ($env)"
+    elif [[ $nrc -ne 0 ]]; then
+        die "Node 런타임을 맞추지 못해 갱신을 멈춥니다 — 소스는 그대로입니다 ($env)"
+    fi
     log_step "환경 갱신: $env"
     restore_lockfiles "$ldir"; [[ -d "$bdir/.git" ]] && restore_lockfiles "$bdir"
     searxng_ensure "$ldir" "$env" "$(env_dir "$env")/searxng" "$(env_dir "$env")"   # 뒤의 update 가 재시작하며 반영
