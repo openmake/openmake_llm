@@ -48,7 +48,7 @@
     "author": "",
     "license": "Apache-2.0",
     "engines": {
-        "node": ">=24 <25"
+        "node": ">=26 <27"
     },
     "workspaces": [
         "apps/api",

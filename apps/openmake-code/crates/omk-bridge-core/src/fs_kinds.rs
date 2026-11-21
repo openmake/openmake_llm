@@ -68,13 +68,14 @@ pub fn resolve_base(root: &str, folder: Option<&str>) -> Result<String, String> 
 }
 
 /// UTF-8 로 읽는다. 깨진 바이트는 U+FFFD 로 바꾼다(Node `readFile(p, 'utf8')` 와 같은 개수). 크기 상한은 없다(TS 와 같다).
+/// 읽기 실패 문구에는 경로가 붙는다 — Node 26 의 `fsp.readFile(경로)` 부터 그렇다(24 는 경로 없이 `read`).
 pub fn read(base: &str, path: Option<&str>) -> Result<String, String> {
     let abs = safe_from(base, path)?;
     no_nul(&abs)?;
     let mut f = fs::File::open(&abs).map_err(|e| node_error::format(&e, "open", Some(&abs)))?;
     let mut buf = Vec::new();
     f.read_to_end(&mut buf)
-        .map_err(|e| node_error::format(&e, "read", None))?;
+        .map_err(|e| node_error::format(&e, "read", Some(&abs)))?;
     Ok(String::from_utf8_lossy(&buf).into_owned())
 }
 

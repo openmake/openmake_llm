@@ -49,7 +49,7 @@
 curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash
 ```
 
-新しいマシンでは、インストーラーが前提条件とフルスタックまでセットアップします(下記参照)。`bash -s -- --minimal` を付けるとアプリのみをインストールします — ツールチェーン(Node.js 24、Docker、PM2)を確認し、新しいシークレットで `.env` を作成、PostgreSQL と Redis を起動し、OpenMake をビルドして PM2 で起動したうえで、ヘルスチェックまで行います。
+新しいマシンでは、インストーラーが前提条件とフルスタックまでセットアップします(下記参照)。`bash -s -- --minimal` を付けるとアプリのみをインストールします — ツールチェーン(Node.js 26、Docker、PM2)を確認し、新しいシークレットで `.env` を作成、PostgreSQL と Redis を起動し、OpenMake をビルドして PM2 で起動したうえで、ヘルスチェックまで行います。
 
 表示された URL を開いて管理者としてサインインし、モデルを接続してください — ローカルの vLLM・Ollama サーバー、または OpenAI 互換エンドポイントが使えます。
 
@@ -238,7 +238,7 @@ flowchart TB
 
 | レイヤー | 技術 |
 |---|---|
-| バックエンド | Node.js 24、Express 5、TypeScript(strict)、Zod、Winston |
+| バックエンド | Node.js 26、Express 5、TypeScript(strict)、Zod、Winston |
 | フロントエンド | Next.js 16、React 19、Zustand、Tailwind CSS 4、`next-intl`(ko · en · ja · zh · de) |
 | データ | パラメーター化した生 SQL による PostgreSQL(ORM なし)、Redis |
 | LLM | vLLM、LiteLLM ゲートウェイ、`openai` SDK |
