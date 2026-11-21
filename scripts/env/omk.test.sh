@@ -121,6 +121,55 @@ ok "backup dir 는 환경 밖" '[[ "$(backup_dir staging)" != "$(env_dir staging
 mkdir -p "$(llm_dir bk)"; printf 'BACKUP_DIR=/mnt/backup/omk\n' > "$(llm_dir bk)/.env"
 eq "backup dir: .env 우선" "$(backup_dir bk)" "/mnt/backup/omk"; rm -rf "$(env_dir bk)"
 
+# ── Node 런타임 맞추기: 갱신할 ref 의 .node-version → mise·pm2·toolchain.env·데몬 ──
+# 가짜 node·npm·pm2·mise — 버전과 호출 기록은 NS 아래 파일로 주고받는다. 실제 PM2·mise 는 건드리지 않는다.
+NS="$TMP/ns"; mkdir -p "$NS/old/bin" "$NS/new/bin" "$NS/mise-bin"
+ns_node() { printf '#!/bin/sh\n[ "$1" = -p ] && echo %s\n' "$2" > "$1/node"; chmod 755 "$1/node"; }
+ns_node "$NS/old/bin" 24.22.2; ns_node "$NS/new/bin" 26.13.1
+printf '#!/bin/sh\necho "npm $*" >> "%s/calls"\nprintf "#!/bin/sh\\necho 7.1.2\\n" > "%s/new/bin/pm2"; chmod 755 "%s/new/bin/pm2"\n' "$NS" "$NS" "$NS" > "$NS/new/bin/npm"; chmod 755 "$NS/new/bin/npm"
+printf '#!/bin/sh\necho 7.1.2\n' > "$NS/old/bin/pm2"; chmod 755 "$NS/old/bin/pm2"
+printf '#!/bin/sh\necho "mise $*" >> "%s/calls"\ncase "$1" in install) [ -f "%s/mise-fail" ] && exit 1; exit 0;; where) echo "%s/new";; esac\n' "$NS" "$NS" "$NS" > "$NS/mise-bin/mise"; chmod 755 "$NS/mise-bin/mise"
+NR="$TMP/nr"; git init -q "$NR"; printf '26.13.1\n' > "$NR/.node-version"
+( cd "$NR" && git add .node-version && git -c user.email=t@t -c user.name=t commit -q -m pin )
+# 데몬 버전·교체 함수는 가짜로 — 실제 pm2 report/update 를 부르지 않는다.
+ns_run() { # $1=PATH 앞부분 $2=데몬 버전 $3=pm_id(빈값=사람이 직접) → rc|호출
+    rm -f "$NS/calls"
+    # shellcheck disable=SC2034  # node_runtime_sync 가 읽는다(PM2 가 자식에 넣는 변수)
+    ( PATH="$1:/usr/bin:/bin"; export PATH; pm_id="$3"
+      pm2_daemon_node_version() { printf '%s' "$NS_DAEMON"; }
+      pm2_daemon_switch_now() { echo "switch-now $1" >> "$NS/calls"; }
+      pm2_daemon_switch_detached() { echo "switch-detached $1${3:+ lock}" >> "$NS/calls"; }
+      pipeline_dir() { printf '%s/pl' "$NS"; }
+      NS_DAEMON="$2"; rm -f "$NR/scripts/lib/node-version.sh"
+      node_runtime_sync "$NR" HEAD >/dev/null 2>&1; echo "$?|$(tr '\n' ';' < "$NS/calls" 2>/dev/null)" )
+}
+printf '#!/bin/sh\necho 7.1.2\n' > "$NS/new/bin/pm2"; chmod 755 "$NS/new/bin/pm2"
+eq "node sync: 이미 같으면 아무것도 안 함"   "$(ns_run "$NS/new/bin" 26.13.1 "")" "0|"
+eq "node sync: 데몬 꺼짐이면 node 만 보고 통과" "$(ns_run "$NS/new/bin" "" "")" "0|"
+rm -f "$NR/.openmake/toolchain.env" "$NS/new/bin/pm2"
+eq "node sync: node 다름 → mise 설치·pm2 설치·데몬 교체(직접 실행)" \
+   "$(ns_run "$NS/mise-bin:$NS/old/bin" 24.22.2 "")" \
+   "0|mise install node@26.13.1;mise where node@26.13.1;npm install -g --no-audit --no-fund pm2@7.1.2;switch-now $NS/new/bin;"
+eq "node sync: toolchain.env 마지막 줄이 새 node" "$(tail -1 "$NR/.openmake/toolchain.env")" "export PATH=\"$NS/new/bin:\$PATH\"  # omk:node (.node-version)"
+printf 'export PATH="/old/node/bin:$PATH"\n' > "$NR/.openmake/toolchain.env"
+ns_run "$NS/mise-bin:$NS/old/bin" 24.22.2 "" >/dev/null; ns_run "$NS/mise-bin:$NS/old/bin" 24.22.2 "" >/dev/null
+eq "node sync: 두 번 돌아도 표식 줄은 하나·기존 줄은 그대로" "$(grep -c 'omk:node' "$NR/.openmake/toolchain.env")|$(head -1 "$NR/.openmake/toolchain.env")" "1|export PATH=\"/old/node/bin:\$PATH\""
+eq "node sync: PM2 자식이면 교체를 떼어 예약하고 75" "$(ns_run "$NS/new/bin" 24.21.0 3)" "75|switch-detached $NS/new/bin;"
+eq "node sync: 잠금 안에서는 잠금이 풀린 뒤로 예약" "$(OMK_PIPELINE_LOCK_ENV=online ns_run "$NS/new/bin" 24.21.0 3)" "75|switch-detached $NS/new/bin lock;"
+eq "node sync: 사람이 직접이면 그 자리에서 교체"     "$(ns_run "$NS/new/bin" 24.21.0 "")" "0|switch-now $NS/new/bin;"
+rm -f "$NS/new/bin/pm2"
+eq "node sync: 새 node 에 pm2 가 없으면 쓰던 판을 깐다" "$(ns_run "$NS/new/bin:$NS/old/bin" 26.13.1 "")" "0|npm install -g --no-audit --no-fund pm2@7.1.2;"
+touch "$NS/mise-fail"
+eq "node sync: mise install 실패 → 1(교체 안 함)" "$(ns_run "$NS/mise-bin:$NS/old/bin" 24.22.2 "")" "1|mise install node@26.13.1;"
+rm -f "$NS/mise-fail"
+eq "node sync: mise 없으면 1"                   "$(ns_run "$NS/old/bin" 24.22.2 "")" "1|"
+( cd "$NR" && git rm -q .node-version && git -c user.email=t@t -c user.name=t commit -q -m unpin )
+eq "node sync: .node-version 없는 소스는 건너뜀"  "$(ns_run "$NS/old/bin" 24.22.2 "")" "0|"
+( cd "$NR" && git checkout -q HEAD~1 -- .node-version && git -c user.email=t@t -c user.name=t commit -q -m repin )
+printf 'v26.13.1\n' > "$NR/.node-version"; ( cd "$NR" && git -c user.email=t@t -c user.name=t commit -qam v )
+eq "node sync: 앞 v 는 지운다"                   "$(ns_run "$NS/new/bin" 26.13.1 "")" "0|"
+eq "update target: upstream 없는 비릴리스는 HEAD" "$(update_target_ref "$NR" main)" "HEAD"
+
 # ── LiteLLM: 환경별 이름·위치, off 면 아무것도 안 함 ──
 eq "litellm names" "$(litellm_pm2_name staging)|$(litellm_pm2_name online)|$(litellm_dir dev)" "openmake-litellm-staging|openmake-litellm|$OMK_ROOT/dev/litellm"
 LX="$TMP/lx"; mkdir -p "$LX"; printf 'OMK_LITELLM=off\nLLM_BASE_URL=http://x\n' > "$LX/.env"
