@@ -202,8 +202,9 @@ impl DownloadTracker {
                 Ok(b) => Some(String::from_utf8_lossy(&b).into_owned()),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
                 // 일시 오류 등 — 멀쩡한 설정을 두 키로 덮지 않는다
+                // Node 26 의 fsp.readFile(경로) 처럼 read 실패 문구에도 경로를 붙인다
                 Err(e) if e.kind() == std::io::ErrorKind::IsADirectory => {
-                    return Err(fmt(&e, "read", None));
+                    return Err(fmt(&e, "read", Some(&file)));
                 }
                 Err(e) => return Err(fmt(&e, "open", Some(&file))),
             };

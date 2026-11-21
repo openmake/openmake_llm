@@ -49,7 +49,7 @@
 curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash
 ```
 
-새 머신에서는 설치 스크립트가 사전 준비와 전체 스택까지 설치합니다(아래 참고). `bash -s -- --minimal` 을 붙이면 앱만 설치합니다 — 도구 체인(Node.js 24, Docker, PM2)을 점검하고, 새 비밀값으로 `.env` 를 만들고, PostgreSQL·Redis 를 띄운 뒤, OpenMake 를 빌드해 PM2 로 실행하고 헬스 체크까지 합니다.
+새 머신에서는 설치 스크립트가 사전 준비와 전체 스택까지 설치합니다(아래 참고). `bash -s -- --minimal` 을 붙이면 앱만 설치합니다 — 도구 체인(Node.js 26, Docker, PM2)을 점검하고, 새 비밀값으로 `.env` 를 만들고, PostgreSQL·Redis 를 띄운 뒤, OpenMake 를 빌드해 PM2 로 실행하고 헬스 체크까지 합니다.
 
 그다음 출력된 주소를 열어 관리자로 로그인하고 모델을 연결하세요 — 로컬 vLLM·Ollama 서버나 OpenAI 호환 엔드포인트면 됩니다.
 
@@ -238,7 +238,7 @@ flowchart TB
 
 | 계층 | 기술 |
 |---|---|
-| 백엔드 | Node.js 24, Express 5, TypeScript(strict), Zod, Winston |
+| 백엔드 | Node.js 26, Express 5, TypeScript(strict), Zod, Winston |
 | 프론트엔드 | Next.js 16, React 19, Zustand, Tailwind CSS 4, `next-intl`(ko · en · ja · zh · de) |
 | 데이터 | 파라미터화 raw SQL 로 쓰는 PostgreSQL(ORM 없음), Redis |
 | LLM | vLLM, LiteLLM 게이트웨이, `openai` SDK |

@@ -42,5 +42,8 @@
       "allowToChangeInstallationDirectory": false,
       "artifactName": "OpenMake-Companion-Setup-${version}.${ext}"
     }
+  },
+  "overrides": {
+    "yauzl": "^3.4.0"
   }
 }

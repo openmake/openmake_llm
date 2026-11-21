@@ -47,7 +47,7 @@
 curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash
 ```
 
-On a fresh machine the installer sets up the prerequisites and the full stack (details below). With `bash -s -- --minimal` it installs only the app: it checks your toolchain (Node.js 24, Docker, PM2), writes a `.env` with fresh secrets, starts PostgreSQL and Redis, builds OpenMake, launches it under PM2, and runs a health check.
+On a fresh machine the installer sets up the prerequisites and the full stack (details below). With `bash -s -- --minimal` it installs only the app: it checks your toolchain (Node.js 26, Docker, PM2), writes a `.env` with fresh secrets, starts PostgreSQL and Redis, builds OpenMake, launches it under PM2, and runs a health check.
 
 Then open the URL it prints, sign in as the administrator, and connect a model — a local vLLM or Ollama server, or any OpenAI-compatible endpoint.
 
@@ -237,7 +237,7 @@ flowchart TB
 
 | Layer | Technologies |
 |---|---|
-| Backend | Node.js 24, Express 5, TypeScript (strict), Zod, Winston |
+| Backend | Node.js 26, Express 5, TypeScript (strict), Zod, Winston |
 | Frontend | Next.js 16, React 19, Zustand, Tailwind CSS 4, `next-intl` (ko · en · ja · zh · de) |
 | Data | PostgreSQL through raw parameterized SQL (no ORM), Redis |
 | LLM | vLLM, LiteLLM gateway, `openai` SDK |

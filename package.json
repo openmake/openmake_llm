@@ -48,7 +48,7 @@
     "author": "",
     "license": "Apache-2.0",
     "engines": {
-        "node": ">=24 <25"
+        "node": ">=26 <27"
     },
     "workspaces": [
         "apps/api",
@@ -81,5 +81,14 @@
         "kordoc": {
             "zod": "^4.6.6"
         }
+    },
+    "allowScripts": {
+        "esbuild": true,
+        "onnxruntime-node": true,
+        "protobufjs": true,
+        "tesseract.js": true,
+        "unrs-resolver": true,
+        "@parcel/watcher": true,
+        "@swc/core": true
     }
 }
