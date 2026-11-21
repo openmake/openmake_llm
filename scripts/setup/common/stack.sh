@@ -7,7 +7,6 @@
 # omk 가 소스(이 디렉터리)를 재사용해 ./install.sh --minimal(앱 본체)을 부른 뒤 게이트웨이·검색·샌드박스
 # 이미지·운영 프로필·DGX·내부망 HTTPS·선택 기능을 붙인다. 설치 답변은 전부 omk 옵션으로 넘긴다.
 
-readonly LITELLM_VERSION="1.100.1"   # 1.102 는 /v1/models 지연 회귀로 운영이 롤백한 버전
 readonly DGX_CHAT_PORT=8002
 readonly BACKUP_CRON="30 4 * * *"      # omk env backup --schedule (DB 덤프 → $OMK_ROOT/backups/<env>)
 readonly DGX_PORTS_TEXT="8002(채팅)·8003(임베딩)·8005(음악)"
@@ -47,7 +46,7 @@ run_omk_install() {
     [[ "$WITH_DISCORD" == "1" && -n "$DISCORD_TOKEN" ]] && args+=(--discord-token "$DISCORD_TOKEN")
     [[ $SANDBOX_IMAGES -eq 0 ]] && args+=(--no-runtime-images)
 
-    OMK_LITELLM_SPEC="litellm[proxy]==$LITELLM_VERSION" omk_cmd "${args[@]}" || die "omk 설치 실패 — 위 로그를 확인하세요"
+    omk_cmd "${args[@]}" || die "omk 설치 실패 — 위 로그를 확인하세요"
 
     # HTTP 모드는 프록시 포트가 접속 주소다 (omk expose 는 CORS 만 채운다).
     if [[ "$HTTPS_MODE" != "1" ]]; then
