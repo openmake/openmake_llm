@@ -138,6 +138,7 @@ ns_run() { # $1=PATH 앞부분 $2=데몬 버전 $3=pm_id(빈값=사람이 직접
     ( PATH="$1:/usr/bin:/bin"; export PATH; pm_id="$3"
       pm2_daemon_node_version() { printf '%s' "$NS_DAEMON"; }
       pm2_daemon_switch_now() { echo "switch-now $1" >> "$NS/calls"; }
+      pm2_boot_agent_sync() { :; }
       pm2_daemon_switch_detached() { echo "switch-detached $1${3:+ lock}" >> "$NS/calls"; }
       pipeline_dir() { printf '%s/pl' "$NS"; }
       NS_DAEMON="$2"; rm -f "$NR/scripts/lib/node-version.sh"
@@ -162,13 +163,39 @@ eq "node sync: 새 node 에 pm2 가 없으면 쓰던 판을 깐다" "$(ns_run "$
 touch "$NS/mise-fail"
 eq "node sync: mise install 실패 → 1(교체 안 함)" "$(ns_run "$NS/mise-bin:$NS/old/bin" 24.22.2 "")" "1|mise install node@26.13.1;"
 rm -f "$NS/mise-fail"
-eq "node sync: mise 없으면 1"                   "$(ns_run "$NS/old/bin" 24.22.2 "")" "1|"
+eq "node sync: mise 없고 배포본도 실패하면 1"    "$(OMK_NODE_DIST_BASE="file://$NS/nodist" ns_run "$NS/old/bin" 24.22.2 "")" "1|"
+# 가짜 nodejs.org — file:// 로 tarball·SHASUMS256 을 준다(mise 없는 호스트의 공식 배포본 경로)
+ND_OS="$(uname -s | tr 'A-Z' 'a-z')"; ND_ARCH="$(uname -m)"; [[ "$ND_ARCH" == x86_64 ]] && ND_ARCH=x64; [[ "$ND_ARCH" == aarch64 ]] && ND_ARCH=arm64
+ND="node-v26.13.1-$ND_OS-$ND_ARCH"; mkdir -p "$NS/dist/v26.13.1" "$NS/pkg/$ND/bin"; cp "$NS/new/bin/node" "$NS/new/bin/npm" "$NS/pkg/$ND/bin/"
+( cd "$NS/pkg" && tar -czf "$NS/dist/v26.13.1/$ND.tar.gz" "$ND" && cd "$NS/dist/v26.13.1" && shasum -a 256 "$ND.tar.gz" > SHASUMS256.txt )
+eq "node sync: mise 없으면 공식 배포본(체크섬 확인)" \
+   "$(OMK_ROOT="$NS/root" OMK_NODE_DIST_BASE="file://$NS/dist" ns_run "$NS/old/bin" 24.22.2 "" | sed "s#$NS/root/node-dist/v26.13.1#DIST#g")" \
+   "0|npm install -g --no-audit --no-fund pm2@7.1.2;switch-now DIST/bin;"
+printf 'bad  %s.tar.gz\n' "$ND" > "$NS/dist/v26.13.1/SHASUMS256.txt"; rm -rf "$NS/root/node-dist"
+eq "node sync: 체크섬이 틀리면 풀지 않고 1"        "$(OMK_ROOT="$NS/root" OMK_NODE_DIST_BASE="file://$NS/dist" ns_run "$NS/old/bin" 24.22.2 "")|$([[ -d "$NS/root/node-dist/v26.13.1" ]] && echo unpacked)" "1||"
 ( cd "$NR" && git rm -q .node-version && git -c user.email=t@t -c user.name=t commit -q -m unpin )
 eq "node sync: .node-version 없는 소스는 건너뜀"  "$(ns_run "$NS/old/bin" 24.22.2 "")" "0|"
 ( cd "$NR" && git checkout -q HEAD~1 -- .node-version && git -c user.email=t@t -c user.name=t commit -q -m repin )
 printf 'v26.13.1\n' > "$NR/.node-version"; ( cd "$NR" && git -c user.email=t@t -c user.name=t commit -qam v )
 eq "node sync: 앞 v 는 지운다"                   "$(ns_run "$NS/new/bin" 26.13.1 "")" "0|"
 eq "update target: upstream 없는 비릴리스는 HEAD" "$(update_target_ref "$NR" main)" "HEAD"
+# PM2 부팅 복구 등록 — 다른 node 를 가리킬 때만 같은 Docker 옵션으로 mac-pm2-boot.sh --apply
+if [[ "$(uname -s)" == Darwin ]] && has plutil; then
+    BA="$TMP/ba"; mkdir -p "$BA/home/Library/LaunchAgents" "$BA/ldir/scripts/setup"
+    printf 'echo "apply $* node=$(command -v node)" >> "%s/calls"\n' "$BA" > "$BA/ldir/scripts/setup/mac-pm2-boot.sh"
+    ba_plist() { # $1=node $2=docker
+        printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>ProgramArguments</key><array><string>/bin/bash</string><string>g</string><string>run</string><string>%s</string><string>pm2</string><string>%s</string></array></dict></plist>\n' "$1" "$2" > "$BA/home/Library/LaunchAgents/com.openmake.pm2.plist"
+    }
+    ba_run() { rm -f "$BA/calls"; ( HOME="$BA/home" pm2_boot_agent_sync "$BA/ldir" "$NS/new/bin" >/dev/null 2>&1 ); tr '\n' ';' < "$BA/calls" 2>/dev/null; }
+    ba_plist "$NS/new/bin/node" /opt/homebrew/bin/docker
+    eq "boot agent: 이미 새 node 면 그대로"          "$(ba_run)" ""
+    ba_plist /opt/homebrew/opt/node@24/bin/node /opt/homebrew/bin/docker
+    eq "boot agent: 옛 node → 다시 등록(새 node PATH)" "$(ba_run)" "apply --apply node=$NS/new/bin/node;"
+    ba_plist /opt/homebrew/opt/node@24/bin/node -
+    eq "boot agent: Docker 없이 등록된 호스트는 --no-docker 유지" "$(ba_run)" "apply --apply --no-docker node=$NS/new/bin/node;"
+    rm -f "$BA/home/Library/LaunchAgents/com.openmake.pm2.plist"
+    eq "boot agent: 등록이 없으면 아무것도 안 함"      "$(ba_run)" ""
+fi
 
 # ── LiteLLM: 환경별 이름·위치, off 면 아무것도 안 함 ──
 eq "litellm names" "$(litellm_pm2_name staging)|$(litellm_pm2_name online)|$(litellm_dir dev)" "openmake-litellm-staging|openmake-litellm|$OMK_ROOT/dev/litellm"
