@@ -30,6 +30,13 @@ test('install_linux.sh 에는 버전 리터럴이 없고 .node-version 에서 �
     assert.match(src, /\.node-version/);
 });
 
+test('install_mac.sh 의 NODE_MAJOR 는 .node-version 메이저와 같다', () => {
+    // macOS 설치기는 Homebrew node@<메이저> 를 먼저 보고 판이 다르면 mise 로 넘어간다 — 메이저가 어긋나면 엉뚱한 keg 를 찾는다.
+    const m = read('install_mac.sh').match(/^readonly NODE_MAJOR=(\d+)$/m);
+    assert.ok(m, 'install_mac.sh 에 readonly NODE_MAJOR=<숫자> 가 없다');
+    assert.equal(m[1], PINNED.split('.')[0]);
+});
+
 test('저장소의 모든 Dockerfile 의 FROM node: 는 node:<.node-version>-bookworm-slim 이다', () => {
     const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8' })
         .split('\n')

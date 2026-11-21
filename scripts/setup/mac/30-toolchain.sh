@@ -2,7 +2,7 @@
 # 이 파일의 전역은 다른 단계 파일·install_mac.sh 가 읽는다 (파일 간 사용).
 # shellcheck disable=SC2034
 # ==============================================================================
-# install_mac.sh 단계 — Node 24 · PM2 · Docker(전용 Colima) · 포트 충돌 회피
+# install_mac.sh 단계 — Node 26 · PM2 · Docker(전용 Colima) · 포트 충돌 회피
 # ==============================================================================
 
 # Node 버전 검사(.node-version 정확 일치) — 저장소 루트는 install_mac.sh 의 SCRIPT_DIR.
