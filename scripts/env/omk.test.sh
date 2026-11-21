@@ -13,6 +13,14 @@ export OMK_ROOT="$TMP/root" OMK_SOURCE_ONLY=1
 proxy_running() { return 1; }
 # shellcheck disable=SC2034  # omk.sh 의 caddy reload 가 읽는다
 OMK_CADDY_ADMIN="127.0.0.1:1"
+# LiteLLM 을 실제로 받지 않는다 — 가짜 venv: bin/python 이 FAKE_LITELLM_VER 를 버전으로 답한다(빈값이면 설치 실패).
+FAKE_LITELLM_VER=""
+litellm_venv_install() {
+    [[ -n "$FAKE_LITELLM_VER" ]] || return 1
+    mkdir -p "$1/bin"; printf '#!/bin/sh\necho %s\n' "$FAKE_LITELLM_VER" > "$1/bin/python"
+    printf '#!%s/bin/python\n' "$1" > "$1/bin/litellm"; chmod 755 "$1/bin/python" "$1/bin/litellm"
+}
+litellm_venv_relink() { printf '#!%s/bin/python\n' "$1" > "$1/bin/litellm"; }
 set +e   # omk.sh 의 set -e 를 끈다 — 실패를 세어서 보고한다
 
 PASS=0; FAIL=0
@@ -182,6 +190,24 @@ eq "litellm ensure: 적힌 LLM_GATEWAY_PROVIDERS 는 그대로" "$rc|$(dotenv_ge
 dotenv_set "$RT/.env" LLM_GATEWAY_PROVIDERS ""
 ( litellm_pm2_start() { return 0; }; curl() { printf 200; }; litellm_ensure "$RT" rt >/dev/null 2>&1 ); rc=$?
 eq "litellm ensure: 빈 LLM_GATEWAY_PROVIDERS(롤백)도 그대로" "$rc|$(grep -c '^LLM_GATEWAY_PROVIDERS=$' "$RT/.env")" "0|1"
+# 버전 동기화 — 고정 버전과 다르면 새 venv 로 교체, 실패하면 기존 venv 유지, 고정이 없으면 건드리지 않는다.
+VS="$TMP/vs"; mkdir -p "$VS"
+FAKE_LITELLM_VER=1.100.1 litellm_venv_install "$VS/venv"
+eq "litellm pinned: 기본 고정" "$(litellm_pinned_version)" "$OMK_LITELLM_VERSION"
+( OMK_LITELLM_SPEC='litellm[proxy]'; FAKE_LITELLM_VER=9.9.9; litellm_venv_sync "$VS" >/dev/null 2>&1 )
+eq "litellm sync: 고정 없으면 그대로" "$(litellm_installed_version "$VS/venv")" "1.100.1"
+( FAKE_LITELLM_VER=""; litellm_venv_sync "$VS" >/dev/null 2>&1 ); rc=$?
+eq "litellm sync: 설치 실패 → 기존 venv 유지·임시 venv 정리" "$rc|$(litellm_installed_version "$VS/venv")|$([[ -e "$VS/venv.new" ]] && echo y || echo n)" "1|1.100.1|n"
+( OMK_LITELLM_SPEC='litellm[proxy]==2.0.0'; FAKE_LITELLM_VER=1.9.0; litellm_venv_sync "$VS" >/dev/null 2>&1 ); rc=$?
+eq "litellm sync: 설치된 버전이 고정과 다르면 실패 → 기존 유지" "$rc|$(litellm_installed_version "$VS/venv")" "1|1.100.1"
+( FAKE_LITELLM_VER="$OMK_LITELLM_VERSION"; litellm_venv_sync "$VS" >/dev/null 2>&1 ); rc=$?
+eq "litellm sync: 다르면 새 venv 로 교체·옛 것은 venv.prev·shebang 은 새 경로" \
+   "$rc|$(litellm_installed_version "$VS/venv")|$(litellm_installed_version "$VS/venv.prev")|$(head -1 "$VS/venv/bin/litellm")" \
+   "0|$OMK_LITELLM_VERSION|1.100.1|#!$VS/venv/bin/python"
+( litellm_venv_relink() { return 1; }; OMK_LITELLM_SPEC='litellm[proxy]==3.0.0'; FAKE_LITELLM_VER=3.0.0; litellm_venv_sync "$VS" >/dev/null 2>&1 ); rc=$?
+eq "litellm sync: 전환 실패 → 원래 venv 로 되돌림" "$rc|$(litellm_installed_version "$VS/venv")" "1|$OMK_LITELLM_VERSION"
+( litellm_venv_install() { echo called > "$VS/called"; }; litellm_venv_sync "$VS" >/dev/null 2>&1 ); rc=$?
+eq "litellm sync: 같은 버전이면 아무것도 안 함" "$rc|$([[ -e "$VS/called" ]] && echo y || echo n)" "0|n"
 # 이번 실행이 업스트림을 다른 이름으로 바꾸면 기억된 옛 업스트림과는 겹쳐도 된다 — 사전 검사와 dgx_apply 가 같은 값을 본다.
 printf 'OMK_UPSTREAM_MODEL=old-up\n' > "$PL"
 ( OMK_DGX_MODEL=old-up dgx_preflight "$PF" pf 1 http://u new-up >/dev/null 2>&1 ); rc=$?
