@@ -114,7 +114,7 @@
         {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
       ],
       "root": "root",
-      "requests": [{"msg":{"kind":"read","path":"sub"},"expect":{"ok":false,"error":"EISDIR: illegal operation on a directory, read"}}]
+      "requests": [{"msg":{"kind":"read","path":"sub"},"expect":{"ok":false,"error":"EISDIR: illegal operation on a directory, read '{{TMP}}/root/sub'"}}]
     },
     {
       "id": "read-path-falsy",
@@ -130,9 +130,9 @@
       ],
       "root": "root",
       "requests": [
-        {"msg":{"kind":"read"},"expect":{"ok":false,"error":"EISDIR: illegal operation on a directory, read"}},
-        {"msg":{"kind":"read","path":""},"expect":{"ok":false,"error":"EISDIR: illegal operation on a directory, read"}},
-        {"msg":{"kind":"read","path":null},"expect":{"ok":false,"error":"EISDIR: illegal operation on a directory, read"}}
+        {"msg":{"kind":"read"},"expect":{"ok":false,"error":"EISDIR: illegal operation on a directory, read '{{TMP}}/root'"}},
+        {"msg":{"kind":"read","path":""},"expect":{"ok":false,"error":"EISDIR: illegal operation on a directory, read '{{TMP}}/root'"}},
+        {"msg":{"kind":"read","path":null},"expect":{"ok":false,"error":"EISDIR: illegal operation on a directory, read '{{TMP}}/root'"}}
       ]
     },
     {

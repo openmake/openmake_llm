@@ -5,7 +5,7 @@
 # 순정 Mac 에서 이 스크립트 하나로 운영과 같은 구성을 만든다. 역할은 셋으로 나뉜다:
 #
 #   1) 이 스크립트  — macOS 사전 준비: 질문(한 번에) → Xcode 명령줄 도구 → Homebrew·도구
-#                     → 절전 해제 → Node 24 · PM2 · Docker(Colima) → (선택) Tailscale
+#                     → 절전 해제 → Node 26 · PM2 · Docker(Colima) → (선택) Tailscale
 #   2) omk          — 스택 (scripts/env/omk.sh env install): LiteLLM 게이트웨이 · SearXNG ·
 #                     샌드박스 이미지 · 운영 기능 프로필 · DGX 연결 · 내부망 HTTPS · 뷰어 · Discord
 #   3) 이 스크립트 --minimal — omk 가 부르는 앱 본체: .env · PostgreSQL/Redis(빈 DB) · 빌드 · PM2
@@ -61,7 +61,7 @@ set -euo pipefail
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]:-$0}" )" && pwd -P )"
 readonly SCRIPT_DIR
 readonly DEFAULT_REPO_URL="https://github.com/openmake/openmake_llm.git"
-readonly NODE_MAJOR=24
+readonly NODE_MAJOR=26
 readonly TOOLCHAIN_DIR="$SCRIPT_DIR/.openmake"
 readonly TOOLCHAIN_ENV="$TOOLCHAIN_DIR/toolchain.env"
 OMK_ROOT="${OMK_ROOT:-$HOME/.openmake}"
@@ -426,7 +426,7 @@ main() {
     ensure_homebrew           # Homebrew · 호스트 도구 · 전원 설정     (10-prereqs)
     ensure_brew_tools
     configure_power
-    ensure_node               # Node 24 · PM2 · Docker(Colima)        (30-toolchain)
+    ensure_node               # Node 26 · PM2 · Docker(Colima)        (30-toolchain)
     ensure_pm2
     ensure_docker
     setup_tailscale           # DGX 가 다른 네트워크에 있을 때         (40-network)
