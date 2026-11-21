@@ -1591,7 +1591,7 @@ DB 이관 (다른 호스트/인스턴스로 옮길 때):
 환경 가정:
   - Linux / macOS (DB/Redis 는 docker compose, 앱은 PM2 로 관리)
   - PM2 설치 (npm i -g pm2 — install.sh 가 자동 처리)
-  - Node 24+ (mise/nvm/fnm 또는 install.sh 가 만든 .openmake/toolchain.env)
+  - Node(.node-version 과 정확히 같은 판 — mise/nvm/fnm 또는 install.sh 가 만든 .openmake/toolchain.env)
 
 오버라이드 환경변수:
   PORT (기본 52416), POSTGRES_PORT (5432), REDIS_PORT (6379)
