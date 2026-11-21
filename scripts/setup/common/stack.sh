@@ -93,6 +93,9 @@ summary() {
     add_todo "첫 로그인 후 관리자 비밀번호 변경 (초기 비밀번호는 .env 에 평문 저장)"
     [[ "$LLM_MODE" == "dgx" ]] && add_todo "관리자 → 모델 배정 → text.embed = bge-m3 (Knowledge Space 사용에 필요)"
     add_todo "(선택) 관리자 → 시스템 설정에서 검색 API 키 입력 — EXA·Tavily·Naver·Kakao 등, 서버마다 새로 발급"
+    # 관측 에이전트는 openmake/monitor 소관이라 여기서 깔지 않는다(제출 키가 모니터 서버에 있어야 한다). 이미 있으면 안내하지 않는다.
+    pm2 describe "openmake-monitor-agent-$(omk_env_name)" >/dev/null 2>&1 \
+        || add_todo "(선택) 현황 보드 관측: 모니터 서버에 제출 키 agent-$(omk_env_name) 을 등록한 뒤 '<모니터>/agent/install.sh' 로 에이전트 설치 — openmake/monitor README '관측 에이전트'"
 
     printf "\n%s══════════════════════════════════════════════════════%s\n" "$C_OK" "$C_RESET"
     printf "%s  OpenMake LLM 설치 완료 (%s · 내부망)%s\n" "$C_OK" "$OS_LABEL" "$C_RESET"

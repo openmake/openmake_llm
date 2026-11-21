@@ -2054,6 +2054,10 @@ cmd_env_install() {
     [[ -z "$track" ]] || dotenv_set "$ldir/.env" OMK_TRACK release
     [[ $gate -eq 0 ]] || dotenv_set "$ldir/.env" OMK_RELEASE_GATE 1
     load_toolchain "$ldir"
+    # 이미 PM2 데몬이 돌던 장비에 다시 설치하면 install.sh 는 pm2 CLI·node 만 고정 판으로 바꾸고 데몬은 옛 판에 남는다
+    # (그러면 pm2 jlist 앞에 'out-of-date' 안내가 붙는다). 갱신 경로와 같은 함수로 데몬·부팅 등록까지 맞춘다.
+    local nrc=0; node_runtime_sync "$ldir" HEAD || nrc=$?
+    [[ $nrc -eq 0 || $nrc -eq $NODE_SYNC_DEFERRED ]] || log_warn "PM2 데몬을 고정 판에 맞추지 못했습니다 — 다음 'omk env update $env' 가 다시 맞춥니다"
 
     # 1.5~1.7 은 .env 를 고친다 — 어느 단계든 내용이 바뀌었으면 끝에 API 를 한 번 재시작한다(단계별 플래그는 빠뜨리기 쉽다).
     local env_before; env_before="$(cksum < "$ldir/.env")"
