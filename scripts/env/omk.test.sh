@@ -171,6 +171,17 @@ eq "litellm ensure: litellm.env 에 DEFAULT_MAX_RETRIES=0" "$rc|$(dotenv_get "$(
 dotenv_set "$(litellm_dir rt)/litellm.env" DEFAULT_MAX_RETRIES 2
 ( litellm_pm2_start() { return 0; }; curl() { printf 200; }; litellm_ensure "$RT" rt >/dev/null 2>&1 ); rc=$?
 eq "litellm ensure: 적힌 DEFAULT_MAX_RETRIES 는 그대로" "$rc|$(dotenv_get "$(litellm_dir rt)/litellm.env" DEFAULT_MAX_RETRIES)" "0|2"
+# 앱 .env 의 LLM_GATEWAY_PROVIDERS — 키가 없으면 config wildcard 로 채우고, 적힌 값(빈값 포함)은 그대로.
+eq "litellm gateway providers: config wildcard 목록" "$(litellm_gateway_providers "$RC")" "openrouter,ollama-cloud,nvidia,hasa,bai,orcarouter,logfare,gemini"
+printf 'OMK_LITELLM_PORT=19999\n' > "$RT/.env"
+( litellm_pm2_start() { return 0; }; curl() { printf 200; }; litellm_ensure "$RT" rt >/dev/null 2>&1; echo "$LITELLM_CHANGED" > "$RT/changed" ); rc=$?
+eq "litellm ensure: LLM_GATEWAY_PROVIDERS 없으면 채움·재시작 표시" "$rc|$(dotenv_get "$RT/.env" LLM_GATEWAY_PROVIDERS)|$(cat "$RT/changed")" "0|$(litellm_gateway_providers "$RC")|1"
+dotenv_set "$RT/.env" LLM_GATEWAY_PROVIDERS openrouter
+( litellm_pm2_start() { return 0; }; curl() { printf 200; }; litellm_ensure "$RT" rt >/dev/null 2>&1 ); rc=$?
+eq "litellm ensure: 적힌 LLM_GATEWAY_PROVIDERS 는 그대로" "$rc|$(dotenv_get "$RT/.env" LLM_GATEWAY_PROVIDERS)" "0|openrouter"
+dotenv_set "$RT/.env" LLM_GATEWAY_PROVIDERS ""
+( litellm_pm2_start() { return 0; }; curl() { printf 200; }; litellm_ensure "$RT" rt >/dev/null 2>&1 ); rc=$?
+eq "litellm ensure: 빈 LLM_GATEWAY_PROVIDERS(롤백)도 그대로" "$rc|$(grep -c '^LLM_GATEWAY_PROVIDERS=$' "$RT/.env")" "0|1"
 # 이번 실행이 업스트림을 다른 이름으로 바꾸면 기억된 옛 업스트림과는 겹쳐도 된다 — 사전 검사와 dgx_apply 가 같은 값을 본다.
 printf 'OMK_UPSTREAM_MODEL=old-up\n' > "$PL"
 ( OMK_DGX_MODEL=old-up dgx_preflight "$PF" pf 1 http://u new-up >/dev/null 2>&1 ); rc=$?

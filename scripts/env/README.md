@@ -273,7 +273,7 @@ omk 를 직접 쓸 때도 같은 옵션을 줄 수 있다. **주지 않으면 �
 | `--artifact-viewer` | 아티팩트 공유 뷰어(nginx 컨테이너 `:8088`, HTTPS 면 `:8443`). nginx.conf 가 백엔드 `:52416` 고정이라 기본 인스턴스 전용 | `OMK_ARTIFACT_VIEWER=1` |
 | `--discord-token T` | Discord 봇 빌드·등록. 앱 API 키(discord 스코프)는 설치 후 발급해 `DISCORD_BOT_API_KEY` 에 넣는다 — 운영 봇 토큰 재사용 금지(두 서버가 같은 봇으로 붙는다) | — |
 
-LiteLLM 버전은 `OMK_LITELLM_SPEC` 로 고정한다 — 설치 스크립트는 `litellm[proxy]==1.100.1`(1.102 지연 회귀로 운영이 고정한 버전)을 넘긴다.
+LiteLLM 버전은 `OMK_LITELLM_SPEC` 로 고정한다 — 설치 스크립트는 `litellm[proxy]==1.110.2` 를 넘긴다. 1.102 부터 `/v1/models` 가 1.100.1 보다 약 50% 느리다(2026-11-21 같은 config 로컬 실측 p50 28→43ms, 동시 10건 280→433ms) — 1.102 때 운영이 롤백한 회귀가 1.110.2 에서도 고쳐지지 않았다.
 
 ### DGX 채팅 모델 바꾸기 — 정식 이름 + 옛 이름 호환
 
