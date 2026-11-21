@@ -382,6 +382,126 @@ load_toolchain() { # $1=llm dir
 }
 require_pm2() { has pm2 || die "pm2 를 찾을 수 없습니다 — 해당 환경의 llm 을 먼저 설치하세요 (install.sh 가 PM2 를 준비합니다)"; }
 
+# ── Node 런타임 맞추기 (env update 가 소스를 바꾸기 전에) ──────────────────────────────
+# openmake_llm.sh deploy 는 셸·PM2 데몬의 node 가 .node-version 과 정확히 같아야 빌드한다. 새 버전이 .node-version 을
+# 올리면 자동 갱신이 그 검사에서 멈췄다 — 갱신할 ref 의 .node-version 을 먼저 읽어 node·pm2·toolchain.env·데몬을 맞춘다.
+# 데몬 교체(pm2 update)는 PM2 가 관리하는 프로세스를 모두 다시 띄운다. 예약 실행(omk-pipeline·updater)은 그 자신이 PM2
+# 자식이라 제자리에서 바꾸면 스스로 죽는다 — 프로세스 트리에서 떨어진 작업에 교체를 맡기고 소스를 바꾸기 전에 멈춘다(75).
+# 실패 기록이 남아 다음 예약 실행이 같은 갱신을 처음부터 다시 한다.
+NODE_SYNC_DEFERRED=75
+TOOLCHAIN_NODE_MARK="# omk:node"
+# toolchain.env 에서 node 경로를 이 한 줄로 고정한다 — 앞줄들이 옛 node 를 PATH 앞에 넣어도 마지막 줄이 이긴다.
+toolchain_node_set() { # $1=llm dir $2=node bin 디렉터리
+    local f="$1/.openmake/toolchain.env" tmp
+    mkdir -p "$1/.openmake"; touch "$f"
+    tmp="$(mktemp)"; grep -vF "$TOOLCHAIN_NODE_MARK" "$f" > "$tmp" || true
+    printf 'export PATH="%s:$PATH"  %s (.node-version)\n' "$2" "$TOOLCHAIN_NODE_MARK" >> "$tmp"
+    mv "$tmp" "$f"
+}
+# 갱신 뒤 소스가 될 ref — release 는 따라갈 태그, 그 밖에는 upstream(없으면 HEAD).
+update_target_ref() { # $1=llm dir $2=track
+    if [[ "$2" == "release" ]]; then
+        if release_behind "$1"; then printf '%s' "$RELEASE_TAG"; else printf 'HEAD'; fi
+        return 0
+    fi
+    git -C "$1" fetch -q 2>/dev/null || true
+    git -C "$1" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || printf 'HEAD'
+}
+# mise 가 없는 호스트(Homebrew node@NN 만 쓰는 곳 — Homebrew 는 패치 판을 고를 수 없다)는 nodejs.org 공식 배포본을
+# 판별 폴더에 푼다. 받은 파일은 같은 배포 폴더의 SHASUMS256.txt 로 확인한 뒤에만 푼다(install_linux.sh 와 같은 규칙).
+node_dist_install() { # $1=판 → stdout 에 bin 디렉터리
+    local v="$1" os arch name base dest tmp
+    case "$(uname -s)" in Darwin) os=darwin ;; Linux) os=linux ;; *) log_err "Node 배포본을 고를 수 없는 OS: $(uname -s)"; return 1 ;; esac
+    case "$(uname -m)" in arm64|aarch64) arch=arm64 ;; x86_64|amd64) arch=x64 ;; *) log_err "Node 배포본을 고를 수 없는 CPU: $(uname -m)"; return 1 ;; esac
+    name="node-v$v-$os-$arch"; base="${OMK_NODE_DIST_BASE:-https://nodejs.org/dist}/v$v"; dest="$OMK_ROOT/node-dist/v$v"
+    if [[ "$("$dest/bin/node" -p 'process.versions.node' 2>/dev/null)" == "$v" ]]; then printf '%s' "$dest/bin"; return 0; fi
+    has curl || { log_err "curl 이 필요합니다 (Node $v 배포본)"; return 1; }
+    tmp="$(mktemp -d)" || return 1
+    if ! curl -fsSL -o "$tmp/$name.tar.gz" "$base/$name.tar.gz" || ! curl -fsSL -o "$tmp/SHASUMS256.txt" "$base/SHASUMS256.txt"; then
+        rm -rf "$tmp"; log_err "Node $v 다운로드 실패 ($base)"; return 1
+    fi
+    if ! ( cd "$tmp" && grep "  $name.tar.gz\$" SHASUMS256.txt | shasum -a 256 -c - ) >/dev/null 2>&1; then
+        rm -rf "$tmp"; log_err "Node 배포본 체크섬 검증 실패 ($name.tar.gz) — 받은 파일을 쓰지 않습니다"; return 1
+    fi
+    rm -rf "$dest.new"; mkdir -p "$dest.new"
+    if ! tar -xzf "$tmp/$name.tar.gz" -C "$dest.new" --strip-components=1; then
+        rm -rf "$tmp" "$dest.new"; log_err "Node $v 압축해제 실패"; return 1
+    fi
+    rm -rf "$tmp" "$dest"; mv "$dest.new" "$dest"
+    log_ok "node $v → $dest (nodejs.org 배포본)" >&2
+    printf '%s' "$dest/bin"
+}
+# PM2 부팅 복구 등록(com.openmake.pm2 — mac-pm2-boot.sh)은 등록할 때의 node 경로를 박아 둔다. 데몬을 새 node 로
+# 바꿔도 재부팅하면 옛 node 로 되살아나므로, 등록이 다른 node 를 가리키면 같은 옵션(--no-docker)으로 다시 등록한다.
+# 다시 등록은 가드를 한 번 돌리고 실행 중인 앱은 건너뛴다. 실패해도 갱신은 멈추지 않는다(다음 실행이 다시 본다).
+pm2_boot_agent_sync() { # $1=llm dir $2=node bin
+    local plist="$HOME/Library/LaunchAgents/com.openmake.pm2.plist" script="$1/scripts/setup/mac-pm2-boot.sh" cur flag=() rc=0 log
+    [[ "$(uname -s)" == Darwin && -f "$plist" && -f "$script" ]] || return 0
+    cur="$(plutil -extract ProgramArguments.3 raw -o - "$plist" 2>/dev/null || true)"
+    [[ -n "$cur" && "$cur" != "$2/node" ]] || return 0
+    [[ "$(plutil -extract ProgramArguments.5 raw -o - "$plist" 2>/dev/null || true)" != "-" ]] || flag=(--no-docker)
+    log="$1/logs/pm2-boot-resync.log"; mkdir -p "$1/logs"
+    PATH="$2:$PATH" OMK_ROOT="$OMK_ROOT" bash "$script" --apply ${flag[@]+"${flag[@]}"} > "$log" 2>&1 || rc=$?
+    case "$rc" in
+        0) log_ok "PM2 부팅 복구 등록 node → $2/node" ;;
+        1) log_warn "PM2 부팅 복구 등록을 새 node 로 썼습니다 — 남은 항목은 $log (SSH 만이면 다음 GUI 로그인 때 읽힘)" ;;
+        *) log_warn "PM2 부팅 복구 등록을 새 node 로 바꾸지 못했습니다 — $log 확인 후 'bash $script --apply'" ;;
+    esac
+    return 0
+}
+pm2_daemon_switch_now() { # $1=node bin — 이 셸이 PM2 자식이 아닐 때
+    PATH="$1:$PATH" "$1/pm2" update >/dev/null 2>&1
+}
+# 서브셸이 끝나 작업은 launchd/init 아래로 옮겨진다. 지금 실행이 잡은 파이프라인 잠금이 풀린 뒤에 바꾼다 — 실행 도중
+# 데몬을 바꾸면 잠금 디렉터리가 남아 다음 주기가 'pipeline busy' 로 멈춘다. 잠금이 15분 넘게 남으면 그냥 바꾼다.
+pm2_daemon_switch_detached() { # $1=node bin $2=로그 파일 $3=기다릴 잠금 디렉터리(없으면 빈값)
+    ( nohup bash -c 'i=0; while [[ -n "$2" && -d "$2" && $i -lt 900 ]]; do sleep 1; i=$((i+1)); done; sleep 2
+        PATH="$1:$PATH" "$1/pm2" update' _ "$1" "${3:-}" > "$2" 2>&1 < /dev/null & )
+}
+node_runtime_sync() { # $1=llm dir $2=ref → 0 준비됨 · 75 데몬 교체 예약 · 1 실패
+    local ldir="$1" want cur bin pm2v daemon log lock
+    want="$(git -C "$ldir" show "$2:.node-version" 2>/dev/null | tr -d '[:space:]')"; want="${want#v}"
+    [[ "$want" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 0   # 고정값이 없는 소스 — 할 일 없음
+    cur="$(node -p 'process.versions.node' 2>/dev/null || true)"
+    pm2v="$(pm2 -v 2>/dev/null | tail -1 || true)"
+    if [[ "$cur" != "$want" ]]; then
+        log_step "Node ${cur:-없음} → $want (.node-version)"
+        if has mise; then
+            mise install "node@$want" >/dev/null 2>&1 || { log_err "mise install node@$want 실패"; return 1; }
+            bin="$(mise where "node@$want" 2>/dev/null)/bin"
+        else
+            bin="$(node_dist_install "$want")" || return 1
+        fi
+        [[ -x "$bin/node" ]] || { log_err "node $want 를 찾지 못했습니다 ($bin)"; return 1; }
+        toolchain_node_set "$ldir" "$bin"
+        export PATH="$bin:$PATH"
+        log_ok "node $want — $ldir/.openmake/toolchain.env"
+    fi
+    bin="$(dirname "$(command -v node)")"
+    # 전역 pm2 는 node 마다 따로다 — 새 node 에 없으면 지금 쓰던 판을 깐다(데몬과 CLI 판이 어긋나지 않게).
+    if [[ ! -x "$bin/pm2" ]]; then
+        "$bin/npm" install -g --no-audit --no-fund "pm2${pm2v:+@$pm2v}" >/dev/null 2>&1 || { log_err "pm2${pm2v:+@$pm2v} 설치 실패 ($bin)"; return 1; }
+        log_ok "pm2 ${pm2v:-latest} → $bin"
+    fi
+    # shellcheck source=/dev/null
+    [[ -f "$ldir/scripts/lib/node-version.sh" ]] && . "$ldir/scripts/lib/node-version.sh"
+    daemon="$(PATH="$bin:$PATH" pm2_daemon_node_version 2>/dev/null || true)"
+    if [[ -z "$daemon" || "$daemon" == "$want" ]]; then   # 데몬이 꺼져 있으면 다음 기동이 새 node 로 뜬다
+        pm2_boot_agent_sync "$ldir" "$bin"; return 0
+    fi
+    if [[ -n "${pm_id:-}" ]]; then
+        log="$ldir/logs/pm2-node-switch.log"; mkdir -p "$ldir/logs"
+        lock=""; [[ -n "${OMK_PIPELINE_LOCK_ENV:-}" ]] && declare -F pipeline_dir >/dev/null && lock="$(pipeline_dir "$OMK_PIPELINE_LOCK_ENV")/lock"
+        pm2_daemon_switch_detached "$bin" "$log" "$lock"
+        log_warn "PM2 데몬 node $daemon → $want 교체를 예약했습니다 (예약 실행은 PM2 자식이라 제자리에서 못 바꿉니다 · $log)"
+        return "$NODE_SYNC_DEFERRED"
+    fi
+    log_step "PM2 데몬 node $daemon → $want (pm2 update — 관리 중인 프로세스가 다시 뜹니다)"
+    pm2_daemon_switch_now "$bin" || { log_err "pm2 update 실패 — 'PATH=$bin:\$PATH pm2 update' 를 직접 실행하세요"; return 1; }
+    log_ok "PM2 데몬 node $want"
+    pm2_boot_agent_sync "$ldir" "$bin"
+}
+
 # ── 포트 ─────────────────────────────────────────────────────────────────────
 port_in_use()   { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 find_free_port() { # $1=start
@@ -1962,6 +2082,13 @@ cmd_env_update_unlocked() {
     dgx_update_sync "$ldir" "$env"
     # 맞출 값이 정해졌으면 쓰기 단계가 두 파일을 같은 값으로 만든다 — 지금의 어긋남으로 멈추지 않는다.
     [[ -n "$DGX_SYNC_TARGET" ]] || dgx_update_guard "$ldir" "$env"
+    # Node 런타임 — 새 소스의 .node-version 에 맞춘 뒤에야 소스를 바꾼다(deploy 의 Node 검사에서 멈추지 않게).
+    local nrc=0; node_runtime_sync "$ldir" "$(update_target_ref "$ldir" "$track")" || nrc=$?
+    if [[ $nrc -eq $NODE_SYNC_DEFERRED ]]; then
+        die "PM2 데몬 교체 뒤 다음 실행이 갱신을 이어갑니다 — 소스는 그대로입니다 ($env)"
+    elif [[ $nrc -ne 0 ]]; then
+        die "Node 런타임을 맞추지 못해 갱신을 멈춥니다 — 소스는 그대로입니다 ($env)"
+    fi
     log_step "환경 갱신: $env"
     restore_lockfiles "$ldir"; [[ -d "$bdir/.git" ]] && restore_lockfiles "$bdir"
     searxng_ensure "$ldir" "$env" "$(env_dir "$env")/searxng" "$(env_dir "$env")"   # 뒤의 update 가 재시작하며 반영
