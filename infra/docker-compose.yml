@@ -62,7 +62,7 @@ services:
     shm_size: 256mb
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.12-alpine
     container_name: openmake${OMK_INSTANCE:+-${OMK_INSTANCE}}-redis
     restart: unless-stopped
     # REDIS_PASSWORD 는 선택 — 있으면 requirepass 로 뜨고 REDIS_URL 에 `:비밀번호@` 가 있어야 한다.

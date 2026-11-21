@@ -1,5 +1,7 @@
 # Dependabot (F28.8, 2026-09-17) — 운영 의존성 보안·버전 갱신 PR.
-# npm workspaces 는 루트 lockfile 하나라 디렉토리는 "/" 만 둔다. minor/patch 는 묶어서 PR 수를 줄인다.
+# npm workspaces 는 루트 lockfile 하나라 루트는 "/" 로 둔다. 워크스페이스 밖에서 자기 lockfile 을 가진 앱(desktop-windows)은 따로 본다.
+# minor/patch 는 묶어서 PR 수를 줄인다. Dependabot 이 읽지 못하는 고정값(.node-version·.pm2-version·omk.sh 의 LiteLLM·caddy)은
+# .github/workflows/toolchain-bump.yml 이 올린다 — 그래서 docker 의 node 이미지는 여기서 뺀다(.node-version 과 같이 움직여야 한다).
 # PR 은 dev 로 올린다(target-branch) — 지정하지 않으면 기본 브랜치(main)로 올라와 feature → dev → main 흐름을 건너뛴다
 # (2026-10-03 #1038 eslint 10 이 main 에 바로 들어가 dev 와 어긋났다). 이 파일은 기본 브랜치의 것이 적용된다.
 version: 2
@@ -19,6 +21,42 @@ updates:
         exclude-patterns: ["@opentelemetry/*"]
   - package-ecosystem: github-actions
     directory: "/"
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+  - package-ecosystem: npm
+    directory: "/apps/desktop-windows"
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+  - package-ecosystem: cargo
+    directory: "/apps/openmake-code"
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+  - package-ecosystem: docker
+    directories: ["/infra/egress-proxy", "/infra/mcp-runtime", "/infra/task-runtime"]
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "node"   # .node-version 과 함께 toolchain-bump 가 올린다
+  - package-ecosystem: docker-compose
+    directories: ["/infra", "/infra/artifact-viewer"]
     target-branch: dev
     schedule:
       interval: weekly
