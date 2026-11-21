@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.145.3](https://github.com/openmake/openmake_llm/compare/v1.145.2...v1.145.3) (2026-11-21)
+
+
+### 🐛 버그 수정
+
+* **pipeline:** Dependabot 패치·마이너 PR 을 예약 실행으로 자동 병합 ([d7ac76e](https://github.com/openmake/openmake_llm/commit/d7ac76e499a2c70cdab96ea6b66493c8e2cd289a))
+
 ## [1.145.2](https://github.com/openmake/openmake_llm/compare/v1.145.1...v1.145.2) (2026-11-21)
 
 
