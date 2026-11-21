@@ -119,7 +119,7 @@ jobs:
           check "루트 CA 파일"                  'test -s "$HOME/.openmake/https/openmake-internal-root.crt"'
           check "LiteLLM liveliness"           'curl -fsS -m 5 http://127.0.0.1:$(envv OMK_LITELLM_PORT)/health/liveliness >/dev/null'
           check "LiteLLM 기본 모델 등록"          'curl -fsS -m 10 -H "Authorization: Bearer $(envv LLM_API_KEY)" http://127.0.0.1:$(envv OMK_LITELLM_PORT)/v1/models | grep -q smoke-model'
-          check "LiteLLM 버전 고정 1.100.1"      '"$HOME/.openmake/online/litellm/venv/bin/python" -c "import importlib.metadata as m; assert m.version(\"litellm\")==\"1.100.1\""'
+          check "LiteLLM 버전 고정 1.110.2"      '"$HOME/.openmake/online/litellm/venv/bin/python" -c "import importlib.metadata as m; assert m.version(\"litellm\")==\"1.110.2\""'
           check "SearXNG"                       'curl -fsS -m 5 "$(envv SEARXNG_URL)/healthz" >/dev/null'
           check "운영 프로필"                     '[ "$(envv OMK_OPS_PROFILE)" = 1 ] && [ "$(envv AGENT_TASK_QUEUE_ENABLED)" = true ]'
           check "VAPID 키"                      '[ -n "$(envv VAPID_PUBLIC_KEY)" ]'

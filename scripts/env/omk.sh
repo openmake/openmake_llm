@@ -1279,7 +1279,7 @@ litellm_ensure() { # $1=llm dir $2=env [$3=QWEN base $4=BGE base $5=vLLM key $6=
     dotenv_ensure "$lenv" LITELLM_MASTER_KEY "sk-$(gen_secret)"
     dotenv_ensure "$lenv" DUMMY_UPSTREAM_KEY "sk-byok-forwarded-per-request"
     # 게이트웨이 안 OpenAI SDK 재시도 끄기 — 임베딩은 요청의 max_retries 0 을 기본값(2)으로 되돌려 이 환경 변수만 통한다
-    # (LiteLLM 1.100.1~1.108.4 `max_retries or DEFAULT_MAX_RETRIES`). Router 재시도는 앱의 x-litellm-num-retries: 0 이 끈다.
+    # (LiteLLM 1.100.1~1.110.2 소스 `max_retries or DEFAULT_MAX_RETRIES`). Router 재시도는 앱의 x-litellm-num-retries: 0 이 끈다.
     dotenv_ensure "$lenv" DEFAULT_MAX_RETRIES 0
     [[ -z "${3:-}" ]] || dotenv_set "$lenv" QWEN_VLLM_API_BASE "$3"
     [[ -z "${4:-}" ]] || dotenv_set "$lenv" BGE_VLLM_API_BASE "$4"
@@ -1313,6 +1313,17 @@ LITELLM_START
     if [[ "$(dotenv_get "$envf" LLM_BASE_URL)|$(dotenv_get "$envf" LLM_API_KEY)|$(dotenv_get "$envf" OMK_LITELLM_PORT)" != "$url|$key|$port" ]]; then
         dotenv_set "$envf" LLM_BASE_URL "$url"; dotenv_set "$envf" LLM_API_KEY "$key"; dotenv_set "$envf" OMK_LITELLM_PORT "$port"; LITELLM_CHANGED=1
     fi
+    # 앱은 LLM_GATEWAY_PROVIDERS 에 없는 BYOK provider 를 게이트웨이 미편입으로 거절한다(capability 호출·배정).
+    # --ops-profile 없이 설치해도 게이트웨이 config 의 wildcard 와 맞도록, 키가 없을 때만 채운다.
+    # 적힌 값은 빈값(= 전부 direct, 롤백 수단)이라도 존중한다.
+    local gw; gw="$(litellm_gateway_providers "$d/litellm.config.yaml")"
+    if [[ -n "$gw" ]] && ! grep -qE '^LLM_GATEWAY_PROVIDERS=' "$envf" 2>/dev/null; then
+        dotenv_set "$envf" LLM_GATEWAY_PROVIDERS "$gw"; LITELLM_CHANGED=1
+    fi
+}
+# config 의 wildcard 항목(model_name: <provider>/*) → 쉼표 목록. 순서는 config 순서.
+litellm_gateway_providers() { # $1=litellm.config.yaml
+    sed -nE 's/^[[:space:]]*-[[:space:]]*model_name:[[:space:]]*"?([a-z0-9][a-z0-9-]*)\/\*"?[[:space:]]*(#.*)?$/\1/p' "$1" 2>/dev/null | paste -sd, -
 }
 litellm_line() { # $1=env $2=llm dir
     local port lenv; port="$(dotenv_get "$2/.env" OMK_LITELLM_PORT)"; lenv="$(litellm_dir "$1")/litellm.env"
