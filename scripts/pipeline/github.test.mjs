@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { metadataOnly, eligiblePull, requireToken, latestCI } from './github.mjs';
+import { metadataOnly, eligiblePull, requireToken, latestCI, dependabotUpdate } from './github.mjs';
 test('metadata JSON permits version only and rejects additions and dependency changes', () => {
     const allow = new Set(['package.json', 'package-lock.json']);
     assert.equal(metadataOnly('{"version":"1.0.0","dependencies":{"x":"1"}}', '{"version":"2.0.0","dependencies":{"x":"1"}}', 'package.json', allow), true);
@@ -18,6 +18,23 @@ test('fork and stale PR heads cannot merge', () => {
     assert.equal(eligiblePull({ ...pr, head: { ...pr.head, ref: 'release/foo' } }, 'a', 'o/r'), false);
     assert.equal(eligiblePull(pr, 'b', 'o/r'), false);
     assert.equal(eligiblePull({ ...pr, head: { ...pr.head, repo: { full_name: 'fork/r' } } }, 'a', 'o/r'), false);
+});
+test('Dependabot PRs merge only for patch/minor updates by dependabot itself', () => {
+    const pr = { state: 'open', draft: false, user: { login: 'dependabot[bot]' }, title: 'build(deps): bump pgvector/pgvector from 0.8.3-pg16-trixie to 0.8.7-pg16-trixie in /infra', head: { sha: 'a', ref: 'dependabot/docker_compose/infra/dev/pgvector', repo: { full_name: 'o/r' } }, base: { ref: 'dev' } };
+    assert.equal(eligiblePull(pr, 'a', 'o/r'), true);
+    assert.equal(eligiblePull({ ...pr, title: 'build(deps): bump the minor-and-patch group with 10 updates' }, 'a', 'o/r'), true);
+    assert.equal(eligiblePull({ ...pr, title: 'build(deps): bump redis from 7.4.12-alpine to 8.10.3-alpine in /infra' }, 'a', 'o/r'), false);
+    assert.equal(eligiblePull({ ...pr, title: 'build(deps-dev): bump electron from 38.8.6 to 45.3.4 in /apps/desktop-windows' }, 'a', 'o/r'), false);
+    assert.equal(eligiblePull({ ...pr, user: { login: 'someone' } }, 'a', 'o/r'), false);
+    assert.equal(eligiblePull({ ...pr, base: { ref: 'main' } }, 'a', 'o/r'), false);
+    assert.equal(eligiblePull({ ...pr, title: 'build(deps): bump something' }, 'a', 'o/r'), false);
+});
+test('Dependabot update width: 0.x minor and any major change need review', () => {
+    assert.equal(dependabotUpdate('build(deps-dev): bump electron-builder from 26.15.3 to 26.18.0 in /apps/desktop-windows'), 'minor');
+    assert.equal(dependabotUpdate('build(deps): bump actions/checkout from v7.0.1 to v8.0.0'), 'major');
+    assert.equal(dependabotUpdate('build(deps): bump x from 0.8.3 to 0.9.0'), 'major');
+    assert.equal(dependabotUpdate('build(deps): bump x from 0.8.3 to 0.8.4'), 'minor');
+    assert.equal(dependabotUpdate('no versions here'), null);
 });
 test('latest CI attempt must succeed at exact SHA', () => {
     const runs = [{ id: 2, head_sha: 'a', conclusion: 'failure' }, { id: 1, head_sha: 'a', conclusion: 'success' }];

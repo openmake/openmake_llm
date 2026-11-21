@@ -9,7 +9,7 @@
 | 로컬 | package.json, scripts/env/omk.sh, tests/e2e, tests/web | 로컬 관련 검사 유지; dev 기능 검사도 명령으로 재사용 |
 | PR·소스 CI | .github/workflows/ci.yml | PR/main/dev 소스·DB·빌드 검사 존재. 웹 단위 검사 추가, 테스트 job 토큰 읽기 전용으로 축소 |
 | dev 기능 | scripts/ci, playwright.config.ts | 기존 CI에 실행 앱/브라우저 검사 없음. 격리 앱/DB/model fixture와 기본+변경 소스 검사 추가. 선택된 E2E만 api/web 대상으로 실행, 실제 통과 0건이면 차단. 전체 E2E 기본 실행 안 함 |
-| 자동 병합 | .github/workflows/auto-merge.yml, scripts/pipeline/github.mjs | 없던 작업 PR 자동 구조 검사/자동 병합 추가. 신뢰된 기본 브랜치 코드만 권한 실행 |
+| 자동 병합 | .github/workflows/auto-merge.yml, scripts/pipeline/github.mjs | 없던 작업 PR 자동 구조 검사/자동 병합 추가. 신뢰된 기본 브랜치 코드만 권한 실행. Dependabot PR 은 패치·마이너만 예약 실행(30분마다)이 병합하고 메이저·0.x 마이너는 사람 검토 — Dependabot 이 일으킨 workflow_run 에는 저장소 비밀값이 오지 않는다 |
 | main 승격 | .github/workflows/promote.yml | dev push 즉시 실행·미설정 토큰 성공 skip·폐지된 omk/env-dev 의존 제거. 실제 병합 dev CI/current SHA로 승격 |
 | staging | scripts/env/omk.sh, pipeline.sh | 기존 update/smoke 재사용. 필수 검증·실행 SHA 확인·잠금·hold 추가 |
 | 검증 | scripts/release/{commands,runner,lib,verify-matrix,release-candidate} | 명령별 결과/skip 분류 도구 존재. 종료0이 승인인 것은 아님. staging의 필수 검증은 비어 있으면 차단하고 별도 SHA 근거 저장 |
