@@ -81,5 +81,14 @@
         "kordoc": {
             "zod": "^4.6.6"
         }
+    },
+    "allowScripts": {
+        "esbuild": true,
+        "onnxruntime-node": true,
+        "protobufjs": true,
+        "tesseract.js": true,
+        "unrs-resolver": true,
+        "@parcel/watcher": true,
+        "@swc/core": true
     }
 }
