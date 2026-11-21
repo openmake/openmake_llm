@@ -194,6 +194,8 @@ eq "litellm ensure: 빈 LLM_GATEWAY_PROVIDERS(롤백)도 그대로" "$rc|$(grep 
 VS="$TMP/vs"; mkdir -p "$VS"
 FAKE_LITELLM_VER=1.100.1 litellm_venv_install "$VS/venv"
 eq "litellm pinned: 기본 고정" "$(litellm_pinned_version)" "$OMK_LITELLM_VERSION"
+# 고정 버전은 omk 한 곳 — 원샷 설치(stack.sh)가 OMK_LITELLM_SPEC 를 따로 넘기면 update 와 설치가 다른 버전을 본다.
+ok "litellm pinned: stack.sh 는 버전을 따로 고정하지 않는다" '! grep -qE "OMK_LITELLM_SPEC|LITELLM_VERSION" "$HERE/../setup/common/stack.sh"'
 ( OMK_LITELLM_SPEC='litellm[proxy]'; FAKE_LITELLM_VER=9.9.9; litellm_venv_sync "$VS" >/dev/null 2>&1 )
 eq "litellm sync: 고정 없으면 그대로" "$(litellm_installed_version "$VS/venv")" "1.100.1"
 ( FAKE_LITELLM_VER=""; litellm_venv_sync "$VS" >/dev/null 2>&1 ); rc=$?
