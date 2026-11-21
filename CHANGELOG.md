@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.145.4](https://github.com/openmake/openmake_llm/compare/v1.145.3...v1.145.4) (2026-11-21)
+
+
+### 🐛 버그 수정
+
+* **omk:** pm2 CLI·데몬 판 불일치 감지·jlist 읽기·LiteLLM relink 를 운영 릴리스에 싣는다 ([0facdd8](https://github.com/openmake/openmake_llm/commit/0facdd84ff6be4536313d7d3c736708297fe8dd1))
+* **omk:** pm2 CLI·데몬 판 불일치 감지·jlist 읽기·LiteLLM relink 를 운영 릴리스에 싣는다 ([0ee386a](https://github.com/openmake/openmake_llm/commit/0ee386a9d95d2bae298aed59de85238d37fd8deb))
+
 ## [1.145.3](https://github.com/openmake/openmake_llm/compare/v1.145.2...v1.145.3) (2026-11-21)
 
 
