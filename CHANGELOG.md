@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.145.6](https://github.com/openmake/openmake_llm/compare/v1.145.5...v1.145.6) (2026-11-21)
+
+
+### 🐛 버그 수정
+
+* **install:** 원샷 설치가 그동안 손으로 맞춘 것을 스스로 하게 — Mac Node 대체 설치·재설치 데몬 맞춤·웹 API 포트·fix(deps) 릴리스 ([0e69d6d](https://github.com/openmake/openmake_llm/commit/0e69d6dbe2770d16db0ac1f7c1c91ee13cfff026))
+
 ## [1.145.5](https://github.com/openmake/openmake_llm/compare/v1.145.4...v1.145.5) (2026-11-21)
 
 
