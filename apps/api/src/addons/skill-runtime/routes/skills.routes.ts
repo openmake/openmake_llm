@@ -29,6 +29,7 @@ import { createHash } from 'crypto';
 import { parseSkillFile, validateManifest } from '../../../agents/manifest-validator';
 import { adaptSkillContent } from '../../../agents/git-ingest/skill-compat';
 import { ManifestImporter } from '../manifest-importer';
+import { mcpBundlesNotice } from '../mcp-bundles-notice';
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
 import { getToolRuntime } from '../../../runtime-ports/tool-runtime';
 import { requireAuth } from '../../../auth';
@@ -166,6 +167,7 @@ router.post('/', requireAuth, validateWithSecurity(createSkillSchema, { preserve
  *   - YAML frontmatter + Markdown body
  *   - Zod 검증 + 도구 존재 검증 + sha256 checksum
  *   - 트랜잭션으로 skill_manifests + skill_tool_bindings + skill_mcp_bundles 저장
+ *     (mcp_bundles 는 기록만 — 실행하지 않는다. 응답 compat_notes 에 안내, mcp-bundles-notice.ts)
  *   - 중복 (id, version) 시 checksum 비교: 동일하면 멱등, 다르면 에러
  *
  */
@@ -221,6 +223,7 @@ router.post('/upload', requireAuth, skillUpload.single('file'), asyncHandler(asy
             createdBy: userId,
             isAdmin,
         });
+        const bundlesNote = mcpBundlesNotice(validation.manifest.mcp_bundles);
         logger.info(`skill upload: ${result.skill_id} v${result.version} (inserted=${result.inserted}, dup=${result.duplicate_checksum}, user=${userId})`);
         res.status(result.inserted ? 201 : 200).json(success({
             skill_id: result.skill_id,
@@ -229,7 +232,7 @@ router.post('/upload', requireAuth, skillUpload.single('file'), asyncHandler(asy
             duplicate_checksum: result.duplicate_checksum,
             bindings_count: validation.manifest.tool_bindings.length,
             bundles_count: validation.manifest.mcp_bundles.length,
-            compat_notes: adapted.notes,
+            compat_notes: [...adapted.notes, ...(bundlesNote ? [bundlesNote] : [])],
         }));
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
