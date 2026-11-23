@@ -266,7 +266,7 @@ manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기�
 - 업데이트(ingest)는 읽어 둔 상태·승인이 저장 값과 같을 때만 쓴다. 업데이트 도중 철회됐으면 `EXTENSION_UPDATE_CONFLICT` 로 실패하고 철회가 남는다(다시 업데이트하면 철회된 승인 기준으로 판정).
 - 재승인·철회는 읽은 요청 권한이 저장 값과 다르면(그 사이 업데이트) 409 — 오래된 화면으로 넓어진 권한을 승인하지 않는다.
 - MCP 서버 반영은 **즉시**다. 네트워크를 닫거나(철회·재시도 no-op 포함) 권한 때문에 막았던 stdio 를 되돌리면, DB 를 고친 뒤 그 확장에 연결된 서버의 떠 있는 연결을 닫는다(`ToolRuntime.releaseServers` — 사용자 풀과 전역 registry, 응답·감사 `releasedServers`). 다음 사용 때 새 설정(`sandbox_network`)으로 다시 뜨고, 끈 원격 서버(`enabled=false`)는 다시 뜨지 않는다. 그 순간 진행 중이던 그 서버의 도구 호출은 실패한다. 연결 정리가 실패해도 권한 변경은 유지된다(같은 철회를 다시 보내면 재시도).
-- 확장 **제거·업데이트**(`archiveLinked`)는 아직 DB 만 고친다 — 떠 있는 연결은 다음 정리(per_chat 종료·idle sweep·재시작)까지 남는다.
+- 확장 **제거**(`DELETE /api/users/me/extensions/:id`, 응답 `releasedServers`)와 **업데이트**(같은 소스 재설치)도 구성요소를 회수(`archiveLinked`)한 뒤 그 MCP 서버의 떠 있는 연결을 닫는다 — 회수된 서버(archived·`enabled=false`)는 다시 뜨지 않는다. 업데이트는 회수가 링크를 끊으므로 구 서버 id 를 회수 전에 받아 둔다. 세 경로 모두 `services/extensions/release-linked-mcp.ts` 를 쓴다.
 - 조회 `GET …/permissions` 와 목록 응답은 상태·승인·요청 권한을 주고, 승인자 id(`permissions_reviewed_by`)는 목록 응답에서 뺀다.
 
 롤백:

@@ -316,7 +316,7 @@ async function processOneUnit(signal: AbortSignal): Promise<void> {
 | 4 | 물리 SQL 권한 격리 없음(같은 DB 의 코드 경계). add-on → Base 내부 import 는 래칫 allowlist 로 남아 있다 | 계약 묶음 | `check:addon-boundary`, Base 테이블 SQL 검사 |
 | 5 | 대화 세션 밖 Base 테이블용 포트는 없다. 스킬 런타임의 스킬 스키마 SQL 은 래칫 예외 | 계약 묶음 | 필요해질 때 포트 추가 |
 | 6 | `TEST_DATABASE_URL` 을 보는 `*.db.test.ts` 밖 테스트 7개(MCP 저장소·마이그레이션·라우트)는 CI Gate 1.5 밖이다 | 계약 묶음 | 후속 후보 |
-| 7 | 설치형 확장 권한의 MCP 반영은 즉시(진행 중이던 그 서버의 도구 호출은 실패한다). 확장 제거·업데이트는 떠 있는 연결을 닫지 않는다. 설치 때 제외된 원격 서버는 확장을 지우고 다시 설치해야 돌아온다. 190 롤백은 승인 기록을 지운다 | 권한 묶음 | 응답의 `excludedRemoteServers`, 롤백 기본 판단 "하지 않는다" |
+| 7 | 설치형 확장 권한의 MCP 반영은 즉시(진행 중이던 그 서버의 도구 호출은 실패한다). 확장 제거·업데이트도 회수한 MCP 서버의 떠 있는 연결을 닫는다. 설치 때 제외된 원격 서버는 확장을 지우고 다시 설치해야 돌아온다. 190 롤백은 승인 기록을 지운다 | 권한 묶음 | 응답의 `excludedRemoteServers`, 롤백 기본 판단 "하지 않는다" |
 | 8 | e2e(`plugin-boundary`·`extension-permissions`)는 CI 에서 돌지 않는다 | 권한·검증 묶음 | 릴리스마다 로컬·스테이징 실행(§3.2) |
 | 9 | 실행 중 작업 취소는 heartbeat 한 주기(기본 최대 48초) 걸린다. 사용자 화면의 "수집 취소" 버튼은 없다 | worker 묶음 | API 로 취소 가능 |
 | 10 | 관리자 토글은 별도 worker 프로세스의 handle 을 직접 멈추지 않는다 | worker 묶음 | claim 게이트가 TTL 안에 막는다 |
