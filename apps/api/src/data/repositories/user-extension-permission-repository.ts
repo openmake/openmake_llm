@@ -6,7 +6,7 @@
  *   요청을 넓혔으면 0행(null)을 돌려 호출부가 409 로 알린다(오래된 화면으로 넓어진 권한을 승인하지 않는다).
  * - restrictLinkedMcpNetwork / restoreLinkedMcpNetwork: 네트워크 권한이 닫히거나 열릴 때 연결된 mcp_servers 를 고친다.
  *   manifest_meta 표시(networkRestrictedByPermission·disabledByPermission)로 "권한 때문에 바꾼 것"만 되돌린다.
- *   이미 떠 있는 MCP 프로세스는 바꾸지 않는다 — 다음 기동부터 적용된다.
+ *   이 저장소는 DB 만 고친다 — 떠 있는 연결은 컨트롤러가 listLinkedMcpServerIds 로 찾아 ToolRuntime.releaseServers 로 닫는다.
  *
  * jsonb 파라미터는 배열이면 JSON 문자열, null 이면 SQL NULL 로 보낸다(JSON.stringify(null) 은 jsonb 'null' 이 된다).
  *
@@ -84,5 +84,11 @@ export class UserExtensionPermissionRepository extends BaseRepository {
      */
     async restoreLinkedMcpNetwork(extensionId: string): Promise<number> {
         return getComponentStore('mcpServers', this.pool).restoreNetworkForExtension(extensionId);
+    }
+
+    /** 확장에 연결된 MCP 서버 id — 권한을 고친 뒤 떠 있는 연결을 닫을 대상 */
+    async listLinkedMcpServerIds(extensionId: string): Promise<string[]> {
+        const linked = await getComponentStore('mcpServers', this.pool).listLinked(extensionId);
+        return linked.map((s) => s.id);
     }
 }

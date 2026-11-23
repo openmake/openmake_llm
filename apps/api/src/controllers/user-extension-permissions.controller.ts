@@ -10,9 +10,11 @@
  * 재승인·철회는 읽은 요청 권한이 저장 값과 같을 때만 쓴다 — 그 사이 업데이트가 요청을 넓혔으면 409.
  * 승인 범위에 없는 권한만 철회하면 아무것도 쓰지 않고 현재 상태를 200 으로 돌려준다(멱등). 단 네트워크가 이미 닫혀 있으면
  * MCP 제한은 한 번 더 건다(상태 저장 뒤 제한이 실패한 경우의 재시도 — 제한 SQL 은 멱등).
- * 네트워크가 열리고 닫히면 연결된 MCP 서버를 바로 고친다(다음 기동부터 적용 — 떠 있는 프로세스는 그대로):
+ * 네트워크가 열리고 닫히면 연결된 MCP 서버를 바로 고친다:
  *   닫힘 → stdio 는 sandbox_network='none', 원격(HTTP)은 enabled=false
  *   열림 → 권한 때문에 막았던 stdio 만 'full'. 설치 때 제외된 원격 서버는 확장을 제거·재설치해야 생긴다(응답 excludedRemoteServers)
+ * 고친 뒤 그 확장의 떠 있는 MCP 연결을 닫는다(releaseLinkedServers → 응답 releasedServers) — 다음 사용 때 새 설정으로
+ * 다시 뜨고, 꺼진 원격 서버는 다시 뜨지 않는다. 철회가 실행 중인 프로세스에도 곧바로 적용된다.
  * user-extensions.controller 와 같은 prefix 에 따로 마운트한다 — 그 파일의 '/:id' 는 '/:id/permissions' 와 겹치지 않는다.
  */
 import { Router, type Request, type Response } from 'express';
@@ -26,6 +28,7 @@ import { isAdminRole } from '../data/user-manager';
 import { UserExtensionRepository, type UserExtensionRow } from '../data/repositories/user-extension-repository';
 import { UserExtensionPermissionRepository } from '../data/repositories/user-extension-permission-repository';
 import { getAuditService } from '../services/AuditService';
+import { getToolRuntime } from '../runtime-ports/tool-runtime';
 import { createLogger } from '../utils/logger';
 import { ADDON_PERMISSION_VALUES } from '../config/addon-permissions';
 import {
@@ -67,6 +70,21 @@ async function loadRow(req: Request, res: Response): Promise<{ row: UserExtensio
     return { row, actor };
 }
 
+/**
+ * 확장에 연결된 MCP 서버의 떠 있는 연결을 닫는다 — DB 의 권한 제한을 실행 중인 프로세스에도 곧바로 적용한다.
+ * 실패해도 권한 변경은 유지한다(응답·감사에 닫은 수만 남긴다). 서버 소유자 = 확장 소유자(설치 때 createdBy).
+ */
+async function releaseLinkedServers(row: UserExtensionRow): Promise<number> {
+    try {
+        const linked = await new UserExtensionPermissionRepository(getPool()).listLinkedMcpServerIds(row.id);
+        if (linked.length === 0) return 0;
+        return await getToolRuntime().releaseServers(String(row.user_id), linked);
+    } catch (e) {
+        log.warn(`확장 ${row.id} 의 MCP 연결 정리 실패(권한 변경은 유지)`, e);
+        return 0;
+    }
+}
+
 /** 저장된 상태 그대로의 판정 — 승인·철회 전후 네트워크 개방을 비교한다 */
 function currentEvaluation(row: UserExtensionRow): PermissionEvaluation {
     return evaluatePermissionState({
@@ -106,17 +124,19 @@ export function createUserExtensionPermissionsController(): Router {
             return;
         }
         const restoredServers = !allowsNetwork(before) && allowsNetwork(next) ? await permRepo.restoreLinkedMcpNetwork(row.id) : 0;
+        const releasedServers = restoredServers > 0 ? await releaseLinkedServers(row) : 0;
         await getAuditService().logAudit({
             action: 'extension.permissions_approved',
             userId: actor.userId,
             resourceType: AUDIT_RESOURCE_TYPE,
             resourceId: row.id,
-            details: { ownerId: row.user_id, previousState: row.permission_state, granted: next.granted, restoredServers },
+            details: { ownerId: row.user_id, previousState: row.permission_state, granted: next.granted, restoredServers, releasedServers },
         });
         log.info(`확장 권한 재승인: ${row.id} (${row.permission_state} → ${next.next}, by=${actor.userId}, restored=${restoredServers})`);
         res.json(success({
             permissions: describePermissions(saved),
             restoredServers,
+            releasedServers,
             excludedRemoteServers: permissionExcludedServers(saved.manifest),
         }));
     }));
@@ -137,7 +157,9 @@ export function createUserExtensionPermissionsController(): Router {
             const restricted = allowsNetwork(before)
                 ? { sandboxed: 0, disabled: 0 }
                 : await new UserExtensionPermissionRepository(getPool()).restrictLinkedMcpNetwork(row.id);
-            res.json(success({ permissions: describePermissions(row), restricted }));
+            // 재시도도 떠 있는 연결을 닫는다 — 지난 철회 때 정리가 실패했을 수 있다.
+            const releasedServers = allowsNetwork(before) ? 0 : await releaseLinkedServers(row);
+            res.json(success({ permissions: describePermissions(row), restricted, releasedServers }));
             return;
         }
         const permRepo = new UserExtensionPermissionRepository(getPool());
@@ -154,15 +176,16 @@ export function createUserExtensionPermissionsController(): Router {
         const restricted = allowsNetwork(before) && !allowsNetwork(next)
             ? await permRepo.restrictLinkedMcpNetwork(row.id)
             : { sandboxed: 0, disabled: 0 };
+        const releasedServers = allowsNetwork(before) && !allowsNetwork(next) ? await releaseLinkedServers(row) : 0;
         await getAuditService().logAudit({
             action: 'extension.permissions_revoked',
             userId: actor.userId,
             resourceType: AUDIT_RESOURCE_TYPE,
             resourceId: row.id,
-            details: { ownerId: row.user_id, previousState: row.permission_state, revoked: permissions, state: next.next, granted: next.granted, ...restricted },
+            details: { ownerId: row.user_id, previousState: row.permission_state, revoked: permissions, state: next.next, granted: next.granted, ...restricted, releasedServers },
         });
-        log.info(`확장 권한 철회: ${row.id} (${permissions.join(',')} → ${next.next}, by=${actor.userId}, sandboxed=${restricted.sandboxed}, disabled=${restricted.disabled})`);
-        res.json(success({ permissions: describePermissions(saved), restricted }));
+        log.info(`확장 권한 철회: ${row.id} (${permissions.join(',')} → ${next.next}, by=${actor.userId}, sandboxed=${restricted.sandboxed}, disabled=${restricted.disabled}, released=${releasedServers})`);
+        res.json(success({ permissions: describePermissions(saved), restricted, releasedServers }));
     }));
 
     return router;

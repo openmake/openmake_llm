@@ -1,7 +1,8 @@
 /**
  * 확장 권한 라우트(controllers/user-extension-permissions.controller) — 무DB.
  * 저장소·감사는 mock, auth 는 요청마다 mockUser 를 주입한다.
- * 고정하는 것: 소유자/관리자 조회 범위, 재승인 승인값·네트워크 복원, 철회의 네트워크 제한, 409 경합, 감사 action.
+ * 고정하는 것: 소유자/관리자 조회 범위, 재승인 승인값·네트워크 복원, 철회의 네트워크 제한, 409 경합, 감사 action,
+ * 권한을 고친 뒤 떠 있는 MCP 연결을 닫는 것(releaseServers — 철회가 실행 중인 프로세스에도 곧바로 적용).
  */
 import express, { type Request, type Response, type NextFunction } from 'express';
 import request from 'supertest';
@@ -23,13 +24,17 @@ jest.mock('../data/repositories/user-extension-repository', () => ({
 const mockSaveReview = jest.fn();
 const mockRestore = jest.fn();
 const mockRestrict = jest.fn();
+const mockListLinked = jest.fn();
 jest.mock('../data/repositories/user-extension-permission-repository', () => ({
     UserExtensionPermissionRepository: jest.fn().mockImplementation(() => ({
         saveReviewIfRequestedUnchanged: mockSaveReview,
         restoreLinkedMcpNetwork: mockRestore,
         restrictLinkedMcpNetwork: mockRestrict,
+        listLinkedMcpServerIds: mockListLinked,
     })),
 }));
+const mockReleaseServers = jest.fn();
+jest.mock('../runtime-ports/tool-runtime', () => ({ getToolRuntime: () => ({ releaseServers: mockReleaseServers }) }));
 const mockLogAudit = jest.fn();
 jest.mock('../services/AuditService', () => ({ getAuditService: () => ({ logAudit: mockLogAudit }) }));
 
@@ -72,6 +77,8 @@ beforeEach(() => {
     mockRestore.mockResolvedValue(2);
     mockRestrict.mockResolvedValue({ sandboxed: 1, disabled: 1 });
     mockLogAudit.mockResolvedValue(undefined);
+    mockListLinked.mockResolvedValue(['srv-a', 'srv-b']);
+    mockReleaseServers.mockResolvedValue(1);
 });
 
 describe('GET /:id/permissions', () => {
@@ -110,6 +117,8 @@ describe('POST /:id/permissions/approve', () => {
         }));
         expect(res.body.data.permissions.state).toBe('reviewed');
         expect(res.body.data.restoredServers).toBe(0);
+        expect(mockReleaseServers).not.toHaveBeenCalled();
+        expect(res.body.data.releasedServers).toBe(0);
     });
 
     it('재승인 필요(승인 [] · 요청 [network]) → network 승인, 권한으로 막은 stdio 복원', async () => {
@@ -120,7 +129,9 @@ describe('POST /:id/permissions/approve', () => {
             state: 'reviewed', granted: [NET], reviewedBy: 'u-1', expectedRequested: [NET],
         });
         expect(mockRestore).toHaveBeenCalledWith('ext-1');
-        expect(res.body.data).toMatchObject({ restoredServers: 2, excludedRemoteServers: ['cloud'] });
+        expect(res.body.data).toMatchObject({ restoredServers: 2, releasedServers: 1, excludedRemoteServers: ['cloud'] });
+        // 복원한 stdio 가 --network none 으로 떠 있으면 닫아 다음 사용 때 네트워크를 받고 다시 뜨게 한다
+        expect(mockReleaseServers).toHaveBeenCalledWith('u-1', ['srv-a', 'srv-b']);
         expect(res.body.data.permissions).toMatchObject({ state: 'reviewed', granted: [NET], blocked: [] });
     });
 
@@ -152,6 +163,30 @@ describe('POST /:id/permissions/revoke', () => {
         expect(mockLogAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'extension.permissions_revoked', resourceId: 'ext-1' }));
         expect(res.body.data.restricted).toEqual({ sandboxed: 1, disabled: 1 });
         expect(res.body.data.permissions).toMatchObject({ state: 'review_required', blocked: [NET] });
+        // DB 제한 뒤 그 확장의 떠 있는 MCP 연결을 닫는다 — 서버 소유자 = 확장 소유자
+        expect(mockListLinked).toHaveBeenCalledWith('ext-1');
+        expect(mockReleaseServers).toHaveBeenCalledWith('u-1', ['srv-a', 'srv-b']);
+        expect(mockRestrict.mock.invocationCallOrder[0]).toBeLessThan(mockReleaseServers.mock.invocationCallOrder[0]);
+        expect(res.body.data.releasedServers).toBe(1);
+        expect(mockLogAudit).toHaveBeenCalledWith(expect.objectContaining({ details: expect.objectContaining({ releasedServers: 1 }) }));
+    });
+
+    it('연결 정리가 실패해도 철회는 유지된다(200, releasedServers 0)', async () => {
+        currentRow = makeRow({ permission_state: 'reviewed', permissions_granted: [NET], permissions_requested: [NET] });
+        mockReleaseServers.mockRejectedValueOnce(new Error('supervisor down'));
+        const res = await request(app()).post(`${BASE}/revoke`).send({ permissions: [NET] });
+        expect(res.status).toBe(200);
+        expect(mockSaveReview).toHaveBeenCalled();
+        expect(res.body.data.releasedServers).toBe(0);
+    });
+
+    it('연결된 MCP 서버가 없으면 런타임을 부르지 않는다', async () => {
+        currentRow = makeRow({ permission_state: 'reviewed', permissions_granted: [NET], permissions_requested: [NET] });
+        mockListLinked.mockResolvedValueOnce([]);
+        const res = await request(app()).post(`${BASE}/revoke`).send({ permissions: [NET] });
+        expect(res.status).toBe(200);
+        expect(mockReleaseServers).not.toHaveBeenCalled();
+        expect(res.body.data.releasedServers).toBe(0);
     });
 
     it('레거시에서 network 철회도 MCP 서버를 막는다(레거시는 열려 있었다)', async () => {
@@ -174,7 +209,9 @@ describe('POST /:id/permissions/revoke', () => {
         expect(res.body.data).toEqual({
             permissions: { state: 'reviewed', granted: [NET], requested: [NET], blocked: [], reviewedAt: '2026-10-01T00:00:00.000Z' },
             restricted: { sandboxed: 0, disabled: 0 },
+            releasedServers: 0,
         });
+        expect(mockReleaseServers).not.toHaveBeenCalled();
     });
 
     it('이미 network 가 철회된 상태에서 다시 철회(no-op)하면 MCP 제한을 한 번 더 건다 — 지난 제한 실패의 재시도', async () => {
@@ -185,6 +222,8 @@ describe('POST /:id/permissions/revoke', () => {
         expect(mockLogAudit).not.toHaveBeenCalled();
         expect(mockRestrict).toHaveBeenCalledWith('ext-1');
         expect(res.body.data.restricted).toEqual({ sandboxed: 1, disabled: 1 });
+        // 재시도도 떠 있는 연결을 닫는다 — 지난 철회 때 정리가 실패했을 수 있다
+        expect(mockReleaseServers).toHaveBeenCalledWith('u-1', ['srv-a', 'srv-b']);
     });
 
     it('어휘 밖 권한·빈 목록은 400, 저장하지 않는다', async () => {
@@ -198,5 +237,6 @@ describe('POST /:id/permissions/revoke', () => {
         mockSaveReview.mockResolvedValueOnce(null);
         expect((await request(app()).post(`${BASE}/revoke`).send({ permissions: [NET] })).status).toBe(409);
         expect(mockRestrict).not.toHaveBeenCalled();
+        expect(mockReleaseServers).not.toHaveBeenCalled();
     });
 });

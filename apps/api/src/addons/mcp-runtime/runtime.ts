@@ -106,6 +106,32 @@ export const mcpToolRuntime: ToolRuntime = {
         await withSupervisor('releaseUserToolsForTask', sv => sv.onTaskEnd(userId, taskId));
     },
 
+    /**
+     * 설정이 바뀐 서버의 떠 있는 연결을 닫는다(확장 권한 철회 등) — env 변경 경로(mcp.routes)와 같은 정리.
+     * 사용자 풀은 다음 ensureUserServers 가 새 설정으로 다시 띄우고, 전역 registry 는 수동 [연결] 로 돌아온다.
+     * 한 서버 정리 실패는 경고만 남기고 나머지를 계속 닫는다.
+     */
+    async releaseServers(userId: string, serverIds: readonly string[]): Promise<number> {
+        const sv = getLifecycleSupervisor();
+        const registry = getUnifiedMCPClient().getServerRegistry();
+        let closed = 0;
+        for (const id of serverIds) {
+            try {
+                if (sv?.getUserClient(userId, id)) {
+                    await sv.killUserServer(userId, id);
+                    closed++;
+                }
+                if (registry.getClient(id)) {
+                    await registry.disconnectServer(id);
+                    closed++;
+                }
+            } catch (e) {
+                logger.warn(`releaseServers: ${id} 정리 실패`, e);
+            }
+        }
+        return closed;
+    },
+
     /** listen 완료 후 1회 — 사용자 MCP 풀 supervisor 기동(멱등). */
     async onServerReady(): Promise<void> {
         const { startMcpLifecycleSupervisor } = await import('./runtime-boot');
