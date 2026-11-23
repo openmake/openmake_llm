@@ -18,6 +18,7 @@ import { rowToSkill } from './skill-row-mapper';
 import { buildDraftQuery } from './skill-draft-query';
 import { baseDataPort } from '../../../runtime-ports/base-data-port';
 import { SkillAssignmentRepository } from './skill-assignment-repository';
+import { SkillRevisionRepository, isRevisableChange } from './skill-revision-repository';
 import type {
     ActorContext,
     AgentSkill,
@@ -121,6 +122,12 @@ export class SkillRepository extends BaseRepository {
         // skill_manifests.prompt_md 가 전 사용자 프롬프트 주입 SoT 라 시스템 스킬 본문 변경은 admin 한정
         if (actor) {
             assertSkillMutationAllowed(existing.createdBy, actor);
+        }
+
+        // 덮어쓰기 전 내용을 이력으로 남긴다(이전 버전 복원용, 203). 기록 실패는 수정을 막지 않는다.
+        if (isRevisableChange(existing, input)) {
+            await new SkillRevisionRepository(this.pool).snapshot(existing, actor?.userId ?? null)
+                .catch((e) => logger.warn(`스킬 ${id} 수정 이력 기록 실패(수정은 계속): ${e instanceof Error ? e.message : String(e)}`));
         }
 
         const now = new Date();

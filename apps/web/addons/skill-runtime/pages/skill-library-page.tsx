@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient, csrfHeaders } from "@/lib/api-client";
 import { CATEGORY_KEYS, type Translate } from "@/lib/skill-categories";
+import { SkillRevisionsPanel } from "../components/skill-revisions-panel";
 
 /* ── 카테고리 라벨 (id → i18n 키) ──────────────────────────── */
 
@@ -811,7 +812,10 @@ export function SkillLibraryPage() {
 
       <Modal open={!!editingSkill} onClose={() => setEditingSkill(null)} title={t("modal.edit")}>
         {editingSkill && (
-          <SkillForm initial={editingSkill} onClose={() => setEditingSkill(null)} onSaved={afterSave} />
+          <>
+            <SkillForm initial={editingSkill} onClose={() => setEditingSkill(null)} onSaved={afterSave} />
+            <SkillRevisionsPanel skillId={editingSkill.id} onRestored={afterSave} />
+          </>
         )}
       </Modal>
 

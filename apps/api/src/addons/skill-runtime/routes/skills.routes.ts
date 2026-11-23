@@ -22,7 +22,7 @@
 
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../../../utils/logger';
-import { success, notFound, unauthorized } from '../../../utils/api-response';
+import { success, notFound, unauthorized, forbidden } from '../../../utils/api-response';
 import { asyncHandler } from '../../../utils/error-handler';
 import { getSkillManager } from '../skill-manager';
 import { createHash } from 'crypto';
@@ -35,6 +35,7 @@ import { getToolRuntime } from '../../../runtime-ports/tool-runtime';
 import { requireAuth } from '../../../auth';
 import { assertResourceOwnerOrAdmin } from '../../../auth/ownership';
 import { exportSkill } from './skills-export';
+import { listSkillRevisions, restoreSkillRevision } from '../skill-revisions';
 import { validate, validateQuery, validateWithSecurity } from '../../../middlewares/validation';
 import {
     createSkillSchema,
@@ -465,71 +466,53 @@ router.post('/:skillId/rewrite-proposal', requireAuth, asyncHandler(async (req: 
 }));
 
 /**
- * PUT /api/agents/skills/:skillId
- * 스킬 수정 (소유권 검증 포함)
+ * 수정 계열 라우트 공통 — 스킬을 찾고 소유권을 본다. 응답을 이미 보냈으면 null.
+ * 사용자 스킬은 소유자·관리자만. 시스템 스킬(createdBy=null)의 수정·삭제는 repo 계층이 관리자로 한정하고
+ * (assertSkillMutationAllowed), 읽기 전용 라우트는 adminForSystem 으로 여기서 막는다.
  */
+async function loadEditableSkill(req: Request, res: Response, opts: { adminForSystem?: boolean } = {}) {
+    const userId = String(req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
+    const role = req.user?.role || 'user';
+    const skill = await getSkillManager().getSkillById(req.params.skillId as string);
+    if (!skill) { res.status(404).json(notFound('스킬')); return null; }
+    if (skill.createdBy) assertResourceOwnerOrAdmin(String(skill.createdBy), userId, role);
+    else if (opts.adminForSystem && !isAdminRole(role)) { res.status(403).json(forbidden('시스템 스킬은 관리자만 볼 수 있습니다')); return null; }
+    return { skill, actor: { userId, userRole: role } };
+}
+
+/** PUT /api/agents/skills/:skillId — 스킬 수정 (소유권 검증, 수정 직전 내용은 이력으로 남는다) */
 router.put('/:skillId', requireAuth, validateWithSecurity(updateSkillSchema, { preserveFormattingFields: ['content'] }), asyncHandler(async (req: Request, res: Response) => {
-    const { skillId } = req.params;
-    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
-
-    // 소유권 검증
-    const skill = await getSkillManager().getSkillById(skillId);
-    if (!skill) {
-        res.status(404).json(notFound('스킬'));
-        return;
-    }
-    // 사용자 스킬은 소유자만 — 시스템 스킬(createdBy=null)은 repo 계층에서 관리자 한정 (assertSkillMutationAllowed)
-    if (skill.createdBy) {
-        assertResourceOwnerOrAdmin(
-            String(skill.createdBy),
-            String(userId),
-            req.user?.role || 'user'
-        );
-    }
-
+    const ctx = await loadEditableSkill(req, res);
+    if (!ctx) return;
     const { name, description, content, category, isPublic } = req.body;
-    const actor = { userId: String(userId), userRole: req.user?.role || 'user' };
-    const updated = await getSkillManager().updateSkill(skillId, {
-        name, description, content, category, isPublic,
-    }, actor);
-
-    if (!updated) {
-        res.status(404).json(notFound('스킬'));
-        return;
-    }
+    const updated = await getSkillManager().updateSkill(ctx.skill.id, { name, description, content, category, isPublic }, ctx.actor);
+    if (!updated) { res.status(404).json(notFound('스킬')); return; }
     res.json(success(updated));
 }));
 
-/**
- * DELETE /api/agents/skills/:skillId
- * 스킬 삭제 (소유권 검증 포함)
- */
+/** DELETE /api/agents/skills/:skillId — 스킬 삭제 (소유권 검증) */
 router.delete('/:skillId', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-    const { skillId } = req.params;
-    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
-
-    // 소유권 검증
-    const skill = await getSkillManager().getSkillById(skillId);
-    if (!skill) {
-        res.status(404).json(notFound('스킬'));
-        return;
-    }
-    // 사용자 스킬은 소유자만 — 시스템 스킬(createdBy=null)은 repo 계층에서 관리자 한정 (assertSkillMutationAllowed)
-    if (skill.createdBy) {
-        assertResourceOwnerOrAdmin(
-            String(skill.createdBy),
-            String(userId),
-            req.user?.role || 'user'
-        );
-    }
-
-    const actor = { userId: String(userId), userRole: req.user?.role || 'user' };
-    const deleted = await getSkillManager().deleteSkill(skillId, actor);
-    if (!deleted) {
-        res.status(404).json(notFound('스킬'));
-        return;
-    }
+    const ctx = await loadEditableSkill(req, res);
+    if (!ctx) return;
+    const deleted = await getSkillManager().deleteSkill(ctx.skill.id, ctx.actor);
+    if (!deleted) { res.status(404).json(notFound('스킬')); return; }
     res.json(success({ deleted: true }));
+}));
+
+/** GET /api/agents/skills/:skillId/revisions — 이전 버전 목록(최신순, 수정 직전 내용) */
+router.get('/:skillId/revisions', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const ctx = await loadEditableSkill(req, res, { adminForSystem: true });
+    if (!ctx) return;
+    res.json(success({ revisions: await listSkillRevisions(ctx.skill.id) }));
+}));
+
+/** POST /api/agents/skills/:skillId/revisions/:revisionId/restore — 그 내용으로 다시 수정(지금 내용은 이력에 남는다) */
+router.post('/:skillId/revisions/:revisionId/restore', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const ctx = await loadEditableSkill(req, res);
+    if (!ctx) return;
+    const restored = await restoreSkillRevision(ctx.skill.id, req.params.revisionId as string, ctx.actor);
+    if (!restored) { res.status(404).json(notFound('이전 버전')); return; }
+    res.json(success(restored));
 }));
 
 // ================================================
