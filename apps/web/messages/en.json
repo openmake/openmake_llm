@@ -907,7 +907,18 @@
         "failed": "Bulk action failed: {error}"
       }
     },
-    "approvalsButton": "Approvals"
+    "approvalsButton": "Approvals",
+    "revisions": {
+      "title": "Previous versions",
+      "loading": "Loading…",
+      "empty": "No previous versions yet. Each edit keeps the content it replaced here.",
+      "loadFailed": "Could not load previous versions.",
+      "savedAt": "Content as of {date}",
+      "restore": "Restore",
+      "confirmRestore": "Restore the content as of {date}? The current content will be kept as a previous version.",
+      "restoreFailed": "Could not restore: {error}",
+      "note": "Each edit keeps the content it replaced (last 30). Restoring never loses the current content."
+    }
   },
   "agentTasks": {
     "loading": "Loading...",
