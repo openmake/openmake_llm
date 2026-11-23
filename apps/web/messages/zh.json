@@ -1431,7 +1431,27 @@
     "deleteConfirm": "确定删除此 MCP 服务器注册吗？",
     "deleteHint": "此操作不可撤销。已保存的凭据（env）会一并删除，正在运行的实例将被终止。如需再次使用，请从目录重新安装。",
     "deleteDone": "已删除服务器“{name}”。",
-    "deleteError": "删除失败"
+    "deleteError": "删除失败",
+    "exposure": {
+      "label": {
+        "auto": "自动提供给模型",
+        "on_mention": "提及时提供给模型",
+        "on_demand": "仅通过 mcp_call 使用",
+        "none": "未提供给模型"
+      },
+      "hint": {
+        "auto": "即使未提及该服务器，每轮也会将部分工具提供给模型。",
+        "on_mention": "消息中提及该服务器名称时，工具会提供给模型。",
+        "on_demand": "工具不会直接提供，模型通过 mcp_list_tools / mcp_call 查找并调用。",
+        "viaMetaTools": "未提及时，模型仍可通过 mcp_call 使用。"
+      },
+      "reason": {
+        "disabled": "该服务器已停用，模型无法使用。",
+        "not_connected": "未连接，模型无法使用。",
+        "no_tools": "已连接但没有工具，模型无法使用。",
+        "meta_tools_off": "全局服务器只能通过 mcp_call 使用，但该功能已关闭。"
+      }
+    }
   },
   "mcpCatalog": {
     "pageTitle": "MCP 目录",
@@ -2446,7 +2466,7 @@
     "permissions": {
       "title": "权限",
       "badge": {
-        "reviewed": "权限已审核",
+        "reviewed": "权限已批准",
         "legacy": "旧版（未审核）",
         "reviewRequired": "需要重新批准"
       },

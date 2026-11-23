@@ -37,6 +37,7 @@ import { getLifecycleSupervisor } from '../lifecycle-supervisor';
 import { removeSandboxCacheVolume } from '../sandbox-bootstrap';
 import { createLogger } from '../../../utils/logger';
 import { classifyConnectError, parseConnectError } from '../connect-error';
+import { exposureOfServer } from '../model-exposure';
 import { validate, validateWithSecurity } from '../../../middlewares/validation';
 import { mcpToolExecuteSchema, mcpServerCreateSchema, mcpServerEnvUpdateSchema,
     mcpServerEnabledUpdateSchema, mcpServerAutoSpawnUpdateSchema, mcpServerRenameSchema } from '../../../schemas/mcp.schema';
@@ -170,6 +171,7 @@ export const mcpRouter = Router();
               connectionErrorAt: live || isConnected ? null : (persistedErrors.get(server.id)?.at ?? null),
               /** 원격 서버에 OAuth 토큰이 저장돼 있는가 (stdio 는 항상 false) */
               oauthConnected: oauthConnected.has(server.id),
+              modelExposure: exposureOfServer(server, effective), // 연결과 별개 — 모델이 도구를 받는 조건
           };
       });
 
