@@ -74,7 +74,7 @@ export class McpCatalogRepository {
         const result = await this.pool.query<UserMcpServerRow>(
             `SELECT id, user_id, name, transport_type, command, args, env, url,
                     visibility, catalog_template_id, auto_spawn, enabled, sandbox_network, sandbox_bridge_allowed,
-                    created_at::text, updated_at::text
+                    extension_id, created_at::text, updated_at::text
              FROM mcp_servers
              WHERE user_id = $1 OR visibility = 'global'
              ORDER BY (user_id IS NULL) ASC, created_at DESC`,

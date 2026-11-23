@@ -1431,7 +1431,27 @@
     "deleteConfirm": "この MCP サーバーの登録を削除しますか？",
     "deleteHint": "元に戻せません。保存された認証情報（env）も削除され、実行中のインスタンスは停止します。再度使うにはカタログから再インストールが必要です。",
     "deleteDone": "サーバー「{name}」を削除しました。",
-    "deleteError": "削除に失敗しました"
+    "deleteError": "削除に失敗しました",
+    "exposure": {
+      "label": {
+        "auto": "モデルに自動公開",
+        "on_mention": "言及するとモデルに公開",
+        "on_demand": "mcp_call でのみ使用",
+        "none": "モデルに未公開"
+      },
+      "hint": {
+        "auto": "サーバーに言及しなくても、毎ターン一部のツールがモデルに渡されます。",
+        "on_mention": "メッセージでこのサーバー名に言及するとツールがモデルに渡されます。",
+        "on_demand": "ツールは直接渡されず、モデルが mcp_list_tools / mcp_call で探して使います。",
+        "viaMetaTools": "言及しなくてもモデルは mcp_call で使えます。"
+      },
+      "reason": {
+        "disabled": "使用しない設定のため、モデルは使えません。",
+        "not_connected": "接続されていないため、モデルは使えません。",
+        "no_tools": "接続済みですがツールがないため、モデルは使えません。",
+        "meta_tools_off": "グローバルサーバーは mcp_call でのみ使えますが、その機能がオフです。"
+      }
+    }
   },
   "mcpCatalog": {
     "pageTitle": "MCPカタログ",
@@ -2446,7 +2466,7 @@
     "permissions": {
       "title": "権限",
       "badge": {
-        "reviewed": "権限確認済み",
+        "reviewed": "権限承認済み",
         "legacy": "レガシー（未確認）",
         "reviewRequired": "再承認が必要"
       },

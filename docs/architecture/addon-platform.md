@@ -254,7 +254,7 @@ manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기�
 | 상태 | 뜻 | 집행 | 화면 |
 |---|---|---|---|
 | `legacy_unreviewed` | 매니페스트도 승인 기록도 없는 예전 설치(190 이전 행 전부의 기본값) | 없음 — 종전 동작(네트워크 허용) 보존 | "레거시 미검토" + 재승인 |
-| `reviewed` | 승인 기록(`permissions_granted`) 안에서 동작 | 요청 ∩ 승인만 허용 | "권한 검토됨" |
+| `reviewed` | 승인 기록(`permissions_granted`) 안에서 동작 | 요청 ∩ 승인만 허용 | "권한 승인됨" |
 | `review_required` | 업데이트가 승인 범위보다 넓게 요청 | 초과분만 막고 기존 승인 범위는 유지 | "재승인 필요" + 막힌 권한 + 재승인 |
 
 전이:
@@ -268,6 +268,7 @@ manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기�
 - MCP 서버 반영은 **즉시**다. 네트워크를 닫거나(철회·재시도 no-op 포함) 권한 때문에 막았던 stdio 를 되돌리면, DB 를 고친 뒤 그 확장에 연결된 서버의 떠 있는 연결을 닫는다(`ToolRuntime.releaseServers` — 사용자 풀과 전역 registry, 응답·감사 `releasedServers`). 다음 사용 때 새 설정(`sandbox_network`)으로 다시 뜨고, 끈 원격 서버(`enabled=false`)는 다시 뜨지 않는다. 그 순간 진행 중이던 그 서버의 도구 호출은 실패한다. 연결 정리가 실패해도 권한 변경은 유지된다(같은 철회를 다시 보내면 재시도).
 - 확장 **제거**(`DELETE /api/users/me/extensions/:id`, 응답 `releasedServers`)와 **업데이트**(같은 소스 재설치)도 구성요소를 회수(`archiveLinked`)한 뒤 그 MCP 서버의 떠 있는 연결을 닫는다 — 회수된 서버(archived·`enabled=false`)는 다시 뜨지 않는다. 업데이트는 회수가 링크를 끊으므로 구 서버 id 를 회수 전에 받아 둔다. 세 경로 모두 `services/extensions/release-linked-mcp.ts` 를 쓴다.
 - 조회 `GET …/permissions` 와 목록 응답은 상태·승인·요청 권한을 주고, 승인자 id(`permissions_reviewed_by`)는 목록 응답에서 뺀다.
+- 커넥터 화면(MCP 서버 목록)은 연결 상태와 따로 두 배지를 보인다. **권한**: 확장이 설치한 서버(`mcp_servers.extension_id`, 목록 응답 `extension_id`)에 그 확장의 상태 배지(위 표의 "화면" 열). **모델 노출**: 목록 응답 `modelExposure`(`addons/mcp-runtime/model-exposure.ts`) — 연결돼 있어도 모델이 도구를 받는 조건은 따로다. 사용자 서버는 메시지가 서버를 언급할 때(`on_mention`, `CHAT_USER_MCP_BREADTH_SLOTS>0` 이면 매 턴 일부 `auto`), 전역 서버는 `mcp_list_tools`/`mcp_call` 로만(`on_demand`), 사용 안 함·연결 안 됨·도구 0개는 `none`(이유 포함).
 
 롤백:
 - **코드만 이전 버전으로 되돌리면** 새 열은 기본값이 있어 무시되고 승인 기록은 DB 에 남는다. 다시 올리면 그대로 이어진다. 되돌린 기간에 업데이트된 확장은 요청 권한이 갱신되지 않은 채라, 다음 업데이트 때 다시 판정된다.
