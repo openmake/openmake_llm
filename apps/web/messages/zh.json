@@ -544,6 +544,7 @@
     "modelFallbackNotice": "所选模型（{from}）未响应，已由默认模型（{to}）作答。",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "已达使用上限",
+      "EGRESS_INTERNAL_ONLY": "敏感数据，改用内部模型",
       "INSUFFICIENT_CREDIT": "积分不足",
       "MODEL_ACCESS_RESTRICTED": "受提供商政策限制",
       "SUBSCRIPTION_REQUIRED": "需要订阅",

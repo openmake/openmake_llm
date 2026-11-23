@@ -19,6 +19,7 @@
  * @requires ../llm/client - LLM HTTP 클라이언트
  */
 import { createLogger } from '../utils/logger';
+import { allowedWhenInternalOnly } from '../config/egress-policy';
 import { getActiveChatTurnIntegrations } from './chat-service/turn-integrations';
 import { AGENTS, type AgentSelection } from '../agents';
 import { withSpan } from '../observability/otel';
@@ -192,7 +193,12 @@ export class ChatService {
         const finalCombined = selectTurnTools({
             allTools, merged, userMcpAutoOn, message: reqCtx.message, tailWebGround: reqCtx.tailWebGround,
         });
-        return this.applySkillCatalog(finalCombined, allTools, reqCtx);
+        const tools = await this.applySkillCatalog(finalCombined, allTools, reqCtx);
+        // 내부 전용 턴(반출 관문) — 자료를 밖으로 보내는 도구는 노출하지 않는다(실행 게이트는 tool-dispatch 가 따로 막는다).
+        if (!reqCtx.egressInternalOnly) return tools;
+        const kept = tools.filter((t) => allowedWhenInternalOnly(t.function.name));
+        if (kept.length !== tools.length) logger.info(`[Egress] 내부 전용 — 도구 ${tools.length - kept.length}개 제외`);
+        return kept;
     }
 
     /**

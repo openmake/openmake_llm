@@ -544,6 +544,7 @@
     "modelFallbackNotice": "The selected model ({from}) did not respond, so the default model ({to}) answered instead.",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "usage limit reached",
+      "EGRESS_INTERNAL_ONLY": "sensitive data — internal model",
       "INSUFFICIENT_CREDIT": "insufficient credit",
       "MODEL_ACCESS_RESTRICTED": "restricted by provider policy",
       "SUBSCRIPTION_REQUIRED": "subscription required",

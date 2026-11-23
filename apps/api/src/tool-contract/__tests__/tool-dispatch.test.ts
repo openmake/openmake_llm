@@ -98,3 +98,18 @@ describe('dispatchTool — 외부 위임자가 붙은 경우', () => {
         expect(textOf(r)).toContain('외부 도구를 찾을 수 없습니다');
     });
 });
+
+describe('dispatchTool — 반출 관문 실행 게이트(하네스 P0-2)', () => {
+    it('내부 전용 문맥이면 자료를 밖으로 보내는 도구를 실행하지 않는다(서킷에도 세지 않는다)', async () => {
+        const r = await dispatchTool('fake_search', { query: 'x' }, { userId: 'u1', role: 'user', egressInternalOnly: true }, { builtInTools });
+        expect(r.isError).toBe(true);
+        expect(textOf(r)).toContain('내부 전용');
+        expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('내부 전용이 아니면 그대로 실행한다', async () => {
+        const r = await dispatchTool('fake_search', { query: 'x' }, { userId: 'u1', role: 'user', egressInternalOnly: false }, { builtInTools });
+        expect(r.isError).toBeFalsy();
+        expect(handler).toHaveBeenCalledTimes(1);
+    });
+});

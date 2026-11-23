@@ -544,6 +544,7 @@
     "modelFallbackNotice": "선택한 모델({from})이 응답하지 않아 기본 모델({to})로 답변했습니다.",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "사용량 한도 초과",
+      "EGRESS_INTERNAL_ONLY": "민감 자료라 내부 모델로",
       "INSUFFICIENT_CREDIT": "크레딧 부족",
       "MODEL_ACCESS_RESTRICTED": "제공자 정책상 접근 제한",
       "SUBSCRIPTION_REQUIRED": "구독 필요",

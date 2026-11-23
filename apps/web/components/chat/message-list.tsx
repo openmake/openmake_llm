@@ -742,6 +742,7 @@ const FALLBACK_REASON_KEYS = new Set([
   "MISSING_API_KEY",
   "UPSTREAM_ERROR",
   "UPSTREAM_TIMEOUT",
+  "EGRESS_INTERNAL_ONLY",
 ]);
 function fallbackReasonKey(code?: string): string | null {
   return code && FALLBACK_REASON_KEYS.has(code) ? code : null;
