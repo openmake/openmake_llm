@@ -139,6 +139,7 @@ export const benchRuntime: ToolRuntime = {
     async onChatEnd() { /* no-op */ },
     async ensureUserToolsForTask() { /* no-op */ },
     async releaseUserToolsForTask() { /* no-op */ },
+    async releaseServers() { return 0; },
     async onServerReady() { /* no-op */ },
     async shutdown() { /* no-op */ },
 };
