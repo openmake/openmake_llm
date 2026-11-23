@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.146.0](https://github.com/openmake/openmake_llm/compare/v1.145.8...v1.146.0) (2026-11-23)
+
+
+### ✨ 기능
+
+* **mcp:** 커넥터 화면에 "모델에 노출됨"·"권한 승인됨" 상태를 연결 상태와 따로 표시 ([ee2658c](https://github.com/openmake/openmake_llm/commit/ee2658cc4361c5be8ff8a04ad55e4006be90b5c7))
+* **skills:** 스킬 이전 버전 보기·복원 ([154ff79](https://github.com/openmake/openmake_llm/commit/154ff79e208727f6fbd6917ba6bea46165d30277))
+* **skills:** 스킬 자동 선택(load_skill) 효과 측정과 실행 중 플래그 확인 API ([7911271](https://github.com/openmake/openmake_llm/commit/7911271a332ddb9ec6233a14b5c3589658bf433d))
+
 ## [1.145.8](https://github.com/openmake/openmake_llm/compare/v1.145.7...v1.145.8) (2026-11-23)
 
 
