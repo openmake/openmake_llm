@@ -250,6 +250,14 @@ function mapStrings(v: unknown, f: (s: string) => string): unknown {
     return v;
 }
 function fillTmp<T>(v: T, tmp: string): T { return mapStrings(v, (s) => s.split('{{TMP}}').join(tmp)) as T; }
+/**
+ * Node 의 ERR_INVALID_ARG_VALUE 는 문구 끝 `Received <inspect(값)>` 의 inspect 결과가 128자를 넘으면 앞 128자 + `...` 로 자른다
+ * (lib/internal/errors.js). `{{TMP}}` 를 채운 기대 문구에도 같은 규칙을 적용해야 임시 폴더 경로가 긴 환경(격리 검증의 TMPDIR 등)에서도 맞는다.
+ */
+function clipNodeArgValue<T>(v: T): T {
+    return mapStrings(v, (s) => s.replace(/^(The argument '[^']+' [\s\S]*?\. Received )('[\s\S]*'|"[\s\S]*")$/, (_m, head: string, inspected: string) =>
+        head + (inspected.length > 128 ? `${inspected.slice(0, 128)}...` : inspected))) as T;
+}
 function makeTmp(): string { return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'omk-conformance-'))); }
 
 function applySetup(tmp: string, setup: Setup[]): void {
@@ -318,7 +326,7 @@ describe('scope', () => {
             applySetup(tmp, c.setup);
             const input = fillTmp(c.input, tmp);
             const got = await settle(() => safeFromAsync(input.base, input.rel));
-            expect(got).toStrictEqual(fillTmp(c.expect, tmp));
+            expect(got).toStrictEqual(clipNodeArgValue(fillTmp(c.expect, tmp)));
             // 동기 판은 통과·거부와 통과 값만 같아야 한다(거부 문구는 Node 판마다 다를 수 있다).
             const sync = await settle(() => safeFrom(input.base, input.rel));
             expect('abs' in sync ? sync : 'rejected').toStrictEqual('abs' in got ? got : 'rejected');
@@ -363,7 +371,7 @@ describe('file-kinds', () => {
                     view = { ...rest, entriesCount: entries?.length };
                     for (const e of entries ?? []) expect(many).toContain(path.posix.join(c.root, e));
                 }
-                expect({ request: n, result: view }).toStrictEqual({ request: n, result: fillTmp(r.expect, tmp) });
+                expect({ request: n, result: view }).toStrictEqual({ request: n, result: clipNodeArgValue(fillTmp(r.expect, tmp)) });
                 for (const a of r.after ?? []) {
                     if ('absent' in a) { expect({ request: n, absent: a.absent, exists: exists(path.join(tmp, a.absent)) }).toEqual({ request: n, absent: a.absent, exists: false }); continue; }
                     const p = path.join(tmp, a.exists);
