@@ -19,7 +19,7 @@ import { prepareToolArgs } from './tool-args';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
 import { notifyApprovalPending } from './approval-pending';
 
-import { AgentTaskAbort, AgentTaskParked, AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_BROWSER_TAKEOVER_REASON } from './types';
+import { AgentTaskAbort, AgentTaskParked, AgentTaskRecordError, AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_BROWSER_TAKEOVER_REASON } from './types';
 import { isShutdownAbort } from './shutdown-drain';
 import { writeTurnCheckpoint, markToolCallInFlight } from './turn-reentry';
 import { hasSideEffects } from '../../config/tool-policy';
@@ -229,7 +229,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         receiptOpen = false;
         // 부작용 도구는 승인 뒤·실행 직전에 표식을 남긴다 — 재개 때 저널에 없으면 결과 불명(다시 실행하지 않음).
         const beforeExecute = AGENT_TASK_LIMITS.REENTRY_UNKNOWN_OUTCOME_ENABLED && tc.id !== undefined && hasSideEffects(name, args)
-            ? async (): Promise<void> => { inFlightMarked = true; await markToolCallInFlight(taskId, tc.id!); }
+            ? async (): Promise<void> => { inFlightMarked = true; await markToolCallInFlight(taskId, tc.id!, name); }
             : undefined;
         const journaled = tc.id !== undefined ? journal.get(tc.id) : undefined;
         const pre = tc.id !== undefined ? prefetched.get(tc.id) : undefined;
@@ -316,9 +316,10 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                 // 승인 대기가 남긴 paused 만 되돌린다 — 승인 없이 실행하는 호출은 상태를 건드리지 않는다(mcp_elicit 주차 계약).
                 if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
             }
-            if (decision === 'approved') await beforeExecute?.();
+            // 실행 기록(표식·영수증) 저장 실패 — fail-closed 모드에서만 던진다: 실행하지 않고 안내를 결과로 남긴다.
             toolResult = decision === 'approved'
-                ? await execWithReceipt(name, args, tc.id)
+                ? await (async () => { await beforeExecute?.(); return execWithReceipt(name, args, tc.id); })()
+                    .catch((e: unknown) => (e instanceof AgentTaskRecordError ? `Error: ${e.message}` : Promise.reject(e)))
                 : getApprovalRejectedNotice(name, rejectReason, rejectText);
         }
         if (parkRequested) await park(); // mcp_elicit 주차 — 결과(cancel 응답)는 기록하지 않는다

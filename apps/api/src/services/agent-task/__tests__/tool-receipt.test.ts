@@ -9,6 +9,8 @@ jest.mock('../../../data/repositories/agent-task-tool-receipt-repository', () =>
 }));
 
 import { toolIdempotencyKey, needsReceipt, startReceipt, finishReceipt, receiptStatusOf } from '../tool-receipt';
+import { AgentTaskRecordError } from '../types';
+import { AGENT_TASK_LIMITS } from '../../../config/runtime-limits';
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -53,5 +55,16 @@ describe('startReceipt · finishReceipt', () => {
         finishToolReceipt.mockRejectedValueOnce(new Error('db down'));
         await expect(startReceipt('t1', 'c1', 'od::create', {})).resolves.toBe(toolIdempotencyKey('t1', 'c1'));
         await expect(finishReceipt('t1', 'c1', 'failed')).resolves.toBeUndefined();
+    });
+
+    it('fail-closed(RECORD_FAIL_CLOSED)면 시작 저장 실패가 AgentTaskRecordError — 종료 저장 실패는 여전히 던지지 않는다', async () => {
+        const limits = AGENT_TASK_LIMITS as { RECORD_FAIL_CLOSED: boolean };
+        limits.RECORD_FAIL_CLOSED = true;
+        try {
+            startToolReceipt.mockRejectedValueOnce(new Error('db down'));
+            finishToolReceipt.mockRejectedValueOnce(new Error('db down'));
+            await expect(startReceipt('t1', 'c1', 'od::create', {})).rejects.toBeInstanceOf(AgentTaskRecordError);
+            await expect(finishReceipt('t1', 'c1', 'failed')).resolves.toBeUndefined();
+        } finally { limits.RECORD_FAIL_CLOSED = false; }
     });
 });

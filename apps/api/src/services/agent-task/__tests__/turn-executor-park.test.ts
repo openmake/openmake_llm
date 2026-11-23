@@ -96,7 +96,7 @@ describe('executeTurnToolCalls — 주차', () => {
         expect(update).not.toHaveBeenCalledWith({ status: 'running' });
         expect(markParked).toHaveBeenCalledWith('t1');
         // 실행 직전 남긴 표식은 주차 전에 지운다 — 재개 때 결과 불명이 아니라 다시 실행돼야 한다
-        expect(markToolCallInFlight.mock.calls).toEqual([['t1', 'c1'], ['t1', null]]);
+        expect(markToolCallInFlight.mock.calls).toEqual([['t1', 'c1', 'od::create'], ['t1', null]]);
     });
 
     it('승인 필요 extra 도구가 주차되면 실행하지 않고 체크포인트·주차한다', async () => {
@@ -207,7 +207,7 @@ describe('executeTurnToolCalls — 승인 대기 슬롯 양보(호스트 도구)
         await run;
         expect(r.slots.forceReclaimSlot).toHaveBeenCalledTimes(1);
         expect(runTool).toHaveBeenCalledTimes(1);
-        expect(markToolCallInFlight).toHaveBeenCalledWith('t1', 'c1');
+        expect(markToolCallInFlight).toHaveBeenCalledWith('t1', 'c1', 'od::create_item');
     });
 });
 

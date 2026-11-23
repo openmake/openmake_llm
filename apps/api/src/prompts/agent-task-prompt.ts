@@ -459,6 +459,11 @@ export function getAgentTaskUnknownOutcomeNotice(toolName: string): string {
     return `이 도구 호출(${toolName})은 서버 재시작으로 실행 도중 끊겨 결과를 알 수 없습니다. 이미 일부 또는 전부 반영됐을 수 있으니 같은 호출을 바로 반복하지 마세요. 먼저 현재 상태(파일·작업 디렉터리·대상 시스템)를 확인하고, 반영되지 않은 부분만 이어서 수행하세요. 확인할 방법이 없으면 사용자에게 물어보세요(ask_human).`;
 }
 
+/** 실행 기록(실행 중 표식·외부 도구 영수증)을 저장하지 못해 부작용 도구를 실행하지 않았을 때의 안내 — fail-closed 모드. 도구 결과로 쓸 땐 `Error: ` 접두를 붙인다(실패로 집계). */
+export function getAgentTaskRecordFailedNotice(toolName: string): string {
+    return `이 도구 호출(${toolName})은 실행 기록을 저장하지 못해 실행하지 않았습니다(기록 없이 실행하면 재개 때 같은 부작용이 두 번 날 수 있습니다). 아무것도 반영되지 않았습니다. 잠시 뒤 같은 호출을 다시 시도하거나, 계속 실패하면 사용자에게 알리세요.`;
+}
+
 /**
  * 로컬 기기 결과 불명 안내에 들어가는 고정 문장 — 대화에서 "결과 불명으로 끝난 호출"을 찾는 표식으로도 쓴다
  * (tool-loop-guard 의 isRetryAfterUnknownOutcome). 문장을 바꾸면 이전 대화의 표식과 맞지 않게 되니 유의.
