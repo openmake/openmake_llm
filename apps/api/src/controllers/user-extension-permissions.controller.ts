@@ -28,7 +28,7 @@ import { isAdminRole } from '../data/user-manager';
 import { UserExtensionRepository, type UserExtensionRow } from '../data/repositories/user-extension-repository';
 import { UserExtensionPermissionRepository } from '../data/repositories/user-extension-permission-repository';
 import { getAuditService } from '../services/AuditService';
-import { getToolRuntime } from '../runtime-ports/tool-runtime';
+import { releaseLinkedMcpServers } from '../services/extensions/release-linked-mcp';
 import { createLogger } from '../utils/logger';
 import { ADDON_PERMISSION_VALUES } from '../config/addon-permissions';
 import {
@@ -70,19 +70,9 @@ async function loadRow(req: Request, res: Response): Promise<{ row: UserExtensio
     return { row, actor };
 }
 
-/**
- * 확장에 연결된 MCP 서버의 떠 있는 연결을 닫는다 — DB 의 권한 제한을 실행 중인 프로세스에도 곧바로 적용한다.
- * 실패해도 권한 변경은 유지한다(응답·감사에 닫은 수만 남긴다). 서버 소유자 = 확장 소유자(설치 때 createdBy).
- */
-async function releaseLinkedServers(row: UserExtensionRow): Promise<number> {
-    try {
-        const linked = await new UserExtensionPermissionRepository(getPool()).listLinkedMcpServerIds(row.id);
-        if (linked.length === 0) return 0;
-        return await getToolRuntime().releaseServers(String(row.user_id), linked);
-    } catch (e) {
-        log.warn(`확장 ${row.id} 의 MCP 연결 정리 실패(권한 변경은 유지)`, e);
-        return 0;
-    }
+/** 권한을 고친 뒤 그 확장의 떠 있는 MCP 연결을 닫는다 — 실패해도 권한 변경은 유지(release-linked-mcp) */
+function releaseLinkedServers(row: UserExtensionRow): Promise<number> {
+    return releaseLinkedMcpServers(getPool(), row.id, String(row.user_id));
 }
 
 /** 저장된 상태 그대로의 판정 — 승인·철회 전후 네트워크 개방을 비교한다 */
