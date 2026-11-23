@@ -3,7 +3,7 @@ import { parseDegradeMap, resolveDegradeTarget } from '../quota-degrade-policy';
 describe('quota-degrade-policy', () => {
     const map = parseDegradeMap('{"local-llm:qwen*":"openrouter:free/a","local-llm:*":"openrouter:free/b","x:*":""}');
     test('선언 순 첫 글롭이 이긴다', () => {
-        expect(resolveDegradeTarget('local-llm:retired-chat-model', map)).toBe('openrouter:free/a');
+        expect(resolveDegradeTarget('local-llm:qwen3.8-flash-next', map)).toBe('openrouter:free/a');
         expect(resolveDegradeTarget('local-llm:other', map)).toBe('openrouter:free/b');
     });
     test('매칭 없음·빈 값·자기 참조는 null', () => {

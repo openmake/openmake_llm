@@ -104,12 +104,12 @@ function envDefault(name: string, fallback?: string): string | undefined {
     return v === '' || v.toLowerCase() === 'none' ? undefined : v;
 }
 export const CAPABILITY_DEFAULTS: Partial<Record<Capability, string>> = {
-    'text.reason': envDefault('CAPABILITY_DEFAULT_TEXT_REASON', 'local-llm:retired-chat-model'),
-    'text.code': envDefault('CAPABILITY_DEFAULT_TEXT_CODE', 'local-llm:retired-chat-model'),
+    'text.reason': envDefault('CAPABILITY_DEFAULT_TEXT_REASON', 'local-llm:qwen3.8-flash-next'),
+    'text.code': envDefault('CAPABILITY_DEFAULT_TEXT_CODE', 'local-llm:qwen3.8-flash-next'),
     // text.embed 는 코드·env 기본값이 없다(2026-11-10) — 개인 → 전역 배정만 쓰고, 둘 다 없으면 미배정(명시 실패).
     // 종전 CAPABILITY_DEFAULT_TEXT_EMBED 는 읽지 않는다(폐기).
-    'vision.describe': envDefault('CAPABILITY_DEFAULT_VISION_DESCRIBE', 'local-llm:retired-chat-model'),
-    'vision.ocr': envDefault('CAPABILITY_DEFAULT_VISION_OCR', 'local-llm:retired-chat-model'),
+    'vision.describe': envDefault('CAPABILITY_DEFAULT_VISION_DESCRIBE', 'local-llm:qwen3.8-flash-next'),
+    'vision.ocr': envDefault('CAPABILITY_DEFAULT_VISION_OCR', 'local-llm:qwen3.8-flash-next'),
     // image.generate 는 코드 기본값 없음(2026-09-18) — 종전 로컬 기본값이 비상업 라이선스(최종 사용자와의 직접
     // 상호작용 금지)라 제거했다. 쓰려면 라이선스를 확인한 뒤 env 나 model_assignments 로 명시 배정한다.
     'image.generate': envDefault('CAPABILITY_DEFAULT_IMAGE_GENERATE'),

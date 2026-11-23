@@ -15,7 +15,7 @@ const tool: ToolDefinition = { type: 'function', function: { name: 't', descript
 
 describe('모델 프로필 해석', () => {
     it('필드마다 그 필드를 가진 가장 긴 접두어가 이긴다', () => {
-        const p = resolveModelProfile('retired-chat-model');
+        const p = resolveModelProfile('qwen3.8-flash-next');
         expect(p.capabilities?.vision).toBe(true);
         expect(p.reasoningEfforts).toEqual(['low', 'medium', 'xhigh']);
         // 같은 계열의 다른 모델은 강도만 물려받고 능력은 미상으로 남는다(프로브·FALLBACK 으로 해석)
@@ -38,10 +38,10 @@ describe('모델 프로필 해석', () => {
     });
 
     it('종전 해석기의 결과가 그대로다', () => {
-        expect(matchCapabilityPreset('retired-chat-model')?.toolCalling).toBe(true);
+        expect(matchCapabilityPreset('qwen3.8-flash-next')?.toolCalling).toBe(true);
         expect(matchCapabilityPreset('qwen3.6-anything')?.vision).toBe(false);
         expect(matchCapabilityPreset('unknown-model')).toBeNull();
-        expect(normalizeEffort('retired-chat-model', 'high')).toBe('xhigh');
+        expect(normalizeEffort('qwen3.8-flash-next', 'high')).toBe('xhigh');
         expect(normalizeEffort('glm-5.3', 'medium', 'bai')).toBe('high');
     });
 });
@@ -69,13 +69,13 @@ describe('프로필만으로 모델을 도입한다 (코드 수정 없음)', () 
         expect(opts?.top_p).toBe(0.9);
         expect(opts?.presence_penalty).toBeDefined(); // 적지 않은 값은 전역 프리셋
         expect(applyLocalToolStrict([tool], { modelId: 'newmodel-9b' })?.[0].function.strict).toBeUndefined();
-        expect(applyLocalToolStrict([tool], { modelId: 'retired-chat-model' })?.[0].function.strict).toBe(true);
+        expect(applyLocalToolStrict([tool], { modelId: 'qwen3.8-flash-next' })?.[0].function.strict).toBe(true);
     });
 
     it('env 는 기본 항목을 지우지 못하고, 형식이 틀린 필드만 버린다', () => {
-        process.env.LLM_MODEL_PROFILES_JSON = JSON.stringify({ 'retired-chat-model': { reasoningEfforts: ['bogus'], maxPromptImages: 4 } });
+        process.env.LLM_MODEL_PROFILES_JSON = JSON.stringify({ 'qwen3.8-flash-next': { reasoningEfforts: ['bogus'], maxPromptImages: 4 } });
         resetModelProfileCache();
-        const p = resolveModelProfile('retired-chat-model');
+        const p = resolveModelProfile('qwen3.8-flash-next');
         expect(p.reasoningEfforts).toEqual(['low', 'medium', 'xhigh']);
         expect(p.maxPromptImages).toBe(4);
         expect(resolveModelProfile('glm-5.3', 'bai').reasoningEfforts).toEqual(['low', 'high']);
@@ -89,7 +89,7 @@ describe('프로필만으로 모델을 도입한다 (코드 수정 없음)', () 
 
     it('비상업 라이선스 모델은 기본 차단, 평가용 배포만 env 로 연다', () => {
         expect(licenseBlockReason('newmodel-9b')).toContain('CC-BY-NC-4.0');
-        expect(licenseBlockReason('retired-chat-model')).toBeNull();
+        expect(licenseBlockReason('qwen3.8-flash-next')).toBeNull();
         expect(licenseBlockReason('unknown-model')).toBeNull();
         process.env.MODEL_NONCOMMERCIAL_ALLOWED = 'true';
         expect(licenseBlockReason('newmodel-9b')).toBeNull();

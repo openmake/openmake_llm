@@ -6,7 +6,7 @@
  * 이제 그 값은 여기 한 항목이고, 위 모듈들은 이 테이블을 읽는 해석기다(함수 시그니처·동작은 그대로).
  * **새 모델 도입 = 항목 추가**(또는 배포 없이 env `LLM_MODEL_PROFILES_JSON`) → `eval:matrix` 통과 → 전환.
  *
- * 키 규칙은 종전과 같다 — 소문자 접두어 startsWith-longest. 로컬 모델은 bare 키(`retired-chat-model`),
+ * 키 규칙은 종전과 같다 — 소문자 접두어 startsWith-longest. 로컬 모델은 bare 키(`qwen3.8-flash-next`),
  * 외부 모델은 provider 한정 키(`bai:glm-5.3`)이고 서로 새어 나가지 않는다(로컬 `qwen3.8` 의 xhigh 가
  * 외부의 같은 이름 모델에 나가던 선례). 외부 모델 항목에는 **실측한 값만** 적는다 — 휴리스틱 금지.
  * 적지 않은 필드는 전역 기본값(env)을 따른다.
@@ -61,12 +61,10 @@ export interface ModelProfile {
 
 /**
  * 기본 프로필. 값의 근거·실측 이력:
- *  - retired-chat-model: vLLM `--reasoning-parser qwen3 --tool-call-parser qwen3_coder --limit-mm-per-prompt image=8`,
- *    thinking·toolCalling·vision 라이브 실측(2026-09-02). reasoning_effort `high` 는 400 — xhigh/medium/low 만.
- *  - qwen3.8-flash-next: DGX 전환 모델(vLLM served 이름, 옛 이름 retired-chat-model 와 같은 가중치). `npm run eval:probe` 실측(2026-10-30):
+ *  - qwen3.8-flash-next: DGX 채팅 모델(vLLM served 이름). `npm run eval:probe` 실측(2026-10-30):
  *    toolCalling·thinking·vision 가능, reasoning_effort `high` 는 400. 이미지 상한·라이선스는 재지 않아 적지 않는다(전역 기본값).
  *  - qwen3.6-35b-a3b: 구 기본 모델. low~xhigh 모두 200(2026-08-23).
- *  - gpt-3.5-turbo: LiteLLM 의 OpenAI 호환 alias → retired-chat-model. 능력은 라우팅 대상과 같게 둔다
+ *  - gpt-3.5-turbo: LiteLLM 의 OpenAI 호환 alias → qwen3.8-flash-next. 능력은 라우팅 대상과 같게 둔다
  *    (vision:false 면 실제 모델은 받는 이미지 요청을 앱이 400 으로 거절한다, 2026-09-03 정정).
  *  - hasa:* (2026-09-20, `npm run eval:probe` 실측): qwen2.5-vl-72b 는 도구 호출·비전 가능, 추론 필드 없음(종전 카탈로그의
  *    toolCalling:false 는 낡은 값). gpt-oss 는 low/medium/high 만 받고 xhigh 를 400 으로 거절.
@@ -88,12 +86,6 @@ const DEFAULT_MODEL_PROFILES: Readonly<Record<string, ModelProfile>> = {
     },
     'qwen3.8': {
         reasoningEfforts: ['low', 'medium', 'xhigh'],
-    },
-    'retired-chat-model': {
-        capabilities: { toolCalling: true, thinking: true, vision: true, streaming: true },
-        reasoningEfforts: ['low', 'medium', 'xhigh'],
-        maxPromptImages: 8,
-        license: { id: 'Apache-2.0', commercialUse: true },
     },
     'qwen3.8-flash-next': {
         capabilities: { toolCalling: true, thinking: true, vision: true, streaming: true },
@@ -209,7 +201,7 @@ export function resetModelProfileCache(): void {
 
 /**
  * 모델 id 에 걸리는 프로필을 **필드별로** 해석한다 — 필드마다 그 필드를 가진 가장 긴 접두어 항목이 이긴다.
- * (`qwen3.8` 이 강도만, `retired-chat-model` 가 능력까지 적어도 둘이 자연스럽게 겹친다.)
+ * (`qwen3.8` 이 강도만, `qwen3.8-flash-next` 가 능력까지 적어도 둘이 자연스럽게 겹친다.)
  * `providerId` 가 로컬이 아니면 provider 한정 키만, 로컬이면 bare 키만 본다.
  */
 export function resolveModelProfile(modelId: string | undefined, providerId?: string): ModelProfile {

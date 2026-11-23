@@ -65,7 +65,7 @@ export async function runPackEvaluation(params: {
 
 async function main(): Promise<void> {
     if (!process.argv.includes('--real')) {
-        console.error('eval:packs 는 실모델 전용입니다 — --real 을 명시하세요 (예: -- --real --models retired-chat-model)');
+        console.error('eval:packs 는 실모델 전용입니다 — --real 을 명시하세요 (예: -- --real --models qwen3.8-flash-next)');
         process.exit(1);
     }
     const models = parseListArg(argValue('--models'), [process.env.LLM_DEFAULT_MODEL ?? 'default']);

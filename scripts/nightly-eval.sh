@@ -85,11 +85,11 @@ fi
 run_step "eval:tools-real"     npm --workspace apps/api run eval:tools -- --real --limit 40
 run_step "eval:redteam-real"   npm --workspace apps/api run eval:redteam -- --real --limit 12
 # 팩 검증 — 켜진 add-on 이 동봉한 response 케이스를 기본 모델로. 관리 화면 "검증된 모델" 이 이 기록을 읽는다(팩 케이스가 없으면 no-op)
-run_step "eval:packs"          npm --workspace apps/api run eval:packs -- --real --models "${NIGHTLY_EVAL_PACK_MODELS:-retired-chat-model}"
+run_step "eval:packs"          npm --workspace apps/api run eval:packs -- --real --models "${NIGHTLY_EVAL_PACK_MODELS:-qwen3.8-flash-next}"
 # 모델 × 프롬프트 매트릭스(선택) — 호출 수 = 모델 × variant × 케이스라 기본 꺼짐
 if [ "${NIGHTLY_EVAL_MATRIX:-0}" = "1" ]; then
     run_step "eval:matrix" npm --workspace apps/api run eval:matrix -- --real \
-        --models "${NIGHTLY_EVAL_MATRIX_MODELS:-retired-chat-model}" --variants "${NIGHTLY_EVAL_MATRIX_VARIANTS:-base,concise}" --limit "${NIGHTLY_EVAL_MATRIX_LIMIT:-10}"
+        --models "${NIGHTLY_EVAL_MATRIX_MODELS:-qwen3.8-flash-next}" --variants "${NIGHTLY_EVAL_MATRIX_VARIANTS:-base,concise}" --limit "${NIGHTLY_EVAL_MATRIX_LIMIT:-10}"
 fi
 # 에이전트 작업 과제 묶음(선택) — 과제마다 작업을 실제로 실행하므로(8건 약 4분) 기본 꺼짐. 샌드박스가 있는 호스트에서만 켠다.
 if [ "${NIGHTLY_EVAL_AGENT_TASKS:-0}" = "1" ]; then

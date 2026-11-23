@@ -102,11 +102,8 @@ GW="$TMP/gw"; mkdir -p "$GW"; CFG="$GW/litellm.config.yaml"
 # 레포형(옛 이름 upstream) — DGX 항목의 주소·키를 literal 로(주석 유지). jev-decision 은 같은 :8002 어댑터.
 REPO_CFG="$TMP/repo-form.yaml"
 sed -e "s#os.environ/QWEN_VLLM_API_BASE#$VBASE#" -e "s#os.environ/VLLM_API_KEY#$VKEY#" "$ROOT/scripts/vllm/litellm.config.yaml" > "$REPO_CFG"
-# 운영 현재 상태 — 정식 항목 qwen3.8-flash-next + retired-chat-model·gpt-3.5-turbo 가 이미 openai/qwen3.8-flash-next
-OPS_CFG="$TMP/ops-form.yaml"
-awk -v b="$VBASE" -v k="$VKEY" '{ sub(/model: openai\/qwen3\.8-27b$/, "model: openai/qwen3.8-flash-next"); print }
-    /^model_list:/ { print "  - model_name: qwen3.8-flash-next"; print "    litellm_params:"; print "      model: openai/qwen3.8-flash-next"
-                     print "      api_base: " b; print "      api_key: " k; print "" }' "$REPO_CFG" > "$OPS_CFG"
+# 운영 현재 상태 — 레포 config 의 DGX 항목이 곧 qwen3.8-flash-next 다(옛 qwen3.8-27b 배정은 지웠다). 덧붙일 항목이 없다.
+OPS_CFG="$REPO_CFG"
 
 LOG="$TMP/calls.log"; OUT="$TMP/out.log"; ALL="$TMP/all-out.log"; : > "$ALL"
 PM2H="$TMP/pm2home"; mkdir -p "$PM2H"
@@ -131,145 +128,145 @@ calls() { tr '\n' ';' < "$LOG"; }
 n_of() { grep -c -- "$1" "$LOG" | tr -d ' '; }
 
 # ── 1. opt-in 키 없음 → 아무것도 하지 않는다 ──
-setup "$REPO_CFG"; printf 'LLM_DEFAULT_MODEL=retired-chat-model\n' > "$APP/.env"; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
-eq "키 없음: 배포 성공" "$(FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+setup "$REPO_CFG"; printf 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n' > "$APP/.env"; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
+eq "키 없음: 배포 성공" "$(FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 eq "키 없음: curl 미호출" "$(n_of '^curl')" "0"
 eq "키 없음: config·.env 그대로" "$(sum "$CFG")|$(sum "$APP/.env")" "$S_CFG|$S_ENV"
 ok "키 없음: DGX 로그 없음" '! grep -qE "DGX|게이트웨이" "$OUT"'
 
-# ── 2. 운영 현재 상태(새 이름 항목·호환 라우트가 이미 새 이름, 앱도 새 이름, 무기록) → 기록 키 2개만 ──
+# ── 2. 운영 현재 상태(레포 config 그대로, 앱·served 모두 레포 기본 이름, 무기록) → 기록할 것도 바꿀 것도 없다 ──
 setup "$OPS_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n'; S_CFG="$(sum "$CFG")"
-eq "운영 상태: 배포 성공" "$(FAKE_VLLM='retired-chat-model qwen3.8-flash-next jev-decision@qwen3.8-flash-next' run)" "0"
+eq "운영 상태: 배포 성공" "$(FAKE_VLLM='qwen3.8-flash-next jev-decision@qwen3.8-flash-next' run)" "0"
 eq "운영 상태: config 그대로·백업 없음" "$(sum "$CFG")|$(baks)" "$S_CFG|0"
 eq "운영 상태: 게이트웨이 재시작 없음" "$(n_of '^pm2 restart')" "0"
-eq "운영 상태: 기록 키 2개, 앱 기본 모델 그대로" "$(envv OMK_DGX_MODEL)|$(envv OMK_DGX_MODEL_PINNED)|$(envv LLM_DEFAULT_MODEL)" "qwen3.8-flash-next|0|qwen3.8-flash-next"
-ok "운영 상태: 이미 맞춰져 있다고 알린다" 'grep -q "이미 qwen3.8-flash-next 로 맞춰져 있습니다" "$OUT"'
+eq "운영 상태: 기록 키 없음, 앱 기본 모델 그대로" "$(envv OMK_DGX_MODEL)|$(envv OMK_DGX_MODEL_PINNED)|$(envv LLM_DEFAULT_MODEL)" "||qwen3.8-flash-next"
+ok "운영 상태: 맞춤 예정 없음" '! grep -q "DGX 모델 이름 맞춤 예정" "$OUT"'
 eq "운영 상태: 모델을 바꾸지 않았으니 pm2 save 없음" "$(n_of '^pm2 save')" "0"
 ok "운영 상태: jev-decision 항목 그대로" 'grep -qxF "      model: openai/jev-decision" "$CFG"'
 
 # ── 3. 전환(레포형 config·앱 옛 이름·served {옛, 새}) ──
-setup "$REPO_CFG" 'LLM_DEFAULT_MODEL=retired-chat-model\n'
-eq "전환: 배포 성공" "$(FAKE_VLLM='retired-chat-model chat-next jev-decision@chat-next' run)" "0"
+setup "$REPO_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n'
+eq "전환: 배포 성공" "$(FAKE_VLLM='qwen3.8-flash-next chat-next jev-decision@chat-next' run)" "0"
 D="$(diff "$REPO_CFG" "$CFG")"
 eq "전환: diff 는 삽입 6줄 + 치환 2줄뿐" "$(grep -c '^>' <<<"$D")|$(grep -c '^<' <<<"$D")" "8|2"
 eq "전환: 정식 항목이 model_list: 바로 다음" "$(sed -n "$(( $(grep -n '^model_list:' "$CFG" | cut -d: -f1) + 2 )),+2p" "$CFG" | tr '\n' ';')" \
     '  - model_name: "chat-next";    litellm_params:;      model: "openai/chat-next";'
 L0="$(grep -n '^model_list:' "$CFG" | cut -d: -f1)"
-eq "전환: api_base·api_key 줄은 앵커 항목과 바이트 단위로 같다" "$(sed -n "$((L0+5)),$((L0+6))p" "$CFG")" "$(sed -n '/^  - model_name: retired-chat-model$/,/api_key:/p' "$REPO_CFG" | grep -E '^      api_(base|key):')"
+eq "전환: api_base·api_key 줄은 앵커 항목과 바이트 단위로 같다" "$(sed -n "$((L0+5)),$((L0+6))p" "$CFG")" "$(sed -n '/^  - model_name: qwen3.8-flash-next$/,/api_key:/p' "$REPO_CFG" | grep -E '^      api_(base|key):')"
 eq "전환: 두 호환 라우트 upstream 이 새 이름" "$(grep -cxF '      model: "openai/chat-next"' "$CFG")" "3"
 ok "전환: jev-decision·bge-m3·wildcard·general_settings 그대로" 'grep -qxF "      model: openai/jev-decision" "$CFG" && grep -qxF "      model: openai/bge-m3" "$CFG" && grep -qxF "  - model_name: openrouter/*" "$CFG" && grep -q "^general_settings:" "$CFG"'
 eq "전환: 백업 1개 = 원본" "$(baks)|$(sum "$(find "$GW" -name 'litellm.config.yaml.bak.*' | head -1)")" "1|$(sum "$REPO_CFG")"
 eq "전환: 순서 — 빌드 → 마이그레이션 → 게이트웨이 재시작 → 게이트웨이 확인(앱 아직 옛 이름) → 앱 재시작(새 이름) → pm2 save" \
     "$(grep -vE "^curl ${VBASE}" "$LOG" | tr '\n' ';')" \
-    "build;migrate;pm2 restart gw;curl $GWURL/v1/models auth=gw app=retired-chat-model;pm2_restart_app openmake-llm app=chat-next;pm2 save;"
+    "build;migrate;pm2 restart gw;curl $GWURL/v1/models auth=gw app=qwen3.8-flash-next;pm2_restart_app openmake-llm app=chat-next;pm2 save;"
 eq "전환: vLLM 은 config 의 주소·키로, 한 번만 조회" "$(grep -c "^curl $VBASE/models auth=vllm" "$LOG" | tr -d ' ')|$(n_of '^curl.*/v1/models auth=vllm')" "1|1"
 ok "전환: 임시 파일이 남지 않는다" '! ls "$CFG".tmp.* >/dev/null 2>&1'
 eq "전환: .env 세 키" "$(envv OMK_DGX_MODEL)|$(envv OMK_DGX_MODEL_PINNED)|$(envv LLM_DEFAULT_MODEL)" "chat-next|0|chat-next"
-ok "전환: 맞춤 예정·갱신·앱 기본 모델 로그" 'grep -q "DGX 모델 이름 맞춤 예정: 앱 retired-chat-model / 기록 없음 → chat-next (출처 served)" "$OUT" && grep -q "게이트웨이 config 갱신" "$OUT" && grep -q "앱 기본 모델: retired-chat-model → chat-next" "$OUT"'
+ok "전환: 맞춤 예정·갱신·앱 기본 모델 로그" 'grep -q "DGX 모델 이름 맞춤 예정: 앱 qwen3.8-flash-next / 기록 없음 → chat-next (출처 served)" "$OUT" && grep -q "게이트웨이 config 갱신" "$OUT" && grep -q "앱 기본 모델: qwen3.8-flash-next → chat-next" "$OUT"'
 ok "전환: 바뀐 config 를 js-yaml 이 읽는다" '( cd "$ROOT" && node -e "require(\"module\").createRequire(require(\"path\").resolve(\"apps/api/package.json\"))(\"js-yaml\").load(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))" "$CFG" )'
 T3_CFG="$TMP/after3.yaml"; cp "$CFG" "$T3_CFG"; cp "$APP/.env" "$TMP/after3.env"
 
 # ── 14. 3 뒤 재실행 → 무변경(멱등) ──
 S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
-eq "멱등: 배포 성공" "$(FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+eq "멱등: 배포 성공" "$(FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 eq "멱등: config·.env 그대로, 재시작·저장 없음" "$(sum "$CFG")|$(sum "$APP/.env")|$(n_of '^pm2 restart')|$(n_of '^pm2 save')" "$S_CFG|$S_ENV|0|0"
 
 # ── 4. vLLM 미도달 → 경고, 무변경, 배포 계속 ──
-setup "$REPO_CFG" 'LLM_DEFAULT_MODEL=retired-chat-model\n'; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
+setup "$REPO_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n'; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
 eq "미도달: 배포 계속" "$(FAKE_VLLM=- run)" "0"
 ok "미도달: 경고 + 이번 배포는 바꾸지 않음" 'grep -q "WARN.*vLLM 모델 목록을 읽지 못해.*이번 배포는 모델 이름을 바꾸지 않습니다" "$OUT"'
 eq "미도달: 무변경·빌드 있음" "$(sum "$CFG")|$(sum "$APP/.env")|$(n_of '^build')" "$S_CFG|$S_ENV|1"
 
 # ── 5. 후보 둘 이상 → 경고, 무변경 ──
-eq "후보 둘: 배포 계속" "$(FAKE_VLLM='retired-chat-model a-1 b-1' run)" "0"
+eq "후보 둘: 배포 계속" "$(FAKE_VLLM='qwen3.8-flash-next a-1 b-1' run)" "0"
 ok "후보 둘: 경고(목록 포함)" 'grep -q "WARN.*둘 이상입니다(a-1, b-1)" "$OUT"'
 eq "후보 둘: 무변경" "$(sum "$CFG")|$(sum "$APP/.env")|$(n_of '^build')" "$S_CFG|$S_ENV|1"
 
 # ── 6. 명시값이 서빙되지 않음 → 빌드 전 종료 2 ──
-eq "명시값 미서빙: 종료 2" "$(OMK_DGX_MODEL=zz FAKE_VLLM='retired-chat-model chat-next' run)" "2"
+eq "명시값 미서빙: 종료 2" "$(OMK_DGX_MODEL=zz FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "2"
 eq "명시값 미서빙: 빌드 없음·무변경" "$(n_of '^build')|$(sum "$CFG")|$(sum "$APP/.env")" "0|$S_CFG|$S_ENV"
 ok "명시값 미서빙: 사유" 'grep -q "OMK_DGX_MODEL=zz 을 vLLM 이 서빙하지 않습니다" "$OUT"'
 eq "명시값 + 미도달: 빌드 전 종료 2" "$(OMK_DGX_MODEL=chat-next FAKE_VLLM=- run)|$(n_of '^build')" "2|0"
 
 # ── 7. 고정 → 고정 유지 → auto 로 해제 ──
 cp "$T3_CFG" "$CFG"; cp "$T3_CFG" "$TMP/cfg-first.yaml"; cp "$TMP/after3.env" "$APP/.env"; rm -f "$CFG".bak.*
-eq "고정: 옛 이름 명시" "$(OMK_DGX_MODEL=retired-chat-model FAKE_VLLM='retired-chat-model chat-next' run)" "0"
-eq "고정: .env" "$(envv OMK_DGX_MODEL)|$(envv OMK_DGX_MODEL_PINNED)|$(envv LLM_DEFAULT_MODEL)" "retired-chat-model|1|retired-chat-model"
-eq "고정: 정식·호환 라우트 upstream 모두 openai/retired-chat-model" "$(grep -c 'openai/chat-next' "$CFG")|$(grep -cxF '      model: "openai/retired-chat-model"' "$CFG")" "0|3"
+eq "고정: 옛 이름 명시" "$(OMK_DGX_MODEL=qwen3.8-flash-next FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
+eq "고정: .env" "$(envv OMK_DGX_MODEL)|$(envv OMK_DGX_MODEL_PINNED)|$(envv LLM_DEFAULT_MODEL)" "qwen3.8-flash-next|1|qwen3.8-flash-next"
+eq "고정: 정식·호환 라우트 upstream 모두 openai/qwen3.8-flash-next" "$(grep -c 'openai/chat-next' "$CFG")|$(grep -cxF '      model: "openai/qwen3.8-flash-next"' "$CFG")" "0|3"
 S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
-eq "고정 유지: 다음 배포(served 에 새 이름 있음)" "$(FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+eq "고정 유지: 다음 배포(served 에 새 이름 있음)" "$(FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 eq "고정 유지: 무변경" "$(sum "$CFG")|$(sum "$APP/.env")" "$S_CFG|$S_ENV"
 eq "고정값 미서빙: 종료 2(빌드 전)" "$(FAKE_VLLM='chat-next' run)|$(n_of '^build')" "2|0"
 cp "$CFG" "$TMP/cfg-first.yaml"
-eq "auto: 해제" "$(OMK_DGX_MODEL=auto FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+eq "auto: 해제" "$(OMK_DGX_MODEL=auto FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 eq "auto: 감지값으로 돌아간다" "$(envv OMK_DGX_MODEL)|$(envv OMK_DGX_MODEL_PINNED)|$(envv LLM_DEFAULT_MODEL)|$(grep -cxF '      model: "openai/chat-next"' "$CFG")" "chat-next|0|chat-next|3"
 
 # ── 8. 앱 기본 모델이 DGX 이름이 아님 → 경고, 무변경 ──
 setup "$REPO_CFG" 'LLM_DEFAULT_MODEL=openrouter/x\n'; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
-eq "비DGX 앱 기본값: 배포 계속" "$(FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+eq "비DGX 앱 기본값: 배포 계속" "$(FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 ok "비DGX 앱 기본값: 경고" 'grep -q "WARN.*LLM_DEFAULT_MODEL=openrouter/x.*자동으로 바꾸지 않습니다" "$OUT"'
 eq "비DGX 앱 기본값: 무변경" "$(sum "$CFG")|$(sum "$APP/.env")" "$S_CFG|$S_ENV"
 
 # ── 9. 게이트웨이 PM2 앱 미등록 → 경고, config 미편집, vLLM 미호출 ──
-setup "$REPO_CFG" 'LLM_DEFAULT_MODEL=retired-chat-model\n'; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
-eq "게이트웨이 미등록: 배포 계속" "$(FAKE_PM2_APPS='openmake-llm' FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+setup "$REPO_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n'; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
+eq "게이트웨이 미등록: 배포 계속" "$(FAKE_PM2_APPS='openmake-llm' FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 ok "게이트웨이 미등록: 경고" 'grep -q "WARN.*게이트웨이 PM2 앱(gw)이 등록돼 있지 않아" "$OUT"'
 eq "게이트웨이 미등록: 무변경·curl 없음" "$(sum "$CFG")|$(sum "$APP/.env")|$(n_of '^curl')" "$S_CFG|$S_ENV|0"
 
 # ── 10. config 형태 불인식(model_list: → models:) → 경고, 백업 없음, 무변경 ──
-sed 's/^model_list:/models:/' "$REPO_CFG" > "$TMP/bad.yaml"; setup "$TMP/bad.yaml" 'LLM_DEFAULT_MODEL=retired-chat-model\n'
+sed 's/^model_list:/models:/' "$REPO_CFG" > "$TMP/bad.yaml"; setup "$TMP/bad.yaml" 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n'
 S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
-eq "형태 불인식: 배포 계속" "$(FAKE_VLLM='retired-chat-model chat-next' run)" "0"
-ok "형태 불인식: 경고" 'grep -q "WARN.*DGX 항목(openai/retired-chat-model)을 찾지 못해" "$OUT"'
+eq "형태 불인식: 배포 계속" "$(FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
+ok "형태 불인식: 경고" 'grep -q "WARN.*DGX 항목(openai/qwen3.8-flash-next)을 찾지 못해" "$OUT"'
 eq "형태 불인식: 무변경·백업 없음" "$(sum "$CFG")|$(sum "$APP/.env")|$(baks)" "$S_CFG|$S_ENV|0"
 
 # ── 10b. 편집한 config 가 검증에 실패(원본에 model_name 중복) → 경고, 백업·재시작 없음, config·.env 그대로, 임시 파일 정리 ──
 awk '{ print } /^model_list:/ { print "  - model_name: bge-m3"; print "    litellm_params:"; print "      model: openai/bge-m3"; print "      api_key: os.environ/DUMMY_UPSTREAM_KEY" }' "$REPO_CFG" > "$TMP/dup.yaml"
-setup "$TMP/dup.yaml" 'LLM_DEFAULT_MODEL=retired-chat-model\n'; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
-eq "검증 실패: 배포 계속" "$(FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+setup "$TMP/dup.yaml" 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n'; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
+eq "검증 실패: 배포 계속" "$(FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 ok "검증 실패: 사유가 검증 단계(model_name 중복)" 'grep -q "WARN.*새 모델 이름(chat-next)으로 게이트웨이 config 를 만들 수 없습니다(model_name 중복)" "$OUT"'
 eq "검증 실패: config·.env 그대로, 백업·게이트웨이 재시작·pm2 save 없음" "$(sum "$CFG")|$(sum "$APP/.env")|$(baks)|$(n_of '^pm2 restart')|$(n_of '^pm2 save')" "$S_CFG|$S_ENV|0|0|0"
 ok "검증 실패: 임시 파일이 남지 않는다" '! ls "$CFG".tmp.* >/dev/null 2>&1'
-eq "검증 실패: 앱은 옛 이름으로 재시작" "$(grep '^pm2_restart_app' "$LOG")" "pm2_restart_app openmake-llm app=retired-chat-model"
+eq "검증 실패: 앱은 옛 이름으로 재시작" "$(grep '^pm2_restart_app' "$LOG")" "pm2_restart_app openmake-llm app=qwen3.8-flash-next"
 
 # ── 2b. vLLM 목록은 한 번만 읽는다 — 운영 상태(앱 기본값이 served 에만 있는 이름)에서 두 번째 조회가 실패하는 vLLM 이어도
-#        "앱 기본 모델이 DGX 이름이 아님" 으로 오판하지 않고 기록한다 ──
+#        "앱 기본 모델이 DGX 이름이 아님" 으로 오판하지 않는다 ──
 setup "$OPS_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n'
-eq "목록 재사용: 배포 성공" "$(FAKE_VLLM_ONCE=1 FAKE_VLLM='retired-chat-model qwen3.8-flash-next' run)" "0"
-eq "목록 재사용: 조회 1회·기록 완료" "$(n_of "^curl $VBASE/models")|$(envv LLM_DEFAULT_MODEL)|$(envv OMK_DGX_MODEL)" "1|qwen3.8-flash-next|qwen3.8-flash-next"
+eq "목록 재사용: 배포 성공" "$(FAKE_VLLM_ONCE=1 FAKE_VLLM='qwen3.8-flash-next' run)" "0"
+eq "목록 재사용: 조회 1회·앱 기본 모델 그대로" "$(n_of "^curl $VBASE/models")|$(envv LLM_DEFAULT_MODEL)|$(envv OMK_DGX_MODEL)" "1|qwen3.8-flash-next|"
 ok "목록 재사용: 비DGX 경고 없음" '! grep -q "자동으로 바꾸지 않습니다" "$OUT"'
 
 # ── 11. 게이트웨이가 새 이름을 끝까지 올리지 않음 → 백업 복원·재시작 2회, .env 그대로 ──
-setup "$REPO_CFG" 'LLM_DEFAULT_MODEL=retired-chat-model\n'; S_ENV="$(sum "$APP/.env")"
-eq "게이트웨이 실패: 배포 계속" "$(FAKE_GW_STUCK=1 FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+setup "$REPO_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n'; S_ENV="$(sum "$APP/.env")"
+eq "게이트웨이 실패: 배포 계속" "$(FAKE_GW_STUCK=1 FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 eq "게이트웨이 실패: config 복원·재시작 2회·.env 그대로" "$(sum "$CFG")|$(n_of '^pm2 restart gw')|$(sum "$APP/.env")" "$(sum "$REPO_CFG")|2|$S_ENV"
 ok "게이트웨이 실패: 경고" 'grep -q "WARN.*게이트웨이(gw)가 chat-next 를 올리지 않아 config 를 백업으로 되돌리고" "$OUT"'
-eq "게이트웨이 실패: 앱은 옛 이름으로 재시작·pm2 save 없음" "$(grep '^pm2_restart_app' "$LOG")|$(n_of '^pm2 save')" "pm2_restart_app openmake-llm app=retired-chat-model|0"
+eq "게이트웨이 실패: 앱은 옛 이름으로 재시작·pm2 save 없음" "$(grep '^pm2_restart_app' "$LOG")|$(n_of '^pm2 save')" "pm2_restart_app openmake-llm app=qwen3.8-flash-next|0"
 
 # ── 13. 앵커 항목의 api_base 가 os.environ/… — 배포 셸에 없으면 경고·무변경, 있으면 그 값으로 ──
-sed "s#$VBASE#os.environ/QWEN_VLLM_API_BASE_X#" "$REPO_CFG" > "$TMP/envbase.yaml"; setup "$TMP/envbase.yaml" 'LLM_DEFAULT_MODEL=retired-chat-model\n'
+sed "s#$VBASE#os.environ/QWEN_VLLM_API_BASE_X#" "$REPO_CFG" > "$TMP/envbase.yaml"; setup "$TMP/envbase.yaml" 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n'
 S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
-eq "os.environ 주소 없음: 배포 계속" "$(FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+eq "os.environ 주소 없음: 배포 계속" "$(FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 ok "os.environ 주소 없음: 경고" 'grep -q "WARN.*api_base 가 os.environ/QWEN_VLLM_API_BASE_X 인데 값을 알 수 없어" "$OUT"'
 eq "os.environ 주소 없음: 무변경·curl 없음" "$(sum "$CFG")|$(sum "$APP/.env")|$(n_of '^curl')" "$S_CFG|$S_ENV|0"
 : > "$LOG"
 ( cd "$APP" && PATH="$BIN:$PATH" PM2_HOME="$PM2H" FAKE_LOG="$LOG" FAKE_APP="$APP" FAKE_CFG="$CFG" FAKE_CFG_FIRST="$TMP/cfg-first.yaml" \
-  FAKE_VKEY="$VKEY" FAKE_GKEY="$GKEY" FAKE_GWURL="$GWURL" FAKE_VLLM='retired-chat-model chat-next' QWEN_VLLM_API_BASE_X="http://envbase.test:8002/v1" \
+  FAKE_VKEY="$VKEY" FAKE_GKEY="$GKEY" FAKE_GWURL="$GWURL" FAKE_VLLM='qwen3.8-flash-next chat-next' QWEN_VLLM_API_BASE_X="http://envbase.test:8002/v1" \
   "$BASH" "$APP/openmake_llm.sh" deploy --yes </dev/null >"$OUT" 2>&1 ); cat "$OUT" >> "$ALL"
 eq "os.environ 주소 있음: 그 주소로 감지·전환" "$(grep -c '^curl http://envbase.test:8002/v1/models auth=vllm' "$LOG" | tr -d ' ')|$(envv LLM_DEFAULT_MODEL)" "1|chat-next"
 ok "os.environ 주소 있음: 새 항목의 api_base 도 같은 os.environ 줄" 'grep -A4 "^  - model_name: \"chat-next\"" "$CFG" | grep -q "api_base: os.environ/QWEN_VLLM_API_BASE_X"'
 
 # ── 15. PM2 env 와 .env 의 LLM_DEFAULT_MODEL 비교(진단만) ──
 setup "$OPS_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n'
-eq "PM2 env 다름: 배포 성공" "$(FAKE_PM2_MODEL=stale-name FAKE_VLLM='retired-chat-model qwen3.8-flash-next' run)" "0"
+eq "PM2 env 다름: 배포 성공" "$(FAKE_PM2_MODEL=stale-name FAKE_VLLM='qwen3.8-flash-next' run)" "0"
 ok "PM2 env 다름: 경고" 'grep -q "WARN.*PM2 env 의 LLM_DEFAULT_MODEL(stale-name)이 .env(qwen3.8-flash-next)와 다릅니다" "$OUT"'
-eq "PM2 env 같음: 배포 성공" "$(FAKE_VLLM='retired-chat-model qwen3.8-flash-next' run)" "0"
+eq "PM2 env 같음: 배포 성공" "$(FAKE_VLLM='qwen3.8-flash-next' run)" "0"
 ok "PM2 env 같음: 경고 없음" '! grep -q "PM2 env 의" "$OUT"'
 
 # ── 16. pm2 save 는 앱 기본 모델을 바꾼 배포만(3 에서 1회, 2·14 에서 0회 — 위에서 확인), dump 의 앱을 잃게 되면 저장하지 않는다 ──
-setup "$REPO_CFG" 'LLM_DEFAULT_MODEL=retired-chat-model\n'
+setup "$REPO_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n'
 printf '[{"name":"openmake-llm"},{"name":"gw"},{"name":"other-app"}]' > "$PM2H/dump.pm2"
-eq "dump 손실: 배포 성공" "$(FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+eq "dump 손실: 배포 성공" "$(FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 eq "dump 손실: 모델은 바뀌었지만 pm2 save 없음" "$(envv LLM_DEFAULT_MODEL)|$(n_of '^pm2 save')" "chat-next|0"
 ok "dump 손실: 경고" 'grep -q "WARN.*저장된 PM2 앱이 지금 실행 중이 아닙니다: other-app" "$OUT"'
 rm -f "$PM2H/dump.pm2"
@@ -286,51 +283,51 @@ SW="1|chat-next|0|chat-next|1"
 KEYWARN='WARN.*api_key 가 os.environ/VLLM_API_KEY 인데 값을 알 수 없어.*OMK_LITELLM_ENV'
 
 # E1. 배포 셸 env 에 키 → 전환(셸 env 경로 회귀)
-setup "$ENV_CFG" 'LLM_DEFAULT_MODEL=retired-chat-model\n'
-eq "E1 셸 env 키: 배포 성공" "$(FAKE_VLLM='retired-chat-model chat-next' run VLLM_API_KEY="$VKEY")" "0"
+setup "$ENV_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n'
+eq "E1 셸 env 키: 배포 성공" "$(FAKE_VLLM='qwen3.8-flash-next chat-next' run VLLM_API_KEY="$VKEY")" "0"
 eq "E1 셸 env 키: 그 키로 감지·전환" "$(switched)" "$SW"
 
 # E2. 셸 env·파일 모두 없음 → 경고 1줄, vLLM 미호출, 무변경, 배포 계속
-setup "$ENV_CFG" 'LLM_DEFAULT_MODEL=retired-chat-model\n'; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
-eq "E2 키 미해석: 배포 계속" "$(FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+setup "$ENV_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n'; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
+eq "E2 키 미해석: 배포 계속" "$(FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 eq "E2 키 미해석: 경고 1줄(api_key·OMK_LITELLM_ENV)" "$(grep -c "$KEYWARN" "$OUT" | tr -d ' ')" "1"
 ok "E2 키 미해석: 401 fallback 경고 없음" '! grep -q "vLLM 모델 목록을 읽지 못해" "$OUT"'
 eq "E2 키 미해석: 무변경·vLLM 미호출·빌드 있음" "$(sum "$CFG")|$(sum "$APP/.env")|$(n_of "^curl $VBASE")|$(n_of '^build')" "$S_CFG|$S_ENV|0|1"
 
 # E3. .env OMK_LITELLM_ENV 파일(따옴표 값, 다른 키 포함) → 전환, 파일 값은 출력에 없음
 gwenv "LITELLM_MASTER_KEY=sk-other-zzz\nVLLM_API_KEY=\"$VKEY\"\n"
-setup "$ENV_CFG" "LLM_DEFAULT_MODEL=retired-chat-model\nOMK_LITELLM_ENV=$GWENV\n"
-eq "E3 파일 키: 배포 성공" "$(FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+setup "$ENV_CFG" "LLM_DEFAULT_MODEL=qwen3.8-flash-next\nOMK_LITELLM_ENV=$GWENV\n"
+eq "E3 파일 키: 배포 성공" "$(FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 eq "E3 파일 키: 그 키로 감지·전환" "$(switched)" "$SW"
 
 # E4. OMK_LITELLM_ENV 가 없는 파일 → 읽기 경고 + 키 경고, 무변경
-setup "$ENV_CFG" "LLM_DEFAULT_MODEL=retired-chat-model\nOMK_LITELLM_ENV=$TMP/no-such.env\n"; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
-eq "E4 파일 없음: 배포 계속" "$(FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+setup "$ENV_CFG" "LLM_DEFAULT_MODEL=qwen3.8-flash-next\nOMK_LITELLM_ENV=$TMP/no-such.env\n"; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
+eq "E4 파일 없음: 배포 계속" "$(FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 eq "E4 파일 없음: 읽기 경고 1줄 + 키 경고 1줄" "$(grep -c "WARN.*게이트웨이 env 파일(.env OMK_LITELLM_ENV)을 읽을 수 없습니다: $TMP/no-such.env" "$OUT" | tr -d ' ')|$(grep -c "$KEYWARN" "$OUT" | tr -d ' ')" "1|1"
 eq "E4 파일 없음: 무변경·vLLM 미호출" "$(sum "$CFG")|$(sum "$APP/.env")|$(n_of "^curl $VBASE")" "$S_CFG|$S_ENV|0"
 
 # E5. 주소·키 모두 os.environ/ — 둘 다 파일에서 → 전환
 gwenv "QWEN_VLLM_API_BASE=$VBASE\nVLLM_API_KEY=$VKEY\n"
-setup "$ENV2_CFG" "LLM_DEFAULT_MODEL=retired-chat-model\nOMK_LITELLM_ENV=$GWENV\n"
-eq "E5 파일 주소·키: 배포 성공" "$(FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+setup "$ENV2_CFG" "LLM_DEFAULT_MODEL=qwen3.8-flash-next\nOMK_LITELLM_ENV=$GWENV\n"
+eq "E5 파일 주소·키: 배포 성공" "$(FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 eq "E5 파일 주소·키: 그 주소·키로 감지·전환" "$(switched)" "$SW"
 
 # E6. 주소·키 모두 os.environ/, 파일에 키만 → 기존 api_base 경고(rc 3), 무변경
 gwenv "VLLM_API_KEY=$VKEY\n"
-setup "$ENV2_CFG" "LLM_DEFAULT_MODEL=retired-chat-model\nOMK_LITELLM_ENV=$GWENV\n"; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
-eq "E6 파일에 주소 없음: 배포 계속" "$(FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+setup "$ENV2_CFG" "LLM_DEFAULT_MODEL=qwen3.8-flash-next\nOMK_LITELLM_ENV=$GWENV\n"; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
+eq "E6 파일에 주소 없음: 배포 계속" "$(FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 ok "E6 파일에 주소 없음: api_base 경고" 'grep -q "WARN.*api_base 가 os.environ/QWEN_VLLM_API_BASE 인데 값을 알 수 없어" "$OUT"'
 eq "E6 파일에 주소 없음: 무변경·curl 없음" "$(sum "$CFG")|$(sum "$APP/.env")|$(n_of '^curl')" "$S_CFG|$S_ENV|0"
 
 # E7. 셸 env 와 파일 둘 다 → 셸 env 우선
 gwenv "VLLM_API_KEY=wrong-key\n"
-setup "$ENV_CFG" "LLM_DEFAULT_MODEL=retired-chat-model\nOMK_LITELLM_ENV=$GWENV\n"
-eq "E7 셸 env 우선: 배포 성공" "$(FAKE_VLLM='retired-chat-model chat-next' run VLLM_API_KEY="$VKEY")" "0"
+setup "$ENV_CFG" "LLM_DEFAULT_MODEL=qwen3.8-flash-next\nOMK_LITELLM_ENV=$GWENV\n"
+eq "E7 셸 env 우선: 배포 성공" "$(FAKE_VLLM='qwen3.8-flash-next chat-next' run VLLM_API_KEY="$VKEY")" "0"
 eq "E7 셸 env 우선: 셸 키로 감지·전환" "$(switched)" "$SW"
 
 # E8. 명시값이 있어도 키 미해석은 경고 + 계속(종료 2 아님)
-setup "$ENV_CFG" 'LLM_DEFAULT_MODEL=retired-chat-model\n'; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
-eq "E8 명시값 + 키 미해석: 배포 계속" "$(OMK_DGX_MODEL=chat-next FAKE_VLLM='retired-chat-model chat-next' run)" "0"
+setup "$ENV_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n'; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
+eq "E8 명시값 + 키 미해석: 배포 계속" "$(OMK_DGX_MODEL=chat-next FAKE_VLLM='qwen3.8-flash-next chat-next' run)" "0"
 eq "E8 명시값 + 키 미해석: 경고 1줄·무변경·빌드 있음" "$(grep -c "$KEYWARN" "$OUT" | tr -d ' ')|$(sum "$CFG")|$(sum "$APP/.env")|$(n_of '^build')" "1|$S_CFG|$S_ENV|1"
 
 # ── 12. 키는 어떤 출력에도 없다 ──

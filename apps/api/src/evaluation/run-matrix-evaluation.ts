@@ -1,7 +1,7 @@
 /**
  * 모델 × 프롬프트 variant 비교 매트릭스 (F26.1) — real 전용(nightly 옵션 NIGHTLY_EVAL_MATRIX=1).
  *
- *   npm run eval:matrix -- --real --models retired-chat-model --variants base,concise --limit 5
+ *   npm run eval:matrix -- --real --models qwen3.8-flash-next --variants base,concise --limit 5
  *
  * 셀마다 response 골든셋(response-pattern)을 실모델로 돌려 통과율·TTFT p50/p95·전체 p50/p95·토큰을 모은다.
  * 가드: --real 필수, --limit(기본 OMK_EVAL_REAL_DEFAULT_LIMIT=5), 케이스 timeout·토큰 한도(real-response-generator 4중 가드 상속).
@@ -98,7 +98,7 @@ export async function runMatrix(params: {
 
 async function main(): Promise<void> {
     if (!process.argv.includes('--real')) {
-        console.error('eval:matrix 는 실모델 전용입니다 — --real 을 명시하세요 (예: -- --real --models retired-chat-model --variants base,concise --limit 5)');
+        console.error('eval:matrix 는 실모델 전용입니다 — --real 을 명시하세요 (예: -- --real --models qwen3.8-flash-next --variants base,concise --limit 5)');
         process.exit(1);
     }
     const limit = Number(argValue('--limit') ?? process.env.OMK_EVAL_REAL_DEFAULT_LIMIT ?? '5');

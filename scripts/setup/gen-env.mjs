@@ -68,7 +68,7 @@ const ADMIN_USERNAME = env('OMK_ADMIN_USERNAME', 'admin');
 const ADMIN_EMAIL = env('OMK_ADMIN_EMAIL', 'admin@example.com');
 const LLM_BASE_URL = env('OMK_LLM_BASE_URL', 'http://localhost:4000');
 const LLM_API_KEY = env('OMK_LLM_API_KEY', 'sk-no-key');
-const LLM_MODEL = env('OMK_LLM_MODEL', 'retired-chat-model');
+const LLM_MODEL = env('OMK_LLM_MODEL', 'qwen3.8-flash-next');
 const INSTANCE = env('OMK_INSTANCE', '');
 if (INSTANCE && !/^[a-z0-9][a-z0-9-]{0,31}$/.test(INSTANCE)) {
     process.stderr.write(`OMK_INSTANCE 는 소문자·숫자·하이픈만 가능합니다: '${INSTANCE}'\n`);
