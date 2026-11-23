@@ -907,7 +907,18 @@
         "failed": "一括処理に失敗しました: {error}"
       }
     },
-    "approvalsButton": "承認待ち"
+    "approvalsButton": "承認待ち",
+    "revisions": {
+      "title": "以前のバージョン",
+      "loading": "読み込み中…",
+      "empty": "以前のバージョンはまだありません。編集するたびに直前の内容がここに残ります。",
+      "loadFailed": "以前のバージョンを読み込めませんでした。",
+      "savedAt": "{date} までの内容",
+      "restore": "復元",
+      "confirmRestore": "{date} までの内容に復元しますか？現在の内容は以前のバージョンとして残ります。",
+      "restoreFailed": "復元できませんでした: {error}",
+      "note": "編集するたびに直前の内容が残ります(最新30件)。復元しても現在の内容は失われません。"
+    }
   },
   "agentTasks": {
     "loading": "読み込み中...",

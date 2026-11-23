@@ -907,7 +907,18 @@
         "failed": "일괄 처리 실패: {error}"
       }
     },
-    "approvalsButton": "승인 대기"
+    "approvalsButton": "승인 대기",
+    "revisions": {
+      "title": "이전 버전",
+      "loading": "불러오는 중…",
+      "empty": "아직 이전 버전이 없습니다. 수정하면 그 직전 내용이 여기에 남습니다.",
+      "loadFailed": "이전 버전을 불러오지 못했습니다.",
+      "savedAt": "{date} 까지의 내용",
+      "restore": "복원",
+      "confirmRestore": "{date} 까지의 내용으로 복원할까요? 지금 내용은 이전 버전으로 남습니다.",
+      "restoreFailed": "복원하지 못했습니다: {error}",
+      "note": "수정할 때마다 직전 내용이 남습니다(최근 30개). 복원해도 지금 내용은 사라지지 않습니다."
+    }
   },
   "agentTasks": {
     "loading": "불러오는 중...",
