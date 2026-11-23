@@ -31,6 +31,15 @@ export class AgentTaskParked extends Error {
     }
 }
 
+/** 실행 기록(실행 중 표식·외부 도구 영수증)을 저장하지 못했다 — fail-closed 모드(RECORD_FAIL_CLOSED)에서만 던진다.
+ *  turn-executor 가 받아 그 호출을 실행하지 않고 안내를 도구 결과로 남긴다. message 는 모델에 보일 안내다. */
+export class AgentTaskRecordError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'AgentTaskRecordError';
+    }
+}
+
 /** 주차 표식 — agent_task_events.reason. 마지막 이벤트가 이 사유인 paused 작업이 주차 중이다. */
 export { AGENT_TASK_PARKED_REASON, AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_BROWSER_TAKEOVER_REASON, AGENT_TASK_PARK_REASONS };
 

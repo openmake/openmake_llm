@@ -120,6 +120,7 @@ const BASE_AUDIT_ACTION_SEVERITY = {
     'agent_task_browser_takeover': null,
     'agent_task_browser_release': null,
     'agent_task.internal_only_enforced': null,
+    'chat.egress_internal_only': null,
     'agent_task.retention_purged': null,
     'agent_suggestion_status': null,
 

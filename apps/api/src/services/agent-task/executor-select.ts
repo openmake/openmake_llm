@@ -13,7 +13,7 @@
  */
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
-import { isInternalOnlyRun } from '../../config/internal-only-policy';
+import { decideTaskEgress, type TaskEgressInput } from './task-egress';
 import { RemoteExecutor } from '../local-bridge/remote-executor';
 import type { AgentTaskRunInput } from './types';
 
@@ -26,7 +26,7 @@ interface ExecutorPlan {
 }
 
 export function resolveExecutorPlan(
-    input: Pick<AgentTaskRunInput, 'executor' | 'approvalPolicy' | 'deviceId' | 'folderRel'>,
+    input: Pick<AgentTaskRunInput, 'executor' | 'approvalPolicy' | 'deviceId' | 'folderRel'> & TaskEgressInput,
     taskId: string,
     userId: string,
     /** 이어받은 세그먼트의 worktree 키(ContinuationInfo.worktreeKey) — 없으면 실행기가 자기 taskId 를 쓴다 */
@@ -35,11 +35,17 @@ export function resolveExecutorPlan(
     const isLocal = input.executor === 'local' && LOCAL_BRIDGE.ENABLED;
     // 로컬: 파일/기타 도구는 서버 승인 유지(디바이스는 파일에 다이얼로그 없음)하되, 코드 실행
     // (bash/python_execute)은 디바이스 confirmExec 가 게이트하므로 deviceGatesShell 로 서버 승인 skip.
-    const sandboxCfg = isLocal
-        ? { ...getTaskSandboxConfig(), approvalPolicy: input.approvalPolicy ?? ('all' as const), deviceGatesShell: true, internalOnly: isInternalOnlyRun(input) }
+    // 반출 판정(task-egress) — 로컬 실행기이거나 민감도 기준에 걸리면 내부 전용(외부 모델·외부 도구 없음).
+    const internalOnly = decideTaskEgress(input).internalOnly;
+    const base = isLocal
+        ? { ...getTaskSandboxConfig(), approvalPolicy: input.approvalPolicy ?? ('all' as const), deviceGatesShell: true }
         : input.approvalPolicy
             ? { ...getTaskSandboxConfig(), approvalPolicy: input.approvalPolicy }
             : getTaskSandboxConfig();
+    // 서버 샌드박스의 내부 전용 — 브라우저(외부 사이트로 입력)를 끄고 명령 컨테이너는 망 없이 둔다.
+    const sandboxCfg: TaskSandboxConfig = !internalOnly ? base
+        : isLocal ? { ...base, internalOnly: true }
+            : { ...base, internalOnly: true, browserEnabled: false, network: 'none' as const };
     return {
         sandboxCfg,
         runtimeEnabled: sandboxCfg.enabled || isLocal,

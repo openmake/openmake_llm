@@ -12,6 +12,7 @@
  */
 import { LRUCache } from 'lru-cache';
 import { createLogger } from '../../utils/logger';
+import { decideEgress } from '../../config/egress-policy';
 import { FILE_ATTACH_LIMITS, URL_ANALYZE_LIMITS, ATTACH_CACHE_LIMITS, SCRAPE_ABORT_BUFFER_MS } from '../../config/runtime-limits';
 
 const logger = createLogger('AttachContext');
@@ -137,6 +138,11 @@ export async function buildUrlContext(message: string): Promise<string> {
 
     const matched = message.match(MESSAGE_URL_PATTERN);
     if (!matched || matched.length === 0) return '';
+    // 반출 관문(config/egress-policy) — 민감 자료가 든 메시지의 URL 은 밖으로 가져오러 가지 않는다(URL 자체에 자료가 실릴 수 있다).
+    if (decideEgress({ texts: [message] }).internalOnly) {
+        logger.info('[Egress] 내부 전용 메시지 — URL 사전 분석 건너뜀');
+        return '';
+    }
 
     // dedup + 끝 문장부호/짝 안 맞는 괄호 제거 + 개수 캡
     const urls = [...new Set(matched.map(trimUrlEnd))]

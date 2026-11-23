@@ -507,6 +507,18 @@ export const AGENT_TASK_LIMITS = {
     /** 결과 불명 호출을 만나면 사용자에게 묻는다(질문 채널) — 승인하면 다시 실행, 거절·무응답이면 안내만 주고 다시 실행하지 않는다.
      *  기본 ON. AGENT_TASK_REENTRY_UNKNOWN_OUTCOME_ASK=false 면 묻지 않고 안내만 준다(172 의 처음 동작). */
     REENTRY_UNKNOWN_OUTCOME_ASK: process.env.AGENT_TASK_REENTRY_UNKNOWN_OUTCOME_ASK !== 'false',
+    /** 실행 기록 fail-closed — 부작용 도구의 실행 중 표식(172)이나 외부 도구 영수증(175)을 저장하지 못하면
+     *  그 호출을 실행하지 않고 "기록 실패로 실행하지 않음" 을 도구 결과로 준다(기록 없는 부작용 = 재개 때 중복 실행 위험).
+     *  기본 OFF(종전 fail-open — 경고 로그만 남기고 실행). AGENT_TASK_RECORD_FAIL_CLOSED=true 로 켠다. */
+    RECORD_FAIL_CLOSED: process.env.AGENT_TASK_RECORD_FAIL_CLOSED === 'true',
+    /** 검증 strict(하네스 P1-4) — 완료 관문의 검증 종합이 failed(검증 실패를 재시도 상한 안에 못 고침)면 completed 가 아니라
+     *  failed(verification_failed)로 끝낸다. 결과 불명(inconclusive)·미실시(not_run)는 막지 않고 verification_status 로만 남긴다.
+     *  기본 OFF(종전 — 검증을 건너뛴 채 completed). AGENT_TASK_VERIFY_STRICT=true 로 켠다. */
+    VERIFY_STRICT: process.env.AGENT_TASK_VERIFY_STRICT === 'true',
+    /** 파일 편집 해시 비교 후 교체(하네스 P2-6) — 작업 도구가 마지막으로 보거나 쓴 내용의 sha256 을 기억하고,
+     *  편집 직전 실제 파일이 그 해시와 다르면(그새 사용자·다른 서브에이전트가 바꿈) 덮어쓰지 않고 다시 보라고 돌려준다.
+     *  기본 OFF(종전 — 마지막 쓰기가 이긴다). AGENT_TASK_EDIT_CAS=true 로 켠다(services/task-sandbox/edit-ledger). */
+    EDIT_CAS: process.env.AGENT_TASK_EDIT_CAS === 'true',
     /** 실행 중 중간 지시(steering) — 실행 중 task 에 사용자가 방향 지시를 주입하면 다음 턴 경계에서
      *  conversation 에 user 메시지로 반영(취소·재시작 없이 교정). steering 은 사용자가 명시적으로
      *  보낼 때만 동작하므로 기본 ON. AGENT_TASK_STEERING=false 로 비활성. */

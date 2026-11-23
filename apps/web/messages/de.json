@@ -544,6 +544,8 @@
     "modelFallbackNotice": "Das ausgewählte Modell ({from}) hat nicht geantwortet, daher hat stattdessen das Standardmodell ({to}) geantwortet.",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "Nutzungslimit erreicht",
+      "EGRESS_INTERNAL_ONLY": "sensible Daten – internes Modell",
+      "MODEL_UNHEALTHY": "Modell gestört – Ersatzmodell",
       "INSUFFICIENT_CREDIT": "unzureichendes Guthaben",
       "MODEL_ACCESS_RESTRICTED": "durch Anbieterrichtlinie eingeschränkt",
       "SUBSCRIPTION_REQUIRED": "Abonnement erforderlich",

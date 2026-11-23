@@ -193,6 +193,11 @@ export interface UserContext {
      * 값이 있으면(채팅 턴은 0 이어도 싣는다) 출처를 낸 도구가 자기 건수만큼 민다 — 같은 턴의 다음 호출이 이어서 매긴다.
      */
     sourceNumberBase?: number;
+    /**
+     * 반출 관문(config/egress-policy) — true 면 이 호출 문맥은 내부 전용이다. 디스패처가 자료를 밖으로 보내는 도구
+     * (위험 등급 network·external·외부 MCP, 허용 목록 제외)를 실행하지 않는다(노출 필터와 별개인 실행 게이트).
+     */
+    egressInternalOnly?: boolean;
 }
 
 /** opts.signal — 호출자(채팅 요청·작업)의 중단 신호(#1474). 다른 도구를 부르는 내장 도구(mcp_call 등)가 그 호출로 넘긴다. 쓰지 않는 핸들러는 무시해도 된다. */

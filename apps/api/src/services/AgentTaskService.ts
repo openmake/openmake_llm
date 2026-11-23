@@ -38,7 +38,8 @@ import { withMemorySaveExposure, type TurnGateFlags } from './agent-task/turn-ga
 import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { parkForMissingDevice } from './agent-task/device-wait';
 import { parkForModelOutage } from './agent-task/model-wait';
-import { isInternalOnlyRun } from '../config/internal-only-policy';
+import { decideTaskEgress } from './agent-task/task-egress';
+import { splitInternalOnlyTools } from '../config/internal-only-policy';
 import { touchProgress, clearProgress } from './agent-task/progress-tracker';
 import { auditInternalOnly } from './agent-task/internal-only-audit';
 import { partialResultOf } from './agent-task/turn-call';
@@ -121,10 +122,12 @@ export class AgentTaskService {
         let totalTimeoutMs = Math.max(input.totalTimeoutMs ?? AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS,
             turnCeiling * AGENT_TASK_LIMITS.TURN_TIME_BUDGET_MS);
 
-        const userCtx: UserContext = { userId, role: userRole };
-
+        // 반출 판정(하네스 P0-2) — 로컬 실행기·민감도 기준. 역할 모델·실행기·감사가 같은 판정을 쓴다(agent-task/task-egress).
+        const taskEgress = decideTaskEgress(input);
+        // 디스패처의 실행 게이트가 읽는다(tool-contract/tool-dispatch) — 내부 전용이면 외부 도구 호출을 실행하지 않는다.
+        const userCtx: UserContext = { userId, role: userRole, ...(taskEgress.internalOnly ? { egressInternalOnly: true } : {}) };
         // 'agent' role 해석 — 상세는 agent-task/role-client (생성자 model 명시 시 그대로 사용)
-        const roleState = await initAgentRoleState(taskId, String(userId), this.explicitModel ? this.client : undefined, { internalOnly: isInternalOnlyRun(input), hasImages: (input.images?.length ?? 0) > 0 });
+        const roleState = await initAgentRoleState(taskId, String(userId), this.explicitModel ? this.client : undefined, { internalOnly: taskEgress.internalOnly, hasImages: (input.images?.length ?? 0) > 0 });
         this.client = roleState.client;
 
         let stepNumber = input.resume?.fromStep ?? 0;
@@ -257,12 +260,14 @@ export class AgentTaskService {
             // (비영속, resume은 전역 폴백; requiresApproval 호출부 2곳이 이 cfg 를 읽어 단일 지점 주입).
             // Cowork D1a: 실행 백엔드(docker/local)·승인 정책 결정 — 상세는 agent-task/executor-select.
             const { sandboxCfg, runtimeEnabled, remoteExecutor } = resolveExecutorPlan({ ...input, approvalPolicy }, taskId, userId, preTask?.continuation?.worktreeKey);
+            // 서브에이전트(delegate·spawn)도 내부 전용이면 외부 도구를 받지 않는다 — 부모 도구 조립(tool-assembly)과 같은 허용 목록.
+            const subagentMcpTools = sandboxCfg.internalOnly ? splitInternalOnlyTools(mcpTools).kept : mcpTools;
             if (runtimeEnabled) {
                 try {
                     // G4 위임 — 상세는 agent-task/delegate (SUBAGENT_ENABLED 시 depth=1 tool-loop 승격,
                     // 토큰·승인대기는 부모 누적에 합산되어 runaway 가드·pause-aware 타임아웃 공유).
                     const delegateFn = buildDelegateFn({
-                        client: this.client, userId, taskId, userCtx, sandboxCfg, mcpTools, signal,
+                        client: this.client, userId, taskId, userCtx, sandboxCfg, mcpTools: subagentMcpTools, signal,
                         onTokens: (n, m) => { totalTokens += n; cacheUsage.add(m); }, remainingTokens: () => AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS - totalTokens,
                         onPausedMs: (ms) => { pausedMs += ms; },
                         ...buildSubagentApprovalHooks({ userId, taskId, update, getCurStatus: () => curStatus, getTaskRuntime: () => taskRuntime }),
@@ -270,7 +275,7 @@ export class AgentTaskService {
                     // 병렬 fan-out(spawn_agents) — 플래그 ON 시에만 도구 노출(undefined 면 미노출).
                     const spawnFn = AGENT_SPAWN.ENABLED
                         ? buildTaskSpawnFn({
-                            client: this.client, userId, taskId, userCtx, sandboxCfg, mcpTools, signal,
+                            client: this.client, userId, taskId, userCtx, sandboxCfg, mcpTools: subagentMcpTools, signal,
                             onTokens: (n, m) => { totalTokens += n; cacheUsage.add(m); }, remainingTokens: () => AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS - totalTokens,
                             onPausedMs: (ms) => { pausedMs += ms; },
                         })
@@ -323,7 +328,7 @@ export class AgentTaskService {
                 injectedSkillIds: new Set(skillBindings.map((b) => b.skill_id)),
                 userId,
             });
-            void auditInternalOnly({ taskId, userId: String(userId), blockedModel: roleState.blockedExternal, removedTools: removedForInternalOnly });
+            void auditInternalOnly({ taskId, userId: String(userId), blockedModel: roleState.blockedExternal, removedTools: removedForInternalOnly, egress: taskEgress });
 
             // 턴 중간 재개(124): 결과 없는 tool_call 로 끝난 체크포인트는 LLM 재호출 없이 남은 호출만 실행(turn-reentry).
             let reentry = input.resume ? findDanglingToolCalls(conversation) : null;

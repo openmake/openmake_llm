@@ -22,6 +22,8 @@ import './default-hooks';
 import { withSpan } from '../observability/otel';
 import { createLogger } from '../utils/logger';
 import { MCP_EXTERNAL_TOOL_LIMITS } from '../config/timeouts';
+import { allowedWhenInternalOnly } from '../config/egress-policy';
+import { getEgressToolBlockedMessage } from '../prompts/egress-notices';
 
 const logger = createLogger('ToolDispatch');
 
@@ -130,6 +132,12 @@ export async function dispatchTool(
 
         // 이미 중단된 요청은 어떤 실행도 시작하지 않는다 — 서킷 반개방 전이·훅·실제 호출 모두 앞에서 끊는다.
         if (aborted()) return fail(abortedMessage, { aborted: true });
+
+        // 반출 관문(config/egress-policy) — 내부 전용 문맥이면 자료를 밖으로 보내는 도구는 실행하지 않는다.
+        // 노출 목록에서 이미 빠지지만, 모델이 이름을 지어 부를 수 있으므로 실행 지점에서 한 번 더 막는다.
+        if (context?.egressInternalOnly === true && !allowedWhenInternalOnly(name, args)) {
+            return fail(getEgressToolBlockedMessage(name), { record: false });
+        }
 
         // 서킷 차단 도구는 실행하지 않고 즉시 거절한다. 노출에서 빠져도 모델이 이름을
         // 기억해 호출할 수 있으므로 2차 방어가 필요하다(그리고 죽은 서버를 두드리지 않는다).

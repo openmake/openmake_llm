@@ -599,3 +599,69 @@ describe('task-sandbox tools', () => {
         expect(txt(await ask.handler({ questions: [{ question: '색은?', options: ['빨강', '파랑'] }] }))).toContain('빨강');
     });
 });
+
+describe('task-sandbox tools — 편집 해시 비교 후 교체(AGENT_TASK_EDIT_CAS)', () => {
+    const limits = () => (jest.requireActual('../../config/runtime-limits') as typeof import('../../config/runtime-limits')).AGENT_TASK_LIMITS;
+    let flag: jest.ReplaceProperty<boolean> | undefined;
+    afterEach(() => flag?.restore());
+
+    function setup(on: boolean) {
+        flag = jest.replaceProperty(limits(), 'EDIT_CAS', on);
+        const sb = fakeSandbox();
+        const tools = createTaskTools(sb);
+        return { sb, editor: byName(tools, 'str_replace_editor'), fileOps: byName(tools, 'file_ops'), bash: byName(tools, 'bash') };
+    }
+
+    it('본 뒤 다른 곳에서 바뀐 파일은 str_replace 하지 않고 다시 보라고 돌려준다', async () => {
+        const { sb, editor } = setup(true);
+        sb.files.set('a.py', 'x = 1\n');
+        await editor.handler({ command: 'view', path: 'a.py' });
+        sb.files.set('a.py', 'x = 1\ny = 2\n'); // 사용자·다른 서브에이전트의 변경
+        const r = await editor.handler({ command: 'str_replace', path: 'a.py', old_str: 'x = 1', new_str: 'x = 3' });
+        expect(r.isError).toBe(true);
+        expect(txt(r)).toContain('다시 본 뒤');
+        expect(sb.files.get('a.py')).toBe('x = 1\ny = 2\n');
+    });
+
+    it('다시 본 뒤에는 편집된다 — 자기 쓰기 뒤 연속 편집도 통과', async () => {
+        const { sb, editor } = setup(true);
+        sb.files.set('a.py', 'x = 1\n');
+        await editor.handler({ command: 'view', path: 'a.py' });
+        sb.files.set('a.py', 'x = 1\ny = 2\n');
+        await editor.handler({ command: 'view', path: 'a.py' });
+        expect((await editor.handler({ command: 'str_replace', path: 'a.py', old_str: 'x = 1', new_str: 'x = 3' })).isError).toBeFalsy();
+        expect((await editor.handler({ command: 'insert', path: 'a.py', insert_line: 0, new_str: '# h' })).isError).toBeFalsy();
+        expect(sb.files.get('a.py')).toBe('# h\nx = 3\ny = 2\n');
+    });
+
+    it('file_ops write 는 읽은 뒤 바뀐 파일을 통째로 덮어쓰지 않는다, delete 는 지워진 파일 기준 충돌 없음', async () => {
+        const { sb, fileOps } = setup(true);
+        sb.files.set('n.md', 'v1');
+        await fileOps.handler({ op: 'read', path: 'n.md' });
+        sb.files.set('n.md', 'v1+user');
+        const r = await fileOps.handler({ op: 'write', path: 'n.md', content: 'mine' });
+        expect(r.isError).toBe(true);
+        expect(sb.files.get('n.md')).toBe('v1+user');
+        sb.files.delete('n.md');
+        const r2 = await fileOps.handler({ op: 'write', path: 'n.md', content: 'mine' });
+        expect(txt(r2)).toContain('지워졌습니다');
+    });
+
+    it('bash 실행 뒤에는 장부를 비워 자기 명령의 변경을 충돌로 보지 않는다', async () => {
+        const { sb, editor, bash } = setup(true);
+        sb.files.set('a.py', 'x=1');
+        await editor.handler({ command: 'view', path: 'a.py' });
+        await bash.handler({ command: 'black a.py' });
+        sb.files.set('a.py', 'x = 1');
+        expect((await editor.handler({ command: 'str_replace', path: 'a.py', old_str: 'x = 1', new_str: 'x = 2' })).isError).toBeFalsy();
+    });
+
+    it('꺼져 있으면(기본) 종전처럼 마지막 쓰기가 이긴다', async () => {
+        const { sb, fileOps } = setup(false);
+        sb.files.set('n.md', 'v1');
+        await fileOps.handler({ op: 'read', path: 'n.md' });
+        sb.files.set('n.md', 'v1+user');
+        expect((await fileOps.handler({ op: 'write', path: 'n.md', content: 'mine' })).isError).toBeFalsy();
+        expect(sb.files.get('n.md')).toBe('mine');
+    });
+});

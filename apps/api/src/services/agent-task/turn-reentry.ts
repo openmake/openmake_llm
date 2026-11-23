@@ -18,6 +18,8 @@ import { snapshotWorkspaceTurn } from './fork-workspace';
 import { handoffUsedToolNames } from './context-handoff';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskCheckpointRepository } from '../../data/repositories/agent-task-checkpoint-repository';
+import { getAgentTaskRecordFailedNotice } from '../../prompts/agent-task-prompt';
+import { AgentTaskRecordError } from './types';
 import type { ChatMessage, ToolCall } from '../../llm/types';
 
 const logger = createLogger('TurnReentry');
@@ -95,11 +97,18 @@ export function resolveUnknownOutcome(inFlightId: string | null, calls: ToolCall
     return calls.some((tc) => tc.id === inFlightId) ? inFlightId : undefined;
 }
 
-/** 실행 중 표식 기록·해제(null) — 실패해도 실행을 막지 않는다(그 호출만 종전의 최소 1회 재실행으로 돌아간다). */
-export async function markToolCallInFlight(taskId: string, toolCallId: string | null): Promise<void> {
+/** 실행 중 표식 기록·해제(null) — 기본은 실패해도 실행을 막지 않는다(그 호출만 종전의 최소 1회 재실행으로 돌아간다).
+ *  fail-closed 모드에선 기록 실패가 AgentTaskRecordError 를 던진다. */
+export async function markToolCallInFlight(taskId: string, toolCallId: string | null, toolName?: string): Promise<void> {
     try {
         await new AgentTaskCheckpointRepository(getPool()).setInFlightToolCall(taskId, toolCallId);
     } catch (e) {
+        // fail-closed(RECORD_FAIL_CLOSED): 표식 기록 실패는 실행을 막는다 — 표식 없는 부작용은 재개 때 다시 실행된다.
+        // 해제 실패는 막지 않는다(남은 표식은 다음 재개에서 결과 불명으로 묻게 될 뿐 — 보수적인 쪽).
+        if (toolCallId && AGENT_TASK_LIMITS.RECORD_FAIL_CLOSED) {
+            logger.error(`[${taskId}] 실행 중 표식 기록 실패 — 실행하지 않음 (${toolName ?? toolCallId}):`, e);
+            throw new AgentTaskRecordError(getAgentTaskRecordFailedNotice(toolName ?? 'tool'));
+        }
         logger.warn(`[${taskId}] 실행 중 표식 ${toolCallId ? '기록' : '해제'} 실패 (무시):`, e);
     }
 }
