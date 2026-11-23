@@ -31,10 +31,10 @@ describe('reasoning-effort 정규화', () => {
     });
 
     it('qwen3.8 의 high 는 xhigh 로 승격된다 (거절값 회피 + 의도 보존)', () => {
-        expect(supportedEfforts('retired-chat-model-awq')).not.toContain('high');
-        expect(normalizeEffort('retired-chat-model-awq', 'high')).toBe('xhigh');
-        expect(normalizeEffort('retired-chat-model-awq', 'low')).toBe('low');
-        expect(normalizeEffort('retired-chat-model-awq', 'medium')).toBe('medium');
+        expect(supportedEfforts('qwen3.8-flash-next-awq')).not.toContain('high');
+        expect(normalizeEffort('qwen3.8-flash-next-awq', 'high')).toBe('xhigh');
+        expect(normalizeEffort('qwen3.8-flash-next-awq', 'low')).toBe('low');
+        expect(normalizeEffort('qwen3.8-flash-next-awq', 'medium')).toBe('medium');
     });
 
     it('미등록 모델은 OpenAI 표준 3단으로 보수 처리 — xhigh 는 high 로 강등', () => {
@@ -63,20 +63,20 @@ describe('reasoning-effort 정규화', () => {
         process.env.LLM_REASONING_EFFORTS_JSON = JSON.stringify({ 'bai:glm-5.3': ['low'] });
         resetReasoningEffortCache();
         expect(supportedEfforts('glm-5.3-flash', 'bai')).toEqual(['low']);
-        expect(supportedEfforts('retired-chat-model')).toEqual(['low', 'medium', 'xhigh']); // 기본값 유지
+        expect(supportedEfforts('qwen3.8-flash-next')).toEqual(['low', 'medium', 'xhigh']); // 기본값 유지
     });
 
     it('잘못된 env 는 기본 카탈로그로 폴백한다 (부팅 실패 금지)', () => {
         process.env.LLM_REASONING_EFFORTS_JSON = '{"broken": ["ultra"]}';
         resetReasoningEffortCache();
-        expect(supportedEfforts('retired-chat-model')).not.toContain('high');
+        expect(supportedEfforts('qwen3.8-flash-next')).not.toContain('high');
     });
 
     it('providerId 가 외부면 provider 한정 키만 보고, 없으면 표준 3단 (bare 로컬 키가 새지 않음)', () => {
         expect(supportedEfforts('qwen3.8-flash', 'bai')).toEqual(['low', 'medium', 'high']);
         expect(normalizeEffort('qwen3.8-flash', 'xhigh', 'bai')).toBe('high');
         // 로컬은 종전과 동일
-        expect(supportedEfforts('retired-chat-model', 'local-llm')).toContain('xhigh');
+        expect(supportedEfforts('qwen3.8-flash-next', 'local-llm')).toContain('xhigh');
     });
 
     it('B.AI glm-5.3 기본 맵: medium 은 400 이라 high 로 승격, low 는 그대로', () => {

@@ -210,7 +210,7 @@ npm run eval:redteam -- --real --limit 12     # real 12건 — 도구는 dry-run
 ## 팩 eval — 케이스는 팩과 함께 다닌다 (2026-09-20, 오픈웨이트 전환 S3)
 
 ```bash
-npm run eval:packs -- --real --models retired-chat-model            # 켜진 팩 전부
+npm run eval:packs -- --real --models qwen3.8-flash-next            # 켜진 팩 전부
 npm run eval:packs -- --real --models a,b --packs industry-pack
 ```
 
@@ -222,7 +222,7 @@ npm run eval:packs -- --real --models a,b --packs industry-pack
 ## 비교 매트릭스·실행 이력 (2026-09-17, 146)
 
 ```bash
-npm run eval:matrix -- --real --models retired-chat-model --variants base,concise --limit 5
+npm run eval:matrix -- --real --models qwen3.8-flash-next --variants base,concise --limit 5
 ```
 
 - 셀 = 모델 × variant(`matrix-variants.ts` — base·concise·verbose·thinking, 채팅 요청 필드만 바꾼다). 셀마다 response 골든셋을 실모델로 돌려 통과율·TTFT p50/p95·전체 p50/p95·토큰을 모은다. 모델은 로컬(LiteLLM alias)만 — 평가 ProviderRouter 에 외부 키가 없다.
@@ -234,11 +234,11 @@ npm run eval:matrix -- --real --models retired-chat-model --variants base,concis
 
 ```bash
 # ① 실측 — 모델당 소형 요청 8회, 순차. 외부 모델은 그 사용자의 등록 키로 provider 직결
-npm run eval:probe -- --model retired-chat-model
+npm run eval:probe -- --model qwen3.8-flash-next
 npm run eval:probe -- --user 3 --model hasa:qwen2.5-vl-72b,hasa:gpt-oss-120b
 # ② 출력 조각을 config/model-profiles.ts 항목(또는 배포 없이 env LLM_MODEL_PROFILES_JSON)으로
 # ③ 전환 판정 — 같은 실행 안에서 현행 모델과 비교, 미달이면 exit 1
-npm run eval:matrix -- --real --models retired-chat-model,<후보> --gate <후보> --limit 30
+npm run eval:matrix -- --real --models qwen3.8-flash-next,<후보> --gate <후보> --limit 30
 ```
 
 - **프로브는 확정한 것만 낸다**(`model-probe.ts` `judgeProbe`). 도구를 안 부른 200·정답을 못 맞힌 비전·429 가 섞인 강도는 *미확정* 이고 프로필에 들어가지 않는다. capabilities 는 네 값이 전부 확정일 때만 나온다. 기본 호출이 실패하면(키·잔액·없는 모델) 나머지 요청은 보내지 않고 exit 2.
