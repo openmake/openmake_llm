@@ -58,6 +58,7 @@ import {
 } from './extension-ingest-helpers';
 import { UserExtensionRepository } from '../../data/repositories/user-extension-repository';
 import { evaluatePermissionState } from '../../services/extensions/permission-state';
+import { listLinkedMcpServerIds, releaseLinkedMcpServers } from '../../services/extensions/release-linked-mcp';
 import { EXTENSION_INGEST, SKILL_CREATOR } from '../../config/constants';
 
 const logger = createLogger('ExtensionIngestService');
@@ -256,10 +257,13 @@ export class ExtensionIngestService {
                 updateTarget = sameName;
                 // 회수 전에 승인 상태를 기억한다 — 같은 이름으로 다시 들어온 스킬은 승인·배정을 이어받는다.
                 approvedBefore = await extRepo.snapshotApprovedSkills(sameName.id);
+                // 회수는 링크를 끊으므로(unlink) 구 MCP 서버 id 를 먼저 받아 둔다 — 회수 뒤 떠 있는 옛 버전 연결을 닫는다.
+                const oldMcpServerIds = await listLinkedMcpServerIds(this.opts.pool, sameName.id);
                 // ⚠️ 구 구성요소 회수는 **신규 생성 전에** 해야 한다. Custom Agent 는
                 // UNIQUE(user_id, name) 이라 구 행이 살아 있으면 신규가 랜덤 suffix 를 달고
                 // 생성돼 이름이 업데이트마다 표류한다(사용자가 고르던 에이전트를 잃는다).
                 await extRepo.archiveLinkedComponents(sameName.id);
+                await releaseLinkedMcpServers(this.opts.pool, sameName.id, input.userId, oldMcpServerIds);
             } else {
                 throw new Error(`EXTENSION_ALREADY_INSTALLED: "${manifest.name}" 이 다른 소스(${sameName.source_url})로 이미 설치됨 (${sameName.id}) — 먼저 제거 후 재설치하세요`);
             }

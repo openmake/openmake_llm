@@ -3,6 +3,7 @@ import { resolveExtensionRoot, scanForExtensionManifests, detectUnsupportedCompo
 import type { Pool } from 'pg';
 import type { LLMClient } from '../../../llm/client';
 import { GitFetcher } from '../git-fetcher';
+import * as toolRuntime from '../../../runtime-ports/tool-runtime';
 
 jest.mock('../../../data/retry-wrapper', () => ({ withRetry: (fn: () => unknown) => fn() }));
 
@@ -284,6 +285,7 @@ describe('ExtensionIngestService', () => {
         // ⚠️ archive 는 update 판정 직후(구성요소 생성 **전**)에 실행된다 — Custom Agent
         // 이름 표류 방지(코드리뷰 지적, 2026-08-24)
         q.mockResolvedValueOnce({ rows: [] });                    // snapshotApprovedSkills (승인 이어주기 — 회수 전)
+        q.mockResolvedValueOnce({ rows: [{ id: 'mcp-old1', name: 'tool-pack-pg', status: 'active', enabled: true }] }); // listLinked — 구 MCP 서버 id(회수가 링크를 끊기 전)
         q.mockResolvedValueOnce({ rows: [] });                    // delete assignments (archive 전 정리)
         q.mockResolvedValueOnce({ rows: [] });                    // archive skills
         q.mockResolvedValueOnce({ rows: [] });                    // archive mcp
@@ -298,9 +300,14 @@ describe('ExtensionIngestService', () => {
         }] });
         q.mockResolvedValueOnce({ rows: [] });                    // linkComponents (mcp)
 
+        const releaseServers = jest.fn().mockResolvedValue(1);
+        const runtimeSpy = jest.spyOn(toolRuntime, 'getToolRuntime').mockReturnValue({ releaseServers } as unknown as toolRuntime.ToolRuntime);
         const svc = makeService();
         const r = await svc.import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' });
+        runtimeSpy.mockRestore();
         if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
+        // 회수한 옛 버전 MCP 서버의 떠 있는 연결을 닫는다 — 소유자 = 설치한 사용자
+        expect(releaseServers).toHaveBeenCalledWith('user-1', ['mcp-old1']);
         expect(r.updated).toBe(true);
         expect(r.previousVersion).toBe('1.0.0');
         expect(r.version).toBe('1.1.0');
@@ -370,6 +377,7 @@ describe('ExtensionIngestService', () => {
                 permission_state: 'reviewed', permissions_granted: [], permissions_requested: [],
             }] });
             q.mockResolvedValueOnce({ rows: [] });                    // snapshotApprovedSkills
+            q.mockResolvedValueOnce({ rows: [] });                    // listLinked — 구 MCP 서버 없음
             q.mockResolvedValueOnce({ rows: [] });                    // delete assignments
             q.mockResolvedValueOnce({ rows: [] });                    // archive skills
             q.mockResolvedValueOnce({ rows: [] });                    // archive mcp
@@ -407,6 +415,7 @@ describe('ExtensionIngestService', () => {
                 permission_state: 'legacy_unreviewed', permissions_granted: null, permissions_requested: null,
             }] });
             q.mockResolvedValueOnce({ rows: [] });                    // snapshotApprovedSkills
+            q.mockResolvedValueOnce({ rows: [] });                    // listLinked — 구 MCP 서버 없음
             q.mockResolvedValueOnce({ rows: [] });                    // delete assignments
             q.mockResolvedValueOnce({ rows: [] });                    // archive skills
             q.mockResolvedValueOnce({ rows: [] });                    // archive mcp
@@ -440,6 +449,7 @@ describe('ExtensionIngestService', () => {
                 permission_state: 'reviewed', permissions_granted: ['network:internet'], permissions_requested: ['network:internet'],
             }] });
             q.mockResolvedValueOnce({ rows: [] });                    // snapshotApprovedSkills
+            q.mockResolvedValueOnce({ rows: [] });                    // listLinked — 구 MCP 서버 없음
             q.mockResolvedValueOnce({ rows: [] });                    // delete assignments
             q.mockResolvedValueOnce({ rows: [] });                    // archive skills
             q.mockResolvedValueOnce({ rows: [] });                    // archive mcp
