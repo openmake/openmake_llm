@@ -1,4 +1,4 @@
-import { autoCreateSkillSchema, draftsQuerySchema } from '../skills.schema';
+import { autoCreateSkillSchema, draftsQuerySchema, searchSkillsQuerySchema } from '../skills.schema';
 
 describe('autoCreateSkillSchema', () => {
   it('accepts minimum valid input', () => {
@@ -41,3 +41,15 @@ describe('draftsQuerySchema', () => {
 
 // searchSkillsQuerySchema.status 필드는 보안상 의도적으로 제거됨.
 // draft 조회는 draftsQuerySchema + /drafts 엔드포인트로만 가능.
+
+describe('searchSkillsQuerySchema.isPublic', () => {
+  it("쿼리 문자열 'false' 는 false, 'true' 는 true, 없으면 undefined", () => {
+    expect(searchSkillsQuerySchema.parse({ isPublic: 'false' }).isPublic).toBe(false);
+    expect(searchSkillsQuerySchema.parse({ isPublic: 'true' }).isPublic).toBe(true);
+    expect(searchSkillsQuerySchema.parse({}).isPublic).toBeUndefined();
+  });
+
+  it('그 밖의 값은 거절한다', () => {
+    expect(() => searchSkillsQuerySchema.parse({ isPublic: 'yes' })).toThrow();
+  });
+});
