@@ -18,6 +18,7 @@ export type AgentTaskFailureClass = typeof AGENT_TASK_FAILURE_CLASSES[number];
 /** error 값이 코드 문자열인 경우 — 정확히 일치. */
 const EXACT: Readonly<Record<string, AgentTaskFailureClass>> = {
     goal_incomplete: 'goal_incomplete',
+    verification_failed: 'goal_incomplete', // 검증 실패를 고치지 못한 완료(strict, 하네스 P1-4) — 목표를 확인된 상태로 끝내지 못했다
     max_turns_exhausted: 'max_turns',
     token_limit: 'token_limit',
     timeout: 'timeout',

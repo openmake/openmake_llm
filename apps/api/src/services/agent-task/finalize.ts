@@ -35,6 +35,7 @@ import { AgentTaskApprovalRepository } from '../../data/repositories/agent-task-
 import { getPool } from '../../data/models/unified-database';
 import { verifyCodeArtifacts } from './deliverable-verify';
 import { verifyWorkspaceTests } from './workspace-test-verify';
+import { combineVerification, VERIFICATION_FAILED_ERROR, type VerificationStatus } from './verification-status';
 import { persistArtifactSteps, persistJudgeStep, persistVerifySkippedStep, verifySkippedMessage } from './task-steps';
 import { maybePersistCodeDiff } from './code-diff';
 import { judgeClientFor } from './role-client';
@@ -174,6 +175,8 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     //    턴 상한에서 꺼낸 보류 답변(verifyHeld)은 더 고칠 턴이 없으므로 상한을 넘긴 것과 같이 다룬다.
     const verifyRetries = input.verifyHeld ? Number.POSITIVE_INFINITY : input.verifyRetries;
     const skippedGates: string[] = [];
+    // 검증 4상태(하네스 P1-4) — 각 검증의 결과를 모아 완료 때 verification_status 로 남긴다(verification-status).
+    const checks: VerificationStatus[] = [];
     if (taskRuntime && AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_ENABLED && artifacts.length > 0
         && verifyRetries >= AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_MAX_RETRIES) skippedGates.push('deliverable');
     if (taskRuntime && AGENT_TASK_LIMITS.WORKSPACE_TEST_GATE_ENABLED
@@ -183,6 +186,7 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
         && verifyRetries < AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_MAX_RETRIES
         && artifacts.length > 0) {
         const verify = await verifyCodeArtifacts(taskRuntime, artifacts, signal);
+        checks.push(verify.status);
         if (!verify.ok) {
             logger.info(`[AgentTask] 산출물 검증 실패 → 자가수정 유도: ${taskId} (재시도 ${input.verifyRetries + 1})`);
             if (input.hold) input.hold.answer = input;
@@ -200,6 +204,7 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
         stepNumber = tests.stepNumber;
         noteTestGateSkip(tests.provenSkip && evidence?.freshPass ? VERIFY_EVIDENCE_SKIP_NOTES.fresh_pass(evidence.freshPass.command) : null, taskId, emitStep);
         emitStepIfRan(tests, emitStep);
+        checks.push(tests.status);
         if (tests.ran && !tests.ok) {
             logger.info(`[AgentTask] 테스트 게이트 실패 → 수정 유도: ${taskId} (${tests.runner}, 재시도 ${input.verifyRetries + 1})`);
             if (input.hold) input.hold.answer = input;
@@ -252,6 +257,7 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
         // 깨진다(셰도우 표본은 step_type='judge_shadow' 로 읽는다).
         if (judgeApplies) {
             verdict = judged;
+            checks.push(judged === 'achieved' ? 'passed' : judged === 'unknown' ? 'inconclusive' : 'failed');
             if (achieved === false || (reviewIncomplete && achieved !== true)) {
                 // 파일 작업 판정으로 실패해도 제출한 보고서 참조가 끊기지 않게 남긴다.
                 stepNumber = await persistArtifactSteps(taskId, artifacts, stepNumber, userId);
@@ -262,6 +268,7 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
                     checkpoint: null,
                     completionPath: path,
                     judgeVerdict: verdict,
+                    verificationStatus: combineVerification(checks),
                 });
                 logger.info(`[AgentTask] judge 목표 미달성 종료: ${taskId} (turn ${turn + 1}, ${path})`);
                 return { kind: 'goal_incomplete', stepNumber };
@@ -270,6 +277,9 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     }
 
     // 4. 산출물 영속 후 완료.
+    // 재시도 상한을 넘겨 건너뛴 게이트·보류 답변은 앞선 검증 실패를 고치지 못했다는 뜻이다.
+    if (skippedGates.length > 0 || input.verifyHeld) checks.push('failed');
+    const verification = combineVerification(checks);
     if (skippedGates.length > 0 || input.verifyHeld) {
         const skippedNote = input.verifyHeld ? getVerifyHeldAnswerNote(skippedGates) : verifySkippedMessage(skippedGates);
         stepNumber = await persistVerifySkippedStep(taskId, stepNumber, skippedGates, skippedNote);
@@ -277,6 +287,20 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     }
     stepNumber = await persistArtifactSteps(taskId, artifacts, stepNumber, userId);
     stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
+    // strict(AGENT_TASK_VERIFY_STRICT) — 검증 실패를 못 고친 답변은 completed 로 남기지 않는다(산출물·diff 는 위에서 남겼다).
+    if (AGENT_TASK_LIMITS.VERIFY_STRICT && verification === 'failed') {
+        await update({
+            status: 'failed',
+            error: VERIFICATION_FAILED_ERROR,
+            result: withSandboxUnavailableFootnote(withWriteFailureFootnote(body, input.conversation), taskId),
+            checkpoint: null,
+            completionPath: path,
+            judgeVerdict: verdict,
+            verificationStatus: verification,
+        });
+        logger.info(`[AgentTask] 검증 실패 종료(strict): ${taskId} (turn ${turn + 1}, ${path}, 건너뛴 게이트 ${skippedGates.join(',') || '-'})`);
+        return { kind: 'goal_incomplete', stepNumber };
+    }
     await update({
         status: 'completed',
         progress: 100,
@@ -289,8 +313,9 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
         checkpoint: null, // 완료 작업은 재개 대상 아님 — checkpoint 잔존 시 resume 허용·저장 팽창
         completionPath: path,
         judgeVerdict: verdict,
+        verificationStatus: verification,
     });
-    logger.info(`[AgentTask] 완료: ${taskId} (${turn + 1} 턴, ${path}, judge=${verdict}, 아티팩트 ${artifacts.length}개)`);
+    logger.info(`[AgentTask] 완료: ${taskId} (${turn + 1} 턴, ${path}, judge=${verdict}, 검증=${verification}, 아티팩트 ${artifacts.length}개)`);
     return { kind: 'completed', stepNumber };
 }
 

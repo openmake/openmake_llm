@@ -174,6 +174,8 @@ export class AgentTaskRepository extends AgentTaskLifecycleRepository {
         completionPath?: string;
         /** goal judge 결과(091) — 'achieved' | 'not_achieved' | 'unknown' | 'skipped' */
         judgeVerdict?: string;
+        /** 완료 검증 종합(204) — 'passed' | 'not_run' | 'failed' | 'inconclusive' */
+        verificationStatus?: string;
         /** 조건부 전이 — 출발 상태를 허용 표와 이 목록의 교집합으로 좁힌다. 밖이면 AgentTaskTransitionError(경쟁 전이를 덮어쓰지 않게). */
         onlyFrom?: AgentTaskStatus[];
         /** 상태 전이 사유(124 이벤트) — 미지정 시 error 문자열을 쓴다. */
@@ -260,6 +262,10 @@ export class AgentTaskRepository extends AgentTaskLifecycleRepository {
         if (updates.judgeVerdict !== undefined) {
             sets.push(`judge_verdict = $${paramIdx++}`);
             params.push(updates.judgeVerdict);
+        }
+        if (updates.verificationStatus !== undefined) {
+            sets.push(`verification_status = $${paramIdx++}`);
+            params.push(updates.verificationStatus);
         }
         if (updates.priority !== undefined) {
             sets.push(`priority = $${paramIdx++}`);

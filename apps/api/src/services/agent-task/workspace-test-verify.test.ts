@@ -58,10 +58,10 @@ describe('detectWorkspaceTestRunner — 실행기 전용 탐지(로컬 브리지
 });
 
 describe('verifyWorkspaceTests', () => {
-    it('러너가 없으면 실행하지 않고 통과한다(리포트형 작업 무영향)', async () => {
+    it('러너가 없으면 실행하지 않는다 — 막지 않되(ok) 통과가 아니라 미실시(not_run)로 남긴다', async () => {
         const { rt, cmds } = runtime(() => exec('none'));
         const r = await verifyWorkspaceTests(rt, 't1', WROTE, 5);
-        expect(r).toEqual({ ran: false, ok: true, report: '', stepNumber: 5 });
+        expect(r).toEqual({ ran: false, ok: true, status: 'not_run', report: '', stepNumber: 5 });
         expect(cmds.length).toBe(1);
     });
 
@@ -75,7 +75,7 @@ describe('verifyWorkspaceTests', () => {
     it('러너 통과 → ran=true·ok=true, 스텝 1개 기록', async () => {
         const { rt, cmds } = runtime((cmd) => cmd === DETECT_PROBE ? exec('pytest') : exec('3 passed'));
         const r = await verifyWorkspaceTests(rt, 't1', WROTE, 5);
-        expect(r.ran).toBe(true); expect(r.ok).toBe(true); expect(r.runner).toBe('pytest');
+        expect(r.ran).toBe(true); expect(r.ok).toBe(true); expect(r.status).toBe('passed'); expect(r.runner).toBe('pytest');
         expect(r.stepNumber).toBe(6);
         expect(cmds[1]).toBe(RUNNER_COMMANDS.pytest);
     });
@@ -84,6 +84,7 @@ describe('verifyWorkspaceTests', () => {
         const { rt } = runtime((cmd) => cmd === DETECT_PROBE ? exec('npm') : exec('a'.repeat(100) + '\nFAIL src/x.test.ts', 1));
         const r = await verifyWorkspaceTests(rt, 't1', WROTE, 0);
         expect(r.ok).toBe(false);
+        expect(r.status).toBe('failed');
         expect(r.report).toContain('FAIL src/x.test.ts');
         expect(r.report).toContain('[exit=1]');
         expect(r.report).toContain('생략');
@@ -97,7 +98,7 @@ describe('verifyWorkspaceTests', () => {
     it('증거의 러너가 감지된 러너와 같으면 실행하지 않는다(프로브만) — provenSkip', async () => {
         const { rt, cmds } = runtime((cmd) => cmd === DETECT_PROBE ? exec('pytest') : exec('3 passed'));
         const r = await verifyWorkspaceTests(rt, 't1', WROTE, 5, undefined, 'pytest');
-        expect(r).toEqual({ ran: false, ok: true, report: '', stepNumber: 5, runner: 'pytest', provenSkip: true });
+        expect(r).toEqual({ ran: false, ok: true, status: 'passed', report: '', stepNumber: 5, runner: 'pytest', provenSkip: true });
         expect(cmds).toEqual([DETECT_PROBE]);
     });
 
@@ -108,9 +109,9 @@ describe('verifyWorkspaceTests', () => {
         expect(cmds[1]).toBe(RUNNER_COMMANDS.npm);
     });
 
-    it('인프라 오류는 fail-open', async () => {
+    it('인프라 오류는 막지 않되(ok) 판정불가(inconclusive)로 남긴다', async () => {
         const { rt } = runtime(() => { throw new Error('docker down'); });
-        expect(await verifyWorkspaceTests(rt, 't1', WROTE, 2)).toEqual({ ran: false, ok: true, report: '', stepNumber: 2 });
+        expect(await verifyWorkspaceTests(rt, 't1', WROTE, 2)).toEqual({ ran: false, ok: true, status: 'inconclusive', report: '', stepNumber: 2 });
     });
 });
 

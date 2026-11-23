@@ -50,6 +50,7 @@ describe('verifyCodeArtifacts', () => {
         const { runtime, cmds } = fakeRuntime(() => OK);
         const r = await verifyCodeArtifacts(runtime, [artifact({ kind: 'markdown', lang: null })]);
         expect(r.ok).toBe(true);
+        expect(r.status).toBe('not_run');
         expect(cmds).toHaveLength(0);
     });
 
@@ -57,6 +58,7 @@ describe('verifyCodeArtifacts', () => {
         const { runtime, cmds } = fakeRuntime(() => OK);
         const r = await verifyCodeArtifacts(runtime, [artifact({ lang: 'python' })]);
         expect(r.ok).toBe(true);
+        expect(r.status).toBe('passed');
         expect(cmds[0]).toContain('py_compile');
     });
 
@@ -64,6 +66,7 @@ describe('verifyCodeArtifacts', () => {
         const { runtime } = fakeRuntime(() => FAIL);
         const r = await verifyCodeArtifacts(runtime, [artifact({ lang: 'python', title: '분석 스크립트' })]);
         expect(r.ok).toBe(false);
+        expect(r.status).toBe('failed');
         expect(r.report).toContain('SyntaxError');
         expect(r.report).toContain('분석 스크립트');
     });
@@ -90,10 +93,11 @@ describe('verifyCodeArtifacts', () => {
         expect(cmds).toHaveLength(0);
     });
 
-    it('execRaw throw → fail-open(ok)', async () => {
+    it('execRaw throw → 막지 않되(ok) 판정불가(inconclusive)', async () => {
         const { runtime } = fakeRuntime(() => { throw new Error('docker down'); });
         const r = await verifyCodeArtifacts(runtime, [artifact({ lang: 'python' })]);
         expect(r.ok).toBe(true);
+        expect(r.status).toBe('inconclusive');
     });
 
     it('aborted signal → 즉시 ok', async () => {
