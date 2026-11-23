@@ -907,7 +907,18 @@
         "failed": "Massenaktion fehlgeschlagen: {error}"
       }
     },
-    "approvalsButton": "Freigaben"
+    "approvalsButton": "Freigaben",
+    "revisions": {
+      "title": "Frühere Versionen",
+      "loading": "Wird geladen…",
+      "empty": "Noch keine früheren Versionen. Jede Bearbeitung behält hier den ersetzten Inhalt.",
+      "loadFailed": "Frühere Versionen konnten nicht geladen werden.",
+      "savedAt": "Inhalt bis {date}",
+      "restore": "Wiederherstellen",
+      "confirmRestore": "Inhalt bis {date} wiederherstellen? Der aktuelle Inhalt bleibt als frühere Version erhalten.",
+      "restoreFailed": "Wiederherstellen fehlgeschlagen: {error}",
+      "note": "Jede Bearbeitung behält den ersetzten Inhalt (letzte 30). Beim Wiederherstellen geht der aktuelle Inhalt nicht verloren."
+    }
   },
   "agentTasks": {
     "loading": "Wird geladen…",

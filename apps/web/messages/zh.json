@@ -907,7 +907,18 @@
         "failed": "批量操作失败：{error}"
       }
     },
-    "approvalsButton": "待审批"
+    "approvalsButton": "待审批",
+    "revisions": {
+      "title": "以前的版本",
+      "loading": "加载中…",
+      "empty": "还没有以前的版本。每次编辑都会在这里保留被替换的内容。",
+      "loadFailed": "无法加载以前的版本。",
+      "savedAt": "截至 {date} 的内容",
+      "restore": "恢复",
+      "confirmRestore": "恢复为截至 {date} 的内容？当前内容将保留为以前的版本。",
+      "restoreFailed": "无法恢复：{error}",
+      "note": "每次编辑都会保留被替换的内容（最近 30 个）。恢复不会丢失当前内容。"
+    }
   },
   "agentTasks": {
     "loading": "加载中...",
