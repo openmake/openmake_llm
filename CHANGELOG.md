@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.145.8](https://github.com/openmake/openmake_llm/compare/v1.145.7...v1.145.8) (2026-11-23)
+
+
+### 🐛 버그 수정
+
+* **extensions:** 확장 권한 철회를 실행 중인 MCP 연결에도 곧바로 적용한다 ([a07a16c](https://github.com/openmake/openmake_llm/commit/a07a16c0d64585ff7495aeafd06098b036205cff))
+
 ## [1.145.7](https://github.com/openmake/openmake_llm/compare/v1.145.6...v1.145.7) (2026-11-22)
 
 
