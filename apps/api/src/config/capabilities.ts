@@ -352,6 +352,8 @@ export const ORCHESTRATOR = {
     TURN_DEADLINE_MS: parseInt(process.env.ORCHESTRATOR_TURN_DEADLINE_MS || '900000', 10),
     /** 프로세스 전체 동시 실행 작업 상한(provider 세마포어와 별개의 총량 상한) */
     GLOBAL_MAX_INFLIGHT: parseInt(process.env.ORCHESTRATOR_GLOBAL_MAX_INFLIGHT || '8', 10),
+    /** 레벨 장벽 없이 선행이 끝난 작업부터 시작(하네스 P2-8, workflow/dag-runner eager). 기본 끔 = 종전 레벨 순서 */
+    DAG_EAGER: process.env.ORCHESTRATOR_DAG_EAGER === 'true',
     /** Planner 에 넘기는 직전 대화 턴 수·메시지 절단 */
     PLANNER_HISTORY_TURNS: parseInt(process.env.ORCHESTRATOR_PLANNER_HISTORY_TURNS || '2', 10),
     PLANNER_MESSAGE_MAX_CHARS: parseInt(process.env.ORCHESTRATOR_PLANNER_MESSAGE_MAX_CHARS || '4000', 10),

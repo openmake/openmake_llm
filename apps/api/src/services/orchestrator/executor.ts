@@ -1,6 +1,7 @@
 /**
  * @module services/orchestrator/executor
- * @description 계획 실행 — depends_on 레벨 순서로, 레벨 안은 병렬(Promise.allSettled).
+ * @description 계획 실행 — 스케줄링은 범용 DAG 실행기(workflow/dag-runner): 기본은 depends_on 레벨 순서·레벨 안 병렬,
+ *  ORCHESTRATOR_DAG_EAGER=true 면 레벨 장벽 없이 선행이 끝난 작업부터.
  *  - 실패한 부모의 자식은 `skipped`(실행·과금 없음), 독립 작업은 계속. DAG 재실행 없음.
  *  - 상한: 레벨 병렬(ORCHESTRATOR.MAX_PARALLEL) · 프로세스 전체 동시 실행(GLOBAL_MAX_INFLIGHT) ·
  *    작업당 TASK_TIMEOUT_MS · 턴 전체 TURN_DEADLINE_MS · 사용자 취소(ctx.signal) 전파.
@@ -21,6 +22,7 @@ import * as crypto from 'node:crypto';
 import type { PlanTask, ValidatedPlan } from './plan-schema';
 import type { ExecContext, TaskResult } from './types';
 import { createLogger } from '../../utils/logger';
+import { runDag } from '../../workflow/dag-runner';
 
 const logger = createLogger('OrchestratorExecutor');
 
@@ -210,49 +212,35 @@ async function runTask(task: PlanTask, ctx: ExecContext, turnSignal: AbortSignal
 export async function executePlan(plan: ValidatedPlan, ctx: ExecContext): Promise<ExecutionSummary> {
     const startedAt = Date.now();
     const turnSignal = combineSignals(ctx.signal, AbortSignal.timeout(ORCHESTRATOR.TURN_DEADLINE_MS));
-    const results: TaskResult[] = [];
-    const failedOrSkipped = new Set<string>();
-    let cancelled = false;
-
-    for (const level of plan.levels) {
-        if (turnSignal.aborted) { cancelled = !!ctx.signal?.aborted; break; }
-        const runnable: PlanTask[] = [];
-        for (const task of level) {
-            // preflight 가 실행 전에 거절한 작업(미배정·키·미지원·입력·쿼터) — 호출·과금 없이 실패로 확정
-            const pre = ctx.results.get(task.id);
-            if (pre) { results.push(pre); failedOrSkipped.add(task.id); ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: pre.text.slice(0, 120), ...failureFields(task, ctx, textKind(pre.text)) }); continue; }
-            const blockedBy = task.dependsOn.find((d) => failedOrSkipped.has(d));
-            if (blockedBy) {
-                const r: TaskResult = { taskId: task.id, capability: task.capability, ok: false, status: 'skipped', text: `[skipped] 선행 작업 미완료(${ctx.results.get(blockedBy)?.status ?? 'failed'})`, media: [], ms: 0, error: `skipped: ${blockedBy}` };
-                results.push(r); ctx.results.set(task.id, r); failedOrSkipped.add(task.id);
-                ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: r.text, ...failureFields(task, ctx, 'skipped') });
-                continue;
-            }
-            runnable.push(task);
-        }
-        // 레벨 안 병렬 — MAX_PARALLEL 은 검증 단계에서 이미 보장, allSettled 로 부분 실패 흡수
-        const settled = await Promise.allSettled(runnable.map((t) => runTask(t, ctx, turnSignal)));
-        settled.forEach((s, i) => {
-            const task = runnable[i];
-            const r: TaskResult = s.status === 'fulfilled'
-                ? s.value
-                : failedRunResult(task, ctx, `[failed] ${String(s.reason)}`, String(s.reason), 0);
-            results.push(r); ctx.results.set(task.id, r);
-            if (!r.ok) failedOrSkipped.add(task.id);
-        });
-        // 마지막 레벨 실행 도중 취소돼도 cancelled 로 집계
-        if (ctx.signal?.aborted) { cancelled = true; break; }
-    }
-    // 실행하지 못한 나머지 레벨(취소·deadline)은 skipped 로 채운다
-    const wasCancelled = () => cancelled || !!ctx.signal?.aborted;
-    const done = new Set(results.map((r) => r.taskId));
-    for (const task of plan.tasks) {
-        if (done.has(task.id)) continue;
-        const r: TaskResult = { taskId: task.id, capability: task.capability, ok: false, status: 'skipped', text: cancelled ? '[cancelled]' : '[skipped] 턴 시간 초과', media: [], ms: 0, error: cancelled ? 'cancelled' : 'turn deadline' };
-        results.push(r); ctx.results.set(task.id, r);
-        // 턴 시간 초과면 배너가 남으므로 실패로 알린다(취소면 배너가 사라져 알리지 않는다)
-        if (!wasCancelled()) ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: r.text, ...failureFields(task, ctx, 'deadline') });
-    }
+    const wasCancelled = () => !!ctx.signal?.aborted;
+    // 스케줄링은 범용 DAG 실행기(workflow/dag-runner)가 맡고, 여기서는 결과·진행 이벤트만 만든다.
+    // 레벨 장벽(종전)이 기본, ORCHESTRATOR_DAG_EAGER=true 면 선행이 끝난 작업을 바로 시작한다.
+    const { settled } = await runDag<PlanTask, TaskResult>({
+        nodes: plan.tasks,
+        levels: plan.levels,
+        mode: ORCHESTRATOR.DAG_EAGER ? 'eager' : 'levels',
+        maxParallel: ORCHESTRATOR.MAX_PARALLEL, // 레벨 폭은 검증 단계에서 이미 보장 — eager 에선 이 값이 동시 실행 상한
+        signal: turnSignal,
+        run: (task) => runTask(task, ctx, turnSignal),
+        isOk: (r) => r.ok,
+        // preflight 가 실행 전에 거절한 작업(미배정·키·미지원·입력·쿼터) — 호출·과금 없이 실패로 확정
+        presettled: (task) => ctx.results.get(task.id),
+        onBlocked: (task, blockedBy) => ({ taskId: task.id, capability: task.capability, ok: false, status: 'skipped', text: `[skipped] 선행 작업 미완료(${ctx.results.get(blockedBy)?.status ?? 'failed'})`, media: [], ms: 0, error: `skipped: ${blockedBy}` }),
+        onRejected: (task, reason) => failedRunResult(task, ctx, `[failed] ${String(reason)}`, String(reason), 0),
+        // 실행하지 못한 나머지(취소·deadline)
+        onUnreached: (task) => {
+            const cancelled = wasCancelled();
+            return { taskId: task.id, capability: task.capability, ok: false, status: 'skipped', text: cancelled ? '[cancelled]' : '[skipped] 턴 시간 초과', media: [], ms: 0, error: cancelled ? 'cancelled' : 'turn deadline' };
+        },
+        onSettled: (task, r, how) => {
+            if (how === 'presettled') { ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: r.text.slice(0, 120), ...failureFields(task, ctx, textKind(r.text)) }); return; }
+            ctx.results.set(task.id, r);
+            if (how === 'blocked') ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: r.text, ...failureFields(task, ctx, 'skipped') });
+            // 턴 시간 초과면 배너가 남으므로 실패로 알린다(취소면 배너가 사라져 알리지 않는다)
+            if (how === 'unreached' && !wasCancelled()) ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: r.text, ...failureFields(task, ctx, 'deadline') });
+        },
+    });
+    const results = settled.map((x) => x.result);
     const ok = results.filter((r) => r.status === 'completed').length;
     const pending = results.filter((r) => r.status === 'pending').length;
     const skipped = results.filter((r) => r.status === 'skipped').length;
