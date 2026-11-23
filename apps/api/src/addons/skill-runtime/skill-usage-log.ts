@@ -127,3 +127,108 @@ export async function getSkillUsageSummary(opts: { days: number; ownerUserId?: s
         lastUsedAt: row.last_used_at ? new Date(row.last_used_at).toISOString() : null,
     }));
 }
+
+// ============================================================
+// 스킬 자동 선택(load_skill) 효과 측정 — skill_auto_select_log(202)
+// ============================================================
+/*
+ * 깔때기:
+ *   offered  카탈로그를 실은 load_skill 이 도구 목록에 들어감 (skill-catalog-tool.applySkillCatalog)
+ *   called   모델이 load_skill 을 호출해 1개 이상 찾음 (load-skill-tool)
+ *   miss     호출했지만 하나도 못 찾음 — 카탈로그 이름과 다른 이름을 지어냈다는 신호
+ *
+ * 호출률 = (called + miss) / offered. 한 턴에 load_skill 을 여러 번 부르면 1 을 넘을 수 있다(근사치).
+ * 스킬별로 실제 불러온 횟수는 위 skill_audit_log(tool_called='load_skill') 요약에 있다.
+ * 같은 원칙(fail-open·개수만 저장·SKILL_USAGE_LOG_ENABLED 따름). add-on 경계 규칙상 DB 접근은
+ * 이 파일에 모은다.
+ */
+
+type AutoSelectEvent = 'offered' | 'called' | 'miss';
+
+interface AutoSelectRecord {
+    event: AutoSelectEvent;
+    userId?: string | null;
+    catalogSize?: number;
+    requested?: number;
+    matched?: number;
+}
+
+/** 이벤트 1건을 비동기로 기록한다. await 하지 않아도 되며 절대 throw 하지 않는다. */
+export function recordAutoSelect(rec: AutoSelectRecord): void {
+    if (!SKILL_USAGE_LOG.enabled) return;
+    void insertRow(rec).catch((e) => {
+        logger.debug(`skill_auto_select_log 기록 실패 (무시): ${e instanceof Error ? e.message : String(e)}`);
+    });
+}
+
+async function insertRow(rec: AutoSelectRecord): Promise<void> {
+    const { getUnifiedDatabase } = await import('../../data/models/unified-database');
+    await getUnifiedDatabase().getPool().query(
+        `INSERT INTO skill_auto_select_log (user_id, event, catalog_size, requested, matched)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [rec.userId ? String(rec.userId) : GUEST_USER_ID, rec.event,
+            rec.catalogSize ?? null, rec.requested ?? null, rec.matched ?? null],
+    );
+}
+
+/** 지금 이 프로세스가 읽은 자동 선택 플래그 — 운영 값 확인용(관리자 API 로 노출) */
+export function autoSelectFlags(): { enabled: boolean; topK: number; overflowOffer: boolean; usageLogEnabled: boolean } {
+    const enabled = process.env.SKILL_AUTO_SELECT_ENABLED === 'true';
+    return {
+        enabled,
+        topK: Number(process.env.SKILL_AUTO_SELECT_TOP_K) || 3,
+        overflowOffer: enabled && process.env.SKILL_OVERFLOW_OFFER_ENABLED !== 'false',
+        usageLogEnabled: SKILL_USAGE_LOG.enabled,
+    };
+}
+
+interface AutoSelectDay { day: string; offered: number; called: number; miss: number }
+
+export interface AutoSelectSummary {
+    offered: number;
+    called: number;
+    miss: number;
+    /** (called + miss) / offered — 노출 없으면 null */
+    callRate: number | null;
+    /** miss / (called + miss) — 호출 없으면 null */
+    missRate: number | null;
+    avgCatalogSize: number | null;
+    daily: AutoSelectDay[];
+}
+
+const ratio = (num: number, den: number): number | null => (den > 0 ? Math.round((num / den) * 1000) / 1000 : null);
+
+/** 최근 `days` 일 깔때기 요약 (UTC 일 단위) */
+export async function getAutoSelectSummary(days: number): Promise<AutoSelectSummary> {
+    const { getUnifiedDatabase } = await import('../../data/models/unified-database');
+    const r = await getUnifiedDatabase().getPool().query<{
+        day: string; event: AutoSelectEvent; n: string; avg_catalog: string | null;
+    }>(
+        `SELECT to_char(date_trunc('day', ts AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS day,
+                event, count(*)::text AS n, avg(catalog_size)::text AS avg_catalog
+           FROM skill_auto_select_log
+          WHERE ts >= NOW() - ($1::int * INTERVAL '1 day')
+          GROUP BY 1, 2
+          ORDER BY 1`,
+        [days],
+    );
+    const byDay = new Map<string, AutoSelectDay>();
+    const totals = { offered: 0, called: 0, miss: 0 };
+    let catalogSum = 0;
+    for (const row of r.rows) {
+        const n = parseInt(row.n, 10);
+        const d = byDay.get(row.day) ?? { day: row.day, offered: 0, called: 0, miss: 0 };
+        d[row.event] += n;
+        byDay.set(row.day, d);
+        totals[row.event] += n;
+        if (row.event === 'offered' && row.avg_catalog !== null) catalogSum += parseFloat(row.avg_catalog) * n;
+    }
+    const calls = totals.called + totals.miss;
+    return {
+        ...totals,
+        callRate: ratio(calls, totals.offered),
+        missRate: ratio(totals.miss, calls),
+        avgCatalogSize: totals.offered > 0 ? Math.round((catalogSum / totals.offered) * 10) / 10 : null,
+        daily: [...byDay.values()],
+    };
+}

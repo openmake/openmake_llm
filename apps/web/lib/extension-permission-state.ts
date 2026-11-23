@@ -1,6 +1,6 @@
 /**
  * 설치형 확장의 권한 상태 → 화면 분류 (서버 계약: docs/architecture/addon-platform.md §11, 마이그레이션 190).
- *   reviewed          → "권한 검토됨"   — 재승인 버튼 없음
+ *   reviewed          → "권한 승인됨"   — 재승인 버튼 없음
  *   legacy_unreviewed → "레거시 미검토" — 종전 동작(네트워크 허용) 유지, 재승인으로 지금 권한을 기록할 수 있다
  *   review_required   → "재승인 필요"   — 업데이트가 넓힌 권한만 막혀 있다
  * 서버가 권한 열을 주지 않으면(구 API) unknown — 배지·패널을 그리지 않는다.

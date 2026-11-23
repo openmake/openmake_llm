@@ -174,11 +174,9 @@ function createValidationMiddleware<T>(schema: ZodSchema<T>, options: SecurityVa
                 return next();
             }
 
-            const currentQuery = req.query as Record<string, unknown>;
-            for (const key of Object.keys(currentQuery)) {
-                delete currentQuery[key];
-            }
-            Object.assign(currentQuery, validated);
+            // Express 5 의 req.query 는 읽을 때마다 URL 을 다시 파싱하는 getter 라, 반환 객체를 고쳐도
+            // 다음 읽기에서 사라진다(coerce·default 유실). 요청 인스턴스에 값 속성으로 덮어 고정한다.
+            Object.defineProperty(req, 'query', { value: validated, writable: true, configurable: true, enumerable: true });
             return next();
         } catch (error) {
             if (error instanceof ZodError) {

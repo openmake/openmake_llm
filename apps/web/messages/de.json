@@ -1442,7 +1442,27 @@
     "deleteConfirm": "Registrierung dieses MCP-Servers löschen?",
     "deleteHint": "Dies kann nicht rückgängig gemacht werden. Gespeicherte Anmeldedaten (env) werden ebenfalls gelöscht, und jede laufende Instanz wird gestoppt. Um ihn wieder zu verwenden, müssen Sie ihn aus dem Katalog neu installieren.",
     "deleteDone": "Server „{name}“ gelöscht.",
-    "deleteError": "Löschen fehlgeschlagen"
+    "deleteError": "Löschen fehlgeschlagen",
+    "exposure": {
+      "label": {
+        "auto": "Für Modell freigegeben",
+        "on_mention": "Freigegeben bei Erwähnung",
+        "on_demand": "Nur über mcp_call",
+        "none": "Nicht für Modell freigegeben"
+      },
+      "hint": {
+        "auto": "Einige Tools werden in jeder Runde an das Modell gesendet, auch ohne Erwähnung des Servers.",
+        "on_mention": "Tools werden an das Modell gesendet, wenn deine Nachricht diesen Server erwähnt.",
+        "on_demand": "Tools werden nicht direkt gesendet; das Modell findet und nutzt sie über mcp_list_tools / mcp_call.",
+        "viaMetaTools": "Auch ohne Erwähnung kann das Modell sie über mcp_call nutzen."
+      },
+      "reason": {
+        "disabled": "Der Server ist deaktiviert, das Modell kann ihn nicht nutzen.",
+        "not_connected": "Nicht verbunden, das Modell kann ihn nicht nutzen.",
+        "no_tools": "Verbunden, aber ohne Tools – das Modell kann ihn nicht nutzen.",
+        "meta_tools_off": "Globale Server sind nur über mcp_call erreichbar, und das ist ausgeschaltet."
+      }
+    }
   },
   "mcpCatalog": {
     "pageTitle": "MCP-Katalog",
@@ -2457,7 +2477,7 @@
     "permissions": {
       "title": "Berechtigungen",
       "badge": {
-        "reviewed": "Berechtigungen geprüft",
+        "reviewed": "Berechtigungen genehmigt",
         "legacy": "Alt, nicht geprüft",
         "reviewRequired": "Erneute Freigabe nötig"
       },
