@@ -245,6 +245,8 @@ PM2 앱 `openmake-knowledge-worker`(`apps/api/dist/workers/knowledge-worker.js`)
 
 manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기여 작업 도구(`agentTaskTools`) 실행 게이트(→ §8.3·8.4 에서 구현 — 작업 도중 토글은 호출 거절로 반영, 도구 목록에서 빼지는 않는다), 턴 단위 활성 통합 스냅숏(한 턴 안에서 훅 집합이 바뀌지 않게, 2차), add-on → Base 내부 import 의 전수 이전(ratchet 으로 줄여 간다 — §8.5), 대화 세션 밖의 Base 테이블 포트(필요해질 때), 물리 SQL 권한 격리.
 
+스킬 매니페스트의 `mcp_bundles` 실행도 범위 밖이다. 업로드(`POST /api/agents/skills/upload`)는 선언을 검증해 `skill_mcp_bundles` 에 **기록만** 하고 MCP 서버를 띄우지 않는다 — 이 행을 읽는 코드가 없다(마이그레이션 201 이 테이블 설명을 바로잡았다). 업로드 스킬이 임의 `command`·`env` 로 stdio 프로세스를 띄우면 MCP 카탈로그 검수와 확장 권한 심사(§11)를 건너뛰기 때문이다. 선언이 있으면 업로드 응답 `compat_notes` 에 실행되지 않는다고 알린다. MCP 서버는 MCP 카탈로그나 설치형 확장으로 설치한다. 도구 바인딩(`tool_bindings` → `skill_tool_bindings`)은 이와 달리 채팅·작업에서 실제로 집행된다.
+
 ## 11. 설치형 확장의 권한 상태 (`user_extensions.permission_state`, 마이그레이션 190)
 
 설치형 확장(Git·ZIP·마켓 갤러리)의 권한은 번들의 `openmake-addon.json` `permissions` 가 **요청**하고, 설치 기록이 **승인**을 들고 있다. 판정은 `services/extensions/permission-state.ts`(순수 함수), 저장은 `data/repositories/user-extension-permission-repository.ts`, 집행은 설치 때 `agents/git-ingest/extension-components.ts` 의 MCP 서버 저장(네트워크가 없으면 stdio 는 `sandbox_network='none'`, 원격 서버는 설치에서 제외)이다.
@@ -263,7 +265,8 @@ manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기�
 - 철회 `POST …/revoke` `{ permissions: [...] }`: 승인에서 뺀 뒤 다시 판정, 감사 `extension.permissions_revoked`. 네트워크가 닫히면 연결된 stdio 는 `none`(`networkRestrictedByPermission`), 원격 서버는 `enabled=false`(`disabledByPermission`). stdio 의 `--network none` 집행은 `MCP_SANDBOX_ENABLED=true` 일 때만 효과가 있다(샌드박스가 꺼져 있으면 `sandbox_network` 값이 프로세스 기동에 쓰이지 않는다). 승인 범위에 철회 대상이 없어 저장하지 않는 철회(no-op)도 네트워크가 이미 닫혀 있으면 MCP 제한을 한 번 더 건다 — 저장 뒤 제한이 실패했을 때의 재시도다.
 - 업데이트(ingest)는 읽어 둔 상태·승인이 저장 값과 같을 때만 쓴다. 업데이트 도중 철회됐으면 `EXTENSION_UPDATE_CONFLICT` 로 실패하고 철회가 남는다(다시 업데이트하면 철회된 승인 기준으로 판정).
 - 재승인·철회는 읽은 요청 권한이 저장 값과 다르면(그 사이 업데이트) 409 — 오래된 화면으로 넓어진 권한을 승인하지 않는다.
-- MCP 서버 반영은 **다음 기동부터**다. 이미 떠 있는 프로세스는 그대로 돈다.
+- MCP 서버 반영은 **즉시**다. 네트워크를 닫거나(철회·재시도 no-op 포함) 권한 때문에 막았던 stdio 를 되돌리면, DB 를 고친 뒤 그 확장에 연결된 서버의 떠 있는 연결을 닫는다(`ToolRuntime.releaseServers` — 사용자 풀과 전역 registry, 응답·감사 `releasedServers`). 다음 사용 때 새 설정(`sandbox_network`)으로 다시 뜨고, 끈 원격 서버(`enabled=false`)는 다시 뜨지 않는다. 그 순간 진행 중이던 그 서버의 도구 호출은 실패한다. 연결 정리가 실패해도 권한 변경은 유지된다(같은 철회를 다시 보내면 재시도).
+- 확장 **제거·업데이트**(`archiveLinked`)는 아직 DB 만 고친다 — 떠 있는 연결은 다음 정리(per_chat 종료·idle sweep·재시작)까지 남는다.
 - 조회 `GET …/permissions` 와 목록 응답은 상태·승인·요청 권한을 주고, 승인자 id(`permissions_reviewed_by`)는 목록 응답에서 뺀다.
 
 롤백:

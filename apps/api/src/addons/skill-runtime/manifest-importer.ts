@@ -4,7 +4,8 @@
  * 단일 트랜잭션으로 3 테이블 INSERT:
  *   - skill_manifests           (id, version, manifest_yaml, prompt_md, checksum, ...)
  *   - skill_tool_bindings       (manifest 의 tool_bindings 배열)
- *   - skill_mcp_bundles         (manifest 의 mcp_bundles 배열)
+ *   - skill_mcp_bundles         (manifest 의 mcp_bundles 배열 — 기록만, 실행하지 않는다:
+ *                                 읽는 코드가 없고 MCP 서버를 띄우지 않는다. mcp-bundles-notice.ts)
  *
  * 중복 처리 (P5-D8):
  *   - (id, version) 이 이미 존재하고 checksum 동일 → no-op, duplicate_checksum=true
@@ -157,6 +158,7 @@ export class ManifestImporter {
         }
     }
 
+    /** 선언 보존용 기록. 이 행을 읽어 MCP 서버를 띄우는 경로는 없다(의도 — mcp-bundles-notice.ts). */
     private async insertMcpBundles(
         client: PoolClient,
         skillId: string,

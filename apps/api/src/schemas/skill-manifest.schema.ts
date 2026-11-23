@@ -19,6 +19,11 @@ const ToolBindingSchema = z.object({
     args_schema: z.record(z.string(), z.unknown()).optional(),
 });
 
+/**
+ * 매니페스트의 MCP 서버 선언. 검증·기록만 하고 실행하지 않는다 — 업로드 스킬이 임의 command 로
+ * 프로세스를 띄우면 MCP 카탈로그 검수·확장 권한 심사를 건너뛴다. 실행은 MCP 카탈로그·확장으로.
+ * (addons/skill-runtime/mcp-bundles-notice.ts)
+ */
 const McpBundleSchema = z.object({
     server_name: z.string().min(1).max(SM.SERVER_NAME_MAX),
     server_config: z.object({
