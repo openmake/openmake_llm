@@ -1790,7 +1790,7 @@ dgx_update_guard() { # $1=llm dir $2=env
     # 기록된 값끼리 충돌하면 뒤의 litellm_ensure 렌더가 앱을 갱신한 뒤에 멈춘다 — 여기서 먼저 거른다.
     [[ -z "$dgx" ]] || p="$(dgx_model_check "$dgx" "$cfg" "$up")" || die "OMK_DGX_MODEL — $p ($lenv) — 아무것도 바꾸지 않았습니다"
     p="$(upstream_model_check "$up" "$cfg" "$dgx")" || die "OMK_UPSTREAM_MODEL — $p ($lenv) — 아무것도 바꾸지 않았습니다"
-    app="$(dotenv_get "$envf" LLM_DEFAULT_MODEL)"; [[ -n "$app" ]] || return 0   # 비면 앱 스키마 기본값(retired-chat-model)
+    app="$(dotenv_get "$envf" LLM_DEFAULT_MODEL)"; [[ -n "$app" ]] || return 0   # 비면 앱 스키마 기본값(qwen3.8-flash-next)
     if [[ -n "$dgx" ]]; then
         [[ "$app" == "$dgx" ]] || die "앱 기본 모델(LLM_DEFAULT_MODEL=$app)과 게이트웨이 DGX 모델(OMK_DGX_MODEL=$dgx)이 다릅니다 — 아무것도 바꾸지 않았습니다. 같은 값으로 맞추려면 'OMK_DGX_MODEL=<값> omk env install $2 --dgx-host <호스트>'(기억된 값 갱신) 또는 ${envf}·${lenv} 를 확인한 뒤 다시 실행하십시오"
         return 0

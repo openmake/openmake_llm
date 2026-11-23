@@ -38,7 +38,7 @@ describe('resolveLocalModelId', () => {
         expect(resolveLocalModelId('chat-next-32b')).toBe('chat-next-32b');
         expect(resolveLocalModelId('jev-decision')).toBe('jev-decision');
         expect(resolveLocalModelId('unknown-model')).toBe('unknown-model');
-        expect(resolveLocalModelId('retired-chat-model')).toBe('retired-chat-model');
+        expect(resolveLocalModelId('RETIRED-CHAT-MODEL')).toBe('RETIRED-CHAT-MODEL');
     });
 
     it('두 엔트리가 같은 alias 를 가지면 해석하지 않는다', () => {

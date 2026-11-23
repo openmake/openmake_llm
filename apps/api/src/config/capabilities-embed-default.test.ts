@@ -47,7 +47,7 @@ describe('CAPABILITY_DEFAULTS — text.embed 기본값 없음', () => {
     });
 
     it('다른 capability 의 코드 기본값과 env override 는 유지한다', () => {
-        expect(loadDefaults({})['text.reason']).toBe('local-llm:retired-chat-model');
+        expect(loadDefaults({})['text.reason']).toBe('local-llm:qwen3.8-flash-next');
         expect(loadDefaults({ CAPABILITY_DEFAULT_TEXT_REASON: 'local-llm:fixture-reason' })['text.reason']).toBe('local-llm:fixture-reason');
         expect(loadDefaults({ CAPABILITY_DEFAULT_TEXT_REASON: 'none' })['text.reason']).toBeUndefined();
     });

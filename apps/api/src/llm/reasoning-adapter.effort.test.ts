@@ -21,7 +21,7 @@ describe('buildExtraBody — reasoning_effort 정규화', () => {
 
     it('게이트가 꺼져 있으면 reasoning_effort 를 보내지 않는다 (기존 동작)', () => {
         process.env.LLM_ENABLE_REASONING_EFFORT = 'false';
-        const body = buildExtraBody('high', 'retired-chat-model-awq');
+        const body = buildExtraBody('high', 'qwen3.8-flash-next-awq');
         expect(body?.reasoning_effort).toBeUndefined();
         expect(body?.allowed_openai_params).toBeUndefined();
         expect(body?.chat_template_kwargs).toEqual({ enable_thinking: true });
@@ -37,8 +37,8 @@ describe('buildExtraBody — reasoning_effort 정규화', () => {
 
     it('게이트 ON: qwen3.8 의 high 는 xhigh 로 바꿔 보낸다 (400 회피)', () => {
         process.env.LLM_ENABLE_REASONING_EFFORT = 'true';
-        expect(buildExtraBody('high', 'retired-chat-model-awq')?.reasoning_effort).toBe('xhigh');
-        expect(buildExtraBody('low', 'retired-chat-model-awq')?.reasoning_effort).toBe('low');
+        expect(buildExtraBody('high', 'qwen3.8-flash-next-awq')?.reasoning_effort).toBe('xhigh');
+        expect(buildExtraBody('low', 'qwen3.8-flash-next-awq')?.reasoning_effort).toBe('low');
     });
 
     it('게이트 ON: qwen3.6 은 요청값 그대로', () => {
@@ -49,7 +49,7 @@ describe('buildExtraBody — reasoning_effort 정규화', () => {
 
     it('think=true(단계 미지정)는 high 의도로 해석 후 모델별 정규화', () => {
         process.env.LLM_ENABLE_REASONING_EFFORT = 'true';
-        expect(buildExtraBody(true, 'retired-chat-model-awq')?.reasoning_effort).toBe('xhigh');
+        expect(buildExtraBody(true, 'qwen3.8-flash-next-awq')?.reasoning_effort).toBe('xhigh');
         expect(buildExtraBody(true, 'qwen3.6-35b-a3b')?.reasoning_effort).toBe('high');
     });
 
