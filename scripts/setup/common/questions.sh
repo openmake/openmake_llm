@@ -66,7 +66,7 @@ ask_llm_backend() {
         interactive || die "--yes 에서는 --dgx-host(DGX vLLM) 또는 --llm-provider(외부 모델) 가 필요합니다."
         echo ""
         echo "  LLM 백엔드를 고르세요."
-        echo "    1) DGX vLLM  — 내부 GPU 서버의 로컬 모델 (qwen3.8-flash-next)"
+        echo "    1) DGX vLLM  — 내부 GPU 서버의 로컬 모델 (retired-chat-model)"
         echo "    2) 외부 provider — OpenRouter 등 API 키로 쓰는 모델"
         local choice=""
         ask choice "선택 [1-2]" "1"

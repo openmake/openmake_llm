@@ -87,6 +87,7 @@
     "scripts/daily-routing-report.sh": "pipeline",
     "scripts/export-openapi.ts": "pipeline",
     "scripts/memory-report.sh": "pipeline",
+    "scripts/nightly-eval.sh": "pipeline",
     "scripts/publish-desktop.sh": "pipeline",
     "scripts/publish-desktop-windows.sh": "pipeline",
     "scripts/resolve-ports.cjs": "pipeline"
