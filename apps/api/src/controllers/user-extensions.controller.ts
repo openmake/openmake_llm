@@ -32,6 +32,7 @@ import { z } from 'zod';
 import { requireAuth, requireAdmin } from '../auth/middleware';
 import { validate } from '../middlewares/validation';
 import { getPool } from '../data/models/unified-database';
+import { releaseLinkedMcpServers } from '../services/extensions/release-linked-mcp';
 import { UserExtensionRepository, type UserExtensionRow } from '../data/repositories/user-extension-repository';
 import { ExtensionCatalogRepository } from '../data/repositories/extension-catalog-repository';
 import { createLogger } from '../utils/logger';
@@ -393,8 +394,11 @@ export function createUserExtensionsController(): Router {
             if (!removed) { res.status(404).json(notFound('확장 없음 또는 이미 제거됨')); return; }
             // 설치 상태 표에서도 지운다 — 남겨 두면 관리 화면이 지운 확장을 계속 보여 준다.
             await removeExtensionInstallation(removed.id);
-            log.info(`확장 제거: userId=${userId} id=${removed.id} name=${removed.name}`);
-            res.json(success({ extension: toPublic(removed) }));
+            // 회수한(archived·enabled=false) MCP 서버의 떠 있는 연결을 닫는다 — 제거한 확장의 프로세스가 계속 돌지 않게.
+            // remove 는 링크를 남기므로(unlink=false) 지금 조회해도 대상이 나온다. 실패해도 제거는 유지.
+            const releasedServers = await releaseLinkedMcpServers(getPool(), removed.id, String(removed.user_id));
+            log.info(`확장 제거: userId=${userId} id=${removed.id} name=${removed.name} released=${releasedServers}`);
+            res.json(success({ extension: toPublic(removed), releasedServers }));
         } catch (err) {
             log.error('remove 실패:', err);
             res.status(500).json(internalError('확장 제거 실패'));
