@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.146.1](https://github.com/openmake/openmake_llm/compare/v1.146.0...v1.146.1) (2026-11-23)
+
+
+### 🐛 버그 수정
+
+* **deps:** url 2.5.9 로 올려 RUSTSEC-2026-0592 를 해소한다 ([bdada88](https://github.com/openmake/openmake_llm/commit/bdada88e5bd5394662e58ed262c6d0f6559163ad))
+* **llm:** qwen3.8-27b 배정을 지운 뒤 남은 기본값·테스트를 qwen3.8-flash-next 기준으로 맞춘다 ([91a6c62](https://github.com/openmake/openmake_llm/commit/91a6c625e62f6a1d4319dc84a1a8b82156e48ec5))
+
 ## [1.146.0](https://github.com/openmake/openmake_llm/compare/v1.145.8...v1.146.0) (2026-11-23)
 
 
