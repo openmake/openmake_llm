@@ -1442,7 +1442,27 @@
     "deleteConfirm": "Delete this MCP server registration?",
     "deleteHint": "This cannot be undone. Stored credentials (env) are deleted too, and any running instance is stopped. To use it again you must reinstall it from the catalog.",
     "deleteDone": "Deleted server \"{name}\".",
-    "deleteError": "Failed to delete"
+    "deleteError": "Failed to delete",
+    "exposure": {
+      "label": {
+        "auto": "Exposed to model",
+        "on_mention": "Exposed when mentioned",
+        "on_demand": "Via mcp_call only",
+        "none": "Not exposed to model"
+      },
+      "hint": {
+        "auto": "Some tools are sent to the model every turn, even without mentioning the server.",
+        "on_mention": "Tools are sent to the model when your message mentions this server.",
+        "on_demand": "Tools are not sent directly; the model finds and calls them via mcp_list_tools / mcp_call.",
+        "viaMetaTools": "Without a mention, the model can still use them via mcp_call."
+      },
+      "reason": {
+        "disabled": "This server is disabled, so the model cannot use it.",
+        "not_connected": "Not connected, so the model cannot use it.",
+        "no_tools": "Connected but has no tools, so the model cannot use it.",
+        "meta_tools_off": "Global servers are reachable only via mcp_call, which is turned off."
+      }
+    }
   },
   "mcpCatalog": {
     "pageTitle": "MCP Catalog",
@@ -2457,7 +2477,7 @@
     "permissions": {
       "title": "Permissions",
       "badge": {
-        "reviewed": "Permissions reviewed",
+        "reviewed": "Permissions approved",
         "legacy": "Legacy, not reviewed",
         "reviewRequired": "Re-approval needed"
       },
