@@ -2,9 +2,12 @@
  * 턴 중간 재개(124) — 체크포인트 대화에서 결과 없는 tool_call 만 골라낸다.
  */
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({}), getPool: () => ({}) }));
-jest.mock('../../../data/repositories/agent-task-checkpoint-repository', () => ({ AgentTaskCheckpointRepository: jest.fn() }));
+const setInFlightToolCall = jest.fn(async () => undefined);
+jest.mock('../../../data/repositories/agent-task-checkpoint-repository', () => ({ AgentTaskCheckpointRepository: jest.fn(() => ({ setInFlightToolCall })) }));
 
-import { ensureUniqueToolCallIds, findDanglingToolCalls, resolveUnknownOutcome , usedToolNamesFrom } from '../turn-reentry';
+import { ensureUniqueToolCallIds, findDanglingToolCalls, resolveUnknownOutcome , usedToolNamesFrom, markToolCallInFlight } from '../turn-reentry';
+import { AgentTaskRecordError } from '../types';
+import { AGENT_TASK_LIMITS } from '../../../config/runtime-limits';
 import type { ChatMessage } from '../../../llm/types';
 
 const call = (id: string, name = 'bash') => ({ type: 'function' as const, id, function: { name, arguments: {} } });
@@ -100,5 +103,23 @@ describe('usedToolNamesFrom — 재개 때 사용 도구 목록 복원', () => {
 
     it('대화가 없으면(새 실행) 비어 있다', () => {
         expect(usedToolNamesFrom(undefined).size).toBe(0);
+    });
+});
+
+describe('markToolCallInFlight — 기록 실패', () => {
+    const limits = AGENT_TASK_LIMITS as { RECORD_FAIL_CLOSED: boolean };
+    afterEach(() => { limits.RECORD_FAIL_CLOSED = false; });
+
+    it('기본(fail-open)은 기록 실패를 삼킨다', async () => {
+        setInFlightToolCall.mockRejectedValueOnce(new Error('db down'));
+        await expect(markToolCallInFlight('t1', 'c1', 'od::create')).resolves.toBeUndefined();
+    });
+
+    it('fail-closed 면 기록 실패가 AgentTaskRecordError, 해제 실패는 삼킨다', async () => {
+        limits.RECORD_FAIL_CLOSED = true;
+        setInFlightToolCall.mockRejectedValueOnce(new Error('db down'));
+        await expect(markToolCallInFlight('t1', 'c1', 'od::create')).rejects.toBeInstanceOf(AgentTaskRecordError);
+        setInFlightToolCall.mockRejectedValueOnce(new Error('db down'));
+        await expect(markToolCallInFlight('t1', null)).resolves.toBeUndefined();
     });
 });

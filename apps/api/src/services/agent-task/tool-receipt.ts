@@ -6,7 +6,8 @@
  * 작업·호출 id 로 정해지는 멱등 키를 외부 MCP 서버에 함께 보낸다 — 같은 호출을 다시 실행해도 키가 같아
  * 키를 지원하는 서버는 중복을 스스로 막는다.
  *
- * 저장 실패는 실행을 막지 않는다(fail-open, 경고 로그).
+ * 저장 실패는 기본적으로 실행을 막지 않는다(fail-open, 경고 로그). AGENT_TASK_RECORD_FAIL_CLOSED=true 면
+ * 시작 영수증 저장 실패가 AgentTaskRecordError 로 실행을 막는다(종료 기록 실패는 이미 실행한 뒤라 그대로 경고만).
  *
  * @module services/agent-task/tool-receipt
  */
@@ -15,6 +16,9 @@ import { getPool } from '../../data/models/unified-database';
 import { AgentTaskToolReceiptRepository } from '../../data/repositories/agent-task-tool-receipt-repository';
 import { classifyToolRisk } from '../../config/tool-policy';
 import { createLogger } from '../../utils/logger';
+import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { getAgentTaskRecordFailedNotice } from '../../prompts/agent-task-prompt';
+import { AgentTaskRecordError } from './types';
 
 const logger = createLogger('AgentTaskToolReceipt');
 
@@ -45,7 +49,12 @@ export async function startReceipt(taskId: string, toolCallId: string, toolName:
             argsHash: createHash('sha256').update(JSON.stringify(args ?? {})).digest('hex'),
         });
     } catch (e) {
-        logger.warn(`[${taskId}] 실행 영수증 기록 실패 (무시): ${e instanceof Error ? e.message : e}`);
+        const msg = e instanceof Error ? e.message : String(e);
+        if (AGENT_TASK_LIMITS.RECORD_FAIL_CLOSED) {
+            logger.error(`[${taskId}] 실행 영수증 기록 실패 — 실행하지 않음 (${toolName}): ${msg}`);
+            throw new AgentTaskRecordError(getAgentTaskRecordFailedNotice(toolName));
+        }
+        logger.warn(`[${taskId}] 실행 영수증 기록 실패 (무시): ${msg}`);
     }
     return idempotencyKey;
 }

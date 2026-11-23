@@ -35,7 +35,7 @@ const markParked = jest.fn(async () => undefined);
 jest.mock('../../../data/repositories/agent-task-repository', () => ({ AgentTaskRepository: jest.fn(() => ({ markParked })) }));
 
 import { executeTurnToolCalls } from '../turn-executor';
-import { AgentTaskParked } from '../types';
+import { AgentTaskParked, AgentTaskRecordError } from '../types';
 import { getToolCallIdempotencyKey } from '../../../utils/tool-call-context';
 import { AGENT_TASK_LIMITS } from '../../../config/runtime-limits';
 import { getAgentTaskUnknownOutcomeNotice, getAgentTaskUnknownOutcomeDeclinedNotice, getAgentTaskUnknownOutcomeAnswerNotice } from '../../../prompts/agent-task-prompt';
@@ -190,6 +190,34 @@ describe('executeTurnToolCalls — 외부 도구 실행 영수증·멱등 키', 
         await executeTurnToolCalls(args);
         expect(startReceipt).not.toHaveBeenCalled();
         expect(finishReceipt).toHaveBeenCalledWith('t1', 'c1', 'outcome_unknown');
+    });
+});
+
+describe('executeTurnToolCalls — 실행 기록 실패(fail-closed)', () => {
+    it('표식 기록이 AgentTaskRecordError 를 던지면 실행하지 않고 안내를 실패 결과로 남긴다', async () => {
+        markToolCallInFlight.mockImplementationOnce(async () => { throw new AgentTaskRecordError('기록 실패 안내'); });
+        const { args, conversation } = input({ toolCalls: [{ id: 'c1', function: { name: 'od::create', arguments: {} } }] });
+        await executeTurnToolCalls(args);
+        expect(runTool).not.toHaveBeenCalled();
+        expect(startReceipt).not.toHaveBeenCalled();
+        expect(conversation.find((m) => m.role === 'tool')?.content).toBe('Error: 기록 실패 안내');
+        expect(addAgentTaskStep).toHaveBeenCalledWith(expect.objectContaining({ toolCallId: 'c1', content: 'Error: 기록 실패 안내' }));
+    });
+
+    it('영수증 시작이 AgentTaskRecordError 를 던지면 실행하지 않고 영수증 종료도 남기지 않는다', async () => {
+        startReceipt.mockImplementationOnce(async () => { throw new AgentTaskRecordError('영수증 실패 안내'); });
+        const { args, conversation } = input({ toolCalls: [{ id: 'c1', function: { name: 'od::create', arguments: {} } }] });
+        await executeTurnToolCalls(args);
+        expect(runTool).not.toHaveBeenCalled();
+        expect(finishReceipt).not.toHaveBeenCalled();
+        expect(conversation.find((m) => m.role === 'tool')?.content).toBe('Error: 영수증 실패 안내');
+        expect(order).toEqual(['mark:c1', 'step', 'clear']); // 남긴 표식은 지운다
+    });
+
+    it('다른 오류는 삼키지 않는다', async () => {
+        startReceipt.mockImplementationOnce(async () => { throw new Error('boom'); });
+        const { args } = input({ toolCalls: [{ id: 'c1', function: { name: 'od::create', arguments: {} } }] });
+        await expect(executeTurnToolCalls(args)).rejects.toThrow('boom');
     });
 });
 
