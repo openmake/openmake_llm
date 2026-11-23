@@ -4,7 +4,7 @@
  * 분산 LLM 노드들을 관리하는 클러스터 매니저입니다.
  * 노드 등록/제거, 헬스체크, 레이턴시 기반 최적 노드 선택 기능을 제공합니다.
  *
- * 내부적으로 HealthChecker(헬스체크/레이턴시)와 NodeSelector(노드 선택/페일오버)에
+ * 내부적으로 HealthChecker(헬스체크/레이턴시)와 NodeSelector(노드 선택)에
  * 각 책임을 위임합니다.
  *
  * @module cluster/manager
@@ -97,10 +97,7 @@ export class ClusterManager extends EventEmitter {
             () => this.getNodeEntries()
         );
 
-        this.selector = new NodeSelector(
-            () => this.getOnlineNodes(),
-            (nodeId, model) => this.createScopedClient(nodeId, model)
-        );
+        this.selector = new NodeSelector(() => this.getOnlineNodes());
     }
 
     /**
@@ -334,31 +331,6 @@ export class ClusterManager extends EventEmitter {
      */
     getBestNode(modelName?: string): ClusterNode | undefined {
         return this.selector.getBestNode(modelName);
-    }
-
-    /**
-     * 후보 노드 목록 반환 (레이턴시 순, CircuitBreaker OPEN 제외)
-     *
-     * @param modelName - 필요한 모델 이름 (선택, "default"는 무시됨)
-     * @returns 후보 노드 배열 (레이턴시 오름차순)
-     */
-    getCandidateNodes(modelName?: string): ClusterNode[] {
-        return this.selector.getCandidateNodes(modelName);
-    }
-
-    /**
-     * 후보 노드 순회하며 실행 시도 (자동 페일오버)
-     *
-     * @param modelName - 요청할 모델 이름
-     * @param fn - 각 노드에서 실행할 비동기 함수
-     * @returns 실행 결과와 성공한 노드 정보
-     * @throws {AllNodesFailedError} 모든 노드 실패 시
-     */
-    async tryWithFallback<T>(
-        modelName: string,
-        fn: (client: LLMClient, node: ClusterNode) => Promise<T>
-    ): Promise<{ result: T; node: ClusterNode }> {
-        return this.selector.tryWithFallback(modelName, fn);
     }
 
     /**

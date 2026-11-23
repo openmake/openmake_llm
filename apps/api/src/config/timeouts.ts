@@ -127,25 +127,6 @@ export const PUSH_TIMEOUTS = {
 } as const;
 
 // ============================================
-// 서킷 브레이커 기본값
-// ============================================
-
-/**
- * 서킷 브레이커 기본 설정값
- * cluster/circuit-breaker.ts에서 참조
- */
-export const CIRCUIT_BREAKER_DEFAULTS = {
-    /** 실패 임계값 (OPEN 전환까지 허용 실패 횟수) */
-    FAILURE_THRESHOLD: 5,
-    /** OPEN 상태 유지 시간 후 HALF_OPEN 전환 (ms) */
-    RESET_TIMEOUT_MS: 30000,
-    /** HALF_OPEN 상태에서 허용할 최대 시도 횟수 */
-    HALF_OPEN_MAX_ATTEMPTS: 2,
-    /** 실패율 모니터링 윈도우 (ms) */
-    MONITOR_WINDOW_MS: 60000,
-} as const;
-
-// ============================================
 // 쿼터 관련 재시도 시간
 // ============================================
 
