@@ -123,7 +123,7 @@ export const envSchema = z
         // LLM Backend (vLLM via LiteLLM proxy)
         LLM_BASE_URL: z.url().default('http://localhost:4000'),
         LLM_API_KEY: z.string().default('sk-no-key'),
-        LLM_DEFAULT_MODEL: z.string().min(1).default('retired-chat-model'),
+        LLM_DEFAULT_MODEL: z.string().min(1).default('qwen3.8-flash-next'),
         LLM_TIMEOUT: positiveIntWithDefault(120000).refine((value) => value <= LLM_TIMEOUT_MAX_MS, {
             message: `LLM_TIMEOUT must be between 1 and ${LLM_TIMEOUT_MAX_MS} milliseconds`,
         }),

@@ -42,7 +42,7 @@ export const DEFAULT_CONFIG: EnvConfig = {
     // LLM Backend (vLLM via LiteLLM proxy)
     llmBaseUrl: 'http://localhost:4000',
     llmApiKey: 'sk-no-key',
-    llmDefaultModel: 'retired-chat-model',
+    llmDefaultModel: 'qwen3.8-flash-next',
     llmTimeout: 120000,
     llmWarmupTimeoutMs: 10000,
     llmHourlyTokenLimit: 300000,
