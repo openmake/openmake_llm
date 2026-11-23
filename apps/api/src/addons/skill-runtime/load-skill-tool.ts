@@ -17,7 +17,7 @@
 import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
 import type { UserContext } from '../../tool-contract/types';
 import { createLogger } from '../../utils/logger';
-import { recordSkillUsage } from './skill-usage-log';
+import { recordSkillUsage, recordAutoSelect } from './skill-usage-log';
 
 const logger = createLogger('LoadSkillTool');
 
@@ -111,6 +111,7 @@ export const loadSkillTool: MCPToolDefinition<LoadSkillArgs> = {
             const { getSkillManager } = await import('./skill-manager');
             const { prompt, matched, matchedIds } = await getSkillManager().buildSkillPromptForNames(names, userId);
             if (!prompt || matched.length === 0) {
+                recordAutoSelect({ event: 'miss', userId, requested: names.length, matched: 0 });
                 return { content: [{ type: 'text', text: `요청한 스킬을 찾지 못했습니다: ${names.join(', ')}` }] };
             }
             // 번들 파일 열람 (Phase 2) — 본문이 참조하는 scripts/·references/ 를 on-demand 로 제공.
@@ -123,6 +124,7 @@ export const loadSkillTool: MCPToolDefinition<LoadSkillArgs> = {
                 assetText = await loadSkillAssets(matched, assetPaths, userId);
             }
             logger.info(`load_skill: ${matched.join(', ')}${assetPaths.length > 0 ? ` +assets(${assetPaths.length})` : ''} (user=${userId ?? 'guest'})`);
+            recordAutoSelect({ event: 'called', userId, requested: names.length, matched: matched.length });
             recordSkillUsage(matchedIds.map(skillId => ({
                 skillId, kind: 'load_skill' as const, userId, args: { names, assetPaths }, durationMs: Date.now() - startedAt,
             })));
