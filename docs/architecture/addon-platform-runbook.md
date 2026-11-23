@@ -43,7 +43,7 @@
 | 런타임 상태 | `not_loaded`·`registering`·`ready`·`stopping`·`stopped`·`failed` | 프로세스 메모리 | 토글(같은 프로세스) · 재시작 | 토글 응답 `runtime`: `stopped`·`resumed`·`restart_required`·`unchanged`·`not_loaded`. 켰는데 이 프로세스에서 준비되지 않은 런타임·마이그레이션 add-on(`restart_required`·`not_loaded`·부팅 실패)은 재시작 전까지 라우트·채팅 기능이 503 `ADDON_FAILED`("부팅 실패 또는 재시작 필요") |
 | 실효 가용성 | `available`·`disabled`·`not_ready`·`failed`·`incompatible`·`state_unknown` | 계산값 | — | 라우트 응답 404 `ADDON_DISABLED`·503 `ADDON_FAILED`·403 `ADDON_NOT_ENTITLED`·503 `ADDON_STATE_UNKNOWN` |
 | 조직 사용권 | `ADDON_ALLOWLIST` 정책 | `organization_policies` | 조직 관리자 | 조직 캐시 `ORG_CONTEXT_CACHE_TTL_MS`(기본 60초) 뒤 |
-| 설치형 확장 권한 | `reviewed`·`legacy_unreviewed`·`review_required` | `user_extensions.permission_state`, `permissions_granted`, `permissions_requested` | 소유자·관리자 `POST /api/users/me/extensions/:id/permissions/approve`·`…/revoke` | API 응답은 즉시. MCP 서버 반영은 다음 기동부터 |
+| 설치형 확장 권한 | `reviewed`·`legacy_unreviewed`·`review_required` | `user_extensions.permission_state`, `permissions_granted`, `permissions_requested` | 소유자·관리자 `POST /api/users/me/extensions/:id/permissions/approve`·`…/revoke` | API 응답·MCP 반영 모두 즉시(떠 있는 연결을 닫고 다음 사용 때 새 설정으로 다시 뜬다, 응답 `releasedServers`) |
 | Knowledge 소비자 모드 | `inprocess`·`external` + `generation` | `knowledge_worker_mode` 1행 | `scripts/knowledge-worker-mode.sh set <모드>`(generation+1) | 다음 claim 부터(모드가 다른 소비자는 집지 않는다) |
 | Knowledge 작업 | `queued`·`running`·`done`·`failed`·`cancelled` | `knowledge_ingestion_jobs.state`, `cancel_requested_at` | 취소 `POST /api/knowledge/jobs/:id/cancel`(소유자·관리자) | 대기 작업 즉시, 실행 중 작업은 heartbeat 한 주기 안 |
 
@@ -316,7 +316,7 @@ async function processOneUnit(signal: AbortSignal): Promise<void> {
 | 4 | 물리 SQL 권한 격리 없음(같은 DB 의 코드 경계). add-on → Base 내부 import 는 래칫 allowlist 로 남아 있다 | 계약 묶음 | `check:addon-boundary`, Base 테이블 SQL 검사 |
 | 5 | 대화 세션 밖 Base 테이블용 포트는 없다. 스킬 런타임의 스킬 스키마 SQL 은 래칫 예외 | 계약 묶음 | 필요해질 때 포트 추가 |
 | 6 | `TEST_DATABASE_URL` 을 보는 `*.db.test.ts` 밖 테스트 7개(MCP 저장소·마이그레이션·라우트)는 CI Gate 1.5 밖이다 | 계약 묶음 | 후속 후보 |
-| 7 | 설치형 확장 권한의 MCP 반영은 다음 기동부터. 설치 때 제외된 원격 서버는 확장을 지우고 다시 설치해야 돌아온다. 190 롤백은 승인 기록을 지운다 | 권한 묶음 | 응답의 `excludedRemoteServers`, 롤백 기본 판단 "하지 않는다" |
+| 7 | 설치형 확장 권한의 MCP 반영은 즉시(진행 중이던 그 서버의 도구 호출은 실패한다). 확장 제거·업데이트는 떠 있는 연결을 닫지 않는다. 설치 때 제외된 원격 서버는 확장을 지우고 다시 설치해야 돌아온다. 190 롤백은 승인 기록을 지운다 | 권한 묶음 | 응답의 `excludedRemoteServers`, 롤백 기본 판단 "하지 않는다" |
 | 8 | e2e(`plugin-boundary`·`extension-permissions`)는 CI 에서 돌지 않는다 | 권한·검증 묶음 | 릴리스마다 로컬·스테이징 실행(§3.2) |
 | 9 | 실행 중 작업 취소는 heartbeat 한 주기(기본 최대 48초) 걸린다. 사용자 화면의 "수집 취소" 버튼은 없다 | worker 묶음 | API 로 취소 가능 |
 | 10 | 관리자 토글은 별도 worker 프로세스의 handle 을 직접 멈추지 않는다 | worker 묶음 | claim 게이트가 TTL 안에 막는다 |

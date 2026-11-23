@@ -118,4 +118,11 @@ describe('UserExtensionPermissionRepository — SQL 파라미터', () => {
         expect(calls[0].sql).toMatch(/manifest_meta->>'networkRestrictedByPermission' = 'true'/);
         expect(calls[0].sql).toMatch(/sandbox_network = 'full'/);
     });
+
+    it('연결된 MCP 서버 id 목록 — 권한을 고친 뒤 떠 있는 연결을 닫을 대상', async () => {
+        const { pool, calls } = fakePool([{ id: 's1', name: 'a', status: 'active', enabled: true }, { id: 's2', name: 'b', status: 'active', enabled: false }]);
+        expect(await new UserExtensionPermissionRepository(pool).listLinkedMcpServerIds('e1')).toEqual(['s1', 's2']);
+        expect(calls[0].sql).toMatch(/WHERE extension_id=\$1/);
+        expect(calls[0].params).toEqual(['e1']);
+    });
 });
