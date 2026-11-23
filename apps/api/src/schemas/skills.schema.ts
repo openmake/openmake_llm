@@ -38,7 +38,8 @@ export const updateSkillSchema = z.object({
 export const searchSkillsQuerySchema = z.object({
     search: z.string().max(S.SEARCH_MAX).optional(),
     category: z.string().max(S.CATEGORY_MAX).optional(),
-    isPublic: z.coerce.boolean().optional(),
+    // z.coerce.boolean 은 'false' 도 true 로 만든다 — 쿼리 문자열은 'true'/'false' 로만 받는다
+    isPublic: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
     sortBy: z.enum(['newest', 'name', 'category', 'updated']).optional().default('newest'),
     limit: z.coerce.number().int().min(1).max(S.SEARCH_LIMIT_MAX).optional().default(S.SEARCH_LIMIT_DEFAULT),
     offset: z.coerce.number().int().min(0).optional().default(0),
