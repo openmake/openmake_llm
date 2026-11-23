@@ -49,6 +49,7 @@ import { CHAT_RESULT_PROCESSORS, runResultProcessors } from '../../chat/processo
 import { decideEgress } from '../../config/egress-policy';
 import { getEgressModeBlockedNotice } from '../../prompts/egress-notices';
 import { enforceInternalOnlyModel } from './chat-egress';
+import { routeAroundUnhealthyModel } from './chat-health-route';
 
 const logger = createLogger('MessagePipeline');
 
@@ -120,9 +121,11 @@ export async function runMessagePipeline(svc: ChatService,
         requestedModel: executionPlan?.requestedModel, userAgentId: req.userAgentId, userId: req.userId,
         userRole: req.userRole, fallbackModel: svc.client.model, onSystemEvent: _onSystemEvent,
     });
-    // 내부 전용 턴 — 외부 모델이면 내부 기본 모델로 바꾸고 고지·감사한다(chat-egress).
-    if (reqCtx.egressInternalOnly) externalResolved = await enforceInternalOnlyModel(svc.providerRouter, externalResolved, {
-        fallbackModel: svc.client.model, userId: req.userId, userRole: req.userRole, lang: req.userLanguagePreference, egress, onSystemEvent: _onSystemEvent });
+    // 내부 전용 턴은 외부 모델 → 내부 기본 모델(chat-egress), 그 밖엔 최근 비정상인 모델 → 대체 후보(chat-health-route, 기본 끔).
+    const gateCtx = { fallbackModel: svc.client.model, userId: req.userId, userRole: req.userRole, lang: req.userLanguagePreference, onSystemEvent: _onSystemEvent };
+    externalResolved = reqCtx.egressInternalOnly
+        ? await enforceInternalOnlyModel(svc.providerRouter, externalResolved, { ...gateCtx, egress })
+        : await routeAroundUnhealthyModel(svc.providerRouter, externalResolved, gateCtx);
     // 로컬 쿼터 초과 시 강등(F25 PR-3a) — QUOTA_EXCEEDED_ACTION=degrade 면 맵의 대체 모델로 재해석하고 고지한다.
     // 대체가 없거나 정책에 막히면 종전대로 QuotaExceededError(429).
     if (externalResolved.providerId === 'local-llm' && getConfig().quotaExceededAction === 'degrade' && req.userId) {
