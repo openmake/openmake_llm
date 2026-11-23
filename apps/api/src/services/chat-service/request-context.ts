@@ -33,4 +33,9 @@ export interface RequestContext {
      * web_search 강제 포함 + external-provider 첫 턴 tool_choice 강제로 연쇄.
      */
     tailWebGround?: boolean;
+    /**
+     * 반출 관문(config/egress-policy) 판정 — true 면 이 턴은 내부 전용이다: 외부 모델·자료를 밖으로 보내는 도구·
+     * 오케스트레이터·외부 모드를 쓰지 않는다(하네스 P0-2).
+     */
+    egressInternalOnly?: boolean;
 }

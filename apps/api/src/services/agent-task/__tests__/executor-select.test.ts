@@ -5,7 +5,7 @@
  */
 jest.mock('../../../config/local-bridge', () => ({ LOCAL_BRIDGE: { ENABLED: true } }));
 jest.mock('../../../config/task-sandbox', () => ({
-    getTaskSandboxConfig: () => ({ enabled: false, approvalPolicy: 'high-risk' }),
+    getTaskSandboxConfig: () => ({ enabled: false, approvalPolicy: 'high-risk', browserEnabled: true, network: 'restricted' }),
 }));
 jest.mock('../../local-bridge/remote-executor', () => ({
     RemoteExecutor: jest.fn().mockImplementation(() => ({})),
@@ -48,5 +48,29 @@ describe('resolveExecutorPlan — 이어받은 세그먼트의 worktree 키', ()
         expect(RemoteExecutor).toHaveBeenLastCalledWith('seg2', 'u1', 'd1', 'f', 'root');
         resolveExecutorPlan({ executor: 'local' }, 't1', 'u1');
         expect(RemoteExecutor).toHaveBeenLastCalledWith('t1', 'u1', undefined, undefined, undefined);
+    });
+});
+
+describe('resolveExecutorPlan — 반출 관문(하네스 P0-2)', () => {
+    const egress = jest.requireActual('../../../config/egress-policy') as typeof import('../../../config/egress-policy');
+    const limits = egress.EGRESS_POLICY as { INTERNAL_ONLY_SENSITIVITY: string };
+    afterEach(() => { limits.INTERNAL_ONLY_SENSITIVITY = 'off'; });
+
+    it('로컬 실행기는 내부 전용(브라우저 설정은 건드리지 않는다)', () => {
+        const plan = resolveExecutorPlan({ executor: 'local', goal: '정리해줘' }, 't1', 'u1');
+        expect(plan.sandboxCfg.internalOnly).toBe(true);
+        expect(plan.sandboxCfg.browserEnabled).toBe(true);
+    });
+
+    it('기준 off 면 샌드박스 작업은 민감 자료여도 내부 전용이 아니다', () => {
+        const plan = resolveExecutorPlan({ executor: 'sandbox', goal: '[대외비] 정리' }, 't1', 'u1');
+        expect(plan.sandboxCfg.internalOnly).toBeUndefined();
+    });
+
+    it('기준 confidential — 목표·첨부가 걸리면 샌드박스도 내부 전용: 브라우저 끔·명령 망 없음', () => {
+        limits.INTERNAL_ONLY_SENSITIVITY = 'confidential';
+        const plan = resolveExecutorPlan({ executor: 'sandbox', goal: '정리해줘', files: [{ name: 'a.txt', content: 'CONFIDENTIAL' }] }, 't1', 'u1');
+        expect(plan.sandboxCfg).toMatchObject({ internalOnly: true, browserEnabled: false, network: 'none' });
+        expect(resolveExecutorPlan({ executor: 'sandbox', goal: '날씨' }, 't1', 'u1').sandboxCfg.internalOnly).toBeUndefined();
     });
 });

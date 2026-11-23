@@ -544,6 +544,7 @@
     "modelFallbackNotice": "選択したモデル({from})が応答しなかったため、既定のモデル({to})が回答しました。",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "利用上限に到達",
+      "EGRESS_INTERNAL_ONLY": "機密データのため内部モデル",
       "INSUFFICIENT_CREDIT": "クレジット不足",
       "MODEL_ACCESS_RESTRICTED": "プロバイダーポリシーにより制限",
       "SUBSCRIPTION_REQUIRED": "サブスクリプションが必要",

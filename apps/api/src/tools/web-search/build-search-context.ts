@@ -27,6 +27,7 @@ import {
     getLocalizedTemplate,
 } from '../../sockets/ws-chat-locales';
 import { createLogger } from '../../utils/logger';
+import { decideEgress } from '../../config/egress-policy';
 
 const logger = createLogger('WebSearchContext');
 
@@ -65,7 +66,11 @@ export async function buildWebSearchContext(opts: {
     let webSearchContext = '';
     let sources: SearchSourceRef[] = [];
 
-    if (!explicitlyDisabled && (webSearchEnabled || isCurrentEventsQuery)) {
+    // 반출 관문(config/egress-policy) — 민감 자료가 든 메시지는 검색어로 밖에 보내지 않는다.
+    const internalOnly = !explicitlyDisabled && (webSearchEnabled || isCurrentEventsQuery) && decideEgress({ texts: [message] }).internalOnly;
+    if (internalOnly) logger.info('[Egress] 내부 전용 메시지 — 사전 웹 검색 건너뜀');
+
+    if (!explicitlyDisabled && !internalOnly && (webSearchEnabled || isCurrentEventsQuery)) {
         try {
             const searchQuery = cleanSearchQuery(message);
             const searchResults = await performWebSearch(searchQuery, {

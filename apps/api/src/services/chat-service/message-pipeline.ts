@@ -46,6 +46,9 @@ import { recordOrchestrationDispatch } from './orchestration-shadow-recorder';
 import { detectOrchestrationIntents } from './external-tool-plan';
 import { ORCHESTRATION_DISPATCH } from '../../config/runtime-limits';
 import { CHAT_RESULT_PROCESSORS, runResultProcessors } from '../../chat/processors';
+import { decideEgress } from '../../config/egress-policy';
+import { getEgressModeBlockedNotice } from '../../prompts/egress-notices';
+import { enforceInternalOnlyModel } from './chat-egress';
 
 const logger = createLogger('MessagePipeline');
 
@@ -100,6 +103,10 @@ export async function runMessagePipeline(svc: ChatService,
         skillBindings: [],
     };
 
+    // 반출 관문(P0-2) — 메시지·첨부가 민감하면 내부 전용 턴. userContext 쪽은 디스패처 실행 게이트(tool-dispatch)가 읽는다.
+    const egress = decideEgress({ texts: [message, fileContext] });
+    if (egress.internalOnly) reqCtx.egressInternalOnly = reqCtx.userContext.egressInternalOnly = true;
+
     // ── Provider Gate: 모델 ID 검증 + provider 해석 (단일 경로) ──
     // 로컬(local-llm)/외부 provider 모두 streamFromExternalProvider 로 dispatch 한다.
     // (strategy 계층 폐기 1단계 2026-07-18 — LOCAL_STRATEGY_PATH_ENABLED 게이트와
@@ -113,6 +120,9 @@ export async function runMessagePipeline(svc: ChatService,
         requestedModel: executionPlan?.requestedModel, userAgentId: req.userAgentId, userId: req.userId,
         userRole: req.userRole, fallbackModel: svc.client.model, onSystemEvent: _onSystemEvent,
     });
+    // 내부 전용 턴 — 외부 모델이면 내부 기본 모델로 바꾸고 고지·감사한다(chat-egress).
+    if (reqCtx.egressInternalOnly) externalResolved = await enforceInternalOnlyModel(svc.providerRouter, externalResolved, {
+        fallbackModel: svc.client.model, userId: req.userId, userRole: req.userRole, lang: req.userLanguagePreference, egress, onSystemEvent: _onSystemEvent });
     // 로컬 쿼터 초과 시 강등(F25 PR-3a) — QUOTA_EXCEEDED_ACTION=degrade 면 맵의 대체 모델로 재해석하고 고지한다.
     // 대체가 없거나 정책에 막히면 종전대로 QuotaExceededError(429).
     if (externalResolved.providerId === 'local-llm' && getConfig().quotaExceededAction === 'degrade' && req.userId) {
@@ -198,6 +208,13 @@ export async function runMessagePipeline(svc: ChatService,
     // 채팅 모드(add-on)는 사용자 명시 토글만 신뢰한다 — 켜진 모드가 있으면 그 모드가 턴을 가져간다.
     // (thinking 토글은 req.thinkingMode 그대로 external-provider 가 소비.)
     const activeMode = resolveActiveMode(req.modes);
+
+    // 내부 전용 턴은 외부를 쓰는 모드(이미지 생성·add-on 모드)로 처리하지 않는다 — 모드를 끄면 내부 모델로 답한다.
+    if (reqCtx.egressInternalOnly && (activeMode || (req.imageMode === true && (req.message ?? '').trim()))) {
+        const notice = getEgressModeBlockedNotice(languagePolicy?.resolvedLanguage);
+        onToken(notice);
+        return notice;
+    }
 
     // 이미지 생성 모드: 토글 ON 이면 메시지를 프롬프트로 이미지를 직접 생성한다 (결정적 경로 —
     // LLM 의 도구 호출 결정에 의존하지 않아 일부 모델이 이미지를 안 그리는 문제를 회피).
@@ -449,7 +466,8 @@ export async function runMessagePipeline(svc: ChatService,
     let orchestratedMessage = finalEnhancedMessage;
     let orchestratorMedia: string[] | undefined;
     let orchestratorFields: Partial<import('./external-provider').StreamFromExternalContext> = {};
-    if (ORCHESTRATOR.ENABLED) {
+    // 내부 전용 턴은 오케스트레이터를 건너뛴다 — Planner·capability 배정이 외부 모델일 수 있다(반출 관문).
+    if (ORCHESTRATOR.ENABLED && !reqCtx.egressInternalOnly) {
         const { runOrchestrator, orchestratorStreamFields } = await import('../orchestrator/orchestrate');
         const outcome = await runOrchestrator({
             req, lang: extLang, userId, signal: req.abortSignal, sourceNumberBase: reqCtx.userContext.sourceNumberBase,
