@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.145.7](https://github.com/openmake/openmake_llm/compare/v1.145.6...v1.145.7) (2026-11-22)
+
+
+### 🐛 버그 수정
+
+* **deps:** 보존해 둔 의존성 업데이트를 현재 dev 기준으로 다시 싣는다 ([d38e37d](https://github.com/openmake/openmake_llm/commit/d38e37dab02e0da2834d9b119523a87982121377))
+* **deps:** 보존해 둔 의존성 업데이트를 현재 dev 기준으로 다시 싣는다 ([24fb950](https://github.com/openmake/openmake_llm/commit/24fb950e69af54ccadf7afa53ab5aa0f652f20a9))
+
 ## [1.145.6](https://github.com/openmake/openmake_llm/compare/v1.145.5...v1.145.6) (2026-11-21)
 
 
