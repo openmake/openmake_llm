@@ -245,6 +245,8 @@ PM2 앱 `openmake-knowledge-worker`(`apps/api/dist/workers/knowledge-worker.js`)
 
 manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기여 작업 도구(`agentTaskTools`) 실행 게이트(→ §8.3·8.4 에서 구현 — 작업 도중 토글은 호출 거절로 반영, 도구 목록에서 빼지는 않는다), 턴 단위 활성 통합 스냅숏(한 턴 안에서 훅 집합이 바뀌지 않게, 2차), add-on → Base 내부 import 의 전수 이전(ratchet 으로 줄여 간다 — §8.5), 대화 세션 밖의 Base 테이블 포트(필요해질 때), 물리 SQL 권한 격리.
 
+스킬 매니페스트의 `mcp_bundles` 실행도 범위 밖이다. 업로드(`POST /api/agents/skills/upload`)는 선언을 검증해 `skill_mcp_bundles` 에 **기록만** 하고 MCP 서버를 띄우지 않는다 — 이 행을 읽는 코드가 없다(마이그레이션 201 이 테이블 설명을 바로잡았다). 업로드 스킬이 임의 `command`·`env` 로 stdio 프로세스를 띄우면 MCP 카탈로그 검수와 확장 권한 심사(§11)를 건너뛰기 때문이다. 선언이 있으면 업로드 응답 `compat_notes` 에 실행되지 않는다고 알린다. MCP 서버는 MCP 카탈로그나 설치형 확장으로 설치한다. 도구 바인딩(`tool_bindings` → `skill_tool_bindings`)은 이와 달리 채팅·작업에서 실제로 집행된다.
+
 ## 11. 설치형 확장의 권한 상태 (`user_extensions.permission_state`, 마이그레이션 190)
 
 설치형 확장(Git·ZIP·마켓 갤러리)의 권한은 번들의 `openmake-addon.json` `permissions` 가 **요청**하고, 설치 기록이 **승인**을 들고 있다. 판정은 `services/extensions/permission-state.ts`(순수 함수), 저장은 `data/repositories/user-extension-permission-repository.ts`, 집행은 설치 때 `agents/git-ingest/extension-components.ts` 의 MCP 서버 저장(네트워크가 없으면 stdio 는 `sandbox_network='none'`, 원격 서버는 설치에서 제외)이다.
