@@ -99,7 +99,7 @@ export const ADDON_OWNED_CORE_TABLES: Readonly<Record<string, readonly string[]>
     'mcp-runtime': ['mcp_catalog_oauth_clients', 'mcp_oauth_credentials', 'mcp_server_catalog', 'mcp_server_instances', 'mcp_servers'],
     'skill-runtime': [
         'agent_skill_assignments', 'agent_skills', 'skill_assets', 'skill_audit_log', 'skill_manifests', 'skill_mcp_bundles',
-        'skill_permissions', 'skill_tool_bindings',
+        'skill_auto_select_log', 'skill_permissions', 'skill_tool_bindings',
     ],
 };
 

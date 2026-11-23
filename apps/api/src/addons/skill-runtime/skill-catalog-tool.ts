@@ -17,6 +17,7 @@ import type { ToolDefinition } from '../../llm/types';
 import { getSkillManager } from './skill-manager';
 import { LOAD_SKILL_TOOL_NAME } from './load-skill-tool';
 import { createLogger } from '../../utils/logger';
+import { recordAutoSelect } from './skill-usage-log';
 
 const logger = createLogger('SkillCatalogTool');
 
@@ -66,6 +67,7 @@ export async function applySkillCatalog(
                 parameters: base.function.parameters,
             },
         };
+        recordAutoSelect({ event: 'offered', userId: opts.userId, catalogSize: count });
         return [...without, augmented];
     } catch (e) {
         logger.warn('스킬 카탈로그 주입 실패 (load_skill 제외):', e);

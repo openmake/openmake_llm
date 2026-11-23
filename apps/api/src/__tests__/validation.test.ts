@@ -284,6 +284,15 @@ describe('validateQuery()', () => {
         expect(next).toHaveBeenCalledTimes(1);
     });
 
+    test('검증 결과(coerce·default)가 req.query 에 고정된다 — Express 5 getter 에서도 유지', async () => {
+        const express = (await import('express')).default;
+        const request = (await import('supertest')).default;
+        const app = express();
+        app.get('/', validateQuery(schema), (req, res) => { res.json(req.query); });
+        const res = await request(app).get('/?page=3');
+        expect(res.body).toEqual({ page: 3, limit: 20 });
+    });
+
     test('query 유효성 실패 → 400', () => {
         const strictSchema = z.object({ status: z.enum(['active', 'inactive']) });
         const middleware = validateQuery(strictSchema);
