@@ -8,7 +8,7 @@
 # ==============================================================================
 declare -F die >/dev/null 2>&1 || die() { log_err "$*"; exit 2; }
 
-OMK_DGX_LEGACY_MODEL="${OMK_DGX_LEGACY_MODEL:-retired-chat-model}"   # 레포 litellm.config.yaml·qwen-serve.sh 의 기본 served-model-name
+OMK_DGX_LEGACY_MODEL="${OMK_DGX_LEGACY_MODEL:-qwen3.8-flash-next}"   # 레포 litellm.config.yaml·qwen-serve.sh 의 기본 served-model-name
 DGX_RESOLVE_SOURCE="${DGX_RESOLVE_SOURCE:-}"
 
 # DGX 모델 ID 는 게이트웨이 config 의 이름·앱의 모델 ID 로 그대로 쓰인다 — 따옴표·공백·'/'(외부 provider 표기)·':'(provider:model)를

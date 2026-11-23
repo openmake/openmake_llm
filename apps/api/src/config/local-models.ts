@@ -82,8 +82,8 @@ export interface LocalModelEntry {
 }
 
 /**
- * 기본 카탈로그 — 로컬 채팅 모델은 실질적으로 **단일** (retired-chat-model, 262K).
- * 2026-09-02: DGX :8002 가 retired-chat-model-fp8 로 교체됨(`--served-model-name retired-chat-model qwen3.6-35b-a3b`
+ * 기본 카탈로그 — 로컬 채팅 모델은 실질적으로 **단일** (qwen3.8-flash-next, 262K).
+ * 2026-09-02: DGX :8002 가 qwen3.8-flash-next-fp8 로 교체됨(`--served-model-name qwen3.8-flash-next qwen3.6-35b-a3b`
  * — 구 이름은 같은 가중치를 가리키는 호환 alias 라 옛 대화의 model id 도 계속 라우팅된다).
  * UI 표시명은 실제 모델명을 그대로 사용한다 (2026-07-04: 구 'Local LLM' 브랜딩 표기는
  * 멀티 provider 모델 칩/2단계 picker 도입으로 "어느 모델인지" 를 가려서 폐기).
@@ -99,8 +99,8 @@ export interface LocalModelEntry {
  */
 const DEFAULT_LOCAL_MODELS: LocalModelEntry[] = [
     {
-        id: 'retired-chat-model',
-        displayName: 'retired-chat-model',
+        id: 'qwen3.8-flash-next',
+        displayName: 'qwen3.8-flash-next',
         description: '로컬 vLLM (Qwen 3.8, 27B dense FP8)',
         role: 'chat',
         contextLength: 262144,
@@ -444,7 +444,7 @@ export async function probeLocalModelAvailability(
     for (const m of list) {
         // 건너뛰는 것은 카탈로그가 **명시적으로** 비활성한 모델뿐이다. 직전 프로브·런타임 fallback 이
         // demote 한 모델(사유가 있음)은 매 주기 다시 ping 해야 회복된다 — 그렇지 않으면 일시 abort 1회로
-        // 재시작 전까지 영구 '사용 불가' 가 된다(2026-09-03 retired-chat-model 6시간 실측).
+        // 재시작 전까지 영구 '사용 불가' 가 된다(2026-09-03 qwen3.8-flash-next 6시간 실측).
         if (m.available === false && (!m.unavailableReason || m.unavailableReason === EXPLICIT_DISABLED_REASON)) {
             m.unavailableReason = EXPLICIT_DISABLED_REASON;
             skipped.push(m.id);
