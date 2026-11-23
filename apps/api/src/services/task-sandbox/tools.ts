@@ -24,7 +24,9 @@ import { maskedPipeFailureNote } from './pipe-status';
 import { ASK_HUMAN_STRUCTURED_SCHEMA, normalizeAskHuman } from './ask-human';
 import { ASK_HUMAN } from '../../config/agent-task-tools';
 import { ASK_HUMAN_STRUCTURED_DESCRIPTION } from '../../prompts/agent-task-tools';
-import { FILE_VIEW_MAX_CHARS } from '../../config/runtime-limits';
+import { FILE_VIEW_MAX_CHARS, AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { EditLedger } from './edit-ledger';
+import { getEditConflictNotice } from '../../prompts/edit-conflict';
 import { randomUUID } from 'crypto';
 import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
 import type { ContributedAgentTaskTool } from '../chat-service/turn-integrations';
@@ -129,6 +131,18 @@ export function createTaskTools(
     contributed: readonly ContributedAgentTaskTool[] = [],
     contributedCtx: { userId: string } = { userId: 'guest' },
 ): MCPToolDefinition[] {
+    // 편집 해시 비교 후 교체(AGENT_TASK_EDIT_CAS) — 이 도구 세트가 본/쓴 내용과 지금 파일이 다르면 덮어쓰지 않는다(edit-ledger).
+    const ledger = new EditLedger(AGENT_TASK_LIMITS.EDIT_CAS);
+    const readOrNull = (path: string): Promise<string | null> => sandbox.readFile(path).catch(() => null);
+    /** 쓰기 직전 판정 — 충돌이면 거절 결과, 아니면 null. current 를 이미 읽었으면 넘긴다. */
+    const conflict = async (path: string, current?: string | null): Promise<MCPToolResult | null> => {
+        const v = ledger.check(path, current !== undefined ? current : await readOrNull(path));
+        return v.ok ? null : textResult(getEditConflictNotice(path, v.deleted), true);
+    };
+    const wrote = async (path: string, content: string): Promise<void> => {
+        await sandbox.writeFile(path, content);
+        ledger.observe(path, content);
+    };
     const bash: MCPToolDefinition = {
         tool: {
             name: 'bash',
@@ -143,6 +157,7 @@ export function createTaskTools(
         handler: async (args): Promise<MCPToolResult> => {
             const command = str(args.command).trim();
             if (!command) return textResult('command 가 필요합니다.', true);
+            ledger.clear(); // 명령이 무엇을 바꿨는지 모른다 — 자기 변경을 남의 변경으로 오판하지 않게 잊는다
             return formatExec(await sandbox.exec(command, { pipeStatus: true }), command);
         },
     };
@@ -163,6 +178,7 @@ export function createTaskTools(
         handler: async (args): Promise<MCPToolResult> => {
             const code = str(args.code);
             if (!code) return textResult('code 가 필요합니다.', true);
+            ledger.clear(); // 실행 코드가 파일을 바꿀 수 있다(bash 와 같은 이유)
             const filename = str(args.filename) || '_exec.py';
             // 셸 명령(`python3 ${filename}`)에 보간되므로 안전 문자만 허용 —
             // 메타문자(; | & $ 공백 등) 셸 주입과 `-` 선행(인자 주입: -c ...)을 차단.
@@ -217,11 +233,14 @@ export function createTaskTools(
             if (!path) return textResult('path 가 필요합니다.', true);
             try {
                 if (command === 'create') {
-                    await sandbox.writeFile(path, str(args.file_text));
+                    const blocked = await conflict(path);
+                    if (blocked) return blocked;
+                    await wrote(path, str(args.file_text));
                     return withDiagnostics(sandbox, path, `생성됨: ${path}`);
                 }
                 if (command === 'view') {
                     const content = await sandbox.readFile(path);
+                    ledger.observe(path, content);
                     // 큰 파일은 줄 구간으로 나눠 본다 — 결과 상한을 넘는 뒷부분도 start_line 으로 볼 수 있다(file-view).
                     const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
                     return textResult(viewWindow(content, path, { startLine: num(args.start_line), lineCount: num(args.line_count) }, FILE_VIEW_MAX_CHARS));
@@ -230,24 +249,28 @@ export function createTaskTools(
                     const oldStr = str(args.old_str);
                     if (!oldStr) return textResult('old_str 가 필요합니다.', true);
                     const content = await sandbox.readFile(path);
+                    const blocked = await conflict(path, content);
+                    if (blocked) return blocked;
                     const count = content.split(oldStr).length - 1;
                     if (count === 0) {
                         // 공백·따옴표만 다른 경우는 유일할 때 적용하고, 아니면 가장 비슷한 줄을 알린다(str-replace-match).
                         const relaxed = resolveMissedStrReplace(content, oldStr, str(args.new_str), path);
                         if (relaxed.content === undefined) return textResult(relaxed.message, true);
-                        await sandbox.writeFile(path, relaxed.content);
+                        await wrote(path, relaxed.content);
                         return withDiagnostics(sandbox, path, relaxed.message, content);
                     }
                     if (count > 1) return textResult(`old_str 가 ${count}회 중복 — 유일해야 합니다.`, true);
-                    await sandbox.writeFile(path, content.replace(oldStr, str(args.new_str)));
+                    await wrote(path, content.replace(oldStr, str(args.new_str)));
                     return withDiagnostics(sandbox, path, `치환 완료: ${path}`, content);
                 }
                 if (command === 'insert') {
                     const content = await sandbox.readFile(path);
+                    const blocked = await conflict(path, content);
+                    if (blocked) return blocked;
                     const lines = content.split('\n');
                     const at = Math.max(0, Math.min(lines.length, Number(args.insert_line) || 0));
                     lines.splice(at, 0, str(args.new_str));
-                    await sandbox.writeFile(path, lines.join('\n'));
+                    await wrote(path, lines.join('\n'));
                     return withDiagnostics(sandbox, path, `삽입 완료: ${path}:${at}`, content);
                 }
                 return textResult(`알 수 없는 command: ${command}`, true);
@@ -278,8 +301,13 @@ export function createTaskTools(
             const op = str(args.op);
             const path = str(args.path);
             try {
-                if (op === 'read') return textResult(await sandbox.readFile(path));
-                if (op === 'write') { await sandbox.writeFile(path, str(args.content)); return withDiagnostics(sandbox, path, `기록됨: ${path}`); }
+                if (op === 'read') { const content = await sandbox.readFile(path); ledger.observe(path, content); return textResult(content); }
+                if (op === 'write') {
+                    const blocked = await conflict(path);
+                    if (blocked) return blocked;
+                    await wrote(path, str(args.content));
+                    return withDiagnostics(sandbox, path, `기록됨: ${path}`);
+                }
                 if (op === 'list') return textResult((await sandbox.listDir(path || '.')).join('\n') || '(빈 디렉토리)');
                 if (op === 'tree') {
                     // 하위 폴더 포함 전체 목록 — list 로 한 단계씩 파고들다 폴더를 놓치는
@@ -291,7 +319,13 @@ export function createTaskTools(
                         : '';
                     return textResult(all.join('\n') + capped);
                 }
-                if (op === 'delete') { await sandbox.deleteFile(path); return textResult(`삭제됨: ${path}`); }
+                if (op === 'delete') {
+                    const blocked = await conflict(path);
+                    if (blocked) return blocked;
+                    await sandbox.deleteFile(path);
+                    ledger.forget(path);
+                    return textResult(`삭제됨: ${path}`);
+                }
                 return textResult(`알 수 없는 op: ${op}`, true);
             } catch (e) {
                 return textResult(`파일 작업 실패: ${e instanceof Error ? e.message : String(e)}`, true);
