@@ -305,6 +305,12 @@ export const SKILL_USAGE_LOG = {
     summaryMaxDays: parseInt(process.env.SKILL_USAGE_SUMMARY_MAX_DAYS || '365', 10),
 } as const;
 
+/**
+ * SKILL_REVISION_KEEP — 스킬 수정 이력(skill_revisions, 203)을 스킬당 몇 개까지 둘지. 기본 30.
+ * 수정 직전 내용을 남겨 이전 버전으로 복원할 수 있게 한다(addons/skill-runtime/data/skill-revision-repository.ts).
+ */
+export const SKILL_REVISION_KEEP = Math.max(1, parseInt(process.env.SKILL_REVISION_KEEP || '30', 10) || 30);
+
 // ============================================
 // 모델 선택
 // ============================================

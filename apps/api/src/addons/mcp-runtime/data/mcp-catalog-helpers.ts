@@ -26,6 +26,8 @@ export interface UserMcpServerRow {
     sandbox_network?: 'full' | 'none' | 'host' | null;
     /** 관리자가 bridge 네트워크를 허용한 사용자 소유 서버 (197 마이그레이션, 기본 false). */
     sandbox_bridge_allowed?: boolean | null;
+    /** 이 서버를 설치한 확장(user_extensions.id) — 단독 설치면 null (093 마이그레이션) */
+    extension_id?: string | null;
 }
 
 const MAX_CATALOG_ARG_VALUE_LENGTH = 512;

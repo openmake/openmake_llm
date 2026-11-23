@@ -907,7 +907,18 @@
         "failed": "일괄 처리 실패: {error}"
       }
     },
-    "approvalsButton": "승인 대기"
+    "approvalsButton": "승인 대기",
+    "revisions": {
+      "title": "이전 버전",
+      "loading": "불러오는 중…",
+      "empty": "아직 이전 버전이 없습니다. 수정하면 그 직전 내용이 여기에 남습니다.",
+      "loadFailed": "이전 버전을 불러오지 못했습니다.",
+      "savedAt": "{date} 까지의 내용",
+      "restore": "복원",
+      "confirmRestore": "{date} 까지의 내용으로 복원할까요? 지금 내용은 이전 버전으로 남습니다.",
+      "restoreFailed": "복원하지 못했습니다: {error}",
+      "note": "수정할 때마다 직전 내용이 남습니다(최근 30개). 복원해도 지금 내용은 사라지지 않습니다."
+    }
   },
   "agentTasks": {
     "loading": "불러오는 중...",
@@ -1431,7 +1442,27 @@
     "deleteConfirm": "이 MCP 서버 등록을 삭제할까요?",
     "deleteHint": "되돌릴 수 없습니다. 저장된 자격증명(env)도 함께 삭제되며, 실행 중인 인스턴스가 있으면 종료됩니다. 다시 쓰려면 카탈로그에서 새로 설치해야 합니다.",
     "deleteDone": "\"{name}\" 서버를 삭제했습니다.",
-    "deleteError": "삭제에 실패했습니다"
+    "deleteError": "삭제에 실패했습니다",
+    "exposure": {
+      "label": {
+        "auto": "모델에 자동 노출",
+        "on_mention": "언급하면 모델에 노출",
+        "on_demand": "mcp_call 로만 사용",
+        "none": "모델에 노출 안 됨"
+      },
+      "hint": {
+        "auto": "메시지에 서버를 언급하지 않아도 매 턴 일부 도구가 모델에 실립니다.",
+        "on_mention": "메시지에 이 서버 이름을 언급하면 도구가 모델에 실립니다.",
+        "on_demand": "도구가 직접 실리지 않고, 모델이 mcp_list_tools / mcp_call 로 찾아 씁니다.",
+        "viaMetaTools": "언급하지 않아도 모델이 mcp_call 로 쓸 수 있습니다."
+      },
+      "reason": {
+        "disabled": "사용 안 함으로 둔 서버라 모델이 쓸 수 없습니다.",
+        "not_connected": "연결돼 있지 않아 모델이 쓸 수 없습니다.",
+        "no_tools": "연결됐지만 도구가 없어 모델이 쓸 수 없습니다.",
+        "meta_tools_off": "전역 서버는 mcp_call 로만 쓰는데 그 기능이 꺼져 있습니다."
+      }
+    }
   },
   "mcpCatalog": {
     "pageTitle": "MCP 카탈로그",
@@ -2446,7 +2477,7 @@
     "permissions": {
       "title": "권한",
       "badge": {
-        "reviewed": "권한 검토됨",
+        "reviewed": "권한 승인됨",
         "legacy": "레거시 미검토",
         "reviewRequired": "재승인 필요"
       },
