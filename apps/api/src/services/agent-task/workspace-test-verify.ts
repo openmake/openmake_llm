@@ -10,6 +10,7 @@
  *  - 러너를 설치하지 않는다(LSP 진단과 같은 규칙, 컨테이너는 network none). 감지 조건은
  *    npm(package.json scripts.test + node_modules) · pytest(설정/tests + import 가능) · go(go.mod + go).
  *  - 러너가 없으면 `ran=false` 로 조용히 통과 — 리포트형 작업(운영 대부분)에는 영향이 0 이다.
+ *    다만 결과는 status 4상태(verification-status)로 구분한다: 러너 없음 not_run · 인프라 오류 inconclusive(하네스 P1-4).
  *  - 파일을 편집한 작업에만 적용(usedTools 에 쓰기 도구). 읽기만 한 작업의 테스트 실패는 그 작업 탓이 아니다.
  *  - 전 구간 fail-open: 감지·실행 인프라 오류는 통과(ok=true). 실패는 러너 exit≠0 뿐이다.
  *  - 코드를 실제로 실행한다 — 컨테이너는 격리(network none·자원 캡)이고, 로컬 브리지에선 exec 가
@@ -21,6 +22,7 @@ import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 import type { TaskRuntime } from '../task-sandbox/runtime';
+import type { VerificationStatus } from './verification-status';
 
 const logger = createLogger('AgentTaskService');
 
@@ -54,6 +56,8 @@ interface WorkspaceTestResult {
     ran: boolean;
     /** 실행하지 않았거나 통과했으면 true. */
     ok: boolean;
+    /** 검증 4상태 — ok 만으로는 "러너 없음"·"인프라 오류"·"통과" 가 구분되지 않는다. */
+    status: VerificationStatus;
     runner?: TestRunner;
     /** 실패 시 모델에 주입할 출력(끝부분). */
     report: string;
@@ -94,12 +98,12 @@ export async function verifyWorkspaceTests(
     /** 마지막 변경 이후 이 러너의 전체 실행이 통과한 기록이 있다(verification-evidence) — 감지된 러너와 같으면 다시 돌리지 않는다. */
     provenRunner?: TestRunner,
 ): Promise<WorkspaceTestResult & { stepNumber: number }> {
-    const skip = { ran: false, ok: true, report: '', stepNumber };
+    const skip = { ran: false, ok: true, status: 'not_run' as VerificationStatus, report: '', stepNumber };
     try {
         if (signal?.aborted || !hasWriteTool(usedTools)) return skip;
         const runner = await detectWorkspaceTestRunner(runtime);
         if (!runner) return skip;
-        if (runner === provenRunner) return { ...skip, runner, provenSkip: true };
+        if (runner === provenRunner) return { ...skip, status: 'passed', runner, provenSkip: true }; // 마지막 변경 이후 통과 증거
         const r = await runtime.execRaw(RUNNER_COMMANDS[runner]);
         const failed = r.exitCode !== 0 || r.timedOut;
         const output = `${r.stdout}${r.stderr ? `\n${r.stderr}` : ''}`;
@@ -119,9 +123,9 @@ export async function verifyWorkspaceTests(
         } catch (e) {
             logger.debug(`[TestGate] 스텝 기록 실패(무시): ${e instanceof Error ? e.message : e}`);
         }
-        return { ran: true, ok: !failed, runner, report, stepNumber: next };
+        return { ran: true, ok: !failed, status: failed ? 'failed' : 'passed', runner, report, stepNumber: next };
     } catch (e) {
         logger.warn(`[TestGate] 게이트 실패 — fail-open: ${e instanceof Error ? e.message : e}`);
-        return skip;
+        return { ...skip, status: 'inconclusive' };
     }
 }

@@ -15,6 +15,7 @@
  * @module services/agent-task/deliverable-verify
  */
 import type { TaskRuntime } from '../task-sandbox/runtime';
+import type { VerificationStatus } from './verification-status';
 import type { ExtractedArtifact } from '../../llm/artifact-parser';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
@@ -34,6 +35,8 @@ const LANG_CHECKS: Record<string, LangCheck> = {
 interface VerifyResult {
     /** 모든 검사 대상이 통과했거나 검사 대상이 없으면 true. */
     ok: boolean;
+    /** 검증 4상태(verification-status) — 대상 없음·중단은 not_run, 인프라 오류는 inconclusive. */
+    status: VerificationStatus;
     /** 실패 시 LLM 에 전달할 오류 리포트(언어·제목·stderr). ok=true 면 빈 문자열. */
     report: string;
 }
@@ -49,15 +52,16 @@ export async function verifyCodeArtifacts(
     signal?: AbortSignal,
 ): Promise<VerifyResult> {
     try {
-        if (signal?.aborted) return { ok: true, report: '' };
+        if (signal?.aborted) return { ok: true, status: 'not_run', report: '' };
         // kind='code' 이고 검사 가능한 언어인 산출물만.
         const targets = artifacts
             .map((a, i) => ({ a, i, check: a.kind === 'code' && a.lang ? LANG_CHECKS[a.lang.toLowerCase()] : undefined }))
             .filter((x): x is { a: ExtractedArtifact; i: number; check: LangCheck } => !!x.check);
-        if (targets.length === 0) return { ok: true, report: '' };
+        if (targets.length === 0) return { ok: true, status: 'not_run', report: '' };
 
         const mode = AGENT_TASK_LIMITS.VERIFY_MODE;
         const failures: string[] = [];
+        let skipped = 0;
         for (const { a, i, check } of targets) {
             if (signal?.aborted) break;
             const file = `.verify_${i}.${check.ext}`;
@@ -71,16 +75,18 @@ export async function verifyCodeArtifacts(
                 }
             } catch (e) {
                 // 개별 산출물 검사 실패는 통과 취급(fail-open) — 인프라 문제로 완료를 막지 않음.
+                skipped++;
                 logger.debug(`[Verify] 검사 스킵(${a.id}): ${e instanceof Error ? e.message : e}`);
             } finally {
                 // 검증 프로브 정리 — 로컬 실행기에선 workspace 가 사용자 연결 폴더라 잔재가 남는다.
                 try { await runtime.deleteWorkspaceFile(file); } catch { /* 정리 실패 무시 */ }
             }
         }
-        if (failures.length === 0) return { ok: true, report: '' };
-        return { ok: false, report: failures.join('\n\n').slice(0, MAX_REPORT_CHARS) };
+        // 전부 인프라 오류로 건너뛰었으면 결과를 알 수 없다(통과로 보지 않는다).
+        if (failures.length === 0) return { ok: true, status: skipped === targets.length ? 'inconclusive' : 'passed', report: '' };
+        return { ok: false, status: 'failed', report: failures.join('\n\n').slice(0, MAX_REPORT_CHARS) };
     } catch (e) {
         logger.warn(`[Verify] 검증 전체 실패 — fail-open: ${e instanceof Error ? e.message : e}`);
-        return { ok: true, report: '' };
+        return { ok: true, status: 'inconclusive', report: '' };
     }
 }

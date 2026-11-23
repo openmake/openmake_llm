@@ -19,7 +19,7 @@ jest.mock('./goal-judge', () => ({
     judgeGoal: jest.fn(async () => ({ achieved: true, reason: 'ok', raw: '' })),
     buildJudgeExecutionContext: jest.fn(() => 'ctx'),
 }));
-jest.mock('./deliverable-verify', () => ({ verifyCodeArtifacts: jest.fn(async () => ({ ok: true, report: '' })) }));
+jest.mock('./deliverable-verify', () => ({ verifyCodeArtifacts: jest.fn(async () => ({ ok: true, status: 'passed', report: '' })) }));
 jest.mock('./workspace-test-verify', () => ({ verifyWorkspaceTests: jest.fn() }));
 jest.mock('./role-client', () => ({ judgeClientFor: jest.fn(async () => ({})) }));
 jest.mock('./task-steps', () => ({
@@ -74,7 +74,7 @@ const exhausted = (held?: FinalizeInput) => finalizeMaxTurnsExhausted({
 beforeEach(() => {
     jest.clearAllMocks();
     updates = []; emitted = [];
-    verifyMock.mockResolvedValue({ ok: true, report: '' });
+    verifyMock.mockResolvedValue({ ok: true, status: 'passed', report: '' });
     testsMock.mockImplementation(testsFail as never);
 });
 

@@ -25,8 +25,8 @@ jest.mock('./goal-judge', () => ({
     judgeGoalAchieved: jest.fn(),
     buildJudgeExecutionContext: jest.fn(() => 'ctx'),
 }));
-jest.mock('./deliverable-verify', () => ({ verifyCodeArtifacts: jest.fn(async () => ({ ok: true, report: '' })) }));
-jest.mock('./workspace-test-verify', () => ({ verifyWorkspaceTests: jest.fn(async (_r: unknown, _t: string, _u: unknown, n: number) => ({ ran: false, ok: true, report: '', stepNumber: n })) }));
+jest.mock('./deliverable-verify', () => ({ verifyCodeArtifacts: jest.fn(async () => ({ ok: true, status: 'passed', report: '' })) }));
+jest.mock('./workspace-test-verify', () => ({ verifyWorkspaceTests: jest.fn(async (_r: unknown, _t: string, _u: unknown, n: number) => ({ ran: false, ok: true, status: 'not_run' as const, report: '', stepNumber: n })) }));
 jest.mock('./role-client', () => ({ judgeClientFor: jest.fn(async () => ({})) }));
 jest.mock('./task-steps', () => ({
     persistArtifactSteps: jest.fn(async (_t: string, _a: unknown[], n: number) => n + 1),
@@ -93,7 +93,7 @@ const lastUpdate = (i: FinalizeInput): Record<string, unknown> => {
 
 beforeEach(() => {
     jest.clearAllMocks();
-    verifyMock.mockResolvedValue({ ok: true, report: '' });
+    verifyMock.mockResolvedValue({ ok: true, status: 'passed', report: '' });
     mockListRejected.mockResolvedValue([]);
 });
 
@@ -312,7 +312,7 @@ describe('finalizeTask — 완료 관문 단일화(091)', () => {
     });
 
     it('산출물 검증 실패는 완료시키지 않고 자가수정 nudge 를 돌려준다', async () => {
-        verifyMock.mockResolvedValue({ ok: false, report: 'SyntaxError' });
+        verifyMock.mockResolvedValue({ ok: false, status: 'failed', report: 'SyntaxError' });
         const i = input({ rawContent: WITH_ARTIFACT });
 
         const out = await finalizeTask(i);
@@ -324,7 +324,7 @@ describe('finalizeTask — 완료 관문 단일화(091)', () => {
     });
 
     it('verify 재시도 상한을 넘으면 검증을 건너뛰고 완료한다(무한루프 방지)', async () => {
-        verifyMock.mockResolvedValue({ ok: false, report: 'SyntaxError' });
+        verifyMock.mockResolvedValue({ ok: false, status: 'failed', report: 'SyntaxError' });
         const i = input({ rawContent: WITH_ARTIFACT, verifyRetries: 1 });
 
         const out = await finalizeTask(i);
@@ -375,7 +375,7 @@ describe('finalizeTask — 완료 관문 단일화(091)', () => {
 
 describe('finalizeTask — workspace 테스트 게이트(2026-09-06)', () => {
     it('테스트 실패면 completed 대신 verify_retry 로 수정 턴을 준다(러너 출력이 nudge 에 실림)', async () => {
-        testsMock.mockResolvedValueOnce({ ran: true, ok: false, runner: 'npm', report: 'FAIL src/x.test.ts\n[exit=1]', stepNumber: 6 });
+        testsMock.mockResolvedValueOnce({ ran: true, ok: false, status: 'failed', runner: 'npm', report: 'FAIL src/x.test.ts\n[exit=1]', stepNumber: 6 });
         const i = input({ path: 'terminate', terminateSummary: '완료' });
 
         const out = await finalizeTask(i);
@@ -406,6 +406,74 @@ describe('finalizeTask — workspace 테스트 게이트(2026-09-06)', () => {
 
         expect(testsMock).toHaveBeenCalledTimes(1);
         expect(out.kind).toBe('completed');
+    });
+});
+
+describe('finalizeTask — 검증 결과 4상태(하네스 P1-4)', () => {
+    const limits = () => (jest.requireMock('../../config/runtime-limits') as typeof import('../../config/runtime-limits')).AGENT_TASK_LIMITS;
+
+    it('러너 없음·판정 달성 → passed (judge 가 실제 확인)', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: 'ok', raw: '' });
+        const i = input({ path: 'terminate', terminateSummary: '완료' });
+        await finalizeTask(i);
+        expect(lastUpdate(i)).toMatchObject({ status: 'completed', verificationStatus: 'passed' });
+    });
+
+    it('검증할 것이 없으면 not_run — 아티팩트 있는 완료(셰도우 판정은 세지 않는다)·러너 없음', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: 'ok', raw: '' });
+        verifyMock.mockResolvedValue({ ok: true, status: 'not_run', report: '' });
+        const i = input({ rawContent: '정리했습니다.\n<artifact kind="markdown" title="t">본문</artifact>' });
+        await finalizeTask(i);
+        expect(lastUpdate(i)).toMatchObject({ status: 'completed', verificationStatus: 'not_run' });
+    });
+
+    it('judge 판정 불가 → inconclusive (완료는 유지)', async () => {
+        judgeMock.mockResolvedValue({ achieved: null, reason: '', raw: 'error' });
+        const i = input();
+        await finalizeTask(i);
+        expect(lastUpdate(i)).toMatchObject({ status: 'completed', verificationStatus: 'inconclusive' });
+    });
+
+    it('테스트 인프라 오류 → inconclusive', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: 'ok', raw: '' });
+        testsMock.mockImplementationOnce(async (_r, _t, _u, n) => ({ ran: false, ok: true, status: 'inconclusive', report: '', stepNumber: n }));
+        const i = input({ path: 'terminate', terminateSummary: '완료' });
+        await finalizeTask(i);
+        expect(lastUpdate(i)).toMatchObject({ verificationStatus: 'inconclusive' });
+    });
+
+    it('재시도 상한으로 검증을 건너뛴 완료 → failed, 기본(strict 꺼짐)은 completed 유지', async () => {
+        const i = input({ rawContent: WITH_ARTIFACT, verifyRetries: 1 });
+        const out = await finalizeTask(i);
+        expect(out.kind).toBe('completed');
+        expect(lastUpdate(i)).toMatchObject({ status: 'completed', verificationStatus: 'failed' });
+    });
+
+    it('strict(AGENT_TASK_VERIFY_STRICT) — 검증 실패를 못 고친 완료는 failed(verification_failed), 산출물은 남긴다', async () => {
+        const flag = jest.replaceProperty(limits(), 'VERIFY_STRICT', true);
+        try {
+            const i = input({ rawContent: WITH_ARTIFACT, verifyRetries: 1 });
+            const out = await finalizeTask(i);
+            expect(out.kind).toBe('goal_incomplete');
+            expect(lastUpdate(i)).toMatchObject({ status: 'failed', error: 'verification_failed', verificationStatus: 'failed', checkpoint: null });
+            expect(persistArtifactSteps).toHaveBeenCalled();
+        } finally { flag.restore(); }
+    });
+
+    it('strict 여도 판정 불가(inconclusive)·미실시는 막지 않는다', async () => {
+        const flag = jest.replaceProperty(limits(), 'VERIFY_STRICT', true);
+        try {
+            judgeMock.mockResolvedValue({ achieved: null, reason: '', raw: 'error' });
+            const i = input();
+            expect((await finalizeTask(i)).kind).toBe('completed');
+        } finally { flag.restore(); }
+    });
+
+    it('judge 미달성 종료에도 verificationStatus=failed 를 남긴다', async () => {
+        judgeMock.mockResolvedValue({ achieved: false, reason: '없음', raw: '' });
+        const i = input();
+        await finalizeTask(i);
+        expect(lastUpdate(i)).toMatchObject({ status: 'failed', error: 'goal_incomplete', verificationStatus: 'failed' });
     });
 });
 
@@ -477,14 +545,14 @@ describe('finalizeTask — 검증 증거 원장', () => {
         });
         it('마지막 편집 이후 전체 테스트가 통과했으면 그 러너를 게이트에 넘기고, 게이트가 건너뛰면 그 사실을 진행 표시로 남긴다', async () => {
             const emitStep = jest.fn();
-            testsMock.mockImplementationOnce(async (_r, _t, _u, n) => ({ ran: false, ok: true, report: '', stepNumber: n, runner: 'npm', provenSkip: true }));
+            testsMock.mockImplementationOnce(async (_r, _t, _u, n) => ({ ran: false, ok: true, status: 'passed', report: '', stepNumber: n, runner: 'npm', provenSkip: true }));
             const out = await run([...edit(), ...testPass()], emitStep);
             expect(testsMock.mock.calls[0][5]).toBe('npm');
             expect(out.kind).toBe('completed');
             expect(emitStep).toHaveBeenCalledWith('test_verify', undefined, expect.stringContaining('npm test'));
         });
         it('증거가 있어도 게이트가 다른 러너를 감지해 돌렸고 실패했으면 수정 턴을 준다', async () => {
-            testsMock.mockImplementationOnce(async (_r, _t, _u, n) => ({ ran: true, ok: false, report: 'FAIL', stepNumber: n + 1, runner: 'pytest' }));
+            testsMock.mockImplementationOnce(async (_r, _t, _u, n) => ({ ran: true, ok: false, status: 'failed', report: 'FAIL', stepNumber: n + 1, runner: 'pytest' }));
             const out = await run([...edit(), ...testPass()]);
             expect(out.kind).toBe('verify_retry');
         });
