@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { ModelExposureBadge, ServerPermissionBadge, parseExposure, type ModelExposureView } from "./server-status-badges";
 import { cn } from "@/lib/utils";
 import { McpInstancesPanel } from "@/addons/mcp-runtime/components/mcp-instances-panel";
 import { useAppStore } from "@/lib/store";
@@ -36,6 +37,10 @@ type ConnStatus = "connected" | "degraded" | "disconnected";
 interface McpServer {
   id: string;
   name: string;
+  /** 도구가 채팅 모델에 실리는 조건 — 연결 상태와 별개 (구 API 면 null) */
+  exposure: ModelExposureView | null;
+  /** 이 서버를 설치한 확장 id — 단독 설치면 null */
+  extensionId: string | null;
   transport: Transport;
   toolCount: number;
   status: ConnStatus;
@@ -90,6 +95,10 @@ interface ApiMcpServer {
   user_id?: string | null;
   /** 카탈로그 설치 서버의 템플릿 id (임의 등록 서버는 null). */
   catalog_template_id?: string | null;
+  /** 모델 노출 조건 (apps/api addons/mcp-runtime/model-exposure.ts) */
+  modelExposure?: unknown;
+  /** 설치한 확장 id — 단독 설치면 null */
+  extension_id?: string | null;
 }
 
 /** 카탈로그 템플릿의 env 스키마 — 설치 후 미설정 선택 항목을 찾는 데만 쓴다. */
@@ -136,6 +145,8 @@ function mapServer(s: ApiMcpServer, t: Translator): McpServer {
   return {
     id: s.id,
     name: s.name,
+    exposure: parseExposure(s.modelExposure),
+    extensionId: s.extension_id ?? null,
     transport: TRANSPORT_MAP[s.transport_type] ?? "stdio",
     toolCount: s.toolCount ?? 0,
     status: mapStatus(s.connectionStatus),
@@ -569,6 +580,8 @@ export function ConnectorsSection() {
   const [modalOpen, setModalOpen] = useState(false);
   const [servers, setServers] = useState<McpServer[]>([]);
   const [loading, setLoading] = useState(true);
+  /** 확장 id → 권한 상태 — 확장이 설치한 서버의 "권한 승인됨" 배지용. 조회 실패면 비어 있다(배지 생략) */
+  const [extPermissions, setExtPermissions] = useState<Record<string, string | null>>({});
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
   const [envEditTarget, setEnvEditTarget] = useState<McpServer | null>(null);
   const [renameTarget, setRenameTarget] = useState<McpServer | null>(null);
@@ -736,6 +749,16 @@ export function ConnectorsSection() {
         if (cancelled) return;
         const list = res?.data?.servers ?? [];
         setServers(list.map((s) => mapServer(s, t)));
+        if (list.some((s) => s.extension_id)) {
+          ApiClient.get<ApiEnvelope<{ extensions: Array<{ id: string; permission_state?: string | null }> }>>(
+            "/api/users/me/extensions",
+          )
+            .then((r) => {
+              if (cancelled) return;
+              setExtPermissions(Object.fromEntries((r?.data?.extensions ?? []).map((e) => [e.id, e.permission_state ?? null])));
+            })
+            .catch(() => { /* 권한 배지만 생략 — 목록은 그대로 */ });
+        }
       } catch {
         // 401·네트워크 실패 등 → 빈 목록 (그전엔 하드코딩 목업 5종이 실렌더됐다)
       } finally {
@@ -891,6 +914,13 @@ export function ConnectorsSection() {
                             </Badge>
                           );
                         })()}
+                        {/* 연결과 별개인 상태: 모델에 실리는 조건 · 확장 설치분의 권한 승인 상태 */}
+                        {(s.exposure || (s.extensionId && s.extensionId in extPermissions)) && (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <ModelExposureBadge exposure={s.exposure} />
+                            {s.extensionId && <ServerPermissionBadge permissionState={extPermissions[s.extensionId]} />}
+                          </div>
+                        )}
                         {/* 실패 원인 — 없으면 아무것도 그리지 않는다(정상 서버에 잡음 금지) */}
                         {s.enabled && s.errorCode && (
                           <div

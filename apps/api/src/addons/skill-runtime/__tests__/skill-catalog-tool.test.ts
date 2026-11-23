@@ -9,6 +9,9 @@ jest.mock('../skill-manager', () => ({
     getSkillManager: () => ({ buildSkillCatalog: buildSkillCatalogMock }),
 }));
 
+const recordAutoSelectMock = jest.fn();
+jest.mock('../skill-usage-log', () => ({ recordAutoSelect: (...a: unknown[]) => recordAutoSelectMock(...a) }));
+
 import { applySkillCatalog } from '../skill-catalog-tool';
 import type { ToolDefinition } from '../../../llm/types';
 
@@ -30,6 +33,7 @@ describe('applySkillCatalog', () => {
 
     beforeEach(() => {
         buildSkillCatalogMock.mockReset();
+        recordAutoSelectMock.mockReset();
         process.env.SKILL_AUTO_SELECT_ENABLED = 'true';
     });
     afterAll(() => {
@@ -47,6 +51,20 @@ describe('applySkillCatalog', () => {
         expect(injected!.function.description).toContain('보고서 작성');
         // 파라미터 스키마는 원본 유지
         expect(injected!.function.parameters).toEqual(loadSkillTool.function.parameters);
+    });
+
+    it('카탈로그를 실으면 노출(offered) 1건을 카탈로그 크기와 함께 기록한다', async () => {
+        buildSkillCatalogMock.mockResolvedValue({ catalog: '- a: b\n- c: d', count: 2 });
+        await applySkillCatalog([otherTool], [otherTool, loadSkillTool], { userId: 'u7' });
+        expect(recordAutoSelectMock).toHaveBeenCalledWith({ event: 'offered', userId: 'u7', catalogSize: 2 });
+    });
+
+    it('노출하지 않으면(플래그 OFF·빈 카탈로그) 기록하지 않는다', async () => {
+        buildSkillCatalogMock.mockResolvedValue({ catalog: '', count: 0 });
+        await applySkillCatalog([otherTool], [otherTool, loadSkillTool]);
+        process.env.SKILL_AUTO_SELECT_ENABLED = 'false';
+        await applySkillCatalog([otherTool], [otherTool, loadSkillTool]);
+        expect(recordAutoSelectMock).not.toHaveBeenCalled();
     });
 
     it('플래그 OFF 면 load_skill 을 제거한다 (기능 OFF)', async () => {
