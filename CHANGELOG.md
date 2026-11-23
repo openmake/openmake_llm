@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.147.0](https://github.com/openmake/openmake_llm/compare/v1.146.1...v1.147.0) (2026-11-23)
+
+
+### ✨ 기능
+
+* **agent-task:** 실행 기록 저장 실패 시 부작용 도구를 실행하지 않는 fail-closed 옵션 ([1b154a6](https://github.com/openmake/openmake_llm/commit/1b154a6976c9f584e2b3abcafcb1ed38c2f964f6))
+* **agent-task:** 완료 검증 결과를 통과·미실시·실패·판정불가 4상태로 구분하고 strict 옵션 추가 ([07e5999](https://github.com/openmake/openmake_llm/commit/07e5999e167ce1a10e75b95196802a7448a3055b))
+* **agent-task:** 파일 편집 해시 비교 후 교체 — 본 뒤 바뀐 파일은 덮어쓰지 않는다 ([7d756c7](https://github.com/openmake/openmake_llm/commit/7d756c7a769a9f6c3a9d93b9aac280b01e7ec7ca))
+* **egress:** 데이터 반출 관문 통합과 민감도 분류 — 채팅·에이전트 작업 공통 판정 ([b43a010](https://github.com/openmake/openmake_llm/commit/b43a01066ec706e054bde971be4252591bbe6370))
+* **routing:** 모델 상태 기반 라우팅 — 최근 비정상 모델은 건강한 대체 후보로 단가·지연 순 재해석 ([989653e](https://github.com/openmake/openmake_llm/commit/989653e04ee4c801577436bbb37cda1085d4051d))
+
+
+### ♻️ 리팩터링
+
+* **cluster:** 호출 0 인 노드 서킷 브레이커·페일오버 제거 — 서킷은 도구 서킷 하나로 ([ffb7b02](https://github.com/openmake/openmake_llm/commit/ffb7b027a5eca3e60fbf90fa11f0580d3c33833c))
+* **orchestrator:** 계획 실행 스케줄링을 범용 DAG 실행기로 분리 + eager 모드 ([f2e4e52](https://github.com/openmake/openmake_llm/commit/f2e4e52bb4c86e69bb13632b468f3a30e997ea60))
+
 ## [1.146.1](https://github.com/openmake/openmake_llm/compare/v1.146.0...v1.146.1) (2026-11-23)
 
 
