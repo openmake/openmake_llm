@@ -357,7 +357,7 @@ async function processOneUnit(signal: AbortSignal): Promise<void> {
 개발 스택(:52418)을 대상으로 plugin-boundary 를 돌리지 않는다 — 토글이 개발 DB 의 add-on 의도를 바꾼다. 격리 테스트 DB(:5433)에 붙인 e2e 전용 API 를 띄운다.
 ```bash
 docker --context colima-openmake run -d --name omk-e2e-test-pg -e POSTGRES_USER=openmake -e POSTGRES_PASSWORD=openmake_test \
-  -e POSTGRES_DB=openmake_llm_test -p 127.0.0.1:5433:5432 pgvector/pgvector:0.8.3-pg16-trixie
+  -e POSTGRES_DB=openmake_llm_test -p 127.0.0.1:5433:5432 pgvector/pgvector:0.8.7-pg16-trixie
 export TEST_DATABASE_URL=postgresql://openmake:openmake_test@localhost:5433/openmake_llm_test
 bash scripts/setup-test-db.sh
 (
