@@ -29,7 +29,7 @@ import { createLogger } from '../../utils/logger';
 import { withLiveTerminal } from './live-terminal';
 import { sanitizeId, buildRunArgs, buildBrowserRunArgs, browserRunContainerName, buildWriteArgs, EXEC_ID_ENV, buildKillExecArgs, runProcess } from './sandbox-docker-cli';
 import { safeRealWorkspacePath, dirSizeBytes, listWorkspaceFilesAt } from './sandbox-workspace-fs';
-import { writeFileNoFollow, copyFileNoFollow, ensurePrivateRoot } from './sandbox-host-write';
+import { writeFileNoFollow, writeFileAtomicNoFollow, copyFileNoFollow, ensurePrivateRoot } from './sandbox-host-write';
 
 // 기존 소비처(runtime/tools 등)가 './sandbox' 에서 ExecResult 를 import 하므로 재노출 유지.
 export type { ExecResult } from './executor';
@@ -205,13 +205,13 @@ export class TaskSandbox implements TaskExecutor {
             // 컨테이너 안에서 쓴다 — 호스트가 쓰면 컨테이너가 약 1초 동안 예전 크기로 읽는다(Colima virtiofs).
             // 경로 검사는 위에서 호스트 실경로로 마쳤다. 여기서는 같은 파일의 컨테이너 쪽 경로만 만든다.
             const rel = relative(await realpath(resolve(this.hostWorkdir)), abs).split(sep).join('/');
-            const r = await runProcess(this.cfg.dockerPath, buildWriteArgs(this.containerName, `${WORKSPACE}/${rel}`),
+            const r = await runProcess(this.cfg.dockerPath, buildWriteArgs(this.containerName, `${WORKSPACE}/${rel}`, { atomic: this.cfg.atomicWrite === true }),
                 { timeoutMs: this.cfg.execTimeoutMs, outputCap: 4096, input: content });
             if (r.exitCode === 0) return;
             logger.warn(`[${this.taskId}] 컨테이너 쓰기 실패 → 호스트에서 씁니다 (${relPath}): ${(r.stderr || r.stdout).trim().slice(0, 200)}`);
         }
         await mkdir(dirname(abs), { recursive: true });
-        await writeFileNoFollow(abs, content);
+        await (this.cfg.atomicWrite ? writeFileAtomicNoFollow : writeFileNoFollow)(abs, content);
     }
 
     /** 호스트 파일을 workspace 로 복사 (대용량 입력 첨부 — Buffer 메모리 적재 없이 fs copy).
