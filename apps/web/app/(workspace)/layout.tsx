@@ -7,7 +7,10 @@ export default function WorkspaceLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-dvh overflow-hidden bg-app">
+    // ⚠️ relative 필수 — 기준(positioned) 조상이 없는 absolute 요소(sr-only 등)는 overflow-hidden 을
+    // 빠져나와 문서(html) 높이를 늘린다. 그러면 메시지 목록 끝에서 굴린 휠이 문서로 이어져 셸 전체가
+    // 위로 밀리고 아래가 빈 화면이 된다(2026-11-25 신고 — 긴 대화의 "답변 모델" sr-only).
+    <div className="relative flex h-dvh overflow-hidden bg-app">
       <div className="hidden lg:block">
         <Sidebar />
       </div>
