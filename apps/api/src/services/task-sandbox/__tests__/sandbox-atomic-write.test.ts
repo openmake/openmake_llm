@@ -80,6 +80,27 @@ describe('buildWriteArgs atomic (컨테이너 쓰기)', () => {
         expect((await stat(p)).mode & 0o777).toBe(0o755);
         expect(await leftovers(join(base, 'dir with space'))).toEqual([]);
     });
+
+    it('권한을 cp -p 에 맡기지 않는다 — cp 가 권한을 버리는 마운트(Colima virtiofs)에서도 덮어쓴 파일의 권한이 유지된다', async () => {
+        // virtiofs 의 cp -p 흉내: 성공(0)을 돌려주지만 사본은 0600. 종전 스크립트는 덮어쓴 파일이 0600 이 됐다.
+        const bin = join(base, 'bin');
+        await mkdir(bin);
+        await writeFile(join(bin, 'cp'), '#!/bin/sh\nfor a; do :; done\nsrc=""; for x; do [ "$x" = "-p" ] || { [ -z "$src" ] && src="$x" || dst="$x"; }; done\ncat "$src" > "$dst"; chmod 600 "$dst"\n');
+        await chmod(join(bin, 'cp'), 0o755);
+        const script = buildWriteArgs('c', 'x', { atomic: true })[5];
+        const p = join(base, 'keep.txt');
+        const write = (content: string) => new Promise<void>((resolve, reject) => {
+            const child = execFile('sh', ['-c', script, 'sh', p], { env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } },
+                (err) => (err ? reject(err) : resolve()));
+            child.stdin?.end(content);
+        });
+        await writeFile(p, 'v1\n');
+        await chmod(p, 0o644);
+        await write('v2\n');
+        expect(await readFile(p, 'utf8')).toBe('v2\n');
+        expect((await stat(p)).mode & 0o777).toBe(0o644);
+        expect(await leftovers(base)).toEqual([]);
+    });
 });
 
 describe('TaskSandbox.writeFile — atomicWrite 설정', () => {
