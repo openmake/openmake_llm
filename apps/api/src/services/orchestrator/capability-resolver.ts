@@ -33,7 +33,9 @@ import {
     CAPABILITY_DEFAULTS,
     CAPABILITY_ENDPOINT,
     CAPABILITY_LIMITS,
+    CAPABILITY_LABELS_KO,
     capabilityKeyPolicy,
+    disabledCapabilities,
     providerParamDefaults,
     type Capability,
 } from '../../config/capabilities';
@@ -53,6 +55,7 @@ const logger = createLogger('CapabilityResolver');
 
 export type CapabilityUnavailableCode =
     | 'CAPABILITY_UNASSIGNED'
+    | 'CAPABILITY_DISABLED'
     | 'CAPABILITY_PROVIDER_UNKNOWN'
     | 'CAPABILITY_PROVIDER_NOT_GATEWAY'
     | 'CAPABILITY_KEY_MISSING'
@@ -348,6 +351,15 @@ async function pickAssignment(capability: Capability, userId: string | undefined
     return fallback ? { fullId: fallback, params: {}, source: 'default' } : null;
 }
 
+/** 운영자가 끈 capability(`CAPABILITY_DISABLED`)는 배정과 무관하게 거절 — 안내가 "배정하라"로 사용자를 헛걸음시키지 않게 */
+function assertCapabilityEnabled(capability: Capability): void {
+    if (!disabledCapabilities().has(capability)) return;
+    throw new CapabilityUnavailableError(
+        `${CAPABILITY_LABELS_KO[capability]}(${capability}) 기능은 이 서버에서 현재 사용할 수 없습니다(관리자가 꺼 둠). 모델을 배정해도 동작하지 않으니 관리자에게 문의하세요.`,
+        'CAPABILITY_DISABLED',
+    );
+}
+
 /**
  * capability의 실행 대상을 해석한다. 미배정·키 없음은 throw(CapabilityUnavailableError) —
  * 호출부는 message 를 그대로 사용자 안내로 쓴다.
@@ -357,6 +369,7 @@ export async function resolveCapabilityTarget(
     userId?: string,
     deps: Partial<ResolveDeps> = {},
 ): Promise<CapabilityTarget> {
+    assertCapabilityEnabled(capability);
     const d: ResolveDeps = { ...defaultDeps(), ...deps };
     const picked = await pickAssignment(capability, userId, d);
     if (picked) {
@@ -412,6 +425,7 @@ export async function describeEffectiveCapabilityTarget(
     userId?: string,
     deps: Partial<ResolveDeps> = {},
 ): Promise<{ fullId: string; source: CapabilityTarget['source']; keyPolicy?: 'actor-byok' }> {
+    assertCapabilityEnabled(capability);
     if (!userId && capabilityKeyPolicy(capability) === 'actor-byok') {
         const a = await describeCapabilityAssignment(capability, undefined, deps);
         if (!a) {

@@ -46,6 +46,22 @@ describe('resolveCapabilityTarget', () => {
         await expect(resolveCapabilityTarget('audio.speech', 'u1', deps())).rejects.toMatchObject({ code: 'CAPABILITY_UNASSIGNED' });
     });
 
+    it('CAPABILITY_DISABLED 의 capability 는 배정이 있어도 CAPABILITY_DISABLED 로 거절(안내는 배정 권유가 아님), 목록 밖은 종전대로', async () => {
+        const prev = process.env.CAPABILITY_DISABLED;
+        process.env.CAPABILITY_DISABLED = ' music.generate , not.a.capability';
+        try {
+            const err = await resolveCapabilityTarget('music.generate', 'u1', deps({ user: [row('u1', 'music.generate', 'gemini:lyria-3.5')], userKey: 'k' })).catch((e) => e);
+            expect(err).toMatchObject({ code: 'CAPABILITY_DISABLED' });
+            expect(err.message).toContain('현재 사용할 수 없습니다');
+            expect(err.message).not.toContain('모델 배정에서 배정하세요');
+            const ok = await resolveCapabilityTarget('image.generate', 'u1', deps());
+            expect(ok).toMatchObject({ source: 'default' });
+        } finally {
+            if (prev === undefined) delete process.env.CAPABILITY_DISABLED; else process.env.CAPABILITY_DISABLED = prev;
+        }
+        await expect(resolveCapabilityTarget('audio.speech', 'u1', deps())).rejects.toMatchObject({ code: 'CAPABILITY_UNASSIGNED' });
+    });
+
     it('사용자 DB 조회 장애는 전역으로 넘어가지 않고 명시 실패', async () => {
         await expect(resolveCapabilityTarget('image.generate', 'u1', deps({ getThrows: true, global: [row('__global__', 'image.generate', 'local-llm:g')] })))
             .rejects.toMatchObject({ code: 'CAPABILITY_LOOKUP_FAILED' });
