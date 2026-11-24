@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.148.0](https://github.com/openmake/openmake_llm/compare/v1.147.1...v1.148.0) (2026-11-24)
+
+
+### ✨ 기능
+
+* **agent-task:** 도구 훅을 task 도구에도 걸고(fail-closed 훅 지원), 파일 쓰기를 원자적 교체로 (opt-in) — 하네스 검토 C-08·P2-6 잔여 ([59e5758](https://github.com/openmake/openmake_llm/commit/59e57583517713aa2e82827b022cc72b3f945172))
+
 ## [1.147.1](https://github.com/openmake/openmake_llm/compare/v1.147.0...v1.147.1) (2026-11-24)
 
 
