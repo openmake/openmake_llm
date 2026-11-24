@@ -40,6 +40,12 @@ export const TOOL_HEALTH_QUERY = {
  *  ② `SCOPE='external'` — 내장 도구는 실패해도 노출에서 빼지 않는다. `web_search` 같은
  *     핵심 경로가 사라지는 손실이 크고, 내장 도구 실패는 대개 인자·사용자 오류다.
  *     서킷의 실제 동기는 죽은 외부 MCP 서버의 도구다.
+ *     **2026-11-25 범위 결정(하네스 v1.1 로드맵 P1 "적용 범위 결정") — `external` 유지.** 운영(서킷 ON) 30일
+ *     `audit_logs` 의 내장 도구 실패는 `web_search` 1/408·`extract_webpage` 1/45 이고, 서킷이 셀 실패 대부분은
+ *     메타 도구 `mcp_call`(9 — 실패의 주인은 안쪽 외부 도구라 거기서 이미 센다)과 `import_mcp_server_from_git`
+ *     (8/8 — 사용자가 준 리포가 잘못된 입력 오류인데 분류는 execution)이었다. 상태가 전 사용자 공용이라 `all` 이면
+ *     한 사용자의 잘못된 import 가 모두의 import 를 막는다. 같은 기간 운영 로그의 `[circuit]` 차단은 0건(오탐 없음).
+ *     `all` 을 다시 검토하려면 먼저 메타·import 도구를 분류 제외(EXCLUDED_CATEGORIES 또는 도구 제외 목록)할 것.
  *
  * ⚠️ `FAILURE_THRESHOLD` 는 연결 사망 self-heal(`external-client` 의 evict → respawn)보다
  * 크게 잡는다 — self-heal 로 고쳐질 실패에 서킷이 먼저 열리면 복구를 방해한다.

@@ -15,6 +15,16 @@
  *   completed→ (없음 — 라우트가 재실행·재개를 400 으로 막는다)
  * 같은 상태로의 갱신은 no-op(허용, 이벤트 없음).
  *
+ * 상태를 늘리지 않는다는 결정(2026-11-25, 하네스 v1.1 로드맵 P1 "검증 대기·전달 대기 상태 신설 여부") —
+ * `verification_pending`·`delivery_pending` 은 만들지 않는다.
+ *   - 검증: 산출물 검사·테스트 게이트·goal judge 는 running 중 finalize 안에서 동기로 끝난다 — 머무를 대기가 없어
+ *     상태로 만들면 관측되지 않는 순간 상태가 된다. 결과는 `agent_tasks.verification_status`(204, 4상태)가 갖고,
+ *     실패를 완료로 끝내지 않는 것은 `AGENT_TASK_VERIFY_STRICT` 가 맡는다.
+ *   - 전달: 종료 알림은 종료 상태와 같은 쓰기로 남는 `terminal_notify_pending` 표식 + 주기 재전송(terminal-notify)이
+ *     맡는다 — 작업은 이미 끝났고 남은 것은 알림뿐이라 작업 상태가 아니다.
+ *   - 비용: 새 상태는 전이표·`allowedSources` WHERE·부팅 복구·큐·웹·iOS 상태 표시·실패 분류 SQL 을 모두 건드린다.
+ * 사람이 검토해야 끝나는 검증(승인 대기형)이 생기면 그때는 paused + 사유로 먼저 표현할 수 있는지부터 볼 것.
+ *
  * @module services/agent-task/task-state
  */
 import type { AgentTaskStatus } from '../../data/models/unified-database.types';
