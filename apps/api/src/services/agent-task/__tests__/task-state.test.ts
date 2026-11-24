@@ -1,7 +1,7 @@
 /**
  * 상태 머신 전이표(124) — 실경로에서 도출한 전이는 허용, 표 밖은 거부.
  */
-import { isTransitionAllowed, allowedSources, AgentTaskTransitionError } from '../task-state';
+import { isTransitionAllowed, allowedSources, AgentTaskTransitionError, AGENT_TASK_STATUSES } from '../task-state';
 
 describe('agent task 상태 전이표', () => {
     it('실경로 전이는 허용된다', () => {
@@ -14,6 +14,10 @@ describe('agent task 상태 전이표', () => {
         expect(isTransitionAllowed('failed', 'running')).toBe(true);    // resume
         expect(isTransitionAllowed('cancelled', 'running')).toBe(true); // 취소 작업 resume
         expect(isTransitionAllowed('queued', 'cancelled')).toBe(true);  // 대기열 취소
+    });
+
+    it('상태는 7개 그대로다 — 검증·전달 대기 상태는 두지 않는다(2026-11-25 결정, task-state.ts 머리말)', () => {
+        expect([...AGENT_TASK_STATUSES].sort()).toEqual(['cancelled', 'completed', 'failed', 'paused', 'pending', 'queued', 'running']);
     });
 
     it('같은 상태로의 갱신은 no-op 으로 허용된다', () => {
