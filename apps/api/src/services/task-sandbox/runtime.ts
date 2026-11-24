@@ -9,7 +9,8 @@
  * @module services/task-sandbox/runtime
  */
 import type { ToolDefinition } from '../../llm/types';
-import type { MCPToolDefinition } from '../../tool-contract/types';
+import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
+import { runPreHooks, runPostHooks, type ToolHookContext } from '../../tool-contract/tool-hooks';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { TaskSandbox, type ExecResult } from './sandbox';
 import type { TaskExecutor } from './executor';
@@ -284,6 +285,17 @@ export class TaskRuntime {
         const refusal = await this.prechecks.get(name)?.(args, { userId: this.userId });
         if (refusal) return `Error: ${refusal}`;
 
+        // 도구 훅(AGENT_TASK_TOOL_HOOKS) — 승인 판정 전에 pre 를 돌린다: 훅이 바꾼 인자가 곧 승인받는 인자이고,
+        // 훅이 거절한 호출은 승인을 묻지 않는다. post 는 핸들러 결과에 건다(아래).
+        const hookCtx: ToolHookContext | null = AGENT_TASK_LIMITS.TOOL_HOOKS_ON_TASK_TOOLS
+            ? { name, external: false, userId: this.userId, role: 'user', startedAt: Date.now(), surface: 'task' }
+            : null;
+        if (hookCtx) {
+            const pre = await runPreHooks(args, hookCtx);
+            if (pre.deny) return `Error: 도구 "${name}" 호출이 정책 훅에 의해 거절되었습니다: ${pre.deny}`;
+            args = pre.args;
+        }
+
         // skill_run — 승인 전에 절차를 불러 인자에 체크섬을 묶는다. 승인 카드에는 절차 본문을 싣고, 실행 단계가 같은 절차인지 확인한다.
         const skillPreview = name === 'skill_run' && this.loadProcedure ? await bindSkillRunApproval(args, this.loadProcedure) : null;
         // 제어 흐름(if·repeat) 형태가 어긋나면 묻지 않고 거절한다 — 실행 위치가 실행하지 않고, 아래 검사는 펼친 액션을 훑는다.
@@ -322,7 +334,9 @@ export class TaskRuntime {
         opts.signal?.addEventListener('abort', onAbort, { once: true });
         try {
             await opts.onBeforeExecute?.();
-            const r = await handler(args, { userId: this.userId, role: 'user' });
+            if (hookCtx) hookCtx.startedAt = Date.now(); // 승인 대기 시간을 빼고 실제 실행 시간만 post 훅이 보게
+            const raw = await handler(args, { userId: this.userId, role: 'user' });
+            const r = hookCtx ? await runPostHooks(raw as MCPToolResult, hookCtx) : raw;
             const typed = r as { content: Array<{ text?: string }>; isError?: boolean };
             // G3 셰도우 계측 — task 도구는 turn-executor 의 runTool 을 타지 않아(이 경로가 캡 지점)
             // 여기서 적재한다 (2026-08-08 라이브 점검에서 발견된 계측 사각).

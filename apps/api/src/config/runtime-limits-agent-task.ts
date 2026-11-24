@@ -519,6 +519,11 @@ export const AGENT_TASK_LIMITS = {
      *  편집 직전 실제 파일이 그 해시와 다르면(그새 사용자·다른 서브에이전트가 바꿈) 덮어쓰지 않고 다시 보라고 돌려준다.
      *  기본 OFF(종전 — 마지막 쓰기가 이긴다). AGENT_TASK_EDIT_CAS=true 로 켠다(services/task-sandbox/edit-ledger). */
     EDIT_CAS: process.env.AGENT_TASK_EDIT_CAS === 'true',
+    /** 도구 훅을 task 도구에도 적용(하네스 검토 C-08) — 도구 디스패처에만 걸리던 pre/post 훅(tool-contract/tool-hooks)을
+     *  에이전트 작업의 task 도구(샌드박스 bash·파일 편집·browser 등)에도 건다. pre 훅은 승인 판정 **전에** 돌아
+     *  승인 카드에 훅이 바꾼 최종 인자가 보이고, 거절된 호출은 승인을 묻지 않는다(ask_human 은 제외 — 도구가 곧 질문).
+     *  기본 OFF(종전 — task 도구는 훅을 지나지 않는다). AGENT_TASK_TOOL_HOOKS=true 로 켠다. */
+    TOOL_HOOKS_ON_TASK_TOOLS: process.env.AGENT_TASK_TOOL_HOOKS === 'true',
     /** 실행 중 중간 지시(steering) — 실행 중 task 에 사용자가 방향 지시를 주입하면 다음 턴 경계에서
      *  conversation 에 user 메시지로 반영(취소·재시작 없이 교정). steering 은 사용자가 명시적으로
      *  보낼 때만 동작하므로 기본 ON. AGENT_TASK_STEERING=false 로 비활성. */

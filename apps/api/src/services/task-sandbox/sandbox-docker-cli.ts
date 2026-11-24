@@ -12,6 +12,7 @@ import { BROWSER_RUN } from '../../config/agent-task-browser-web';
 import type { ExecResult } from './executor';
 import { SANDBOX_WORKSPACE_DIR } from './workspace-path';
 import { tapOutput } from './live-terminal';
+import { ATOMIC_WRITE_TMP_PREFIX } from './sandbox-host-write'; // 셸 문자열에 그대로 들어간다 — 따옴표·$ 없는 리터럴만
 
 const WORKSPACE = SANDBOX_WORKSPACE_DIR;
 
@@ -84,8 +85,15 @@ export function browserRunContainerName(taskId: string): string {
  * PURE: 컨테이너 안에서 파일을 쓰는 `docker exec` 인자 (유닛테스트 대상). 내용은 stdin 으로 넘긴다.
  * 경로는 셸 문자열에 넣지 않고 위치 인자($1)로 넘긴다 — 공백·메타문자가 있어도 명령으로 해석되지 않는다.
  */
-export function buildWriteArgs(containerName: string, containerPath: string): string[] {
-    return ['exec', '-i', containerName, 'sh', '-c', 'mkdir -p "$(dirname "$1")" && cat > "$1"', 'sh', containerPath];
+export function buildWriteArgs(containerName: string, containerPath: string, opts: { atomic?: boolean } = {}): string[] {
+    if (!opts.atomic) {
+        return ['exec', '-i', containerName, 'sh', '-c', 'mkdir -p "$(dirname "$1")" && cat > "$1"', 'sh', containerPath];
+    }
+    // 원자적 교체(TASK_SANDBOX_ATOMIC_WRITE) — 같은 폴더 임시 파일에 다 쓴 뒤 mv. 기존 파일이 있으면 cp -p 로 권한을
+    // 먼저 옮겨 실행 비트를 잃지 않는다. 실패하면 임시 파일을 지우고 실패를 돌려준다(호출부가 호스트 쓰기로 넘어간다).
+    const script = 'd="$(dirname "$1")"; mkdir -p "$d" || exit 1; t="$d/' + ATOMIC_WRITE_TMP_PREFIX + '$(basename "$1").$$"; '
+        + '{ if [ -f "$1" ]; then cp -p "$1" "$t"; fi; } && cat > "$t" && mv -f "$t" "$1" || { rm -f "$t"; exit 1; }';
+    return ['exec', '-i', containerName, 'sh', '-c', script, 'sh', containerPath];
 }
 
 /** exec 한 번을 식별하는 환경변수 — 그 명령이 띄운 프로세스(백그라운드·데몬 포함)가 모두 물려받는다. */
