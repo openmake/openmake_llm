@@ -56,7 +56,26 @@ export const AGENT_DELEGATION = {
     OUTPUT_SCHEMA_MAX_CHARS: num(process.env.AGENT_DELEGATION_OUTPUT_SCHEMA_MAX_CHARS, 4000),
     /** 형식 검증 실패 사유에 싣는 항목 수 상한. */
     OUTPUT_SCHEMA_MAX_ISSUES: 5,
+    /**
+     * 핸드오프 봉투(하네스 v1.1 로드맵 P1 "핸드오프 계약 표준화") — 서브에이전트(spawn_agents·delegate) 결과마다
+     * 실행 id·증거(실제 도구 호출과 거절 수, 도구 결과에서 본 출처 URL)·결과 포인터(전문 sha256·글자 수)·정책 맥락(승인 정책·
+     * 받은 도구 수·도구 없음 사유)·형식 검증 판정을 한 묶음으로 만든다. 부모 모델에는 태스크 머리말 아래 한 줄로,
+     * 활동 기록(agent_task_subagent_steps)에는 step_type='handoff' JSON 으로 남긴다.
+     * 기본 꺼짐(opt-in) — 켜면 부모 결과가 태스크당 한 줄 늘어난다. AGENT_DELEGATION_HANDOFF_ENVELOPE=true
+     */
+    HANDOFF_ENVELOPE_ENABLED: process.env.AGENT_DELEGATION_HANDOFF_ENVELOPE === 'true',
+    /** 봉투에 싣는 출처 URL 수 상한(부모에게 가는 줄에는 개수만, 활동 기록에는 목록). AGENT_DELEGATION_HANDOFF_MAX_SOURCES */
+    HANDOFF_MAX_SOURCES: num(process.env.AGENT_DELEGATION_HANDOFF_MAX_SOURCES, 10),
 } as const;
+
+/** 도구 결과에서 출처로 셀 URL — 공백·따옴표·괄호·꺾쇠에서 끊는다. AGENT_DELEGATION_HANDOFF_URL_PATTERN */
+export const HANDOFF_SOURCE_URL_RE = new RegExp(
+    process.env.AGENT_DELEGATION_HANDOFF_URL_PATTERN || 'https?://[^\\s"\'<>()\\[\\]{}]+',
+    'g',
+);
+
+/** URL 끝에 붙어 온 문장 부호 — 출처 비교 전에 걷어낸다. */
+export const HANDOFF_URL_TRAILING_PUNCT_RE = /[.,;:!?]+$/;
 
 /** 재개 때 다시 돌리지 않을 종료 사유 — 오류·시간 초과로 끝난 서브는 기록하지 않아 재개 때 다시 돈다. */
 export const SUBAGENT_REUSABLE_EXITS: readonly SubagentExitReason[] = ['completed', 'turns', 'tokens'];

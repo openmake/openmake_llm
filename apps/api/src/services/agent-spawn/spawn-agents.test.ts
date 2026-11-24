@@ -34,6 +34,8 @@ jest.mock('../task-sandbox/approval-gate', () => ({
 
 /** 서브 수명 마킹 관측 — `${subIndex}:${event}` 순서로 쌓는다. */
 const mockTraceEvents: string[] = [];
+/** 기록 본문까지 보는 테스트용 — 핸드오프 봉투 JSON 을 확인한다. */
+const mockTraceRecords: Array<{ sub: number; type: string; content: string }> = [];
 jest.mock('../agent-task/subagent-trace', () => ({
     ...jest.requireActual('../agent-task/subagent-trace'),
     newTraceId: () => 'trace-test',
@@ -42,7 +44,10 @@ jest.mock('../agent-task/subagent-trace', () => ({
             public taskId: string, public traceId: string, public origin: string,
             public subIndex: number, public label: string | null,
         ) {}
-        record = jest.fn((type: string) => { mockTraceEvents.push(`${this.subIndex}:${type}`); });
+        record = jest.fn((type: string, content: string) => {
+            mockTraceEvents.push(`${this.subIndex}:${type}`);
+            mockTraceRecords.push({ sub: this.subIndex, type, content });
+        });
         queued = jest.fn(() => { mockTraceEvents.push(`${this.subIndex}:queued(${this.label})`); });
         started = jest.fn(() => { mockTraceEvents.push(`${this.subIndex}:started`); });
     },
@@ -101,6 +106,7 @@ const baseParams = {
 beforeEach(() => {
     jest.clearAllMocks();
     mockTraceEvents.length = 0;
+    mockTraceRecords.length = 0;
     autoApproveMock.mockReturnValue(false);
     runSubagentMock.mockImplementation(async (p: { subgoal: string }) => `RESULT<${p.subgoal}>`);
     routeToAgentMock.mockResolvedValue({ agentId: 'finance' });
@@ -234,6 +240,62 @@ describe('runSpawnAgents 종료 사유 전달', () => {
         expect(out).toContain('fine\n[종료 사유: 정상 완료]\nRESULT<fine>');
         expect(out).toContain('slow\n[종료 사유: 시간 초과]\nRESULT<slow>');
         expect(out).toContain('crash\n[종료 사유: 오류]\nError: 서브에이전트 실패');
+    });
+});
+
+describe('runSpawnAgents 핸드오프 봉투 (AGENT_DELEGATION_HANDOFF_ENVELOPE)', () => {
+    const delegation = jest.requireMock('../../config/agent-task-delegation').AGENT_DELEGATION as Record<string, unknown>;
+    afterEach(() => { delegation.HANDOFF_ENVELOPE_ENABLED = false; });
+
+    type SubP = { subgoal: string; onExit?: (r: string) => void; onToolOutcome?: (t: string, o: string, text?: string) => void };
+
+    it('꺼져 있으면 봉투 줄도 기록도 없고 onToolOutcome 을 넘기지 않는다(종전과 같음)', async () => {
+        const out = await runSpawnAgents({ ...baseParams, args: { tasks: [{ prompt: 'a' }] } });
+        expect(out).not.toContain('[핸드오프:');
+        expect(runSubagentMock.mock.calls[0][0].onToolOutcome).toBeUndefined();
+        expect(mockTraceRecords.some((r) => r.type === 'handoff')).toBe(false);
+    });
+
+    it('켜면 태스크마다 실제 도구 결과·출처·정책·결과 해시를 한 줄로 싣고, 봉투 JSON 을 활동 기록에 남긴다', async () => {
+        delegation.HANDOFF_ENVELOPE_ENABLED = true;
+        runSubagentMock.mockImplementation(async (p: SubP) => {
+            if (p.subgoal === 'research') {
+                p.onToolOutcome?.('web_search', 'ok', '결과: https://a.example/x, https://b.example/y. 그리고 https://a.example/x');
+                p.onToolOutcome?.('web_search', 'error');
+                p.onToolOutcome?.('extract_webpage', 'denied');
+            }
+            p.onExit?.('completed');
+            return `RESULT<${p.subgoal}>`;
+        });
+        const out = await runSpawnAgents({ ...baseParams, args: { tasks: [{ prompt: 'research' }, { prompt: 'memory' }] } });
+        expect(out).toContain('[종료 사유: 정상 완료]\n[핸드오프: 실행 trace-test#0 · 도구 호출 3회: web_search 2(실패 1), extract_webpage 1(거절 1) · 출처 URL 2개');
+        expect(out).toContain('[핸드오프: 실행 trace-test#1 · 도구 호출 0회 — 조회 없이 작성된 답');
+        expect(out).toContain('승인 정책 none·받은 도구 1개');
+
+        const handoffs = mockTraceRecords.filter((r) => r.type === 'handoff');
+        expect(handoffs.map((r) => r.sub)).toEqual([0, 1]);
+        const env = JSON.parse(handoffs[0].content);
+        expect(env).toMatchObject({
+            v: 1, executionId: 'trace-test#0', exit: 'completed', reused: false, schema: 'none',
+            evidence: { calls: 3, sourceCount: 2, sources: ['https://a.example/x', 'https://b.example/y'] },
+            policy: { approvalPolicy: 'none', toolsGranted: 1 },
+            result: { chars: 'RESULT<research>'.length },
+        });
+        expect(env.result.sha256).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('형식 계약이 있으면 판정이 봉투에 실린다', async () => {
+        delegation.HANDOFF_ENVELOPE_ENABLED = true;
+        runSubagentMock.mockImplementation(async (p: SubP) => { p.onExit?.('completed'); return '{"n": 1}'; });
+        await runSpawnAgents({ ...baseParams, args: { tasks: [{ prompt: 'a', outputSchema: { type: 'object', properties: { n: { type: 'number' } }, required: ['n'] } }] } });
+        expect(JSON.parse(mockTraceRecords.find((r) => r.type === 'handoff')!.content).schema).toBe('valid');
+    });
+
+    it('채팅 경로(작업 행 없음)도 봉투 줄을 싣되 활동 기록은 남기지 않는다', async () => {
+        delegation.HANDOFF_ENVELOPE_ENABLED = true;
+        const out = await runSpawnAgents({ ...baseParams, taskId: '__chat__', args: { tasks: [{ prompt: 'a' }] } });
+        expect(out).toContain('[핸드오프: 실행 chat-trace-test#0');
+        expect(mockTraceRecords).toHaveLength(0);
     });
 });
 

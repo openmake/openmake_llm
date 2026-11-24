@@ -43,7 +43,9 @@ import { AGENT_DELEGATION, SUBAGENT_REUSABLE_EXITS, exitReasonForError, type Sub
 import {
     getSubagentStatusLine, SUBAGENT_REUSED_NOTE, getDelegationRejection, DELEGATION_SELF_REPORT_NOTICE,
     SPAWN_OUTPUT_SCHEMA_PARAM_DESCRIPTION, getOutputSchemaCorrection, OUTPUT_SCHEMA_VALID_NOTE, getOutputSchemaFailedNote,
+    getHandoffLine,
 } from '../../prompts/agent-task-delegation';
+import { HandoffEvidenceCollector, buildHandoffEnvelope, emptyEvidence } from './handoff-envelope';
 import { compileOutputContract, type OutputContract } from './output-schema';
 import { checkDelegationGoal } from '../agent-task/delegation-input';
 import { SpawnResultStore } from './spawn-result-store';
@@ -318,6 +320,9 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
     // 끝난 서브 결과의 즉시 기록·재사용 — 작업 행이 있는 경로만(채팅은 재개가 없다).
     const store = traceId && AGENT_DELEGATION.RESULT_REUSE_ENABLED ? new SpawnResultStore(p.taskId) : null;
     const reused = new Set<number>();
+    // 핸드오프 봉투(opt-in) — 태스크마다 실제 도구 결과를 모은다. 실행 id 는 활동 기록의 trace 를 가리킨다(채팅은 임시 id).
+    const collectors = AGENT_DELEGATION.HANDOFF_ENVELOPE_ENABLED ? tasks.map(() => new HandoffEvidenceCollector()) : null;
+    const executionBase = traceId ?? `chat-${newTraceId()}`;
     try {
         results = await parallelBatch(
             tasks,
@@ -357,6 +362,7 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
                         ...(p.onPausedMs ? { onPausedMs: p.onPausedMs } : {}),
                         ...(p.chatTaint ? { chatTaint: p.chatTaint } : {}),
                         onExit: (reason) => { exits[idx] = reason; },
+                        ...(collectors ? { onToolOutcome: collectors[idx].record } : {}),
                     });
                     const exit = exits[idx];
                     if (store && exit && SUBAGENT_REUSABLE_EXITS.includes(exit)) await store.save(task, { result, exit });
@@ -387,15 +393,34 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
         `[AgentSpawn] 태스크 ${i + 1} 결과 프리뷰: ${(r ?? '(null)').slice(0, 160).replace(/\n/g, ' ')}`));
     // 태스크별 예산 분배 — 모든 결과와 끝의 종합 지시가 상한 안에 들어가게 한다(spawn-result).
     /** 상태 줄에 덧붙일 표시 — 재사용 여부, 형식 검증 판정(계약이 있는 태스크만). */
+    /** 형식 계약 판정 — 계약이 없으면 undefined, 통과면 null, 어긋나면 사유. */
+    const schemaProblems = tasks.map((_, i) => contracts[i]?.check(results[i] ?? ''));
     const statusExtras = (i: number): string[] => {
-        const problem = contracts[i]?.check(results[i] ?? '');
+        const problem = schemaProblems[i];
         return [
             ...(reused.has(i) ? [SUBAGENT_REUSED_NOTE] : []),
             ...(contracts[i] ? [problem ? getOutputSchemaFailedNote(problem) : OUTPUT_SCHEMA_VALID_NOTE] : []),
         ];
     };
-    const statusLines = AGENT_DELEGATION.EXIT_REASON_ENABLED
+    const exitLines = AGENT_DELEGATION.EXIT_REASON_ENABLED
         ? exits.map((reason, i) => (reason ? getSubagentStatusLine(reason, statusExtras(i)) : undefined))
+        : undefined;
+    const envelopes = collectors?.map((collector, i) => buildHandoffEnvelope({
+        executionId: `${executionBase}#${i}`,
+        exit: exits[i],
+        reused: reused.has(i),
+        evidence: reused.has(i) ? emptyEvidence() : collector.snapshot(),
+        result: results[i] ?? '',
+        approvalPolicy: p.sandboxCfg.approvalPolicy,
+        toolsGranted: subTools.length,
+        ...(p.noToolsReason ? { noToolsReason: p.noToolsReason } : {}),
+        schemaProblem: schemaProblems[i],
+    }));
+    // 감사용 기록 — 부모 결과는 예산으로 잘릴 수 있지만 봉투(해시·증거)는 활동 기록에 그대로 남는다.
+    envelopes?.forEach((env, i) => traces?.[i]?.record('handoff', JSON.stringify(env)));
+    const handoffLines = envelopes?.map((env) => getHandoffLine(env));
+    const statusLines = exitLines || handoffLines
+        ? tasks.map((_, i) => [exitLines?.[i], handoffLines?.[i]].filter((l): l is string => !!l).join('\n') || undefined)
         : undefined;
     return composeSpawnResult({
         tasks, results, ...(statusLines ? { statusLines } : {}),

@@ -79,3 +79,41 @@ export function getOutputSchemaTooLarge(chars: number, maxChars: number): string
 export function getOutputSchemaInvalid(detail: string): string {
     return `outputSchema 가 올바른 JSON Schema 가 아닙니다 (${detail})`;
 }
+
+/** 핸드오프 봉투 한 줄에 필요한 값 — services/agent-spawn/handoff-envelope 의 HandoffEnvelope 와 같은 모양(구조 타입). */
+interface HandoffLineInput {
+    executionId: string;
+    reused: boolean;
+    evidence: { calls: number; tools: ReadonlyArray<{ tool: string; ok: number; error: number; denied: number }>; sourceCount: number };
+    result: { sha256: string; chars: number };
+    policy: { approvalPolicy: string; toolsGranted: number };
+}
+
+/** 핸드오프 봉투 줄에 싣는 도구 수 상한 — 나머지는 "외 N개". */
+const HANDOFF_LINE_MAX_TOOLS = 4;
+/** 결과 해시를 줄에 싣는 앞자리 수(전체 해시는 활동 기록에 있다). */
+const HANDOFF_LINE_HASH_CHARS = 12;
+
+/**
+ * 태스크 머리말 아래 핸드오프 줄 — 부모가 이 결과의 근거를 가늠하게 한다.
+ * 도구 호출 0회는 "조회 없이 작성"으로 분명히 적는다(자가 보고를 조사 결과로 오인하지 않게).
+ */
+export function getHandoffLine(e: HandoffLineInput): string {
+    const parts: string[] = [`실행 ${e.executionId}`];
+    if (e.reused) {
+        parts.push('이전 실행 결과 재사용(이번 실행의 도구 호출 없음)');
+    } else if (e.evidence.calls === 0) {
+        parts.push('도구 호출 0회 — 조회 없이 작성된 답');
+    } else {
+        const shown = e.evidence.tools.slice(0, HANDOFF_LINE_MAX_TOOLS).map((t) => {
+            const fails = [t.error ? `실패 ${t.error}` : '', t.denied ? `거절 ${t.denied}` : ''].filter(Boolean).join('·');
+            return `${t.tool} ${t.ok + t.error + t.denied}${fails ? `(${fails})` : ''}`;
+        });
+        const more = e.evidence.tools.length - shown.length;
+        parts.push(`도구 호출 ${e.evidence.calls}회: ${shown.join(', ')}${more > 0 ? ` 외 ${more}개` : ''}`);
+        parts.push(`출처 URL ${e.evidence.sourceCount}개`);
+    }
+    parts.push(`승인 정책 ${e.policy.approvalPolicy}·받은 도구 ${e.policy.toolsGranted}개`);
+    parts.push(`결과 ${e.result.chars}자 sha256:${e.result.sha256.slice(0, HANDOFF_LINE_HASH_CHARS)}`);
+    return `[핸드오프: ${parts.join(' · ')}]`;
+}

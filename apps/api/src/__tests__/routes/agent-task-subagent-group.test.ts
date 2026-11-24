@@ -27,6 +27,25 @@ describe('groupSubagentSteps', () => {
     test('빈 입력은 빈 배열', () => {
         expect(groupSubagentSteps([])).toEqual([]);
     });
+
+    test('핸드오프 봉투는 단계 목록에서 빠지고 handoff 필드로 간다 — 상태·종료 시각은 그대로', () => {
+        const envelope = { v: 1, executionId: 's1#0', evidence: { calls: 2 } };
+        const rows = [
+            row('s1', 0, 0, 'tool_call', '03', 'web_search'), row('s1', 0, 1, 'final', '06'),
+            { ...row('s1', 0, 2, 'handoff', '07'), content: JSON.stringify(envelope) },
+        ];
+        const [t] = groupSubagentSteps(rows);
+        expect(t.steps.map((s) => s.type)).toEqual(['tool_call', 'final']);
+        expect(t.handoff).toEqual(envelope);
+        expect(t.status).toBe('completed');
+        expect(t.finishedAt).toBe(at('06').toISOString());
+    });
+
+    test('봉투가 없거나 깨졌으면 handoff 는 null', () => {
+        expect(groupSubagentSteps([row('s1', 0, 0, 'final', '06')])[0].handoff).toBeNull();
+        const broken = { ...row('s1', 0, 1, 'handoff', '07'), content: '{not json' };
+        expect(groupSubagentSteps([row('s1', 0, 0, 'final', '06'), broken])[0].handoff).toBeNull();
+    });
 });
 
 describe('deriveSubagentStatus', () => {

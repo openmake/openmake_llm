@@ -24,7 +24,9 @@ import { AgentTaskSubagentStepRepository } from '../../data/repositories/agent-t
 import type { ChatMessage } from '../../llm/types';
 import { createLogger } from '../../utils/logger';
 import { AGENT_DELEGATION } from '../../config/agent-task-delegation';
-import { getDelegationRejection, DELEGATION_SELF_REPORT_NOTICE } from '../../prompts/agent-task-delegation';
+import { getDelegationRejection, DELEGATION_SELF_REPORT_NOTICE, getHandoffLine } from '../../prompts/agent-task-delegation';
+import { HandoffEvidenceCollector, buildHandoffEnvelope } from '../agent-spawn/handoff-envelope';
+import type { SubagentExitReason } from '../../config/agent-task-delegation';
 import { checkDelegationGoal } from './delegation-input';
 
 const logger = createLogger('AgentTaskDelegate');
@@ -80,6 +82,9 @@ export function buildDelegateFn(p: DelegateFactoryParams): DelegateFn {
             const trace = new SubagentTrace(p.taskId, saved?.trace_id ?? newTraceId(), 'delegate', 0,
                 subagentLabel(role ?? selection.primaryAgent, subgoal), saved?.trace_seq ?? 0);
             if (!saved) { trace.queued(subgoal); trace.started(); }
+            // 핸드오프 봉투(opt-in) — spawn_agents 와 같은 계약. 주차 뒤 재개면 이번 실행분의 도구 결과만 모인다.
+            const collector = AGENT_DELEGATION.HANDOFF_ENVELOPE_ENABLED ? new HandoffEvidenceCollector() : null;
+            let exit: SubagentExitReason | undefined;
             const result = await runSubagent({
                 trace,
                 client: p.client, personaPrompt: prompt, subgoal,
@@ -88,6 +93,8 @@ export function buildDelegateFn(p: DelegateFactoryParams): DelegateFn {
                 onTokens: p.onTokens, onPausedMs: p.onPausedMs,
                 ...(p.remainingTokens ? { remainingTokens: p.remainingTokens } : {}),
                 onApprovalPending: p.onApprovalPending, onApprovalDecided: p.onApprovalDecided,
+                onExit: (reason) => { exit = reason; },
+                ...(collector ? { onToolOutcome: collector.record } : {}),
                 park: {
                     ...(saved ? { restored: { conversation: saved.conversation as ChatMessage[], turn: saved.turn, tokens: saved.tokens } } : {}),
                     save: (s) => repo.saveCheckpoint({
@@ -98,7 +105,13 @@ export function buildDelegateFn(p: DelegateFactoryParams): DelegateFn {
             });
             // 서브가 끝났다 — 주차로 던져진 경우(AgentTaskParked)는 여기 오지 않아 체크포인트가 남는다.
             await repo.deleteCheckpoint(p.taskId, ckptKey).catch(() => { /* 남아도 같은 위임이 다시 올 때만 쓰인다 */ });
-            return withNotice(result);
+            if (!collector) return withNotice(result);
+            const envelope = buildHandoffEnvelope({
+                executionId: `${trace.position.traceId}#0`, exit, reused: false, evidence: collector.snapshot(), result,
+                approvalPolicy: p.sandboxCfg.approvalPolicy, toolsGranted: subTools.length,
+            });
+            trace.record('handoff', JSON.stringify(envelope));
+            return withNotice(`${getHandoffLine(envelope)}\n\n${result}`);
         }
         const r = await p.client.chat(
             [{ role: 'system', content: prompt }, { role: 'user', content: subgoal }],
