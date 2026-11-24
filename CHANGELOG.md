@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.147.1](https://github.com/openmake/openmake_llm/compare/v1.147.0...v1.147.1) (2026-11-24)
+
+
+### 🐛 버그 수정
+
+* **orchestrator:** 운영자가 끈 capability 는 '배정하라' 대신 '현재 사용 불가'로 안내한다 ([01eaf0e](https://github.com/openmake/openmake_llm/commit/01eaf0e3bba4e16026d0bdcb192aeb28f93704e3))
+
 ## [1.147.0](https://github.com/openmake/openmake_llm/compare/v1.146.1...v1.147.0) (2026-11-23)
 
 
