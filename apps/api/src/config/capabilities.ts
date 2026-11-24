@@ -119,6 +119,18 @@ export const CAPABILITY_DEFAULTS: Partial<Record<Capability, string>> = {
 };
 
 /**
+ * 운영자가 끈 capability — env `CAPABILITY_DISABLED`(쉼표 목록, 예 `music.generate`). 기본은 비어 있어 종전 동작 그대로다.
+ * 목록에 든 capability 는 사용자·전역 배정이 있어도 실행 전에 `CAPABILITY_DISABLED` 로 거절되고, 안내는 "배정하라"가 아니라
+ * "이 서버에서 지금 쓸 수 없다"가 된다(실행 백엔드가 내려가 배정해도 동작하지 않을 때 — 2026-11-24 음악 생성).
+ * 호출마다 읽는다(관리자 설정 overlay·테스트가 process.env 를 바꾼다).
+ */
+export function disabledCapabilities(): ReadonlySet<Capability> {
+    const raw = process.env.CAPABILITY_DISABLED ?? '';
+    const known = new Set<string>(CAPABILITIES);
+    return new Set(raw.split(',').map((v) => v.trim()).filter((v): v is Capability => known.has(v)));
+}
+
+/**
  * capability 가 외부 모델을 어느 키로 실행하는가.
  *  assignment-scope(기본): 사용자 배정=BYOK, 전역·기본값=서버 공용 키 (종전)
  *  actor-byok: 배정 출처와 무관하게 행위자 사용자의 BYOK 만 — 서버 공용 키를 쓰지 않는다 (문서 색인 임베딩)
