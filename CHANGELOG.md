@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.148.1](https://github.com/openmake/openmake_llm/compare/v1.148.0...v1.148.1) (2026-11-24)
+
+
+### 🐛 버그 수정
+
+* **task-sandbox:** 원자적 컨테이너 쓰기가 덮어쓴 파일 권한을 0600 으로 바꾸던 결함 — [#1974](https://github.com/openmake/openmake_llm/issues/1974) 릴리스 유도 ([95e83fa](https://github.com/openmake/openmake_llm/commit/95e83fa5efddeb280d68d787945d6db5e8465989))
+
 ## [1.148.0](https://github.com/openmake/openmake_llm/compare/v1.147.1...v1.148.0) (2026-11-24)
 
 
