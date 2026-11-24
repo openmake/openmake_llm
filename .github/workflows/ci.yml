@@ -49,7 +49,7 @@ jobs:
     # Gate 1.5 만 TEST_DATABASE_URL 로 쓴다. 포트 5433 — model-assignments DB 테스트는 :5432 URL 이면 스스로 skip 한다.
     services:
       postgres:
-        image: pgvector/pgvector:0.8.3-pg16-trixie
+        image: pgvector/pgvector:0.8.7-pg16-trixie
         env:
           POSTGRES_USER: openmake
           POSTGRES_PASSWORD: openmake_test
