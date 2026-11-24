@@ -19,7 +19,8 @@ export function ChatScrollArea({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-0 flex-1 justify-center" onWheel={onWheel}>
-      <div ref={scrollerRef} className="h-full w-full max-w-3xl overflow-y-auto">
+      {/* relative — 메시지 안 absolute 요소(sr-only)가 이 스크롤 박스를 기준으로 놓이고 함께 스크롤되게(셸 밖으로 새지 않게) */}
+      <div ref={scrollerRef} className="relative h-full w-full max-w-3xl overflow-y-auto">
         {children}
       </div>
     </div>
