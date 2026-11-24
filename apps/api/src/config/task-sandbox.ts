@@ -129,6 +129,12 @@ export interface TaskSandboxConfig {
      * 컨테이너 안에서 쓰면 컨테이너도 호스트도 곧바로 정확히 읽는다. 기본: 전용 Colima 를 쓰는 호스트에서만 켠다.
      */
     writeViaContainer?: boolean;
+    /**
+     * workspace 파일 쓰기를 원자적 교체로 한다(하네스 검토 P2-6 잔여) — 같은 폴더 임시 파일에 다 쓴 뒤 rename/mv.
+     * 쓰는 도중 실패·중단돼도 원본이 반쯤 잘린 채 남지 않는다. 기본 OFF(종전 — 대상 파일을 잘라내고 바로 쓴다).
+     * TASK_SANDBOX_ATOMIC_WRITE=true 로 켠다. 하드링크는 끊긴다(새 inode).
+     */
+    atomicWrite?: boolean;
 }
 
 /** PURE: writeViaContainer 기본값 — TASK_SANDBOX_WRITE_VIA_CONTAINER 가 있으면 그 값, 없으면 docker 접속처가 Colima 인지. */
@@ -182,6 +188,7 @@ export function getTaskSandboxConfig(): TaskSandboxConfig {
         egressGatewayIsolated: process.env.TASK_SANDBOX_EGRESS_GATEWAY_ISOLATED !== 'false',
         codeDiffEnabled: process.env.TASK_SANDBOX_CODE_DIFF_ENABLED !== 'false',
         writeViaContainer: resolveWriteViaContainer(process.env),
+        atomicWrite: process.env.TASK_SANDBOX_ATOMIC_WRITE === 'true',
         extraTools: (process.env.TASK_SANDBOX_EXTRA_TOOLS ?? 'web_search')
             .split(',').map((s) => s.trim()).filter(Boolean),
     };
