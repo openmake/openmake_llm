@@ -89,10 +89,14 @@ export function buildWriteArgs(containerName: string, containerPath: string, opt
     if (!opts.atomic) {
         return ['exec', '-i', containerName, 'sh', '-c', 'mkdir -p "$(dirname "$1")" && cat > "$1"', 'sh', containerPath];
     }
-    // 원자적 교체(TASK_SANDBOX_ATOMIC_WRITE) — 같은 폴더 임시 파일에 다 쓴 뒤 mv. 기존 파일이 있으면 cp -p 로 권한을
-    // 먼저 옮겨 실행 비트를 잃지 않는다. 실패하면 임시 파일을 지우고 실패를 돌려준다(호출부가 호스트 쓰기로 넘어간다).
+    // 원자적 교체(TASK_SANDBOX_ATOMIC_WRITE) — 같은 폴더 임시 파일에 다 쓴 뒤 mv. 기존 파일이 있으면 그 권한 비트를
+    // stat 으로 읽어 임시 파일에 chmod 해 실행 비트를 잃지 않는다. 실패하면 임시 파일을 지우고 실패를 돌려준다(호출부가
+    // 호스트 쓰기로 넘어간다). ⚠️ `cp -p` 로 권한을 옮기지 말 것 — Colima virtiofs 바인드 마운트에서 cp -p 는 성공(0)을
+    // 돌려주면서 사본을 0600 으로 만든다(2026-11-24 staging 실측: 덮어쓴 파일이 0644 → 0600). stat 은 GNU(-c %a)·BSD(-f %Lp)
+    // 둘 다 받고(-L: 심링크면 대상 권한), chmod 는 virtiofs 에서도 지켜진다.
     const script = 'd="$(dirname "$1")"; mkdir -p "$d" || exit 1; t="$d/' + ATOMIC_WRITE_TMP_PREFIX + '$(basename "$1").$$"; '
-        + '{ if [ -f "$1" ]; then cp -p "$1" "$t"; fi; } && cat > "$t" && mv -f "$t" "$1" || { rm -f "$t"; exit 1; }';
+        + 'cat > "$t" && { [ ! -f "$1" ] || chmod "$(stat -L -c %a "$1" 2>/dev/null || stat -L -f %Lp "$1")" "$t"; } '
+        + '&& mv -f "$t" "$1" || { rm -f "$t"; exit 1; }';
     return ['exec', '-i', containerName, 'sh', '-c', script, 'sh', containerPath];
 }
 
