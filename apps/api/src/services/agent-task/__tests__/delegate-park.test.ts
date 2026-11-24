@@ -22,7 +22,7 @@ beforeEach(() => { jest.clearAllMocks(); });
 
 const fn = () => buildDelegateFn({
     client: {} as never, userId: 'u1', taskId: 't1', userCtx: { userId: 'u1' } as never,
-    sandboxCfg: { extraTools: [] } as never, mcpTools: [], signal: new AbortController().signal,
+    sandboxCfg: { extraTools: [], approvalPolicy: 'all' } as never, mcpTools: [], signal: new AbortController().signal,
     onTokens: () => undefined, onPausedMs: () => undefined,
 });
 
@@ -89,4 +89,35 @@ describe('buildDelegateFn — 서브에이전트 체크포인트', () => {
         expect(runSubagent.mock.calls[0][0]).toMatchObject({ onApprovalPending, onApprovalDecided });
     });
 
+});
+
+describe('buildDelegateFn — 핸드오프 봉투 (AGENT_DELEGATION_HANDOFF_ENVELOPE)', () => {
+    const delegation = require('../../../config/agent-task-delegation').AGENT_DELEGATION as Record<string, unknown>;
+    const traceLimits = AGENT_TASK_LIMITS as { SUBAGENT_TRACE_ENABLED: boolean };
+    const traceOriginal = traceLimits.SUBAGENT_TRACE_ENABLED;
+    beforeEach(() => { traceLimits.SUBAGENT_TRACE_ENABLED = true; });
+    afterEach(() => { delegation.HANDOFF_ENVELOPE_ENABLED = false; traceLimits.SUBAGENT_TRACE_ENABLED = traceOriginal; });
+
+    it('꺼져 있으면 결과 앞에 봉투 줄이 없고 콜백도 넘기지 않는다', async () => {
+        repo.loadCheckpoint.mockResolvedValue(null);
+        runSubagent.mockResolvedValue('결과');
+        const out = await fn()('목표');
+        expect(out.startsWith('결과')).toBe(true);
+        expect(runSubagent.mock.calls[0][0].onToolOutcome).toBeUndefined();
+    });
+
+    it('켜면 결과 앞에 봉투 줄을 싣고 활동 기록에 handoff JSON 을 남긴다', async () => {
+        delegation.HANDOFF_ENVELOPE_ENABLED = true;
+        repo.loadCheckpoint.mockResolvedValue(null);
+        runSubagent.mockImplementation(async (p: { onExit: (r: string) => void; onToolOutcome: (t: string, o: string, x?: string) => void }) => {
+            p.onToolOutcome('web_search', 'ok', 'https://a.example');
+            p.onExit('completed');
+            return '결과';
+        });
+        const out = await fn()('목표');
+        expect(out).toMatch(/^\[핸드오프: 실행 [^#\s]+#0 · 도구 호출 1회: web_search 1 · 출처 URL 1개 · 승인 정책 all·받은 도구 0개 · 결과 2자 sha256:[0-9a-f]{12}\]$/m);
+        expect(out).toContain('\n\n결과');
+        const handoff = repo.add.mock.calls.map((c) => (c as unknown as [{ step_type: string; content: string }])[0]).find((r) => r.step_type === 'handoff');
+        expect(JSON.parse(handoff!.content)).toMatchObject({ exit: 'completed', evidence: { calls: 1, sources: ['https://a.example'] }, policy: { toolsGranted: 0 } });
+    });
 });

@@ -86,6 +86,8 @@ interface SubagentParams {
     onApprovalDecided?: () => void;
     /** 종료 사유 — 결과 문자열을 돌려주기 직전에 한 번 부른다. 주차(AgentTaskParked)는 종료가 아니라 부르지 않는다. */
     onExit?: (reason: SubagentExitReason) => void;
+    /** 도구 호출 하나가 끝날 때마다(실행·거절 모두) — 핸드오프 봉투의 증거 수집용(handoff-envelope). 결과 본문은 성공한 호출만 넘긴다. */
+    onToolOutcome?: (toolName: string, outcome: 'ok' | 'error' | 'denied', resultText?: string) => void;
     /** 최종 답 검사 — 교정 요청문을 돌려주면 그 문장을 대화에 싣고 도구 없이 한 번만 더 부른다. null 이면 그대로 끝낸다. */
     finalCheck?: (text: string) => string | null;
     /** 채팅 경로만 — 오염 문맥(#1469). 있으면 부모 채팅 루프와 같은 taint 규칙(TAINT_ENABLED·예외 도구·requiresApproval)으로 판정한다. */
@@ -246,6 +248,15 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
         {
             const result = { tool_calls: calls };
             const prefetchDenied = new Set<string>();
+            /** 선실행 중 승인이 거절된 호출 — 핸드오프 증거에서 거절로 센다(taint 판정은 종전과 같다). */
+            const prefetchRejected = new Set<string>();
+            /** 핸드오프 증거 — 실행한 호출은 결과로 성공·실패를 가르고, 실행 전에 막힌 호출은 거절로 센다. */
+            const reportOutcome = (name: string, text: string, denied: boolean): void => {
+                if (!p.onToolOutcome) return;
+                if (denied) p.onToolOutcome(name, 'denied');
+                else if (text.startsWith('Error')) p.onToolOutcome(name, 'error');
+                else p.onToolOutcome(name, 'ok', text);
+            };
             // 읽기 전용 도구 병렬 선실행 — 승인 필요 호출은 자동 승인 작업에서만(부모 루프와 같은 규칙).
             const prefetched = await prefetchReadOnlyCalls(
                 result.tool_calls.map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
@@ -263,7 +274,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                             { timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal, policy: p.sandboxCfg.approvalPolicy },
                         );
                         p.onPausedMs?.(r.waitedMs);
-                        if (r.decision !== 'approved') return getApprovalRejectedNotice(name, r.reason, r.text);
+                        if (r.decision !== 'approved') { prefetchRejected.add(tc.id ?? ''); return getApprovalRejectedNotice(name, r.reason, r.text); }
                     }
                     return runTool(mcp, name, args, p.userCtx, undefined, p.signal);
                 },
@@ -276,12 +287,14 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 if (pre !== undefined) {
                     // 선실행 결과는 원래 순서대로 소비하면서 taint 를 켠다 — 같은 응답의 뒤 호출(쓰기 등)이 그 결과 뒤에 판정되게.
                     if (!prefetchDenied.has(tc.id ?? '')) noteResult(name, args);
+                    reportOutcome(name, pre, prefetchDenied.has(tc.id ?? '') || prefetchRejected.has(tc.id ?? ''));
                     p.trace?.record('tool_result', pre, name);
                     conversation.push({ role: 'tool', content: pre, tool_name: name, tool_call_id: tc.id });
                     continue;
                 }
                 const denied = childRejection(name, args);
                 if (denied !== null) {
+                    reportOutcome(name, denied, true);
                     p.trace?.record('tool_result', denied, name);
                     conversation.push({ role: 'tool', content: denied, tool_name: name, tool_call_id: tc.id });
                     continue;
@@ -313,6 +326,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                     ? await runTool(mcp, name, args, p.userCtx, undefined, p.signal)
                     : getApprovalRejectedNotice(name, rejected.reason, rejected.text);
                 if (approved) noteResult(name, args);
+                reportOutcome(name, toolResult, !approved);
                 p.trace?.record('tool_result', toolResult, name);
                 conversation.push({ role: 'tool', content: toolResult, tool_name: name, tool_call_id: tc.id });
             }

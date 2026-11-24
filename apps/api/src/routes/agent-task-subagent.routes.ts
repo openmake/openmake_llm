@@ -38,6 +38,21 @@ interface SubagentTraceView {
     /** 종료(final/error) 시각 — 진행 중이면 null. */
     finishedAt: string | null;
     steps: { seq: number; type: string; tool: string | null; content: string | null; at: string }[];
+    /** 핸드오프 봉투(handoff-envelope, AGENT_DELEGATION_HANDOFF_ENVELOPE) — 활동이 아니라 감사 기록이라 steps 에 넣지 않는다.
+     *  봉투가 없거나(꺼짐·옛 기록) 깨진 JSON 이면 null. */
+    handoff: Record<string, unknown> | null;
+}
+
+/** 활동 목록에 넣지 않는 기록 종류 — 봉투 JSON 이 "최근 활동"·단계 목록에 보이지 않게. */
+const HANDOFF_STEP_TYPE = 'handoff';
+
+/** PURE: 봉투 기록 본문 → 객체. 깨졌으면 null(관측 기록이라 응답을 막지 않는다). */
+function parseHandoff(content: string | null): Record<string, unknown> | null {
+    if (!content) return null;
+    try {
+        const v: unknown = JSON.parse(content);
+        return v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : null;
+    } catch { return null; }
 }
 
 /**
@@ -64,10 +79,11 @@ export function groupSubagentSteps(rows: SubagentStepRow[], taskStatus?: string)
         if (!v) {
             v = {
                 traceId: r.trace_id, origin: r.origin, subIndex: r.sub_index, label: r.label,
-                status: 'queued', startedAt: r.created_at.toISOString(), finishedAt: null, steps: [],
+                status: 'queued', startedAt: r.created_at.toISOString(), finishedAt: null, steps: [], handoff: null,
             };
             map.set(key, v);
         }
+        if (r.step_type === HANDOFF_STEP_TYPE) { v.handoff = parseHandoff(r.content); continue; }
         v.steps.push({ seq: r.seq, type: r.step_type, tool: r.tool_name, content: r.content, at: r.created_at.toISOString() });
     }
     const parentDone = taskStatus !== undefined && TERMINAL_TASK_STATUSES.has(taskStatus);
