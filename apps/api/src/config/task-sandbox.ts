@@ -194,7 +194,16 @@ export function getTaskSandboxConfig(): TaskSandboxConfig {
     };
 }
 
-/** 샌드박스를 쓰기로 한 작업이 샌드박스를 받지 못했을 때의 처리 — notify: 알리고 진행(기본), fail: 작업을 실패로 끝냄, silent: 종전처럼 조용히 진행. */
+/**
+ * 샌드박스를 쓰기로 한 작업이 샌드박스를 받지 못했을 때의 처리 — notify: 알리고 진행(기본), fail: 작업을 실패로 끝냄, silent: 종전처럼 조용히 진행.
+ *
+ * 위험도별 정책(고위험 작업만 fail)은 두지 않는다 — 2026-11-25 보류 결정(하네스 v1.1 로드맵 P1 "위험도별 샌드박스 fail 정책").
+ *   - 실측: 운영 기록 전체에서 sandbox_unavailable·sandbox_wait 스텝 0건, 최근 60일 작업 229건 전부 샌드박스 확보. 운영은 이미 fail.
+ *   - "실행이 필요한 작업"은 생성 시점에 목표 문장으로만 가를 수 있다(첨부는 샌드박스가 없으면 fileContext 로 들어간다) —
+ *     regex 분류기를 새로 둬야 하는데, 표본 0건으로는 오분류율을 잴 수 없고 오분류는 곧 조용한 notify(가짜 완료)다.
+ *   - 보안 축의 위험은 이미 없다 — notify 에서도 셸 도구가 노출되지 않아 호스트 우회 실행 경로가 없다(tool-assembly).
+ * 다시 검토할 조건: notify 를 쓰는 설치에서 sandbox_unavailable 가 실제로 쌓일 때. 그 스텝의 목표 문장으로 분류기를 재고 opt-in 값으로 넣는다.
+ */
 export type SandboxUnavailablePolicy = 'notify' | 'fail' | 'silent';
 
 function nonNegIntEnv(raw: string | undefined, def: number): number {
