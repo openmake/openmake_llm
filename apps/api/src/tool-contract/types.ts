@@ -198,6 +198,13 @@ export interface UserContext {
      * (위험 등급 network·external·외부 MCP, 허용 목록 제외)를 실행하지 않는다(노출 필터와 별개인 실행 게이트).
      */
     egressInternalOnly?: boolean;
+    /**
+     * 감사 근거(하네스 P2 감사 무결성) — 이 호출이 속한 에이전트 작업 id. 도구 호출 감사 행(mcp_tool_call)의 details.taskId 로
+     * 실려 작업 단위 감사 조회(GET /api/agent-tasks/:taskId/audit)가 묶는다. 채팅 호출엔 없다.
+     */
+    auditTaskId?: string;
+    /** 감사 근거 — 이 호출에 적용된 승인 정책(all·high-risk·none). 판정 자체는 승인 게이트가 하고 여기는 기록용이다. */
+    approvalPolicy?: string;
 }
 
 /** opts.signal — 호출자(채팅 요청·작업)의 중단 신호(#1474). 다른 도구를 부르는 내장 도구(mcp_call 등)가 그 호출로 넘긴다. 쓰지 않는 핸들러는 무시해도 된다. */

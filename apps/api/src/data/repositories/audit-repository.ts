@@ -9,6 +9,9 @@
 import type { QueryResult } from 'pg';
 import { BaseRepository } from './base-repository';
 import type { AuditAction } from '../../config/audit-actions';
+import { AUDIT_CHAIN } from '../../config/audit-chain';
+import { insertAuditRow, isAuditChainable } from '../audit-chain';
+import { withRetry, withTransaction, type TransactionClient } from '../retry-wrapper';
 
 export class AuditRepository extends BaseRepository {
     async logAgentUsage(params: {
@@ -76,21 +79,18 @@ export class AuditRepository extends BaseRepository {
         details?: Record<string, unknown>;
         ipAddress?: string;
         userAgent?: string;
-    }): Promise<QueryResult> {
-        return this.query(
-            `INSERT INTO audit_logs 
-            (action, user_id, resource_type, resource_id, details, ip_address, user_agent)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [
-                params.action,
-                params.userId,
-                params.resourceType,
-                params.resourceId,
-                JSON.stringify(params.details || {}),
-                params.ipAddress,
-                params.userAgent
-            ]
-        );
+    }): Promise<void> {
+        // 해시 체인(AUDIT_HASH_CHAIN_ENABLED, 205) 대상이면 잠금·직전 해시 조회·INSERT 를 한 트랜잭션으로 —
+        // 꺼져 있거나 체인 밖 행이면 종전처럼 INSERT 1회(재시도 포함).
+        if (AUDIT_CHAIN.ENABLED && isAuditChainable(params.action, params.resourceType)) {
+            await withRetry(
+                () => withTransaction(this.pool as unknown as { connect: () => Promise<TransactionClient> },
+                    async (client) => { await insertAuditRow(client, params, { chain: true }); }),
+                { operation: 'audit_log.chain_insert' },
+            );
+            return;
+        }
+        await withRetry(() => insertAuditRow(this.pool, params, { chain: false }).then(() => undefined), { operation: 'audit_log.insert' });
     }
 
     /**

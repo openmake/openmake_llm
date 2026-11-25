@@ -12,6 +12,7 @@ import type { Pool } from 'pg';
 import type { ConversationShareVisibility } from '@openmake/shared-types';
 import type { AuditAction } from '../../config/audit-actions';
 import { BaseRepository } from './base-repository';
+import { insertAuditRow } from '../audit-chain';
 import { withRetry, withTransaction, type TransactionClient } from '../retry-wrapper';
 
 export interface ConversationShareRow {
@@ -174,11 +175,10 @@ export class ShareTx {
 
     /** 감사 — 같은 연결. 문서·제목·본문·토큰·URL 은 넣지 않는다(details 는 호출측 allowlist). */
     async audit(e: ShareAuditEntry): Promise<void> {
-        await this.client.query(
-            `INSERT INTO audit_logs (action, user_id, resource_type, resource_id, details)
-             VALUES ($1, $2, 'conversation_share', $3, $4::jsonb)`,
-            [e.action, e.userId, e.shareId, JSON.stringify(e.details)],
-        );
+        // 이미 공유 트랜잭션 안 — 체인(205)이 켜져 있으면 잠금이 이 트랜잭션 커밋까지 유지된다.
+        await insertAuditRow(this.client, {
+            action: e.action, userId: e.userId, resourceType: 'conversation_share', resourceId: e.shareId, details: e.details,
+        });
     }
 }
 

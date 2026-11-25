@@ -12,6 +12,7 @@
  * - GET  /api/audit               - 감사 로그 목록 조회 (필터: action, userId, limit)
  * - GET  /api/audit/export        - 감사 로그 CSV download (동일 filter)
  * - GET  /api/audit/actions       - 감사 로그 액션 타입 목록
+ * - GET  /api/audit/chain/verify  - 감사 해시 체인 검증(fromSeq·limit, 205)
  * - GET  /api/audit/user/:userId  - 특정 사용자 감사 로그 조회
  * - POST /api/audit               - 감사 로그 엔트리 생성
  *
@@ -60,6 +61,20 @@ const INVALID_DATE_MESSAGE = 'startDate/endDate 는 ISO 8601 날짜 형식이어
 // ================================================
 // 감사 로그 조회
 // ================================================
+
+/**
+ * GET /api/audit/chain/verify?fromSeq=&limit=
+ * 감사 해시 체인 검증(관리자 전용) — 끊긴 곳(gap·link·content)과 사용자 삭제로 user_id 가 비어 재계산이 안 맞는 행(user_erased)을 센다.
+ */
+router.get('/chain/verify', asyncHandler(async (req: Request, res: Response) => {
+    const fromSeq = parseInt(req.query.fromSeq as string, 10);
+    const limit = parseInt(req.query.limit as string, 10);
+    const result = await auditService.verifyChain({
+        ...(Number.isFinite(fromSeq) && fromSeq > 0 ? { fromSeq } : {}),
+        ...(Number.isFinite(limit) && limit > 0 ? { limit } : {}),
+    });
+    res.json(success(result));
+}));
 
 /**
  * GET /api/audit
