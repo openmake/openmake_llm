@@ -75,8 +75,9 @@ export async function seedBaseSkills(signal?: AbortSignal): Promise<void> {
 
 /**
  * Skill Author Guide system-skill 시드 (멱등 upsert).
- * LLM 에게 create_skill 도구 사용을 안내. 모든 사용자 세션에 자동 활성
- * (isPublic=true, createdBy=null).
+ * LLM 에게 create_skill 도구 사용을 안내 (isPublic=true, createdBy=null).
+ * 어느 에이전트에도 배정하지 않아 매니페스트 주입 경로로는 실리지 않는다 — 채팅에서는 opt-in
+ * `SKILL_AUTHOR_INTENT_ENABLED` 일 때 스킬 작성 의도 턴에만 `chat-integration.ts` 가 같은 본문을 싣는다.
  *
  * 부팅 시 seedBaseSkills() 의 끝부분에서 호출.
  *
