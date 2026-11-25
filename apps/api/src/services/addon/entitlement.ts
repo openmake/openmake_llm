@@ -61,10 +61,6 @@ export async function checkAddonEntitlement(addonId: string, userId?: string, sc
     return 'ok';
 }
 
-export async function isAddonEntitled(addonId: string, userId?: string): Promise<boolean> {
-    return (await checkAddonEntitlement(addonId, userId)) === 'ok';
-}
-
 /** 여러 add-on 을 한 번에 — 팩 스킬 주입 필터가 쓴다(정책 조회 1회). */
 export async function entitledAddonIds(addonIds: readonly string[], userId?: string): Promise<Set<string>> {
     const out = new Set<string>();

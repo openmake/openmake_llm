@@ -107,8 +107,3 @@ export function unknownDisabledIds(): string[] {
     const known = builtinAddonIds();
     return [...disabledIds()].filter(id => !known.includes(id));
 }
-
-/** 테스트 전용 — 발견 캐시 초기화 */
-export function resetBuiltinAddonDiscoveryForTest(): void {
-    discovered = null;
-}

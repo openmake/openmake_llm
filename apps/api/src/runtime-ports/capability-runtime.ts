@@ -6,14 +6,13 @@
  * 텍스트·비전·오디오·웹·분석 계열은 `addon-host/legacy-capability-bridge.ts` 가 Base 소유로 등록한다 —
  * 미디어 add-on 을 전부 꺼도 텍스트 기능은 사라지지 않는다.
  *
- * 등록이 없는 capability 는 `CapabilityNotRegisteredError` 로 명시 실패한다(조용한 폴백 없음).
+ * 실행기는 등록이 없는 capability 를 `CapabilityNotRegisteredError` 로 처리한다.
  *
  * @module runtime-ports/capability-runtime
  */
 import { CapabilityRegistry } from '../capability-contract/registry';
-import type { CapabilityHandler, CapabilityId, CapabilityOwner, CapabilityRegistration } from '../capability-contract/types';
+import type { CapabilityHandler, CapabilityId, CapabilityOwner } from '../capability-contract/types';
 import type { CapabilityDefinition } from '../capability-contract/types';
-import { CapabilityNotRegisteredError } from '../capability-contract/errors';
 import { buildExecutionSnapshot, type ExecutionSnapshot } from '../capability-contract/plan-schema';
 
 const registry = new CapabilityRegistry();
@@ -47,13 +46,6 @@ export function registerCapabilities(
  */
 export function snapshotForExecution(): ExecutionSnapshot {
     return buildExecutionSnapshot(registry.snapshot());
-}
-
-/** 실행 직전 조회 — 없으면 명시 실패(소유 add-on 이 꺼졌거나 부팅 실패) */
-export function requireCapability(id: CapabilityId): CapabilityRegistration {
-    const reg = registry.get(id);
-    if (!reg) throw new CapabilityNotRegisteredError(id);
-    return reg;
 }
 
 /** 테스트 정리용 — 게시 전부 회수 */

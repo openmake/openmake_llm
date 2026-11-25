@@ -20,8 +20,3 @@ export function ensureDefaultSearchProviders(): void {
     registerSearchProvider({ id: 'wikipedia', group: 'reference', logLabel: 'Wiki', search: (c) => searchWikipedia(c.query, c.language, c.signal) });
     registerSearchProvider({ id: 'duckduckgo', group: 'fallback', logLabel: 'DDG', search: (c) => searchDuckDuckGoAPI(c.query, c.signal) });
 }
-
-/** 테스트 훅 — 레지스트리를 비운 뒤 기본 provider 를 다시 올리게 한다 */
-export function resetDefaultSearchProviders(): void {
-    registered = false;
-}
