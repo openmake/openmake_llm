@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 도구 고정 판 올리기 — Dependabot 이 읽지 못하는 고정값(.node-version·.pm2-version·omk.sh 의 상수)을 최신으로 올린다.
+// 도구 고정 판 올리기 — Dependabot 이 읽지 못하는 고정값(.node-version·.pm2-version·.npm-version·omk.sh 의 상수)을 최신으로 올린다.
 //
 // 설치 시점의 최신을 받지 않고 저장소에 고정해 두는 이유: CI → staging 검증 → 승인 → 운영이 같은 조합을 돌려야 한다.
 // 최신 유지는 이 스크립트가 PR 로 한다(.github/workflows/toolchain-bump.yml, 매주). 서버는 omk env update 가 고정값에 맞춘다.
@@ -35,6 +35,11 @@ export const COMPONENTS = {
         current: { file: '.pm2-version', re: /^(\d+\.\d+\.\d+)\s*$/ },
         latest: async (_cur, get) => (await get('https://registry.npmjs.org/pm2/latest')).version,
         edits: [{ file: '.pm2-version', re: /^\d+\.\d+\.\d+(\s*)$/, to: v => `${v}$1` }],
+    },
+    npm: {
+        current: { file: '.npm-version', re: /^(\d+\.\d+\.\d+)\s*$/ },
+        latest: async (_cur, get) => (await get('https://registry.npmjs.org/npm/latest')).version,
+        edits: [{ file: '.npm-version', re: /^\d+\.\d+\.\d+(\s*)$/, to: v => `${v}$1` }],
     },
     litellm: {
         current: { file: 'scripts/env/omk.sh', re: /OMK_LITELLM_VERSION="\$\{OMK_LITELLM_VERSION:-(\d+\.\d+\.\d+)\}"/ },

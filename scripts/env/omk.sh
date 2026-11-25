@@ -470,7 +470,7 @@ pm2_daemon_switch_detached() { # $1=node bin $2=로그 파일 $3=기다릴 잠�
         PATH="$1:$PATH" "$1/pm2" update' _ "$1" "${3:-}" > "$2" 2>&1 < /dev/null & )
 }
 node_runtime_sync() { # $1=llm dir $2=ref → 0 준비됨 · 75 데몬 교체 예약 · 1 실패
-    local ldir="$1" want cur bin pm2v pm2want daemon dpm2 log lock
+    local ldir="$1" want cur bin pm2v pm2want npmwant daemon dpm2 log lock
     want="$(git -C "$ldir" show "$2:.node-version" 2>/dev/null | tr -d '[:space:]' || true)"; want="${want#v}"
     [[ "$want" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 0   # 고정값이 없는 소스 — 할 일 없음
     cur="$(node -p 'process.versions.node' 2>/dev/null || true)"
@@ -492,6 +492,12 @@ node_runtime_sync() { # $1=llm dir $2=ref → 0 준비됨 · 75 데몬 교체 �
         log_ok "node $want — $ldir/.openmake/toolchain.env"
     fi
     bin="$(dirname "$(command -v node)")"
+    # npm 판 — 갱신할 ref 의 .npm-version(없으면 node 에 딸린 판 그대로). npm 도 node 마다 따로라 이 node 의 npm 을 맞춘다.
+    npmwant="$(git -C "$ldir" show "$2:.npm-version" 2>/dev/null | tr -d '[:space:]' || true)"
+    if [[ "$npmwant" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$("$bin/npm" -v 2>/dev/null)" != "$npmwant" ]]; then
+        "$bin/npm" install -g --no-audit --no-fund "npm@$npmwant" >/dev/null 2>&1 || { log_err "npm@$npmwant 설치 실패 ($bin)"; return 1; }
+        log_ok "npm $npmwant → $bin"
+    fi
     # 전역 pm2 는 node 마다 따로다 — 이 node 에 없거나 판이 다르면 고정 판을 깐다.
     if [[ ! -x "$bin/pm2" || ( -n "$pm2want" && "$("$bin/pm2" -v 2>/dev/null | tail -1)" != "$pm2want" ) ]]; then
         "$bin/npm" install -g --no-audit --no-fund "pm2${pm2want:+@$pm2want}" >/dev/null 2>&1 || { log_err "pm2${pm2want:+@$pm2want} 설치 실패 ($bin)"; return 1; }

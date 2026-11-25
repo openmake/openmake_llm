@@ -22,6 +22,13 @@ pm2_version_pinned() {
     tr -d '[:space:]' < "$file"
 }
 
+# <repo_root>/.npm-version 의 npm 고정 판. 파일이 없으면 return 1 (node 에 딸린 npm 을 그대로 쓴다).
+npm_version_pinned() {
+    local file="$1/.npm-version"
+    [[ -f "$file" ]] || return 1
+    tr -d '[:space:]' < "$file"
+}
+
 # 지금 PATH 의 node 버전 (node 가 없으면 빈 문자열).
 node_version_current() {
     command -v node >/dev/null 2>&1 || return 0
