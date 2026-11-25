@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.149.0](https://github.com/openmake/openmake_llm/compare/v1.148.2...v1.149.0) (2026-11-25)
+
+
+### ✨ 기능
+
+* **agent-spawn:** 서브에이전트 핸드오프 봉투 — 실제 도구 호출·출처·정책·결과 해시를 결과와 활동 기록에 (opt-in) ([ee827ac](https://github.com/openmake/openmake_llm/commit/ee827ac70dbd7a6cbdfe6a29000c7720f98a01b2))
+* **audit:** 감사 무결성 — 해시 체인·도구 호출 판정 근거·작업 단위 감사 조회 ([d7910b8](https://github.com/openmake/openmake_llm/commit/d7910b833ff02e20ba9b32295cc638cb150f0db9))
+
+
+### 🐛 버그 수정
+
+* **audit:** 작업 감사 요약의 도구 호출 수를 실행된 호출(tool_result)로 센다 ([65bb10d](https://github.com/openmake/openmake_llm/commit/65bb10d2c3435980471c18ca81b6839dc2fa5a5f))
+
 ## [1.148.2](https://github.com/openmake/openmake_llm/compare/v1.148.1...v1.148.2) (2026-11-24)
 
 
