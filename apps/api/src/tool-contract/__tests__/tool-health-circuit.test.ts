@@ -60,6 +60,13 @@ describe('도구 서킷 브레이커', () => {
         expect(isToolCircuitOpen(TOOL)).toBe(true);
     });
 
+    it('기본 범위에서 메타·import 도구의 실패는 서킷을 열지 않는다(2026-11-25 범위 결정 근거)', () => {
+        for (let i = 0; i < 20; i++) recordToolResult('mcp_call', false, 'execution');
+        for (let i = 0; i < 20; i++) recordToolResult('import_mcp_server_from_git', false, 'execution');
+        expect(isToolCircuitOpen('mcp_call')).toBe(false);
+        expect(isToolCircuitOpen('import_mcp_server_from_git')).toBe(false);
+    });
+
     it('SCOPE=all 이면 내장 도구도 대상', () => {
         Object.assign(mutable, { SCOPE: 'all' });
         for (let i = 0; i < 3; i++) recordToolResult('web_search', false, 'provider');

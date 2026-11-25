@@ -18,8 +18,9 @@ type SubagentOrigin = 'spawn_agents' | 'delegate';
 /** `queued`/`started` 는 수명 마킹(활동 아님) — 이 둘이 없으면 아직 첫 도구를 부르지 않은 서브는
  *  테이블에 행이 없어 진행 화면에 존재조차 하지 않는다("대기 중"·"실행 중"을 표현할 수 없음).
  *  `awaiting`/`parked`/`resumed` 도 수명 마킹(173) — 승인을 기다리는(유예 중이거나 주차된) 서브가 "실행 중"으로
- *  보이지 않게 한다. awaiting = 대기 진입, parked = 유예를 넘겨 주차, resumed = 대기가 끝나 다시 진행. */
-type SubagentStepType = 'queued' | 'started' | 'awaiting' | 'parked' | 'resumed' | 'tool_call' | 'tool_result' | 'final' | 'error';
+ *  보이지 않게 한다. awaiting = 대기 진입, parked = 유예를 넘겨 주차, resumed = 대기가 끝나 다시 진행.
+ *  `handoff` 는 종료 뒤 핸드오프 봉투 JSON(handoff-envelope, AGENT_DELEGATION_HANDOFF_ENVELOPE) — 활동이 아니라 감사용 기록이다. */
+type SubagentStepType = 'queued' | 'started' | 'awaiting' | 'parked' | 'resumed' | 'tool_call' | 'tool_result' | 'final' | 'error' | 'handoff';
 
 /** fan-out/위임 1회를 묶는 id — 같은 fan-out 의 서브들은 trace_id 를 공유하고 sub_index 로 갈린다. */
 export function newTraceId(): string {
