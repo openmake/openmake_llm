@@ -12,6 +12,7 @@
   "components": {},
   "entry": {
     "runtime": "index#startSkillRuntime",
+    "chatIntegration": "chat-integration#skillAuthorChatIntegration",
     "routes": [
       { "mountPath": "/api/agents/skills", "module": "routes/skills-usage.routes" },
       { "mountPath": "/api/agents/skills", "module": "routes/skills.routes" },
