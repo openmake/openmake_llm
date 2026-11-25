@@ -104,6 +104,7 @@ omk env verify staging --list
 | npm(루트·`apps/desktop-windows`)·cargo·GitHub Actions·Docker 이미지(node 제외)·compose 이미지 | lockfile·Dockerfile·compose | Dependabot (매주 월) | 배포의 `npm ci`·이미지 재빌드 |
 | Node | `.node-version`(+`mise.toml`·runtime Dockerfile) — 지금 메이저 안에서만 | `toolchain-bump.yml` (매주 월) | `env update` 가 mise 또는 공식 배포본으로 설치, PM2 데몬 교체 |
 | pm2 | `.pm2-version` | `toolchain-bump.yml` | `env update` 가 그 판을 깔고 데몬 판이 다르면 `pm2 update` |
+| npm | `.npm-version` | `toolchain-bump.yml` | `env update` 가 그 node 의 npm 을 그 판으로(`npm i -g npm@X`), CI 는 `setup-node` 뒤에 같은 판 |
 | LiteLLM | `omk.sh` `OMK_LITELLM_VERSION` | `toolchain-bump.yml` | `env update` 가 옆에 새 venv |
 | caddy | `omk.sh` `CADDY_PINNED_VERSION` | `toolchain-bump.yml` | omk 가 받은 바이너리만 바꾸고 프록시 재시작(brew 등은 그 관리자에 맡김) |
 
