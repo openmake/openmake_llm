@@ -7,6 +7,7 @@
  *      (token-crypto 등 production 검증 회피)
  *   3. RL_MCP_INGEST_* rate limit 테스트 한도 상향 — supertest 빠른 반복 시
  *      tier 한도 초과 방지
+ *   4. 배포 구성 키(ADDON_BUILTIN_DISABLED)의 .env 누출 차단 — 아래 DOTENV_IGNORED_KEYS
  *
  * 본 파일은 apps/api/jest.config.js 의 `setupFiles` 에 등록됨.
  */
@@ -15,7 +16,17 @@ import * as dotenv from 'dotenv';
 
 // .env 는 프로젝트 루트 — apps/api/jest.setup.ts 기준 ../../.env
 const ENV_PATH = path.resolve(__dirname, '../../.env');
+// 명령줄에서 직접 준 값은 dotenv 가 덮어쓰지 않는다 — 누출 차단 판정에 쓰려고 로드 전에 기록한다.
+const PRESET_ENV_KEYS = new Set(Object.keys(process.env));
 dotenv.config({ path: ENV_PATH });
+
+// 배포 구성 키는 .env 에서 받지 않는다 — 테스트 결과가 그 장비의 운영 구성에 따라 달라지지 않게.
+// 예: 로컬 .env 에 ADDON_BUILTIN_DISABLED=industry-pack,… 를 두면 팩 데이터를 전제로 한 7개 suite 가
+// 실패했다(2026-11-26, CI 는 .env 가 없어 통과). 명령줄로 직접 준 값(`ADDON_BUILTIN_DISABLED=x npx jest`)은 그대로 둔다.
+const DOTENV_IGNORED_KEYS = ['ADDON_BUILTIN_DISABLED'];
+for (const key of DOTENV_IGNORED_KEYS) {
+    if (!PRESET_ENV_KEYS.has(key)) delete process.env[key];
+}
 
 // jest 실행 시 NODE_ENV 강제 — token-crypto / config validator 가 test 모드로 작동
 process.env.NODE_ENV = 'test';
