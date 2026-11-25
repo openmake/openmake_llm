@@ -49,10 +49,21 @@ describe('buildTaskAuditTimeline', () => {
     it('요약: 전이·승인 상태별·도구 호출·실패·감사 행·체인 행', () => {
         const tl = buildTaskAuditTimeline('t1', sources(), 2000);
         expect(tl.summary).toEqual({
-            transitions: 2, approvals: { total: 1, byStatus: { approved: 1 } }, toolCalls: 1, toolErrors: 1, auditRows: 1, chainedAuditRows: 1,
+            transitions: 2, approvals: { total: 1, byStatus: { approved: 1 } }, toolCalls: 2, toolErrors: 1, auditRows: 1, chainedAuditRows: 1,
         });
         expect(tl.entries.find((e) => e.kind === 'audit')?.detail.chainSeq).toBe(42);
         expect(tl.truncated).toBe(false);
+    });
+
+    it('첫 턴(plan)에 한 번 부르고 끝난 작업도 호출 1건으로 센다 — assistant_tool_call 행이 없어도(staging 라이브 재현)', () => {
+        const src = sources();
+        src.steps = [
+            { id: 1, step_number: 0, step_type: 'plan', tool_name: 'web_search', tool_call_id: null, status: 'completed', args_hash: null, is_error: null, created_at: T(1) },
+            { id: 2, step_number: 1, step_type: 'tool_result', tool_name: 'web_search', tool_call_id: 'c1', status: 'completed', args_hash: H, is_error: false, created_at: T(2) },
+        ];
+        const tl = buildTaskAuditTimeline('t1', src, 2000);
+        expect(tl.summary).toMatchObject({ toolCalls: 1, toolErrors: 0 });
+        expect(tl.entries.some((e) => e.kind === 'step' && e.type === 'plan' && e.tool === 'web_search')).toBe(true);
     });
 
     it('출처 하나라도 상한에 닿으면 truncated', () => {
