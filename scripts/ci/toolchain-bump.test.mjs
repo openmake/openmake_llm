@@ -59,3 +59,16 @@ test('cmp 는 숫자 순서', () => {
     assert.ok(cmp('1.10.0', '1.9.9') > 0);
     assert.equal(cmp('2.0.0', '2.0.0'), 0);
 });
+
+test('npm 을 쓰는 워크플로는 setup-node 뒤에 .npm-version 판을 깐다 (CI 와 서버가 같은 npm)', () => {
+    const dir = path.join(root, '.github/workflows');
+    const npmPin = /npm install -g --no-audit --no-fund "npm@\$\(tr -d '\[:space:\]' < \.npm-version\)"/;
+    for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.yml'))) {
+        const text = fs.readFileSync(path.join(dir, f), 'utf8');
+        if (!/actions\/setup-node@/.test(text) || !/\bnpm (ci|install|run|i )|\bnpx /.test(text.replace(npmPin, ''))) continue;
+        const setups = (text.match(/uses: actions\/setup-node@/g) || []).length;
+        const pins = (text.match(new RegExp(npmPin.source, 'g')) || []).length;
+        assert.ok(pins >= 1 && pins <= setups, `${f}: setup-node ${setups}개, npm 고정 단계 ${pins}개`);
+    }
+    assert.match(read('.npm-version'), /^\d+\.\d+\.\d+\n$/);
+});

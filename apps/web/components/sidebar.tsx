@@ -111,6 +111,11 @@ export function Sidebar() {
             "/api/agents/custom/drafts?target=user", opts);
           return r.data?.total ?? r.data?.drafts?.length ?? 0;
         }),
+        // 확장 설치로 들어온 Custom Agent 승인 대기 (206, 2026-11-25)
+        count(async () => {
+          const r = await ApiClient.get<{ data: { total?: number } }>("/api/users/me/agents/pending", opts);
+          return r.data?.total ?? 0;
+        }),
         ...addonPendingCounters.map((fn) => count(fn)),
       ]);
       if (!alive) return;

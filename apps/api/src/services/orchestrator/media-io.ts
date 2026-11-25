@@ -108,13 +108,6 @@ export async function saveAudio(buf: Buffer, ext: string, label: string, scope: 
     return { kind: 'audio', urlPath, markdown: `[🔊 ${label}](${urlPath})` };
 }
 
-export async function saveVideo(buf: Buffer, ext: string, label: string, scope: SaveScope | string = {}): Promise<TaskMedia> {
-    const s = typeof scope === 'string' ? { userId: scope } : scope;
-    const { urlPath } = await saveGeneratedArtifact(s, { kind: 'video', prefix: 'video', ext, bytes: buf, mime: mimeFromName(`x.${ext}`) });
-    recordGeneratedStorageCost(s.userId, buf.length);
-    return { kind: 'video', urlPath, markdown: `[🎬 ${label}](${urlPath})` };
-}
-
 /** 매직 바이트로 오디오 확장자 판별 — 모르면 요청 형식 */
 export function sniffAudioExt(buf: Buffer, fallback: string): string {
     if (buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WAVE') return 'wav';

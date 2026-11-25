@@ -30,6 +30,7 @@ import { ADDON_PERMISSIONS, hasAddonPermission } from '../../config/addon-permis
 import { collectPlaceholderEnvKeys, buildEnvInputHints, type UserConfigEntry } from '../../tool-contract/env-placeholder';
 import { ConventionChecker, isBlockedByConvention } from './convention-checker';
 import { UserAgentRepository } from '../../data/repositories/user-agent-repository';
+import { EXTENSION_SECURITY } from '../../config/extension-security';
 import { EXTENSION_INGEST, SKILL_CREATOR } from '../../config/constants';
 import { PLUGIN_COMPONENT_LIMITS, UNSUPPORTED_AGENT_FIELDS } from '../../config/skill-compat';
 import type { SkillInstallResult, AgentInstallResult, McpServerInstallResult } from './extension-ingest-types';
@@ -178,8 +179,10 @@ export async function collectCommandSkills(
 /**
  * `agents/<name>.md` → Custom Agent.
  *
- * 본문이 곧 시스템 프롬프트다. 스킬/MCP 와 달리 실행 권한이 없고 사용자가 명시
- * 선택할 때만 적용되는 페르소나라 승인 게이트 없이 즉시 활성으로 만든다.
+ * 본문이 곧 시스템 프롬프트다. 기본은 종전대로 설치 즉시 활성이다.
+ * opt-in `EXTENSION_AGENT_APPROVAL_REQUIRED`(206, 2026-11-25)면 외부 저장소의 프롬프트라 스킬·MCP 와 같이
+ * `approval_status='pending'` 으로 만들고 승인함(`/approvals`)에서 승인해야 실행·목록·공유에 나온다.
+ * 업데이트 시엔 종전 승인을 이어받는다(`carryOverAgentApprovals` — 지문 opt-in 이면 내용이 같을 때만).
  */
 export async function collectPluginAgents(ctx: ComponentContext): Promise<AgentInstallResult[]> {
     let agentPaths = discoverMarkdownComponents(ctx.tree.entries, ctx.root, 'agents');
@@ -191,6 +194,7 @@ export async function collectPluginAgents(ctx: ComponentContext): Promise<AgentI
 
     const results: AgentInstallResult[] = [];
     const agentRepo = new UserAgentRepository(ctx.pool);
+    const requireApproval = EXTENSION_SECURITY.AGENT_APPROVAL_REQUIRED;
     for (const path of agentPaths) {
         try {
             const raw = await ctx.fetcher.fetchFile(ctx.owner, ctx.repo, ctx.sha, path, SKILL_CREATOR.gitMaxFileSize ?? 262144);
@@ -212,6 +216,7 @@ export async function collectPluginAgents(ctx: ComponentContext): Promise<AgentI
                 description: parsedAgent.description,
                 systemPrompt: parsedAgent.systemPrompt,
                 extensionId: null,   // linkComponents 가 이어서 연결
+                approvalStatus: requireApproval ? 'pending' : 'approved',
             });
             results.push({
                 path, name: parsedAgent.name, agentId: created.id, storedName,
@@ -224,7 +229,7 @@ export async function collectPluginAgents(ctx: ComponentContext): Promise<AgentI
 
     const okAgents = results.filter(r => r.agentId);
     if (okAgents.length > 0) {
-        ctx.warnings.push(`AGENTS_CONVERTED: 서브에이전트 ${okAgents.length}개를 Custom Agent 로 변환 (즉시 사용 가능)`);
+        ctx.warnings.push(`AGENTS_CONVERTED: 서브에이전트 ${okAgents.length}개를 Custom Agent 로 변환 (${requireApproval ? '승인 후 사용 가능' : '즉시 사용 가능'})`);
     }
     const ignored = [...new Set(results.flatMap(r => r.ignoredFields ?? []))];
     if (ignored.length > 0) {

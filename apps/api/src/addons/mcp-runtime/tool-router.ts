@@ -30,6 +30,7 @@
 
 import type { MCPTool, MCPToolResult, ExternalToolEntry, UserContext } from '../../tool-contract/types';
 import { dispatchTool, type ExternalToolDispatch } from '../../tool-contract/tool-dispatch';
+import { looksLikeToolAlias, resolveToolNameAlias, toolAliasResolveEnabled } from './tool-name-alias';
 import { runWithToolMediaSink } from '../../utils/tool-media-sink';
 import { chatMediaSinkFor } from './chat-media-sink';
 import { MCP_NAMESPACE_SEPARATOR } from '../../tool-contract/types';
@@ -312,6 +313,24 @@ export class ToolRouter implements ExternalToolDispatch {
     /** 오타 교정 제안용 — Base 디스패처가 not-found 메시지를 만들 때 부른다. */
     async knownToolNames(userId?: string): Promise<string[]> {
         return this.knownToolNamesFor(userId);
+    }
+
+    /**
+     * 별칭 해석(opt-in `MCP_TOOL_ALIAS_RESOLVE`, 기본 OFF) — 외부 스킬 표기(`mcp__<키>__<도구>`·`<키>::<도구>`)를 이 사용자의 실제 이름(`<확장>-<키>::<도구>`)으로.
+     * 규칙은 `tool-name-alias.ts`. 아는 이름·별칭 형태가 아닌 이름은 바로 돌려보낸다(매 호출 빠른 경로).
+     * `mcp__` 표기에 후보가 없으면 사용자 풀을 한 번 보장하고 다시 본다(재시작 직후 풀이 비어 있는 경우).
+     * `::` 표기는 실제 이름일 수 있어 보장하지 않는다 — 끊긴 서버 복구는 `execute` 가 맡는다(중복 기동 방지).
+     */
+    async resolveToolName(name: string, userId?: string): Promise<string | undefined> {
+        if (!toolAliasResolveEnabled() || !looksLikeToolAlias(name, MCP_NAMESPACE_SEPARATOR) || this.externalTools.has(name)) return undefined;
+        let r = resolveToolNameAlias(name, await this.knownToolNamesFor(userId), MCP_NAMESPACE_SEPARATOR);
+        if (!r.resolved && !r.ambiguous && userId && !name.includes(MCP_NAMESPACE_SEPARATOR)) {
+            await this.ensureUserPool(userId, 'tool-alias');
+            r = resolveToolNameAlias(name, await this.knownToolNamesFor(userId), MCP_NAMESPACE_SEPARATOR);
+        }
+        if (r.resolved) logger.info(`도구 이름 별칭 해석: ${name} → ${r.resolved}${userId ? ` (u=${userId})` : ''}`);
+        else if (r.ambiguous) logger.warn(`도구 이름 별칭 모호 — 해석하지 않음: ${name} → [${r.ambiguous.join(', ')}]`);
+        return r.resolved;
     }
 
     /**

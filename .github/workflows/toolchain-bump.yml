@@ -1,7 +1,7 @@
 # ============================================================
 # 도구 고정 판 올리기 — Dependabot 이 읽지 못하는 고정값을 매주 최신으로 올리는 PR
 # ============================================================
-# 대상: Node(.node-version·mise.toml·runtime Dockerfile, 지금 메이저 안에서만), pm2(.pm2-version),
+# 대상: Node(.node-version·mise.toml·runtime Dockerfile, 지금 메이저 안에서만), pm2(.pm2-version), npm(.npm-version),
 #       LiteLLM(omk.sh OMK_LITELLM_VERSION), caddy(omk.sh CADDY_PINNED_VERSION). 구성요소마다 PR 하나.
 # 설치 시점의 최신을 받지 않고 고정해 두는 이유: CI → staging 검증 → 승인 → 운영이 같은 조합을 돌려야 한다.
 # PR 은 dev 로 올리고 브랜치는 chore/ — CI 가 통과하면 auto-merge 흐름을 그대로 탄다. 커밋은 fix(deps) — 서버 도구 판이
@@ -28,7 +28,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        component: [node, pm2, litellm, caddy]
+        component: [node, pm2, npm, litellm, caddy]
     steps:
       - name: Require downstream-triggering automation credential
         env:

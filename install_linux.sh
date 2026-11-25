@@ -79,6 +79,10 @@ PM2_PINNED_VERSION=""
 [[ -f "$SCRIPT_DIR/.pm2-version" ]] && PM2_PINNED_VERSION="$(tr -d '[:space:]' < "$SCRIPT_DIR/.pm2-version")"
 readonly PM2_PINNED_VERSION
 readonly PM2_PKG="pm2${PM2_PINNED_VERSION:+@$PM2_PINNED_VERSION}"
+# npm 고정 판(.npm-version) — 없으면(레포 밖) node 에 딸린 판 그대로.
+NPM_PINNED_VERSION=""
+[[ -f "$SCRIPT_DIR/.npm-version" ]] && NPM_PINNED_VERSION="$(tr -d '[:space:]' < "$SCRIPT_DIR/.npm-version")"
+readonly NPM_PINNED_VERSION
 readonly TOOLCHAIN_DIR="$SCRIPT_DIR/.openmake"
 readonly TOOLCHAIN_ENV="$TOOLCHAIN_DIR/toolchain.env"
 readonly HEALTH_RETRIES=45
@@ -746,6 +750,14 @@ PM2_BIN=""
 
 ensure_pm2() {
     log_step "3/8 PM2"
+    # npm 고정 판 — pm2 보다 먼저. 전역 prefix 에 쓰기 권한이 없으면(시스템 Node) 경고만 하고 node 에 딸린 판으로 계속한다.
+    if [[ -n "$NPM_PINNED_VERSION" && "$(npm -v 2>/dev/null)" != "$NPM_PINNED_VERSION" ]]; then
+        if npm install -g --no-audit --no-fund "npm@$NPM_PINNED_VERSION" >/dev/null 2>&1; then
+            hash -r; log_ok "npm $(npm -v)"
+        else
+            log_warn "npm@$NPM_PINNED_VERSION 설치 실패 — node 에 딸린 npm $(npm -v 2>/dev/null) 으로 계속합니다."
+        fi
+    fi
     if has pm2 && [[ -z "$PM2_PINNED_VERSION" || "$(pm2 -v 2>/dev/null | tail -1)" == "$PM2_PINNED_VERSION" ]]; then
         PM2_BIN="pm2"; log_ok "pm2 $(pm2 -v 2>/dev/null)"; return 0
     fi

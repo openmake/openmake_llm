@@ -193,6 +193,18 @@ eq "pm2 pin: 판을 못 읽고 안내도 없으면 그대로"      "$(NS_DPM2=''
 eq "pm2 pin: 예약 실행이면 데몬 교체를 떼어 예약"   "$(NS_DPM2=7.1.2 ns_run "$NS/new/bin" 26.13.1 5)" "75|switch-detached $NS/new/bin;"
 ( cd "$NR" && git rm -q .pm2-version && git -c user.email=t@t -c user.name=t commit -qm unpin-pm2 )
 printf '#!/bin/sh\necho 7.1.2\n' > "$NS/new/bin/pm2"
+# npm 고정 판(.npm-version) — 이 node 의 npm 이 다르면 그 판을 깐다(pm2 보다 먼저), 없으면 건드리지 않는다
+printf '12.2.3\n' > "$NR/.npm-version"; ( cd "$NR" && git add .npm-version && git -c user.email=t@t -c user.name=t commit -qm npm )
+cp "$NS/new/bin/npm" "$NS/npm.orig"
+printf '#!/bin/sh\nif [ "$1" = -v ]; then cat "%s/npmv"; exit 0; fi\necho "npm $*" >> "%s/calls"\n[ -f "%s/npm-fail" ] && exit 1; exit 0\n' "$NS" "$NS" "$NS" > "$NS/new/bin/npm"; chmod 755 "$NS/new/bin/npm"
+echo 11.20.0 > "$NS/npmv"
+eq "npm pin: 판이 다르면 고정 판을 깐다"          "$(ns_run "$NS/new/bin" 26.13.1 "")" "0|npm install -g --no-audit --no-fund npm@12.2.3;"
+echo 12.2.3 > "$NS/npmv"
+eq "npm pin: 같으면 아무것도 안 함"               "$(ns_run "$NS/new/bin" 26.13.1 "")" "0|"
+echo 11.20.0 > "$NS/npmv"; touch "$NS/npm-fail"
+eq "npm pin: 설치 실패 → 1(pm2·데몬 교체 안 함)"  "$(ns_run "$NS/new/bin" 24.21.0 "")" "1|npm install -g --no-audit --no-fund npm@12.2.3;"
+rm -f "$NS/npm-fail"; mv "$NS/npm.orig" "$NS/new/bin/npm"
+( cd "$NR" && git rm -q .npm-version && git -c user.email=t@t -c user.name=t commit -qm unpin-npm )
 # LiteLLM python — uv 는 PATH 밖 흔한 위치까지, 없으면 3.10 이상 python 만
 LP="$TMP/lp"; mkdir -p "$LP/fakehome/.local/bin" "$LP/bin"
 printf '#!/bin/sh\nexit 0\n' > "$LP/fakehome/.local/bin/uv"; chmod 755 "$LP/fakehome/.local/bin/uv"
