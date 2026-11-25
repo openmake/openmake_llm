@@ -28,6 +28,7 @@ export interface TaskAuditTimeline {
     summary: {
         transitions: number;
         approvals: { total: number; byStatus: Record<string, number> };
+        /** 실행된 도구 호출 수(tool_result 행) — 거절·중단으로 실행되지 않은 호출은 승인 항목·턴 스텝에만 보인다. */
         toolCalls: number;
         toolErrors: number;
         auditRows: number;
@@ -57,8 +58,12 @@ export function buildTaskAuditTimeline(taskId: string, src: TaskAuditSources, ma
     let toolCalls = 0;
     let toolErrors = 0;
     for (const s of src.steps) {
-        if (s.step_type === 'assistant_tool_call') toolCalls += 1;
-        if (s.step_type === 'tool_result' && s.is_error) toolErrors += 1;
+        // 실행된 호출 = tool_result 행. assistant_tool_call 은 턴 단위(그 턴의 호출 묶음) 이고 첫 턴은 'plan' 으로 남아
+        // 호출 수로 쓰면 첫 턴 호출이 빠진다(staging 라이브 확인에서 1회 호출 작업이 0 으로 나왔다).
+        if (s.step_type === 'tool_result') {
+            toolCalls += 1;
+            if (s.is_error) toolErrors += 1;
+        }
         entries.push({
             at: iso(s.created_at), kind: 'step', type: s.step_type, tool: s.tool_name, toolCallId: s.tool_call_id, argsHash: s.args_hash,
             detail: { stepNumber: s.step_number, status: s.status, ...(s.is_error === null ? {} : { ok: !s.is_error }) },

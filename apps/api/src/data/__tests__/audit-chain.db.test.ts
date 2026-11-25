@@ -79,11 +79,12 @@ describeOrSkip('감사 해시 체인 — 실제 Postgres (205)', () => {
              VALUES ($1, $2, $3, 'write_file', $4::jsonb, $5, 'approved', NOW() + interval '1 hour', 'write')`,
             [`${tag}-ap`, taskId, userId, JSON.stringify(args), h]);
         await pool.query(
+            // 실제 기록 모양(turn-response·tool-result 기록): 턴 단위 행은 호출 묶음 배열·콤마 결합 도구명, 호출 단위 인자는 tool_result 에.
             `INSERT INTO agent_task_steps (task_id, step_number, step_type, tool_name, tool_call_id, tool_args, content)
-             VALUES ($1, 1, 'assistant_tool_call', 'write_file', 'c1', $2::jsonb, 'secret-body'),
-                    ($1, 2, 'tool_result', 'write_file', 'c1', NULL, 'Error: denied'),
-                    ($1, 3, 'assistant', NULL, NULL, NULL, 'plain answer')`,
-            [taskId, JSON.stringify(args)]);
+             VALUES ($1, 0, 'plan', 'write_file,web_search', NULL, $2::jsonb, 'secret-body'),
+                    ($1, 1, 'tool_result', 'write_file', 'c1', $3::jsonb, 'Error: denied'),
+                    ($1, 2, 'assistant', NULL, NULL, NULL, 'plain answer')`,
+            [taskId, JSON.stringify([{ name: 'write_file', args }, { name: 'web_search', args: { query: 'q' } }]), JSON.stringify(args)]);
         await insertAuditRow(pool, {
             action: 'mcp_tool_call', userId, resourceType: 'mcp_builtin_tool', resourceId: 'write_file',
             details: { tag, taskId, argsHash: h, approvalPolicy: 'all' },
@@ -92,8 +93,9 @@ describeOrSkip('감사 해시 체인 — 실제 Postgres (205)', () => {
         const src = await new AgentTaskAuditRepository(pool).loadSources(taskId);
         expect(src.events).toHaveLength(1);
         expect(src.approvals[0]).toMatchObject({ tool_name: 'write_file', args_hash: h, risk_class: 'write' });
-        expect(src.steps.map((s) => s.step_type)).toEqual(['assistant_tool_call', 'tool_result']); // assistant 본문 스텝은 뺀다
-        expect(src.steps[0].args_hash).toBe(h);
+        expect(src.steps.map((s) => s.step_type)).toEqual(['plan', 'tool_result']); // assistant 본문 스텝은 뺀다
+        expect(src.steps[0].args_hash).toBeNull(); // 턴 단위 배열 인자는 해시하지 않는다 — 호출 단위 해시는 tool_result
+        expect(src.steps[1].args_hash).toBe(h);
         expect(src.steps[1].is_error).toBe(true);
         expect(src.auditLogs).toHaveLength(1);
         expect(src.auditLogs[0].details?.argsHash).toBe(h);

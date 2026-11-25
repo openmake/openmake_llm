@@ -20,9 +20,14 @@ function argsHashOrNull(args: unknown): string | null {
     try { return hashToolArgs(args as Record<string, unknown>); } catch { return 'unhashable'; }
 }
 
-/** 타임라인에 싣는 스텝 종류 — 대화 본문(assistant·thinking·plan 등)은 감사 대상이 아니라 뺀다. */
+/**
+ * 타임라인에 싣는 스텝 종류 — 본문은 어느 것도 읽지 않는다(종류·도구·호출 id·해시·실패 여부만).
+ * 호출 의도는 턴 단위 행이다: 첫 턴은 'plan', 이후 도구를 부른 턴은 'assistant_tool_call'(tool_name 은 그 턴 호출 묶음의
+ * 콤마 결합, tool_args 는 배열이라 args_hash 는 null). 호출 단위 인자 해시는 tool_result 행에 있다 — 승인·도구 호출 감사와
+ * 맞추는 쪽은 그 행이다. 도구 없이 답만 한 턴('assistant')·사고('thinking')는 뺀다.
+ */
 export const TASK_AUDIT_STEP_TYPES: readonly string[] = [
-    'assistant_tool_call', 'tool_result', 'judge', 'judge_shadow', 'test_verify', 'verify_skipped', 'diff', 'artifact',
+    'plan', 'assistant_tool_call', 'tool_result', 'judge', 'judge_shadow', 'test_verify', 'verify_skipped', 'diff', 'artifact',
     'retry', 'hitl_degrade', 'final_turn', 'sandbox_unavailable', 'sandbox_wait', 'steering',
 ];
 
