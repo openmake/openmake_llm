@@ -18,6 +18,16 @@ import { SkillAssetRepository } from './skill-asset-repository';
 
 const logger = createLogger('SkillComponentStore');
 
+/**
+ * 스킬 내용 지문 — 설명·본문·번들 파일(경로 + 바이트 sha256, 경로순). 업데이트 승인 이어받기의 비교 기준이다.
+ * 모델이 보는 것(설명은 목록·제안, 본문은 주입, 번들은 load_skill 자산)이 하나라도 바뀌면 지문이 달라진다.
+ * `s` 는 agent_skills 별칭.
+ */
+const SKILL_FINGERPRINT_SQL = `encode(sha256(
+        convert_to(coalesce(s.description, '') || chr(31) || coalesce(s.content, '') || chr(30)
+            || coalesce((SELECT string_agg(a.rel_path || ':' || encode(sha256(a.content), 'hex'), chr(10) ORDER BY a.rel_path)
+                           FROM skill_assets a WHERE a.skill_id = s.id), ''), 'UTF8')), 'hex')`;
+
 export function skillComponentStore(db: StoreDb): SkillComponentStore {
     /** 종전 BaseRepository.query 와 같은 재시도 래퍼 */
     const retried = <T extends Record<string, unknown> = Record<string, unknown>>(sql: string, params: unknown[]) =>
@@ -106,28 +116,36 @@ export function skillComponentStore(db: StoreDb): SkillComponentStore {
         },
 
         async snapshotApproved(extensionId) {
-            const r = await retried<{ name: string; agent_id: string | null; priority: number | null }>(
-                `SELECT s.name, a.agent_id, a.priority
+            const r = await retried<{ name: string; fingerprint: string; agent_id: string | null; priority: number | null }>(
+                `SELECT s.name, ${SKILL_FINGERPRINT_SQL} AS fingerprint, a.agent_id, a.priority
                FROM agent_skills s
                LEFT JOIN agent_skill_assignments a ON a.skill_id = s.id
               WHERE s.extension_id = $1 AND s.status = 'active'`,
                 [extensionId],
             );
-            const byName = new Map<string, Array<{ agentId: string; priority: number }>>();
+            const byName = new Map<string, { fingerprint: string; assignments: Array<{ agentId: string; priority: number }> }>();
             for (const row of r.rows) {
-                const list = byName.get(row.name) ?? [];
-                if (row.agent_id) list.push({ agentId: row.agent_id, priority: row.priority ?? 0 });
-                byName.set(row.name, list);
+                const entry = byName.get(row.name) ?? { fingerprint: row.fingerprint, assignments: [] };
+                if (row.agent_id) entry.assignments.push({ agentId: row.agent_id, priority: row.priority ?? 0 });
+                byName.set(row.name, entry);
             }
-            return [...byName.entries()].map(([name, assignments]) => ({ name, assignments }));
+            return [...byName.entries()].map(([name, e]) => ({ name, fingerprint: e.fingerprint, assignments: e.assignments }));
         },
 
         async carryOverApprovals(installed, snapshot) {
-            const prev = new Map(snapshot.map(s => [s.name, s.assignments]));
+            const prev = new Map(snapshot.map(s => [s.name, s]));
             const carried: string[] = [];
             for (const skill of installed) {
-                const assignments = prev.get(skill.name);
-                if (!assignments) continue;
+                const before = prev.get(skill.name);
+                if (!before) continue;
+                // 내용이 바뀐 스킬은 이어받지 않는다 — 이름만 같고 본문·번들이 달라진 업데이트가 검토 없이 활성화되던 결함.
+                // draft 로 남아 승인함에서 다시 검토한다(지문이 없는 스냅샷도 이어받지 않는다 — 판단 근거가 없으면 보수적으로).
+                const now = await retried<{ fingerprint: string }>(
+                    `SELECT ${SKILL_FINGERPRINT_SQL} AS fingerprint FROM agent_skills s WHERE s.id = $1`,
+                    [skill.skillId],
+                );
+                if (!before.fingerprint || now.rows[0]?.fingerprint !== before.fingerprint) continue;
+                const assignments = before.assignments;
                 await retried(
                     `UPDATE agent_skills SET status='active', updated_at=$2 WHERE id=$1 AND status='draft'`,
                     [skill.skillId, new Date().toISOString()],

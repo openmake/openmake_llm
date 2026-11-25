@@ -1304,7 +1304,8 @@
     "visibilityShared": "工作区共享",
     "visibilityOrganization": "组织共享",
     "orgBadge": "组织",
-    "visibilityAria": "智能体可见范围"
+    "visibilityAria": "智能体可见范围",
+    "viewSystemPrompt": "查看系统提示词"
   },
   "research": {
     "pageTitle": "深度研究历史",
@@ -2617,7 +2618,7 @@
     },
     "agents": {
       "title": "自定义智能体",
-      "hint": "通过扩展安装的智能体无需批准即刻生效。只有从 Git URL 导入的智能体需要在此审批。",
+      "hint": "通过扩展安装或从 Git URL 导入的智能体需在此批准后才能使用。批准前请检查系统提示词。",
       "link": "打开智能体列表"
     },
     "tasks": {

@@ -1304,7 +1304,8 @@
     "visibilityShared": "Arbeitsbereich",
     "visibilityOrganization": "Organisation",
     "orgBadge": "Org",
-    "visibilityAria": "Sichtbarkeit des Agenten"
+    "visibilityAria": "Sichtbarkeit des Agenten",
+    "viewSystemPrompt": "System-Prompt anzeigen"
   },
   "research": {
     "pageTitle": "Deep-Research-Verlauf",
@@ -2617,7 +2618,7 @@
     },
     "agents": {
       "title": "Benutzerdefinierte Agents",
-      "hint": "Aus Erweiterungen installierte Agents sind sofort aktiv. Nur aus einer Git-URL importierte Agents benötigen hier eine Freigabe.",
+      "hint": "Agenten aus Erweiterungen oder aus einer Git-URL müssen hier genehmigt werden, bevor sie nutzbar sind. Prüfe den System-Prompt vor der Genehmigung.",
       "link": "Agentenliste öffnen"
     },
     "tasks": {

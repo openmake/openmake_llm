@@ -87,6 +87,49 @@ export function createUserAgentsController(): Router {
         }
     });
 
+    // 승인 대기(확장 설치분, 206) — `/:id` 보다 먼저 등록한다. 검토할 수 있게 시스템 프롬프트까지 돌려준다.
+    router.get('/pending', requireAuth, async (req, res) => {
+        const userId = getUserId(req);
+        if (!userId) { res.status(401).json(unauthorized()); return; }
+        try {
+            const rows = await new UserAgentRepository(getPool()).listPendingForUser(userId);
+            const agents = rows.map(({ user_id: _user_id, ...rest }) => rest);
+            res.json(success({ agents, total: agents.length }));
+        } catch (err) {
+            log.error('pending 목록 실패:', err);
+            res.status(500).json(internalError('승인 대기 agent 조회 실패'));
+        }
+    });
+
+    router.post('/:id/approve', requireAuth, async (req, res) => {
+        const userId = getUserId(req);
+        if (!userId) { res.status(401).json(unauthorized()); return; }
+        try {
+            const agent = await new UserAgentRepository(getPool()).approve(req.params.id, userId);
+            if (!agent) { res.status(404).json(notFound('승인 대기 중인 agent 없음')); return; }
+            log.info(`agent 승인: userId=${userId} id=${agent.id} name=${agent.name}`);
+            const { user_id: _user_id, ...rest } = agent;
+            res.json(success({ agent: { ...rest, owned: true } }));
+        } catch (err) {
+            log.error('approve 실패:', err);
+            res.status(500).json(internalError('agent 승인 실패'));
+        }
+    });
+
+    router.post('/:id/reject', requireAuth, async (req, res) => {
+        const userId = getUserId(req);
+        if (!userId) { res.status(401).json(unauthorized()); return; }
+        try {
+            const ok = await new UserAgentRepository(getPool()).reject(req.params.id, userId);
+            if (!ok) { res.status(404).json(notFound('승인 대기 중인 agent 없음')); return; }
+            log.info(`agent 거절: userId=${userId} id=${req.params.id}`);
+            res.json(success({ rejected: true }));
+        } catch (err) {
+            log.error('reject 실패:', err);
+            res.status(500).json(internalError('agent 거절 실패'));
+        }
+    });
+
     router.get('/:id', requireAuth, async (req, res) => {
         const userId = getUserId(req);
         if (!userId) { res.status(401).json(unauthorized()); return; }

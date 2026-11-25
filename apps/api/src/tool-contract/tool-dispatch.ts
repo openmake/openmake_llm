@@ -39,6 +39,12 @@ export interface ExternalToolDispatch {
     execute(name: string, args: Record<string, unknown>, context?: UserContext, opts?: { signal?: AbortSignal }): Promise<MCPToolResult | undefined>;
     /** 오타 교정 제안용 — 이 사용자가 쓸 수 있는 외부 도구 이름 */
     knownToolNames(userId?: string): Promise<string[]>;
+    /**
+     * 선택 — 별칭 이름(외부 표기)을 이 사용자의 실제 도구 이름으로 해석한다. 해석할 것이 없으면 `undefined`.
+     * 디스패처는 거버넌스(반출·서킷·역할 게이트·훅)보다 **먼저** 불러, 모든 검사가 해석된 이름으로 돈다.
+     * 실패는 원래 이름으로 진행한다(fail-open — 종전 not-found 경로).
+     */
+    resolveToolName?(name: string, userId?: string): Promise<string | undefined>;
 }
 
 export interface DispatchDeps {
@@ -60,6 +66,18 @@ export function capToolOutput(result: MCPToolResult): MCPToolResult {
     return result;
 }
 
+/** 내장 도구 이름이 아니면 외부 위임자에게 별칭 해석을 묻는다. 해석기가 없거나 실패하면 원래 이름. */
+async function resolveAlias(name: string, context: UserContext | undefined, deps: DispatchDeps): Promise<string> {
+    const resolver = deps.external?.resolveToolName;
+    if (!resolver || deps.builtInTools().some(d => d.tool.name === name)) return name;
+    try {
+        return (await resolver.call(deps.external, name, context?.userId != null ? String(context.userId) : undefined)) ?? name;
+    } catch (e) {
+        logger.warn(`도구 이름 별칭 해석 실패 — 원래 이름으로 진행 [${name}]: ${e instanceof Error ? e.message : String(e)}`);
+        return name;
+    }
+}
+
 /**
  * 도구 실행 — 내장이면 직접 handler, `::` 이름이면 등록된 외부 위임자.
  *
@@ -67,13 +85,15 @@ export function capToolOutput(result: MCPToolResult): MCPToolResult {
  * 성공/실패 모두 finalize() 로 정규화한다(외부/내장 도구가 isError 를 반환하는 경우 포함).
  */
 export async function dispatchTool(
-    name: string,
+    nameIn: string,
     argsIn: Record<string, unknown>,
     context: UserContext | undefined,
     deps: DispatchDeps,
     /** 중단 신호 — 외부 도구와 내장 도구 핸들러에 전달한다(다른 도구를 부르는 내장 도구가 이어 넘긴다, #1474). */
     opts?: { signal?: AbortSignal },
 ): Promise<MCPToolResult> {
+    // 별칭 해석은 모든 검사보다 먼저 — 반출·서킷·역할 게이트·훅·감사가 실제로 실행될 이름을 본다.
+    const name = await resolveAlias(nameIn, context, deps);
     // pre 훅이 인자를 치환할 수 있어 let — 아래 모든 호출 경로가 이 args 를 쓴다.
     let args = argsIn;
     const isExternal = name.includes(MCP_NAMESPACE_SEPARATOR);
