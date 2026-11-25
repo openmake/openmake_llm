@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.149.3](https://github.com/openmake/openmake_llm/compare/v1.149.2...v1.149.3) (2026-11-25)
+
+
+### 🐛 버그 수정
+
+* **skill-runtime:** 스킬 작성 의도 턴에 create_skill 과 안내문을 싣는다 (opt-in) ([b8c4f6c](https://github.com/openmake/openmake_llm/commit/b8c4f6c2e91329b8b8397623dc2de46c0aa105cd))
+
 ## [1.149.2](https://github.com/openmake/openmake_llm/compare/v1.149.1...v1.149.2) (2026-11-25)
 
 
