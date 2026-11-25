@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.149.1](https://github.com/openmake/openmake_llm/compare/v1.149.0...v1.149.1) (2026-11-25)
+
+
+### 🐛 버그 수정
+
+* **skill-compat:** 외부 스킬 본문의 Claude Code·Desktop 설치·설정 안내를 감지해 그대로 전하지 말라는 안내를 붙인다 ([3a26930](https://github.com/openmake/openmake_llm/commit/3a26930f90d85a75b5bc21b1fe5177ee138d6933))
+
 ## [1.149.0](https://github.com/openmake/openmake_llm/compare/v1.148.2...v1.149.0) (2026-11-25)
 
 
