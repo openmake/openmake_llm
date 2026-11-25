@@ -11,7 +11,7 @@ import type {
     ModelSlotInfo, ModelSlotAssignment, ModelSlotEffective, ModelAssignmentsResponse,
 } from '@openmake/shared-types';
 import {
-    MODEL_SLOTS, USER_ASSIGNABLE_SLOTS, getModelSlot, slotKindMismatch, type ModelSlotDef,
+    USER_ASSIGNABLE_SLOTS, getModelSlot, slotKindMismatch, type ModelSlotDef,
 } from '../config/model-slots';
 import {
     CAPABILITY_LIMITS, UNSUPPORTED_CAPABILITIES, GLOBAL_CAPABILITY_SCOPE,
@@ -177,6 +177,3 @@ export async function deleteAssignment(opts: { scope: string; slotId: string; ad
     if (opts.scope === GLOBAL_CAPABILITY_SCOPE) invalidateGlobalAssignmentCaches();
     return { previous };
 }
-
-/** 전체 슬롯 id(관리자 검증용) — chat·router 포함 */
-export const ALL_SLOT_IDS: readonly string[] = MODEL_SLOTS.map((s) => s.id);

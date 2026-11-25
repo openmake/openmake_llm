@@ -34,8 +34,3 @@ export function resolveDocker(dockerPath: string): string | null {
     dockerCache = { key: dockerPath, value: resolved };
     return resolved;
 }
-
-/** 테스트 전용 — 탐색 캐시 초기화 */
-export function resetDockerPathCache(): void {
-    dockerCache = null;
-}

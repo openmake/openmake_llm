@@ -14,8 +14,6 @@
 
 export type VerificationStatus = 'passed' | 'not_run' | 'failed' | 'inconclusive';
 
-export const VERIFICATION_STATUSES: readonly VerificationStatus[] = ['passed', 'not_run', 'failed', 'inconclusive'];
-
 /** strict 모드에서 failed 로 끝낼 때의 error 코드(실패 분류 goal_incomplete). */
 export const VERIFICATION_FAILED_ERROR = 'verification_failed';
 
