@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.148.2](https://github.com/openmake/openmake_llm/compare/v1.148.1...v1.148.2) (2026-11-24)
+
+
+### 🐛 버그 수정
+
+* **web:** 긴 대화에서 휠을 끝까지 내리면 셸 전체가 위로 밀려 빈 화면이 되던 결함 ([61e0d4e](https://github.com/openmake/openmake_llm/commit/61e0d4efbc8ae67de4b965d9d0c5ea80fb2f2d76))
+
 ## [1.148.1](https://github.com/openmake/openmake_llm/compare/v1.148.0...v1.148.1) (2026-11-24)
 
 
