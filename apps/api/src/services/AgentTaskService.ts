@@ -125,7 +125,7 @@ export class AgentTaskService {
         // 반출 판정(하네스 P0-2) — 로컬 실행기·민감도 기준. 역할 모델·실행기·감사가 같은 판정을 쓴다(agent-task/task-egress).
         const taskEgress = decideTaskEgress(input);
         // 디스패처의 실행 게이트가 읽는다(tool-contract/tool-dispatch) — 내부 전용이면 외부 도구 호출을 실행하지 않는다.
-        const userCtx: UserContext = { userId, role: userRole, ...(taskEgress.internalOnly ? { egressInternalOnly: true } : {}) };
+        const userCtx: UserContext = { userId, role: userRole, auditTaskId: taskId, ...(taskEgress.internalOnly ? { egressInternalOnly: true } : {}) };
         // 'agent' role 해석 — 상세는 agent-task/role-client (생성자 model 명시 시 그대로 사용)
         const roleState = await initAgentRoleState(taskId, String(userId), this.explicitModel ? this.client : undefined, { internalOnly: taskEgress.internalOnly, hasImages: (input.images?.length ?? 0) > 0 });
         this.client = roleState.client;
@@ -207,6 +207,7 @@ export class AgentTaskService {
             if (input.resume && preTask?.auto_approve) getApprovalRegistry().setAutoApprove(taskId, true);
             // 승인 정책(183) — 처음 시작이면 남기고, 재개면 남긴 값으로 되살린다(주차 재개는 요청 본문이 없다).
             const approvalPolicy = effectiveApprovalPolicy(input, preTask?.approval_policy);
+            userCtx.approvalPolicy = approvalPolicy; // 도구 호출 감사의 판정 근거(tool-execution-guard toolCallPolicyBasis)
             await persistApprovalPolicy(taskId, input);
             // 추론 수준(184) — 승인 정책과 같은 규칙(처음 시작이면 남기고, 재개면 남긴 값). 역할 상태는 위에서 'off' 로 만들어졌으므로 여기서 덮는다.
             roleState.thinkingLevel = effectiveThinkingLevel(input, preTask?.thinking_level);

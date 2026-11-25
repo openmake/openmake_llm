@@ -15,6 +15,7 @@ import { UserSandbox } from './user-sandbox';
 import { createLogger } from '../utils/logger';
 import { auditSecurityEvent, securityAuditActor } from '../security/security-audit';
 import { hashToolArgs } from '../utils/args-hash';
+import { classifyToolRisk } from '../config/tool-policy';
 import { TOOL_ARG_SCAN_LIMITS } from '../config/runtime-limits';
 
 const logger = createLogger('ToolExecutionGuard');
@@ -136,9 +137,28 @@ function auditBlockedArgs(toolName: string, args: Record<string, unknown>, conte
 }
 
 /** 도구 호출 감사 영속화 (fire-and-forget·비차단). 공개 운영 포렌식용. */
+/**
+ * PURE: 도구 호출 감사의 판정 근거(하네스 P2 감사 무결성) — 인자 해시(값은 넣지 않는다)·위험 등급(config/tool-policy)·
+ * 문맥이 실어 온 승인 정책·작업 id. 해시·등급 계산이 실패해도 감사 자체는 남긴다.
+ */
+export function toolCallPolicyBasis(toolName: string, args: Record<string, unknown>, context: UserContext): Record<string, unknown> {
+    let argsHash: string;
+    try { argsHash = hashToolArgs(args); } catch { argsHash = 'unhashable'; }
+    let riskClass: string | undefined;
+    try { riskClass = classifyToolRisk(toolName, args); } catch { riskClass = undefined; }
+    return {
+        argsHash,
+        ...(riskClass ? { riskClass } : {}),
+        ...(context.approvalPolicy ? { approvalPolicy: context.approvalPolicy } : {}),
+        ...(context.auditTaskId ? { taskId: context.auditTaskId } : {}),
+        ...(context.egressInternalOnly ? { egressInternalOnly: true } : {}),
+    };
+}
+
 async function auditToolCall(
     toolName: string, context: UserContext, result: MCPToolResult, durationMs: number,
     classification: { errorCategory?: ToolErrorCategory; retryable?: boolean } = {},
+    basis: Record<string, unknown> = {},
 ): Promise<void> {
     try {
         const { getAuditService } = await import('../services/AuditService');
@@ -159,6 +179,7 @@ async function auditToolCall(
                 // 실패 분류 — 도구별 실패 원인 집계(도구 헬스)의 소스. 성공 호출엔 없다.
                 ...(classification.errorCategory ? { errorCategory: classification.errorCategory } : {}),
                 ...(classification.retryable !== undefined ? { retryable: classification.retryable } : {}),
+                ...basis,
             },
         });
     } catch (e) { logger.debug(`audit 기록 실패(무시): ${e instanceof Error ? e.message : String(e)}`); }
@@ -203,6 +224,8 @@ export async function executeToolSecurely(
     }
 
     logger.info(`🔧 도구 실행: ${toolName} (user: ${context.userId})`);
+    // 판정 근거는 실행 전 인자로 — 도구가 args 객체를 고쳐도 감사는 받은 인자 기준이다.
+    const basis = toolCallPolicyBasis(toolName, sandboxedArgs, context);
     const startedAt = Date.now();
     const result = await exec(toolName, sandboxedArgs, context);
     // 실패 분류(디스패처가 실어 보낸 내부 전용 필드)를 감사에 넘기고 응답에서는 지운다.
@@ -213,6 +236,6 @@ export async function executeToolSecurely(
         delete result.errorCategory;
         delete result.retryable;
     }
-    void auditToolCall(toolName, context, result, Date.now() - startedAt, { errorCategory, retryable });
+    void auditToolCall(toolName, context, result, Date.now() - startedAt, { errorCategory, retryable }, basis);
     return result;
 }

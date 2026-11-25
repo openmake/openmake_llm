@@ -1,5 +1,7 @@
 import { getPool, getUnifiedDatabase } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
+import { readAndVerifyAuditChain, type AuditChainVerifyResult } from '../data/audit-chain';
+import { AUDIT_CHAIN } from '../config/audit-chain';
 import { AUDIT_ACTIONS, CRITICAL_ACTIONS, type AuditAction, type AuditSeverity } from '../config/audit-actions';
 
 const logger = createLogger('AuditService');
@@ -122,6 +124,15 @@ export class AuditService {
             action: row.action,
             count: Number(row.count),
         }));
+    }
+
+    /**
+     * 해시 체인 검증(205, AUDIT_HASH_CHAIN_ENABLED) — fromSeq 부터 limit 행을 다시 계산해 끊긴 곳을 돌려준다.
+     * 꺼져 있어도 이미 체인에 든 행은 검증할 수 있다(enabled 로 현재 기록 여부를 함께 알린다).
+     */
+    async verifyChain(p: { fromSeq?: number; limit?: number } = {}): Promise<AuditChainVerifyResult & { enabled: boolean }> {
+        const result = await readAndVerifyAuditChain(getPool(), p);
+        return { ...result, enabled: AUDIT_CHAIN.ENABLED };
     }
 
     async logAudit(input: CreateAuditLogInput): Promise<void> {

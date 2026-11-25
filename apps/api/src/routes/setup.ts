@@ -15,6 +15,7 @@ import { agentTaskQueueRouter } from './agent-task-queue.routes';
 import { agentTaskShareRouter } from './agent-task-share.routes';
 import { conversationShareRouter } from './conversation-share.routes';
 import { agentTaskSubagentRouter } from './agent-task-subagent.routes';
+import { agentTaskAuditRouter } from './agent-task-audit.routes';
 import { marketplacePublishRouter } from './marketplace-publish.routes';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -327,6 +328,7 @@ export function setupApiRoutes(
     app.use('/api/audit', auditRouter);
     app.use('/api/agent-tasks', agentTaskQueueRouter);   // /queue/stats — /:id 라우트보다 먼저
     app.use('/api/agent-tasks', agentTaskSubagentRouter); // /:id/subagents — 서브에이전트 활동(109)
+    app.use('/api/agent-tasks', agentTaskAuditRouter);    // /:id/audit — 작업 단위 감사 타임라인(205)
     app.use('/api', agentTaskShareRouter);               // /agent-tasks/:id/share, /shared-tasks/:shareId
     app.use('/api', conversationShareRouter);            // /sessions/:id/share, /shared-conversations/:shareId (198)
     app.use('/api/agent-tasks', agentTaskRouter);
