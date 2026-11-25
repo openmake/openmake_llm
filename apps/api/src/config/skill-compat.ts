@@ -21,8 +21,9 @@ export const SKILL_COMPAT = {
     /**
      * 적응 규칙 버전 — 설치 레코드(manifest_meta.compatibility.adapterVersion)에 남긴다. 규칙이 바뀌면 올린다
      * (2: 지원 수준·필수 도구 차단·인자 제한 검토·mcp__ 별칭, P09 2026-09-23)
+     * (3: Claude Code·Desktop 설치·설정 안내 감지, 2026-09-21 조사 ⑤ — 2026-11-25)
      */
-    adapterVersion: '2',
+    adapterVersion: '3',
 } as const;
 
 /**
@@ -30,6 +31,23 @@ export const SKILL_COMPAT = {
  * 서버 이름에 `_` 가 들어갈 수 있어 **첫** `__` 뒤를 서버, 마지막 `__` 뒤를 도구로 읽는다.
  */
 export const MCP_TOOL_ALIAS_PATTERN = /\bmcp__([A-Za-z0-9_-]+?)__([A-Za-z0-9_-]+)\b/g;
+
+/**
+ * Claude Code·Claude Desktop **설치·설정 지시** 표기 (2026-09-21 조사 ⑤ — 11개 스킬).
+ *
+ * 이미 설치된 스킬 본문에 남은 "`.mcp.json` 에 추가하세요"·"`/plugin install …`" 같은 문장을
+ * 모델이 사용자에게 그대로 전하던 오안내를 막는 안내 노트의 감지 기준이다.
+ * ⚠️ "Claude Code" 단순 언급은 넣지 않는다 — 언급 32개 중 설치·설정 지시는 11개뿐이라
+ * 이름만으로 잡으면 문맥 언급까지 안내가 붙는다.
+ */
+export const CLAUDE_INSTALL_GUIDE_PATTERNS: readonly RegExp[] = [
+    /claude_desktop_config\.json/i,
+    /(^|[\s`'"(])\.mcp\.json\b/,
+    /\bclaude\s+(mcp|plugin)\s+(add|install|marketplace)\b/i,
+    /(^|[\s`'"(])\/plugin\s+(install|marketplace)\b/i,
+    /\bClaude Code plugin\b/i,
+    /Claude (Code|Desktop)[^\n]{0,40}(자동 등록|에 등록|install)/i,
+];
 
 /**
  * Claude Code 도구 이름 → openmake_llm 등가 도구.

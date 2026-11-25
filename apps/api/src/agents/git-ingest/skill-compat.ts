@@ -19,6 +19,7 @@ import {
     KNOWN_FOREIGN_FRONTMATTER_KEYS,
     ALLOWED_TOOLS_KEYS,
     MCP_TOOL_ALIAS_PATTERN,
+    CLAUDE_INSTALL_GUIDE_PATTERNS,
 } from '../../config/skill-compat';
 import { SkillManifestFrontmatterSchema } from '../../schemas/skill-manifest.schema';
 
@@ -166,6 +167,7 @@ export function detectBodyMarkers(promptMd: string): string[] {
     if (/!`[^`]+`/.test(promptMd)) markers.push('!`command`');
     if (/(^|\s)@[\w./-]+\.(md|txt|json|ya?ml|ts|js|py)\b/.test(promptMd)) markers.push('@file');
     if (/\.claude\/|CLAUDE\.md/.test(promptMd)) markers.push('.claude/');
+    if (CLAUDE_INSTALL_GUIDE_PATTERNS.some(re => re.test(promptMd))) markers.push('install-guide');
     return markers;
 }
 
@@ -197,6 +199,11 @@ export function buildCompatNote(mappings: readonly ToolMapping[], markers: reado
         // 스킬이 만들어내는 산출물 경로일 때도 있다(예: hookify 가 규칙 파일을 생성).
         // 후자까지 무시시키면 스킬이 아무 결과도 내지 못한다.
         lines.push('- `.claude/` · `CLAUDE.md` 는 이 환경에 없습니다. **읽으라는 지침이면 건너뛰고**, 스킬이 **만들어내는 파일 경로**면 `.claude/` 를 뗀 작업 디렉토리 기준 경로에 생성하세요 (그 파일이 원래 자동 실행되는 훅·설정이었다면 이 환경에서는 실행되지 않고 참고용으로만 남습니다).');
+    }
+
+    if (markers.includes('install-guide')) {
+        // 설치는 이미 끝났다 — 본문의 Claude Code·Desktop 설치·설정 절차를 사용자에게 옮기면 오안내다.
+        lines.push('- 이 스킬은 이미 설치돼 있습니다. 본문의 Claude Code·Claude Desktop 설치·설정 안내(`claude_desktop_config.json`·`.mcp.json`·`/plugin install` 등)는 이 환경에 해당하지 않으니 사용자에게 그대로 전하지 마세요. 외부 MCP 서버가 필요하면 이 환경의 커넥터(MCP) 설정에서 연결하도록 안내하세요.');
     }
 
     return finishNote(lines);

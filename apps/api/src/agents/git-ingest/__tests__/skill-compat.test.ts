@@ -73,6 +73,23 @@ describe('skill-compat', () => {
         it('관용구가 없으면 빈 배열', () => {
             expect(detectBodyMarkers('일반적인 스킬 본문입니다.')).toEqual([]);
         });
+
+        it('Claude Code·Desktop 설치·설정 안내 (2026-09-21 조사 ⑤ 실사례)', () => {
+            for (const body of [
+                'Claude Desktop (`claude_desktop_config.json`) or Claude Code (`.mcp.json`):',
+                '- `endor-labs-agent-kit@endorlabs` is the preferred Claude Code plugin id for new installs.',
+                '(`npx -y kordoc@^4 setup` — 대화형 마법사가 Claude Code/Desktop·Cursor 등에 자동 등록).',
+                'Run `/plugin install foo@bar` first.',
+                'claude mcp add apollo -- npx apollo-mcp',
+            ]) {
+                expect(detectBodyMarkers(body)).toContain('install-guide');
+            }
+        });
+
+        it('Claude Code 단순 언급·비슷한 파일명은 설치 안내가 아니다', () => {
+            expect(detectBodyMarkers('This skill was written for Claude Code users.')).toEqual([]);
+            expect(detectBodyMarkers('Edit config/app.mcp.json.bak carefully')).toEqual([]);
+        });
     });
 
     describe('buildCompatNote', () => {
@@ -85,6 +102,12 @@ describe('skill-compat', () => {
             expect(note).toContain('`Bash` → `bash`');
             expect(note).toContain('대응 도구 없음');
             expect(note).toContain('$ARGUMENTS');
+        });
+
+        it('설치 안내 마커 → 그대로 전하지 말라는 안내', () => {
+            const note = buildCompatNote([], ['install-guide']);
+            expect(note).toContain('이미 설치돼 있습니다');
+            expect(note).toContain('커넥터(MCP)');
         });
 
         it('안내할 것이 없으면 빈 문자열', () => {
