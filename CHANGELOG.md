@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.149.2](https://github.com/openmake/openmake_llm/compare/v1.149.1...v1.149.2) (2026-11-25)
+
+
+### 🐛 버그 수정
+
+* **api:** remove unused internal helpers and constants ([8559170](https://github.com/openmake/openmake_llm/commit/85591703fbbba949c43c9e4edf154007db25745d))
+* **deps:** npm 을 .npm-version(12.2.3) 판으로 고정한다 ([5440f84](https://github.com/openmake/openmake_llm/commit/5440f84453525c676440b9ad5ee3a8c6bf3a3f9f))
+* **extensions:** 확장 보안 1단계를 opt-in 으로 — 기본 동작은 종전 그대로 (Base 원칙) ([2aed94b](https://github.com/openmake/openmake_llm/commit/2aed94b270d9077ce1791778791cd6e4a49ac088))
+* **extensions:** 확장 업데이트·설치의 승인 우회 3건을 막는다 (보안 1단계) ([3202884](https://github.com/openmake/openmake_llm/commit/3202884b19759b06f647753a90205c83b4101360))
+* **mcp-runtime:** 별칭 해석 모듈이 Base 내부를 import 하지 않게 구분자를 인자로 받는다 (add-on 경계 래칫) ([b7560de](https://github.com/openmake/openmake_llm/commit/b7560ded706ede08afb75ec2ad0de8d0eb824a0f))
+
 ## [1.149.1](https://github.com/openmake/openmake_llm/compare/v1.149.0...v1.149.1) (2026-11-25)
 
 
