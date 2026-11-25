@@ -322,11 +322,11 @@ export class ToolRouter implements ExternalToolDispatch {
      * `::` 표기는 실제 이름일 수 있어 보장하지 않는다 — 끊긴 서버 복구는 `execute` 가 맡는다(중복 기동 방지).
      */
     async resolveToolName(name: string, userId?: string): Promise<string | undefined> {
-        if (!toolAliasResolveEnabled() || !looksLikeToolAlias(name) || this.externalTools.has(name)) return undefined;
-        let r = resolveToolNameAlias(name, await this.knownToolNamesFor(userId));
+        if (!toolAliasResolveEnabled() || !looksLikeToolAlias(name, MCP_NAMESPACE_SEPARATOR) || this.externalTools.has(name)) return undefined;
+        let r = resolveToolNameAlias(name, await this.knownToolNamesFor(userId), MCP_NAMESPACE_SEPARATOR);
         if (!r.resolved && !r.ambiguous && userId && !name.includes(MCP_NAMESPACE_SEPARATOR)) {
             await this.ensureUserPool(userId, 'tool-alias');
-            r = resolveToolNameAlias(name, await this.knownToolNamesFor(userId));
+            r = resolveToolNameAlias(name, await this.knownToolNamesFor(userId), MCP_NAMESPACE_SEPARATOR);
         }
         if (r.resolved) logger.info(`도구 이름 별칭 해석: ${name} → ${r.resolved}${userId ? ` (u=${userId})` : ''}`);
         else if (r.ambiguous) logger.warn(`도구 이름 별칭 모호 — 해석하지 않음: ${name} → [${r.ambiguous.join(', ')}]`);

@@ -17,7 +17,7 @@
  *  - 후보는 **이 사용자가 지금 쓸 수 있는 이름** 안에서만 고른다. 해석된 이름은 Base 디스패처의 거버넌스(반출·서킷·역할·훅)를
  *    그 이름으로 다시 지난다.
  */
-import { MCP_NAMESPACE_SEPARATOR } from '../../tool-contract/types';
+// 이 모듈은 Base 내부를 import 하지 않는다(add-on 경계 래칫) — 네임스페이스 구분자는 호출자(tool-router)가 넘긴다.
 
 /** 별칭 해석 켜짐 여부 — 호출 시점에 읽는다(기본 OFF) */
 export function toolAliasResolveEnabled(): boolean {
@@ -30,16 +30,16 @@ const COLLISION_SUFFIX = /-[0-9a-f]{6}$/;
 const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
 /** 별칭 후보 형태인가 — 해석을 시도할 가치가 있는 이름만(매 도구 호출의 빠른 경로). */
-export function looksLikeToolAlias(name: string): boolean {
-    return CLAUDE_MCP_ALIAS.test(name) || name.includes(MCP_NAMESPACE_SEPARATOR);
+export function looksLikeToolAlias(name: string, sep: string): boolean {
+    return CLAUDE_MCP_ALIAS.test(name) || name.includes(sep);
 }
 
-function splitAlias(name: string): { key: string; tool: string } | null {
+function splitAlias(name: string, sep: string): { key: string; tool: string } | null {
     const m = CLAUDE_MCP_ALIAS.exec(name);
     if (m) return { key: m[1], tool: m[2] };
-    const i = name.indexOf(MCP_NAMESPACE_SEPARATOR);
+    const i = name.indexOf(sep);
     if (i <= 0) return null;
-    const tool = name.slice(i + MCP_NAMESPACE_SEPARATOR.length);
+    const tool = name.slice(i + sep.length);
     return tool ? { key: name.slice(0, i), tool } : null;
 }
 
@@ -50,16 +50,17 @@ export interface ToolAliasResolution {
     ambiguous?: string[];
 }
 
-export function resolveToolNameAlias(name: string, known: readonly string[]): ToolAliasResolution {
+/** @param sep 도구 네임스페이스 구분자(`::` — 호출자가 Base 계약에서 넘긴다) */
+export function resolveToolNameAlias(name: string, known: readonly string[], sep: string): ToolAliasResolution {
     if (known.includes(name)) return {};
-    const alias = splitAlias(name);
+    const alias = splitAlias(name, sep);
     if (!alias) return {};
     const key = norm(alias.key);
     if (!key) return {};
     const scored: Array<{ name: string; exact: boolean }> = [];
     for (const k of new Set(known)) {
-        const i = k.indexOf(MCP_NAMESPACE_SEPARATOR);
-        if (i <= 0 || k.slice(i + MCP_NAMESPACE_SEPARATOR.length) !== alias.tool) continue;
+        const i = k.indexOf(sep);
+        if (i <= 0 || k.slice(i + sep.length) !== alias.tool) continue;
         const server = k.slice(0, i);
         const forms = [norm(server), norm(server.replace(COLLISION_SUFFIX, ''))];
         if (forms.some(f => f === key)) scored.push({ name: k, exact: true });
