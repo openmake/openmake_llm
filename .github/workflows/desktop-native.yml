@@ -47,6 +47,10 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
+      # npm 은 .npm-version 판으로 — 서버(omk env update)·설치기와 같은 판을 쓴다(node 에 딸린 판은 node 판마다 다르다).
+      - name: npm (.npm-version)
+        shell: bash
+        run: npm install -g --no-audit --no-fund "npm@$(tr -d '[:space:]' < .npm-version)" && npm -v
 
       # rust-toolchain.toml 의 판을 받는다(openmake-code.yml 과 같은 단계).
       - name: Rust toolchain
@@ -126,6 +130,10 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
+      # npm 은 .npm-version 판으로 — 서버(omk env update)·설치기와 같은 판을 쓴다(node 에 딸린 판은 node 판마다 다르다).
+      - name: npm (.npm-version)
+        shell: bash
+        run: npm install -g --no-audit --no-fund "npm@$(tr -d '[:space:]' < .npm-version)" && npm -v
 
       - name: Gate (VERSION changed in this push, release absent)
         id: gate

@@ -70,6 +70,10 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: '.node-version'
+      # npm 은 .npm-version 판으로 — 서버(omk env update)·설치기와 같은 판을 쓴다(node 에 딸린 판은 node 판마다 다르다).
+      - name: npm (.npm-version)
+        shell: bash
+        run: npm install -g --no-audit --no-fund "npm@$(tr -d '[:space:]' < .npm-version)" && npm -v
 
       - name: Source archive
         run: git archive --format=tar.gz --prefix="openmake_llm-${TAG}/" -o "openmake_llm-${TAG}.tar.gz" "${TAG}"
