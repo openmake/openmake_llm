@@ -2618,7 +2618,7 @@
     },
     "agents": {
       "title": "Custom agents",
-      "hint": "Agents installed from extensions or imported from a Git URL must be approved here before use. Review the system prompt before approving.",
+      "hint": "Approve custom agents that need review here — agents imported from a Git URL and, depending on server settings, agents installed from extensions. Review the system prompt before approving.",
       "link": "Open agent list"
     },
     "tasks": {

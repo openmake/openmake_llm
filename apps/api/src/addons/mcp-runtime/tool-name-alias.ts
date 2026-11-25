@@ -6,6 +6,8 @@
  * 외부 스킬 본문은 Claude Code 표기 `mcp__<키>__<도구>` 나 `<키>::<도구>` 로 적혀 있어, 모델이 그 이름 그대로 부르면
  * "도구를 찾을 수 없습니다" 가 됐다(2026-09-21 조사 ① — Apollo 는 서버가 active 인데 이름만 달라 못 썼다).
  *
+ * opt-in — `MCP_TOOL_ALIAS_RESOLVE=true` 일 때만 해석한다(기본 OFF = 종전대로 not-found + 이름 제안).
+ *
  * 규칙(결정적, 2026-11-25):
  *  - 입력이 이미 아는 이름이면 해석하지 않는다.
  *  - 도구 부분은 그대로 같아야 한다(도구 이름은 추측하지 않는다).
@@ -16,6 +18,11 @@
  *    그 이름으로 다시 지난다.
  */
 import { MCP_NAMESPACE_SEPARATOR } from '../../tool-contract/types';
+
+/** 별칭 해석 켜짐 여부 — 호출 시점에 읽는다(기본 OFF) */
+export function toolAliasResolveEnabled(): boolean {
+    return process.env.MCP_TOOL_ALIAS_RESOLVE === 'true';
+}
 
 const CLAUDE_MCP_ALIAS = /^mcp__([A-Za-z0-9_-]+?)__([A-Za-z0-9_-]+)$/;
 const COLLISION_SUFFIX = /-[0-9a-f]{6}$/;

@@ -8,7 +8,7 @@
  * 사이드바에 없었다. 실제 사용자가 "어디서 승인하는지 정말 모르겠다"고 막힌 지점이라
  * 한 페이지로 통합하고 사이드바에 노출한다(대기 건수 뱃지 포함).
  *
- * Custom Agent 도 승인 대상이다 — Git URL 가져오기 draft 와 확장 설치분(206, 2026-11-25 — 종전엔 설치 즉시 활성).
+ * Custom Agent 승인 — Git URL 가져오기 draft 와, opt-in `EXTENSION_AGENT_APPROVAL_REQUIRED` 일 때 확장 설치분(206, 2026-11-25).
  *
  * 스킬·MCP 서버 섹션은 그 구성요소를 소유한 add-on(`skill-runtime`·`mcp-runtime`)이 `approvalSections` 로 끼운다
  * (2026-10-18) — Base 섹션은 에이전트 작업(10)·Custom Agent(40)뿐이다.
@@ -64,7 +64,7 @@ export default function ApprovalsPage() {
       ),
     })),
     {
-      // Custom Agent — Git URL 가져오기 draft + 확장 설치분(pending, 206). 구 /custom-agents "Draft 검토" 탭을 이관
+      // Custom Agent — Git URL 가져오기 draft + (opt-in 시) 확장 설치분 pending(206). 구 /custom-agents "Draft 검토" 탭을 이관
       id: "agents",
       order: 40,
       node: (

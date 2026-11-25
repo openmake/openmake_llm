@@ -115,9 +115,9 @@ export function skillComponentStore(db: StoreDb): SkillComponentStore {
             await db.query(`UPDATE skill_manifests SET prompt_md = $2, checksum = $3 WHERE id = $1`, [skillId, updated, checksum]);
         },
 
-        async snapshotApproved(extensionId) {
+        async snapshotApproved(extensionId, opts) {
             const r = await retried<{ name: string; fingerprint: string; agent_id: string | null; priority: number | null }>(
-                `SELECT s.name, ${SKILL_FINGERPRINT_SQL} AS fingerprint, a.agent_id, a.priority
+                `SELECT s.name, ${opts?.withFingerprint ? SKILL_FINGERPRINT_SQL : "''"} AS fingerprint, a.agent_id, a.priority
                FROM agent_skills s
                LEFT JOIN agent_skill_assignments a ON a.skill_id = s.id
               WHERE s.extension_id = $1 AND s.status = 'active'`,
@@ -132,19 +132,22 @@ export function skillComponentStore(db: StoreDb): SkillComponentStore {
             return [...byName.entries()].map(([name, e]) => ({ name, fingerprint: e.fingerprint, assignments: e.assignments }));
         },
 
-        async carryOverApprovals(installed, snapshot) {
+        async carryOverApprovals(installed, snapshot, opts) {
             const prev = new Map(snapshot.map(s => [s.name, s]));
             const carried: string[] = [];
             for (const skill of installed) {
                 const before = prev.get(skill.name);
                 if (!before) continue;
-                // 내용이 바뀐 스킬은 이어받지 않는다 — 이름만 같고 본문·번들이 달라진 업데이트가 검토 없이 활성화되던 결함.
-                // draft 로 남아 승인함에서 다시 검토한다(지문이 없는 스냅샷도 이어받지 않는다 — 판단 근거가 없으면 보수적으로).
-                const now = await retried<{ fingerprint: string }>(
-                    `SELECT ${SKILL_FINGERPRINT_SQL} AS fingerprint FROM agent_skills s WHERE s.id = $1`,
-                    [skill.skillId],
-                );
-                if (!before.fingerprint || now.rows[0]?.fingerprint !== before.fingerprint) continue;
+                // opt-in(requireSameContent): 내용이 바뀐 스킬은 이어받지 않는다 — 이름만 같고 본문·번들이 달라진 업데이트가
+                // 검토 없이 활성화되던 결함. draft 로 남아 승인함에서 다시 검토한다(지문이 없는 스냅샷도 이어받지 않는다).
+                // 옵션이 없으면 종전대로 이름만 본다.
+                if (opts?.requireSameContent) {
+                    const now = await retried<{ fingerprint: string }>(
+                        `SELECT ${SKILL_FINGERPRINT_SQL} AS fingerprint FROM agent_skills s WHERE s.id = $1`,
+                        [skill.skillId],
+                    );
+                    if (!before.fingerprint || now.rows[0]?.fingerprint !== before.fingerprint) continue;
+                }
                 const assignments = before.assignments;
                 await retried(
                     `UPDATE agent_skills SET status='active', updated_at=$2 WHERE id=$1 AND status='draft'`,

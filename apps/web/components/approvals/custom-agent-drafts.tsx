@@ -3,7 +3,8 @@
 /**
  * Custom Agent 승인 — 두 출처를 한 목록으로 보인다.
  *  - Git URL 가져오기(`/api/agents/custom/import-from-git`) draft — `custom_agents`
- *  - 확장(플러그인) 설치로 들어온 Custom Agent — `user_agents.approval_status='pending'`(206, 2026-11-25 — 종전엔 승인 없이 즉시 활성).
+ *  - 확장(플러그인) 설치로 들어온 Custom Agent — `user_agents.approval_status='pending'`(206, opt-in `EXTENSION_AGENT_APPROVAL_REQUIRED`;
+ *    꺼져 있으면 확장 설치분은 종전대로 즉시 활성이라 이 목록은 비어 있다).
  *    외부 저장소의 시스템 프롬프트라 승인 전에 본문을 펼쳐 볼 수 있게 한다.
  *
  * 구 `/custom-agents` 의 "Draft 검토" 탭을 옮겨 온 것 — 승인 창구를 `/approvals` 한 곳으로

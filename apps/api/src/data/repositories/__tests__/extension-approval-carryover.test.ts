@@ -3,8 +3,9 @@
  *
  * 결함: 업데이트하면 승인한 스킬이 전부 draft 로 돌아가, 재승인 전까지 설치한 팩이 통째로 꺼졌다
  * (법무 팩 1.0.0→1.0.1 라이브 검증: active 5 → draft 5).
- * 계약: 같은 이름**이고 내용 지문(설명·본문·번들)이 같은** 스킬만 승인·배정을 이어받는다.
- * 새로 추가되거나 내용이 바뀐 스킬은 draft 로 남는다(2026-11-25: 이름만 비교해 바뀐 본문이 검토 없이 활성화되던 결함).
+ * 계약: 같은 이름으로 다시 들어온 스킬만 승인·배정을 이어받는다. 새로 추가된 스킬은 draft 로 남는다.
+ * opt-in `requireSameContent`(EXTENSION_APPROVAL_FINGERPRINT, 2026-11-25)면 내용 지문(설명·본문·번들)도 같아야 하고,
+ * 바뀐 스킬은 draft 로 남는다. 옵션이 없으면 종전대로 이름만 본다(Base 원칙 — 기본 동작 유지).
  */
 import type { Pool } from 'pg';
 import { UserExtensionRepository } from '../user-extension-repository';
@@ -31,7 +32,7 @@ describe('snapshotApprovedSkills', () => {
             { name: 'patent-attorney', fingerprint: 'fp-patent', agent_id: null, priority: null },
         ]);
 
-        const snap = await new UserExtensionRepository(pool).snapshotApprovedSkills('ext-1');
+        const snap = await new UserExtensionRepository(pool).snapshotApprovedSkills('ext-1', { withFingerprint: true });
 
         expect(snap).toEqual([
             { name: 'labor-lawyer', fingerprint: 'fp-labor', assignments: [{ agentId: 'user:3', priority: 5 }, { agentId: '__global__', priority: 0 }] },
@@ -47,6 +48,13 @@ describe('snapshotApprovedSkills', () => {
 });
 
 describe('archiveLinkedComponents', () => {
+    it('지문 opt-in 이 아니면 스냅샷은 지문을 계산하지 않는다 (기본 동작 유지)', async () => {
+        const { pool, calls } = fakePool([{ name: 'a', fingerprint: '', agent_id: null, priority: null }]);
+        const snap = await new UserExtensionRepository(pool).snapshotApprovedSkills('ext-1');
+        expect(snap).toEqual([{ name: 'a', fingerprint: '', assignments: [] }]);
+        expect(calls[0].sql).not.toContain('sha256');
+    });
+
     it('스킬 배정도 함께 지운다 — archived 스킬에 배정이 남으면 도구 바인딩이 계속 따라온다', async () => {
         const { pool, calls } = fakePool();
 
@@ -72,6 +80,7 @@ describe('carryOverSkillApprovals', () => {
         const carried = await new UserExtensionRepository(pool).carryOverSkillApprovals(
             [{ skillId: 'new-labor', name: 'labor-lawyer' }, { skillId: 'new-tax', name: 'tax-lawyer' }],
             [{ name: 'labor-lawyer', fingerprint: 'fp-labor', assignments: [{ agentId: 'user:3', priority: 5 }] }],
+            { requireSameContent: true },
         );
 
         expect(carried).toEqual(['new-labor']);
@@ -91,6 +100,7 @@ describe('carryOverSkillApprovals', () => {
         const carried = await new UserExtensionRepository(pool).carryOverSkillApprovals(
             [{ skillId: 'new-labor', name: 'labor-lawyer' }],
             [{ name: 'labor-lawyer', fingerprint: 'fp-labor', assignments: [{ agentId: 'user:3', priority: 5 }] }],
+            { requireSameContent: true },
         );
 
         expect(carried).toEqual([]);
@@ -102,11 +112,24 @@ describe('carryOverSkillApprovals', () => {
         const { pool } = fakePool(fingerprints({ 'new-a': 'fp-a' }));
         const repo = new UserExtensionRepository(pool);
         expect(await repo.carryOverSkillApprovals(
-            [{ skillId: 'new-a', name: 'a' }], [{ name: 'a', fingerprint: '', assignments: [] }],
+            [{ skillId: 'new-a', name: 'a' }], [{ name: 'a', fingerprint: '', assignments: [] }], { requireSameContent: true },
         )).toEqual([]);
         expect(await repo.carryOverSkillApprovals(
-            [{ skillId: 'missing', name: 'b' }], [{ name: 'b', fingerprint: 'fp-b', assignments: [] }],
+            [{ skillId: 'missing', name: 'b' }], [{ name: 'b', fingerprint: 'fp-b', assignments: [] }], { requireSameContent: true },
         )).toEqual([]);
+    });
+
+    it('옵션이 없으면 종전대로 이름만 본다 — 지문을 조회하지 않고 내용이 달라도 이어받는다 (기본 동작 유지)', async () => {
+        const { pool, calls } = fakePool(fingerprints({ 'new-labor': 'fp-labor-v2' }));
+
+        const carried = await new UserExtensionRepository(pool).carryOverSkillApprovals(
+            [{ skillId: 'new-labor', name: 'labor-lawyer' }],
+            [{ name: 'labor-lawyer', fingerprint: '', assignments: [{ agentId: 'user:3', priority: 5 }] }],
+        );
+
+        expect(carried).toEqual(['new-labor']);
+        expect(calls.some(c => c.sql.includes('sha256'))).toBe(false);
+        expect(calls.filter(c => c.sql.startsWith('UPDATE agent_skills'))).toHaveLength(1);
     });
 
     it('새로 추가된 스킬(종전에 없던 이름)은 승인하지 않는다 — draft 로 남아 사용자가 본다', async () => {

@@ -2618,7 +2618,7 @@
     },
     "agents": {
       "title": "Benutzerdefinierte Agents",
-      "hint": "Agenten aus Erweiterungen oder aus einer Git-URL müssen hier genehmigt werden, bevor sie nutzbar sind. Prüfe den System-Prompt vor der Genehmigung.",
+      "hint": "Hier werden Custom Agents genehmigt, die eine Prüfung brauchen — aus einer Git-URL importierte Agenten und, je nach Servereinstellung, aus Erweiterungen installierte Agenten. Prüfe den System-Prompt vor der Genehmigung.",
       "link": "Agentenliste öffnen"
     },
     "tasks": {

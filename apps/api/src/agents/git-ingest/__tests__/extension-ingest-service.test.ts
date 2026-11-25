@@ -285,7 +285,6 @@ describe('ExtensionIngestService', () => {
         // ⚠️ archive 는 update 판정 직후(구성요소 생성 **전**)에 실행된다 — Custom Agent
         // 이름 표류 방지(코드리뷰 지적, 2026-08-24)
         q.mockResolvedValueOnce({ rows: [] });                    // snapshotApprovedSkills (승인 이어주기 — 회수 전)
-        q.mockResolvedValueOnce({ rows: [] });                    // snapshotApprovedAgents (206 — 회수 전)
         q.mockResolvedValueOnce({ rows: [{ id: 'mcp-old1', name: 'tool-pack-pg', status: 'active', enabled: true }] }); // listLinked — 구 MCP 서버 id(회수가 링크를 끊기 전)
         q.mockResolvedValueOnce({ rows: [] });                    // delete assignments (archive 전 정리)
         q.mockResolvedValueOnce({ rows: [] });                    // archive skills
@@ -378,7 +377,6 @@ describe('ExtensionIngestService', () => {
                 permission_state: 'reviewed', permissions_granted: [], permissions_requested: [],
             }] });
             q.mockResolvedValueOnce({ rows: [] });                    // snapshotApprovedSkills
-            q.mockResolvedValueOnce({ rows: [] });                    // snapshotApprovedAgents (206 — 회수 전)
             q.mockResolvedValueOnce({ rows: [] });                    // listLinked — 구 MCP 서버 없음
             q.mockResolvedValueOnce({ rows: [] });                    // delete assignments
             q.mockResolvedValueOnce({ rows: [] });                    // archive skills
@@ -417,7 +415,6 @@ describe('ExtensionIngestService', () => {
                 permission_state: 'legacy_unreviewed', permissions_granted: null, permissions_requested: null,
             }] });
             q.mockResolvedValueOnce({ rows: [] });                    // snapshotApprovedSkills
-            q.mockResolvedValueOnce({ rows: [] });                    // snapshotApprovedAgents (206 — 회수 전)
             q.mockResolvedValueOnce({ rows: [] });                    // listLinked — 구 MCP 서버 없음
             q.mockResolvedValueOnce({ rows: [] });                    // delete assignments
             q.mockResolvedValueOnce({ rows: [] });                    // archive skills
@@ -452,7 +449,6 @@ describe('ExtensionIngestService', () => {
                 permission_state: 'reviewed', permissions_granted: ['network:internet'], permissions_requested: ['network:internet'],
             }] });
             q.mockResolvedValueOnce({ rows: [] });                    // snapshotApprovedSkills
-            q.mockResolvedValueOnce({ rows: [] });                    // snapshotApprovedAgents (206 — 회수 전)
             q.mockResolvedValueOnce({ rows: [] });                    // listLinked — 구 MCP 서버 없음
             q.mockResolvedValueOnce({ rows: [] });                    // delete assignments
             q.mockResolvedValueOnce({ rows: [] });                    // archive skills

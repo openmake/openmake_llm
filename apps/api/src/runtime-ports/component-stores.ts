@@ -77,15 +77,16 @@ export interface SkillComponentStore extends ExtensionLinkedStore {
     upsertAsset(input: { skillId: string; relPath: string; contentType?: string; content: Buffer }): Promise<void>;
     /** 본문 끝에 덧붙이고 skill_manifests.prompt_md·checksum 도 맞춘다(주입 SoT) */
     appendToContent(skillId: string, block: string): Promise<void>;
-    /** 업데이트 전 — 이 확장의 승인된(active) 스킬 이름·내용 지문(설명·본문·번들)·배정 */
-    snapshotApproved(extensionId: string): Promise<ApprovedSkillSnapshot[]>;
+    /** 업데이트 전 — 이 확장의 승인된(active) 스킬 이름·배정. `withFingerprint`(opt-in)면 내용 지문(설명·본문·번들)도 계산한다(아니면 빈 문자열) */
+    snapshotApproved(extensionId: string, opts?: { withFingerprint?: boolean }): Promise<ApprovedSkillSnapshot[]>;
     /**
-     * 업데이트 후 — 같은 이름**이고 내용 지문도 같은** 스킬만 active 로 올리고 배정을 옮긴다.
-     * 내용이 바뀐 스킬은 draft 로 남아 재승인을 받는다. @returns 이어받은 스킬 id
+     * 업데이트 후 — 같은 이름으로 다시 들어온 스킬만 active 로 올리고 배정을 옮긴다. @returns 이어받은 스킬 id
+     * `requireSameContent`(opt-in, 기본 false = 종전 이름 기준)면 내용 지문도 같아야 하고, 바뀐 스킬은 draft 로 남는다.
      */
     carryOverApprovals(
         installed: ReadonlyArray<{ skillId: string; name: string }>,
         snapshot: ReadonlyArray<ApprovedSkillSnapshot>,
+        opts?: { requireSameContent?: boolean },
     ): Promise<string[]>;
     /** 마켓 게시 후보 — 사용자가 직접 만든 active 스킬(확장 유래 제외) */
     listExportCandidates(userId: string): Promise<Array<Omit<ExportSkill, 'content' | 'manifest_meta'>>>;
@@ -96,6 +97,7 @@ export interface SkillComponentStore extends ExtensionLinkedStore {
 /** 업데이트 승인 이어받기의 비교 기준 — 승인 당시의 내용 지문과 배정 */
 export interface ApprovedSkillSnapshot {
     name: string;
+    /** 내용 지문 — 지문 비교 opt-in 이 아니면 빈 문자열 */
     fingerprint: string;
     assignments: ReadonlyArray<{ agentId: string; priority: number }>;
 }

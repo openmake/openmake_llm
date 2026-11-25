@@ -165,14 +165,15 @@ export class UserExtensionRepository extends BaseRepository {
      * 업데이트 전 스냅샷 — 이 확장의 **승인된(active) 스킬** 이름과 그 스킬의 배정(agent_id·priority).
      * `archiveLinkedComponents` 가 구 행을 회수하기 **전에** 불러야 한다(회수 후엔 extension_id 가 NULL 이다).
      */
-    async snapshotApprovedSkills(extensionId: string): Promise<ApprovedSkillSnapshot[]> {
-        return this.skills().snapshotApproved(extensionId);
+    async snapshotApprovedSkills(extensionId: string, opts?: { withFingerprint?: boolean }): Promise<ApprovedSkillSnapshot[]> {
+        return this.skills().snapshotApproved(extensionId, opts);
     }
 
     /**
-     * 업데이트 후 승인 이어주기 — 같은 소스의 새 버전에 **같은 이름·같은 내용 지문**(설명·본문·번들)으로 다시 들어온
-     * 스킬만 active 로 올리고 종전 배정을 새 id 로 옮긴다. 새로 추가되거나 내용이 바뀐 스킬은 draft 로 남아 사용자가 본다
-     * (2026-11-25: 이름만 비교해 바뀐 본문이 검토 없이 활성화되던 결함).
+     * 업데이트 후 승인 이어주기 — 같은 소스의 새 버전에 **같은 이름**으로 다시 들어온 스킬만 active 로 올리고
+     * 종전 배정을 새 id 로 옮긴다. 새로 추가된 스킬은 draft 로 남아 사용자가 본다.
+     * `requireSameContent`(opt-in `EXTENSION_APPROVAL_FINGERPRINT`, 2026-11-25)면 내용 지문(설명·본문·번들)도 같아야 한다
+     * — 이름만 비교하면 바뀐 본문이 검토 없이 활성화된다.
      * (2026-09-20: 업데이트하면 승인한 스킬이 전부 draft 로 돌아가 재승인 전까지 팩이 꺼지던 문제)
      * ⚠️ 대상은 스킬(프롬프트 텍스트)뿐이다 — MCP 서버는 실행 코드라 업데이트마다 재승인을 받는다.
      * @returns 승인을 이어받은 스킬 id
@@ -180,8 +181,9 @@ export class UserExtensionRepository extends BaseRepository {
     async carryOverSkillApprovals(
         installed: ReadonlyArray<{ skillId: string; name: string }>,
         snapshot: ReadonlyArray<ApprovedSkillSnapshot>,
+        opts?: { requireSameContent?: boolean },
     ): Promise<string[]> {
-        return this.skills().carryOverApprovals(installed, snapshot);
+        return this.skills().carryOverApprovals(installed, snapshot, opts);
     }
 
     /**
@@ -199,23 +201,29 @@ export class UserExtensionRepository extends BaseRepository {
     }
 
     /**
-     * 업데이트 후 — 같은 이름·같은 내용 지문으로 다시 들어온 에이전트만 approved 로 올린다.
-     * 내용이 바뀌었거나 새로 추가된 에이전트는 pending 으로 남아 재승인을 받는다. @returns 이어받은 에이전트 id
+     * 업데이트 후 — 같은 이름으로 다시 들어온 pending 에이전트를 approved 로 올린다(승인 대기 설치 opt-in 일 때만 쓰인다).
+     * `requireSameContent` 면 내용 지문도 같아야 하고, 바뀐 에이전트는 pending 으로 남아 재승인을 받는다. @returns 이어받은 id
      */
     async carryOverAgentApprovals(
         installed: ReadonlyArray<{ agentId: string; storedName: string }>,
         snapshot: ReadonlyArray<{ name: string; fingerprint: string }>,
+        opts?: { requireSameContent?: boolean },
     ): Promise<string[]> {
         const prev = new Map(snapshot.map(s => [s.name, s.fingerprint]));
         const carried: string[] = [];
         for (const a of installed) {
             const fp = prev.get(a.storedName);
-            if (!fp) continue;
+            if (fp === undefined) continue;
+            if (opts?.requireSameContent && !fp) continue;
             const r = await this.query<{ id: string }>(
-                `UPDATE user_agents SET approval_status='approved', updated_at=NOW()
-                  WHERE id=$1 AND approval_status='pending' AND ${AGENT_FINGERPRINT_SQL} = $2
-                  RETURNING id`,
-                [a.agentId, fp]
+                opts?.requireSameContent
+                    ? `UPDATE user_agents SET approval_status='approved', updated_at=NOW()
+                        WHERE id=$1 AND approval_status='pending' AND ${AGENT_FINGERPRINT_SQL} = $2
+                        RETURNING id`
+                    : `UPDATE user_agents SET approval_status='approved', updated_at=NOW()
+                        WHERE id=$1 AND approval_status='pending'
+                        RETURNING id`,
+                opts?.requireSameContent ? [a.agentId, fp] : [a.agentId]
             );
             if (r.rows[0]) carried.push(a.agentId);
         }
