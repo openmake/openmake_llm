@@ -10,6 +10,8 @@
 import { BaseRepository, type QueryParam } from './base-repository';
 
 export type UserAgentVisibility = 'private' | 'shared' | 'organization';
+/** 'approved'(기본 — 직접 생성·기존 행) | 'pending'(확장 설치분, 승인 전엔 실행·목록·공유 제외 — 206) */
+export type UserAgentApprovalStatus = 'approved' | 'pending';
 
 /** 가시성 SQL 조각 — 소유자 OR 인스턴스 공유 OR (활성 조직 공유). $u = userId, $o = orgId(없으면 조직 절 생략). */
 function visibleWhere(u: string, o: string | null): string {
@@ -37,6 +39,8 @@ interface UserAgent {
     usage_count: number;
     /** 확장 번들 설치분이면 그 확장 id (103) */
     extension_id?: string | null;
+    /** 승인 상태 (206) — pending 은 소유자의 승인함에만 보인다 */
+    approval_status?: UserAgentApprovalStatus;
     created_at: string;
     updated_at: string;
 }
@@ -58,6 +62,8 @@ interface UserAgentCreate {
     model?: string | null;
     /** 확장 번들에서 설치된 경우 그 확장 id (제거/업데이트 시 함께 정리) */
     extensionId?: string | null;
+    /** 기본 'approved'. 확장 설치분은 'pending' — 승인 전엔 실행·목록·공유에서 빠진다 */
+    approvalStatus?: UserAgentApprovalStatus;
 }
 
 interface UserAgentUpdate {
@@ -75,8 +81,8 @@ export class UserAgentRepository extends BaseRepository {
         const result = await this.query<UserAgent>(
             `INSERT INTO user_agents (
                 id, user_id, name, description, system_prompt,
-                allowed_tools, allowed_skills, icon, model, extension_id
-            ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, $10)
+                allowed_tools, allowed_skills, icon, model, extension_id, approval_status
+            ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, $10, $11)
              RETURNING *`,
             [
                 params.id,
@@ -89,6 +95,7 @@ export class UserAgentRepository extends BaseRepository {
                 params.icon ?? null,
                 params.model ?? null,
                 params.extensionId ?? null,
+                params.approvalStatus ?? 'approved',
             ],
         );
         return result.rows[0] as UserAgent;
@@ -133,7 +140,7 @@ export class UserAgentRepository extends BaseRepository {
     async getByIdVisibleToUser(id: string, userId: string, orgId: string | null = null): Promise<UserAgent | undefined> {
         const result = await this.query<UserAgent>(
             `SELECT * FROM user_agents
-             WHERE id = $1 AND is_active = TRUE
+             WHERE id = $1 AND is_active = TRUE AND approval_status = 'approved'
                AND ${visibleWhere('$2', orgId ? '$3' : null)}`,
             orgId ? [id, userId, orgId] : [id, userId],
         );
@@ -144,7 +151,7 @@ export class UserAgentRepository extends BaseRepository {
     async listVisibleToUser(userId: string, orgId: string | null = null): Promise<UserAgentWithOwnership[]> {
         const result = await this.query<UserAgentWithOwnership>(
             `SELECT *, (user_id = $1) AS owned FROM user_agents
-             WHERE is_active = TRUE AND ${visibleWhere('$1', orgId ? '$2' : null)}
+             WHERE is_active = TRUE AND approval_status = 'approved' AND ${visibleWhere('$1', orgId ? '$2' : null)}
              ORDER BY owned DESC, updated_at DESC`,
             orgId ? [userId, orgId] : [userId],
         );
@@ -158,7 +165,7 @@ export class UserAgentRepository extends BaseRepository {
     async setVisibility(id: string, userId: string, visibility: UserAgentVisibility, orgId: string | null = null): Promise<UserAgent | undefined> {
         const result = await this.query<UserAgent>(
             `UPDATE user_agents SET visibility = $3, org_id = $4, updated_at = NOW()
-             WHERE id = $1 AND user_id = $2 AND is_active = TRUE
+             WHERE id = $1 AND user_id = $2 AND is_active = TRUE AND approval_status = 'approved'
              RETURNING *`,
             [id, userId, visibility, visibility === 'organization' ? orgId : null],
         );
@@ -186,6 +193,53 @@ export class UserAgentRepository extends BaseRepository {
             values,
         );
         return result.rows[0] as UserAgent | undefined;
+    }
+
+    /** 승인 대기(확장 설치분) — 소유자 본인 것만. 승인함이 시스템 프롬프트를 보여 주고 검토하게 한다. */
+    async listPendingForUser(userId: string): Promise<UserAgent[]> {
+        const result = await this.query<UserAgent>(
+            `SELECT * FROM user_agents
+             WHERE user_id = $1 AND is_active = TRUE AND approval_status = 'pending'
+             ORDER BY created_at DESC`,
+            [userId],
+        );
+        return result.rows as UserAgent[];
+    }
+
+    async countPendingForUser(userId: string): Promise<number> {
+        const r = await this.query<{ count: string }>(
+            `SELECT COUNT(*)::text AS count FROM user_agents
+             WHERE user_id = $1 AND is_active = TRUE AND approval_status = 'pending'`,
+            [userId],
+        );
+        return Number(r.rows[0]?.count ?? 0);
+    }
+
+    /** pending → approved (소유자 한정). 대상이 없거나 이미 승인됐으면 undefined. */
+    async approve(id: string, userId: string): Promise<UserAgent | undefined> {
+        const result = await this.query<UserAgent>(
+            `UPDATE user_agents SET approval_status = 'approved', updated_at = NOW()
+             WHERE id = $1 AND user_id = $2 AND is_active = TRUE AND approval_status = 'pending'
+             RETURNING *`,
+            [id, userId],
+        );
+        return result.rows[0] as UserAgent | undefined;
+    }
+
+    /**
+     * pending 거절 — soft-delete(is_active=FALSE). 이름도 비켜 준다: UNIQUE(user_id, name) 은 soft-delete 행에도 걸려,
+     * 남겨 두면 같은 확장을 다시 설치할 때 에이전트가 랜덤 suffix 를 단다(archiveLinkedComponents 와 같은 규칙).
+     */
+    async reject(id: string, userId: string): Promise<boolean> {
+        const result = await this.query<{ id: string }>(
+            `UPDATE user_agents
+                SET is_active = FALSE, updated_at = NOW(),
+                    name = name || '-rejected-' || substr(md5(random()::text), 1, 6)
+              WHERE id = $1 AND user_id = $2 AND is_active = TRUE AND approval_status = 'pending'
+              RETURNING id`,
+            [id, userId],
+        );
+        return result.rowCount! > 0;
     }
 
     async softDelete(id: string, userId: string): Promise<boolean> {

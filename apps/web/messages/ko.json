@@ -1304,7 +1304,8 @@
     "visibilityShared": "워크스페이스 공유",
     "visibilityOrganization": "조직 공유",
     "orgBadge": "조직",
-    "visibilityAria": "에이전트 공개 범위"
+    "visibilityAria": "에이전트 공개 범위",
+    "viewSystemPrompt": "시스템 프롬프트 보기"
   },
   "research": {
     "pageTitle": "딥 리서치 히스토리",
@@ -2617,7 +2618,7 @@
     },
     "agents": {
       "title": "커스텀 에이전트",
-      "hint": "확장으로 설치한 에이전트는 승인 없이 즉시 활성입니다. Git URL 가져오기로 만든 에이전트만 여기서 승인합니다.",
+      "hint": "승인이 필요한 커스텀 에이전트를 여기서 승인합니다 — Git URL 가져오기로 만든 에이전트와, 설정에 따라 확장으로 설치한 에이전트. 승인 전에 시스템 프롬프트를 확인하세요.",
       "link": "에이전트 목록 열기"
     },
     "tasks": {

@@ -35,6 +35,28 @@ describe('ToolRouter 역할 게이트', () => {
         expect(exec).not.toHaveBeenCalled();
     });
 
+    // 별칭 해석(2026-11-25)은 거버넌스보다 먼저 돈다 — 외부 표기로 불러도 역할 게이트는 실제 이름으로 판정한다
+    it('별칭 해석 opt-in 이 꺼져 있으면(기본) 별칭은 종전대로 찾을 수 없음', async () => {
+        delete process.env.MCP_TOOL_ALIAS_RESOLVE;
+        const exec = jest.fn(async () => ({ content: [{ type: 'text' as const, text: 'ran' }] }));
+        const r = await makeRouter(exec).executeTool('mcp__python_repl__run_code', {}, { userId: 'a', role: 'admin' });
+        expect(r.isError).toBe(true);
+        expect(exec).not.toHaveBeenCalled();
+    });
+
+    it('별칭(mcp__<키>__<도구>)으로 불러도 user 는 거절, admin 은 실제 도구로 실행 (MCP_TOOL_ALIAS_RESOLVE=true)', async () => {
+        process.env.MCP_TOOL_ALIAS_RESOLVE = 'true';
+        const exec = jest.fn(async () => ({ content: [{ type: 'text' as const, text: 'ran' }] }));
+        const router = makeRouter(exec);
+        const denied = await router.executeTool('mcp__python_repl__run_code', {}, { userId: 'u1', role: 'user' });
+        expect(denied.isError).toBe(true);
+        expect(exec).not.toHaveBeenCalled();
+        const ran = await router.executeTool('mcp__python_repl__run_code', {}, { userId: 'a', role: 'admin' });
+        expect(ran.isError).toBeFalsy();
+        expect(exec).toHaveBeenCalledWith('run_code', {}, expect.anything());
+        delete process.env.MCP_TOOL_ALIAS_RESOLVE;
+    });
+
     it('admin 은 실행', async () => {
         const exec = jest.fn(async () => ({ content: [{ type: 'text' as const, text: 'ran' }] }));
         const r = await makeRouter(exec).executeTool('Python REPL::run_code', {}, { userId: 'a', role: 'admin' });

@@ -113,3 +113,42 @@ describe('dispatchTool — 반출 관문 실행 게이트(하네스 P0-2)', () =
         expect(handler).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('dispatchTool — 외부 위임자의 이름 별칭 해석 (2026-11-25)', () => {
+    const okResult: MCPToolResult = { content: [{ type: 'text', text: 'ext-ok' }] };
+
+    it('해석된 이름으로 외부 실행하고, pre 훅도 해석된 이름을 본다 (거버넌스가 실제 이름 기준)', async () => {
+        const seen: string[] = [];
+        registerToolHook({ id: 'spy', pre: (_a, ctx) => { seen.push(ctx.name); return {}; } });
+        const external: ExternalToolDispatch = {
+            execute: jest.fn(async () => okResult),
+            knownToolNames: async () => ['myext-apollo::search'],
+            resolveToolName: jest.fn(async (n: string) => (n === 'mcp__apollo__search' ? 'myext-apollo::search' : undefined)),
+        };
+        const r = await dispatchTool('mcp__apollo__search', { q: 1 }, { userId: 'u1', role: 'user' } as never, { builtInTools, external });
+        expect(r.isError).toBeFalsy();
+        expect(external.execute).toHaveBeenCalledWith('myext-apollo::search', { q: 1 }, expect.anything(), undefined);
+        expect(seen).toEqual(['myext-apollo::search']);
+        expect(external.resolveToolName).toHaveBeenCalledWith('mcp__apollo__search', 'u1');
+    });
+
+    it('내장 도구 이름은 해석기를 부르지 않는다', async () => {
+        const resolveToolName = jest.fn(async () => 'x::y');
+        await dispatchTool('fake_search', { query: 'x' }, undefined, {
+            builtInTools, external: { execute: jest.fn(), knownToolNames: async () => [], resolveToolName },
+        });
+        expect(resolveToolName).not.toHaveBeenCalled();
+        expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('해석기가 던지면 원래 이름으로 진행한다 (fail-open — 종전 not-found)', async () => {
+        const external: ExternalToolDispatch = {
+            execute: jest.fn(async () => undefined),
+            knownToolNames: async () => [],
+            resolveToolName: async () => { throw new Error('boom'); },
+        };
+        const r = await dispatchTool('a::b', {}, undefined, { builtInTools, external });
+        expect(r.isError).toBe(true);
+        expect(external.execute).toHaveBeenCalledWith('a::b', {}, undefined, undefined);
+    });
+});

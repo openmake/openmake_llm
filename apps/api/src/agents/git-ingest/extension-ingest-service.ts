@@ -60,6 +60,7 @@ import { UserExtensionRepository } from '../../data/repositories/user-extension-
 import { evaluatePermissionState } from '../../services/extensions/permission-state';
 import { listLinkedMcpServerIds, releaseLinkedMcpServers } from '../../services/extensions/release-linked-mcp';
 import { EXTENSION_INGEST, SKILL_CREATOR } from '../../config/constants';
+import { EXTENSION_SECURITY } from '../../config/extension-security';
 
 const logger = createLogger('ExtensionIngestService');
 
@@ -244,6 +245,7 @@ export class ExtensionIngestService {
         const sameName = await extRepo.findActiveByName(input.userId, manifest.name);
         let updateTarget: typeof sameName = null;
         let approvedBefore: Awaited<ReturnType<typeof extRepo.snapshotApprovedSkills>> = [];
+        let approvedAgentsBefore: Awaited<ReturnType<typeof extRepo.snapshotApprovedAgents>> = [];
         if (sameName) {
             const prevParsed = isArchive ? null : parseGitUrl(sameName.source_url);
             const sameSource = isArchive
@@ -256,7 +258,9 @@ export class ExtensionIngestService {
                 }
                 updateTarget = sameName;
                 // 회수 전에 승인 상태를 기억한다 — 같은 이름으로 다시 들어온 스킬은 승인·배정을 이어받는다.
-                approvedBefore = await extRepo.snapshotApprovedSkills(sameName.id);
+                approvedBefore = await extRepo.snapshotApprovedSkills(sameName.id, { withFingerprint: EXTENSION_SECURITY.APPROVAL_FINGERPRINT });
+                // Custom Agent 승인 대기 opt-in 일 때만 — 꺼져 있으면 에이전트는 즉시 활성이라 이어받을 승인이 없다
+                if (EXTENSION_SECURITY.AGENT_APPROVAL_REQUIRED) approvedAgentsBefore = await extRepo.snapshotApprovedAgents(sameName.id);
                 // 회수는 링크를 끊으므로(unlink) 구 MCP 서버 id 를 먼저 받아 둔다 — 회수 뒤 떠 있는 옛 버전 연결을 닫는다.
                 const oldMcpServerIds = await listLinkedMcpServerIds(this.opts.pool, sameName.id);
                 // ⚠️ 구 구성요소 회수는 **신규 생성 전에** 해야 한다. Custom Agent 는
@@ -400,12 +404,29 @@ export class ExtensionIngestService {
         }
 
         // 업데이트 — 종전에 승인돼 있던 스킬(같은 이름)은 승인·배정을 이어받는다. MCP 서버는 재승인 대상.
+        // opt-in EXTENSION_APPROVAL_FINGERPRINT 면 내용(설명·본문·번들)도 그대로여야 하고, 바뀐 스킬은 재승인 대상이다.
+        const requireSameContent = EXTENSION_SECURITY.APPROVAL_FINGERPRINT;
         if (updateTarget && approvedBefore.length > 0) {
-            const carried = await extRepo.carryOverSkillApprovals(
-                okSkills.filter(r => r.skillId && r.name).map(r => ({ skillId: r.skillId!, name: r.name! })),
-                approvedBefore,
-            );
-            if (carried.length > 0) warnings.push(`SKILL_APPROVAL_CARRIED: 종전 승인을 이어받은 스킬 ${carried.length}개 (새로 추가된 스킬과 MCP 서버는 승인 대기)`);
+            const reinstalled = okSkills.filter(r => r.skillId && r.name).map(r => ({ skillId: r.skillId!, name: r.name! }));
+            const carried = await extRepo.carryOverSkillApprovals(reinstalled, approvedBefore, { requireSameContent });
+            if (carried.length > 0) warnings.push(`SKILL_APPROVAL_CARRIED: 종전 승인을 이어받은 스킬 ${carried.length}개 (새로 추가${requireSameContent ? '되거나 내용이 바뀐' : '된'} 스킬과 MCP 서버는 승인 대기)`);
+            if (requireSameContent) {
+                const approvedNames = new Set(approvedBefore.map(s => s.name));
+                const carriedIds = new Set(carried);
+                const changed = reinstalled.filter(r => approvedNames.has(r.name) && !carriedIds.has(r.skillId)).map(r => r.name);
+                if (changed.length > 0) warnings.push(`SKILL_CHANGED_REVIEW: 내용이 바뀌어 다시 승인해야 하는 스킬 ${changed.length}개 — ${changed.join(', ')}`);
+            }
+        }
+
+        // Custom Agent 승인 대기(opt-in EXTENSION_AGENT_APPROVAL_REQUIRED, 206) — 종전 승인은 스킬과 같은 규칙으로 이어받고
+        // 나머지는 승인함에서 승인한다. 옵션이 꺼져 있으면 에이전트는 종전대로 설치 즉시 활성이다.
+        if (EXTENSION_SECURITY.AGENT_APPROVAL_REQUIRED) {
+            const installedAgents = okAgentResults.filter(r => r.agentId && r.storedName).map(r => ({ agentId: r.agentId!, storedName: r.storedName! }));
+            const carriedAgents = updateTarget && approvedAgentsBefore.length > 0
+                ? await extRepo.carryOverAgentApprovals(installedAgents, approvedAgentsBefore, { requireSameContent })
+                : [];
+            const pendingAgents = installedAgents.length - carriedAgents.length;
+            if (pendingAgents > 0) warnings.push(`AGENTS_PENDING_APPROVAL: Custom Agent ${pendingAgents}개는 승인함(/approvals)에서 승인한 뒤 사용할 수 있습니다`);
         }
 
         await extRepo.linkComponents(

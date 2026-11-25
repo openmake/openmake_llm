@@ -14,6 +14,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { BaseRepository, type QueryParam } from './base-repository';
 import { getComponentStore } from '../../addon-host/addon-data';
 import type { ExtensionPermissionState } from '../../config/addon-permissions';
+import type { ApprovedSkillSnapshot } from '../../runtime-ports/component-stores';
 import { jsonbParam, type SavePermissionStateInput } from './user-extension-permission-repository';
 
 export interface UserExtensionRow {
@@ -71,6 +72,14 @@ interface InsertExtensionInput {
 function permissionParams(p: SavePermissionStateInput): QueryParam[] {
     return [p.state, jsonbParam(p.granted), jsonbParam(p.requested), p.reviewedBy];
 }
+
+/**
+ * Custom Agent 내용 지문 — 모델에 닿는 것(설명·시스템 프롬프트·모델·도구/스킬 허용 목록)이 하나라도 바뀌면 달라진다.
+ * 업데이트 승인 이어받기의 비교 기준(스킬 지문과 같은 원칙 — skill-runtime `SKILL_FINGERPRINT_SQL`).
+ */
+const AGENT_FINGERPRINT_SQL = `encode(sha256(convert_to(
+        coalesce(description, '') || chr(31) || system_prompt || chr(31) || coalesce(model, '') || chr(31)
+        || coalesce(allowed_tools::text, '') || chr(31) || coalesce(allowed_skills::text, ''), 'UTF8')), 'hex')`;
 
 export class UserExtensionRepository extends BaseRepository {
     /** 스킬·MCP 서버 구성요소는 각 add-on 소유 테이블 — 데이터 모듈의 저장 연산(같은 풀, SQL 동일)으로 다룬다(2026-10-18) */
@@ -156,22 +165,69 @@ export class UserExtensionRepository extends BaseRepository {
      * 업데이트 전 스냅샷 — 이 확장의 **승인된(active) 스킬** 이름과 그 스킬의 배정(agent_id·priority).
      * `archiveLinkedComponents` 가 구 행을 회수하기 **전에** 불러야 한다(회수 후엔 extension_id 가 NULL 이다).
      */
-    async snapshotApprovedSkills(extensionId: string): Promise<Array<{ name: string; assignments: Array<{ agentId: string; priority: number }> }>> {
-        return this.skills().snapshotApproved(extensionId);
+    async snapshotApprovedSkills(extensionId: string, opts?: { withFingerprint?: boolean }): Promise<ApprovedSkillSnapshot[]> {
+        return this.skills().snapshotApproved(extensionId, opts);
     }
 
     /**
      * 업데이트 후 승인 이어주기 — 같은 소스의 새 버전에 **같은 이름**으로 다시 들어온 스킬만 active 로 올리고
      * 종전 배정을 새 id 로 옮긴다. 새로 추가된 스킬은 draft 로 남아 사용자가 본다.
+     * `requireSameContent`(opt-in `EXTENSION_APPROVAL_FINGERPRINT`, 2026-11-25)면 내용 지문(설명·본문·번들)도 같아야 한다
+     * — 이름만 비교하면 바뀐 본문이 검토 없이 활성화된다.
      * (2026-09-20: 업데이트하면 승인한 스킬이 전부 draft 로 돌아가 재승인 전까지 팩이 꺼지던 문제)
      * ⚠️ 대상은 스킬(프롬프트 텍스트)뿐이다 — MCP 서버는 실행 코드라 업데이트마다 재승인을 받는다.
      * @returns 승인을 이어받은 스킬 id
      */
     async carryOverSkillApprovals(
         installed: ReadonlyArray<{ skillId: string; name: string }>,
-        snapshot: ReadonlyArray<{ name: string; assignments: ReadonlyArray<{ agentId: string; priority: number }> }>,
+        snapshot: ReadonlyArray<ApprovedSkillSnapshot>,
+        opts?: { requireSameContent?: boolean },
     ): Promise<string[]> {
-        return this.skills().carryOverApprovals(installed, snapshot);
+        return this.skills().carryOverApprovals(installed, snapshot, opts);
+    }
+
+    /**
+     * 업데이트 전 스냅샷 — 이 확장의 **승인된** Custom Agent 이름과 내용 지문(설명·시스템 프롬프트·모델·도구·스킬 허용 목록).
+     * `archiveLinkedComponents` 가 이름을 비키기 **전에** 불러야 한다.
+     */
+    async snapshotApprovedAgents(extensionId: string): Promise<Array<{ name: string; fingerprint: string }>> {
+        const r = await this.query<{ name: string; fingerprint: string }>(
+            `SELECT name, ${AGENT_FINGERPRINT_SQL} AS fingerprint
+               FROM user_agents
+              WHERE extension_id=$1 AND is_active=TRUE AND approval_status='approved'`,
+            [extensionId]
+        );
+        return r.rows;
+    }
+
+    /**
+     * 업데이트 후 — 같은 이름으로 다시 들어온 pending 에이전트를 approved 로 올린다(승인 대기 설치 opt-in 일 때만 쓰인다).
+     * `requireSameContent` 면 내용 지문도 같아야 하고, 바뀐 에이전트는 pending 으로 남아 재승인을 받는다. @returns 이어받은 id
+     */
+    async carryOverAgentApprovals(
+        installed: ReadonlyArray<{ agentId: string; storedName: string }>,
+        snapshot: ReadonlyArray<{ name: string; fingerprint: string }>,
+        opts?: { requireSameContent?: boolean },
+    ): Promise<string[]> {
+        const prev = new Map(snapshot.map(s => [s.name, s.fingerprint]));
+        const carried: string[] = [];
+        for (const a of installed) {
+            const fp = prev.get(a.storedName);
+            if (fp === undefined) continue;
+            if (opts?.requireSameContent && !fp) continue;
+            const r = await this.query<{ id: string }>(
+                opts?.requireSameContent
+                    ? `UPDATE user_agents SET approval_status='approved', updated_at=NOW()
+                        WHERE id=$1 AND approval_status='pending' AND ${AGENT_FINGERPRINT_SQL} = $2
+                        RETURNING id`
+                    : `UPDATE user_agents SET approval_status='approved', updated_at=NOW()
+                        WHERE id=$1 AND approval_status='pending'
+                        RETURNING id`,
+                opts?.requireSameContent ? [a.agentId, fp] : [a.agentId]
+            );
+            if (r.rows[0]) carried.push(a.agentId);
+        }
+        return carried;
     }
 
     async archiveLinkedComponents(extensionId: string): Promise<void> {
@@ -311,7 +367,8 @@ export class UserExtensionRepository extends BaseRepository {
         const skills = await this.skills().listLinked(extensionId);
         const servers = await this.mcpServers().listLinked(extensionId);
         const agents = await this.query<{ id: string; name: string; status: string }>(
-            `SELECT id, name, CASE WHEN is_active THEN 'active' ELSE 'archived' END AS status
+            `SELECT id, name,
+                    CASE WHEN NOT is_active THEN 'archived' WHEN approval_status = 'pending' THEN 'draft' ELSE 'active' END AS status
                FROM user_agents WHERE extension_id=$1 ORDER BY name`,
             [extensionId]
         );
