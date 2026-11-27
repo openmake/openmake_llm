@@ -17,6 +17,7 @@ import { useTranslations } from "next-intl";
 import { Bot, Check, X } from "lucide-react";
 import { Button, Badge, Card } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
+import { formatExtensionOrigin as formatOrigin } from "@/lib/extension-origin";
 import type { ApiSuccess } from "@openmake/shared-types";
 
 interface ApiCustomAgentDraft {
@@ -33,11 +34,18 @@ interface ApiPendingUserAgent {
   name: string;
   description: string | null;
   system_prompt: string;
+  /** 승인 대기 설치 opt-in 일 때만 온다 — 어느 확장·원본·커밋에서 왔는지 */
+  extension_name?: string | null;
+  extension_source_url?: string | null;
+  extension_source_ref?: string | null;
 }
 type PendingUserAgentsResponse = ApiSuccess<{ agents: ApiPendingUserAgent[]; total: number }>;
 
 /** 항목별 승인·거절 엔드포인트 — 출처에 따라 다르다 */
-type DraftItem = { id: string; name: string; description: string | null; systemPrompt?: string; base: string };
+type DraftItem = {
+  id: string; name: string; description: string | null; systemPrompt?: string; base: string;
+  origin?: { extension: string | null; source: string | null; ref: string | null };
+};
 
 export function CustomAgentDrafts({ onRefreshAction }: { onRefreshAction?: () => void }) {
   const t = useTranslations("customAgents");
@@ -54,7 +62,12 @@ export function CustomAgentDrafts({ onRefreshAction }: { onRefreshAction?: () =>
         .then((r) => r?.data?.agents ?? []).catch(() => [] as ApiPendingUserAgent[]),
     ]);
     setDrafts([
-      ...ext.map((a) => ({ id: a.id, name: a.name, description: a.description, systemPrompt: a.system_prompt, base: "/api/users/me/agents" })),
+      ...ext.map((a) => ({
+        id: a.id, name: a.name, description: a.description, systemPrompt: a.system_prompt, base: "/api/users/me/agents",
+        ...(a.extension_name !== undefined
+          ? { origin: { extension: a.extension_name ?? null, source: a.extension_source_url ?? null, ref: a.extension_source_ref ?? null } }
+          : {}),
+      })),
       ...git.map((d) => ({ id: d.id, name: d.name, description: d.description, base: "/api/agents/custom" })),
     ]);
     setLoading(false);
@@ -100,10 +113,16 @@ export function CustomAgentDrafts({ onRefreshAction }: { onRefreshAction?: () =>
               <div className="mb-1 flex items-center gap-2">
                 <Badge tone="warn">Draft</Badge>
                 <Bot className="h-3.5 w-3.5 text-faint" />
+                {d.origin?.extension && <Badge tone="neutral">{d.origin.extension}</Badge>}
               </div>
               <h3 className="text-sm font-semibold text-fg">{d.name}</h3>
               {d.description && (
                 <p className="mt-1 line-clamp-2 text-xs text-muted">{d.description}</p>
+              )}
+              {d.origin && formatOrigin(d.origin.source, d.origin.ref) && (
+                <p className="mt-1 truncate font-mono text-xs text-muted" title={d.origin.source ?? undefined}>
+                  {t("agentOrigin", { source: formatOrigin(d.origin.source, d.origin.ref) ?? "" })}
+                </p>
               )}
               {d.systemPrompt && (
                 <details className="mt-2">

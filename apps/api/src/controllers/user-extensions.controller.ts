@@ -25,6 +25,8 @@
  *   POST   /api/users/me/extensions/install-by-name    — `플러그인@마켓플레이스` 이름 설치 (M5, user-extensions-named.routes)
  *   POST   /api/users/me/extensions/preview-by-name    — 이름 설치 미리보기 (M1b 연장, EXTENSION_INSTALL_PREVIEW_ENABLED)
  *   DELETE /api/users/me/extensions/catalog/:id         — 소스 삭제
+ *   GET|POST /api/users/me/extensions/org-owned · POST …/org-owned/:id/update · DELETE …/org-owned/:id
+ *                                                      — 조직 소유 설치(P8, EXTENSION_ORG_OWNED_INSTALL_ENABLED — OFF 면 종전 라우트로)
  *
  * ⚠️ 라우트 등록 순서: '/gallery*'·'/catalog*' 가 '/:id' 보다 먼저여야 한다 (Express 순차 매칭).
  *
@@ -41,17 +43,20 @@ import { releaseLinkedMcpServers } from '../services/extensions/release-linked-m
 import { UserExtensionRepository, type UserExtensionRow } from '../data/repositories/user-extension-repository';
 import { ExtensionCatalogRepository, toPublicCatalogSource } from '../data/repositories/extension-catalog-repository';
 import { buildExtensionIngestService } from '../services/extensions/ingest-service-factory';
+import { installSharedExtension } from '../services/extensions/shared-install';
 import { syncCatalogSource } from '../services/extensions/catalog-sync';
 import { EXTENSION_CATALOG_SYNC_LIMITS, normalizeCatalogSubpath } from '../config/extension-catalog-sync';
 import { CATALOG_INDEX_LIMITS, normalizeCatalogIndexUrl } from '../config/extension-catalog-index';
 import { encryptToken } from '../utils/token-crypto';
 import { NAMED_INSTALL_LIMITS, isValidMarketplaceAlias } from '../config/extension-named-install';
 import { registerNamedInstallRoutes } from './user-extensions-named.routes';
+import { registerOrgOwnedRoutes } from './user-extensions-org-owned.routes';
 import { applyDefaultCatalogAlias } from '../services/extensions/catalog-alias';
 import { createLogger } from '../utils/logger';
 import { removeExtensionInstallation } from '../services/addon/addon-state';
 import { activeOrgFor, membershipsFor } from '../services/org/membership-cache';
-import { success, internalError, unauthorized, notFound, badRequest, conflict } from '../utils/api-response';
+import { success, internalError, unauthorized, notFound, badRequest, conflict, error as apiError } from '../utils/api-response';
+import { decideExtensionRemoval, galleryDeploymentModes, installedDeploymentInfo, recordExtensionRemoval } from '../services/extensions/org-deployment';
 import { ExtensionSourceBlockedError } from '../errors/extension-source-blocked.error';
 import { extensionInstallPreviewEnabled } from '../config/extension-install-preview';
 
@@ -112,10 +117,14 @@ function getUserId(req: Request): string | null {
     return null;
 }
 
-/** 응답에서 내부 필드(source_hash, user_id, 승인자 id) 제외. */
+/**
+ * 응답에서 내부 필드(source_hash, user_id, 승인자 id) 제외. 조직 소유(212) 열은 싣지 않고 — 사람 소유 행의 응답 모양은
+ * 마이그레이션 전과 같다 — 조직 소유 행만 `orgOwned: true` 를 붙인다(설치자 id 는 싣지 않는다).
+ */
 function toPublic(row: UserExtensionRow) {
-    const { source_hash: _hash, user_id: _uid, permissions_reviewed_by: _reviewer, ...rest } = row;
-    return rest;
+    const { source_hash: _hash, user_id: _uid, permissions_reviewed_by: _reviewer, ...rest } = row as UserExtensionRow & { owner_org_id?: string | null; installed_by_user_id?: string | null };
+    const { owner_org_id: ownerOrg, installed_by_user_id: _installer, ...base } = rest;
+    return ownerOrg ? { ...base, orgOwned: true } : base;
 }
 
 /** 요청자가 멤버인 조직 id — 조직에 공개된 확장의 갤러리 노출·설치 판정에 쓴다 (조회 실패는 빈 목록 = 조직 공개분만 안 보인다) */
@@ -154,7 +163,13 @@ export function createUserExtensionsController(): Router {
         try {
             const repo = new UserExtensionRepository(getPool());
             const rows = await repo.listActiveForUser(userId);
-            res.json(success({ extensions: rows.map(toPublic) }));
+            // 조직 배포 모드(§8-1, opt-in) — 배포로 설치된 행에만 org_deployment 를 싣는다. 꺼져 있으면 null(응답 종전 그대로)
+            const deployment = await installedDeploymentInfo(userId, isAdminRole(req.user?.role));
+            res.json(success({
+                extensions: deployment
+                    ? rows.map((r) => { const d = deployment.get(r.id); return d ? { ...toPublic(r), org_deployment: d } : toPublic(r); })
+                    : rows.map(toPublic),
+            }));
         } catch (err) {
             log.error('list 실패:', err);
             res.status(500).json(internalError('확장 목록 조회 실패'));
@@ -169,7 +184,13 @@ export function createUserExtensionsController(): Router {
             const repo = new UserExtensionRepository(getPool());
             const rows = await repo.listShared(undefined, await memberOrgIds(userId));
             // 타인 user_id 는 노출하지 않고 owned 플래그만 제공 (user_agents 관용구 동형)
-            const extensions = rows.map((r) => ({ ...toPublic(r), owned: r.user_id === userId }));
+            const modes = await galleryDeploymentModes(userId);
+            const extensions = rows.map((r) => {
+                const item = { ...toPublic(r), owned: r.user_id === userId };
+                // 조직 배포 모드(§8-1, opt-in) — 활성 조직 공개 항목에만 이 멤버의 적용 모드. 꺼져 있으면 필드 없음(종전)
+                const mode = modes?.get(r.id);
+                return mode ? { ...item, deployment_mode: mode } : item;
+            });
             // admin 큐레이션 카탈로그 (enabled 소스만) — 실패해도 갤러리 자체는 응답 (fail-open)
             let catalog: Array<Record<string, unknown>> = [];
             try {
@@ -198,18 +219,8 @@ export function createUserExtensionsController(): Router {
             if (!shared) { res.status(404).json(notFound('공유 확장 없음')); return; }
 
             const body = req.body as z.infer<typeof galleryInstallSchema>;
-            const service = await buildIngestService({ userId, isAdmin: isAdminRole(req.user?.role) });
-            // 설치자 본인 계정으로 동일 소스 ingest 재실행 — 구성요소는 본인 소유 draft 로 생성
-            const result = await service.import({
-                userId,
-                isAdmin: false,
-                gitUrl: shared.source_url,
-                gitRef: shared.tracking_ref ?? undefined,
-                gitPath: shared.source_path,
-                // 합성 매니페스트 설치본(plugin.json 없는 마켓 엔트리)의 이름 — 가상 source_path 재설치 시 사용
-                plugin: shared.name,
-                accessToken: body.accessToken,
-            });
+            // 설치자 본인 계정으로 동일 소스 ingest 재실행 — 구성요소는 본인 소유 draft 로 생성 (조직 배포 조정과 같은 입력)
+            const result = await installSharedExtension(shared, userId, { isAdmin: isAdminRole(req.user?.role), accessToken: body.accessToken });
             if ('selectionRequired' in result && result.selectionRequired) {
                 // 명시 gitPath 라 도달 불가 — 방어
                 res.status(400).json(badRequest('plugin.json 후보가 모호합니다'));
@@ -388,6 +399,8 @@ export function createUserExtensionsController(): Router {
 
     // 이름 설치(M5)·그 미리보기 — user-extensions-named.routes (같은 설치 입력 namedInstallInput)
     registerNamedInstallRoutes(router, { getUserId, rethrowPolicyError, installSummary });
+    // 조직 소유 설치(P8, opt-in EXTENSION_ORG_OWNED_INSTALL_ENABLED) — OFF 면 next('route') 로 종전 라우트에 넘긴다
+    registerOrgOwnedRoutes(router, { getUserId });
 
     // 설치 미리보기(M1b, opt-in) — 쓰기·LLM 없이 설치될 구성요소·권한·원본·커밋·경고. 플래그 OFF 면 404(라우트가 없는 것과 같다)
     router.post('/catalog/:id/preview', requireAuth, validate(catalogInstallSchema), async (req, res) => {
@@ -519,8 +532,18 @@ export function createUserExtensionsController(): Router {
         if (!userId) { res.status(401).json(unauthorized()); return; }
         try {
             const repo = new UserExtensionRepository(getPool());
+            // 조직 배포 모드(§8-1, opt-in) — required 설치본은 일반 멤버가 지울 수 없다. 꺼져 있으면 언제나 허용(종전)
+            const decision = await decideExtensionRemoval(req.params.id, userId, isAdminRole(req.user?.role));
+            if (!decision.allowed) {
+                res.status(403).json(apiError('EXTENSION_REQUIRED', '조직이 필수로 배포한 확장은 지울 수 없습니다. 조직 관리자에게 문의하세요.'));
+                return;
+            }
             const removed = await repo.remove(req.params.id, userId, false);
             if (!removed) { res.status(404).json(notFound('확장 없음 또는 이미 제거됨')); return; }
+            // 배포로 설치된 항목 — 지운 기록을 남겨 default_on 이 다시 설치하지 않게 한다(실패해도 제거는 유지)
+            if (decision.link) {
+                await recordExtensionRemoval(decision.link).catch((e) => log.warn(`배포 제거 기록 실패 (제거는 완료): ${e instanceof Error ? e.message : String(e)}`));
+            }
             // 설치 상태 표에서도 지운다 — 남겨 두면 관리 화면이 지운 확장을 계속 보여 준다.
             await removeExtensionInstallation(removed.id);
             // 회수한(archived·enabled=false) MCP 서버의 떠 있는 연결을 닫는다 — 제거한 확장의 프로세스가 계속 돌지 않게.

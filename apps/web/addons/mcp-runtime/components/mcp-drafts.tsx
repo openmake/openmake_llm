@@ -21,7 +21,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Check, X, Loader2, Server, AlertTriangle, KeyRound } from "lucide-react";
+import { Check, X, Loader2, Server, AlertTriangle, KeyRound, Globe } from "lucide-react";
 import { Button, Badge, Card } from "@/components/ui/primitives";
 import { ApiClient, ApiError } from "@/lib/api-client";
 
@@ -37,7 +37,11 @@ interface DraftServer {
   name?: string;
   git_url?: string;
   status: string;
+  transport_type?: string;
+  url?: string | null;
   manifest_meta?: {
+    /** 원격 관리 등록(EXTENSION_REMOTE_MCP_ENABLED) — 번들 선언 URL 고정, 승인 뒤 OAuth 로그인으로 연결 */
+    remoteRegistration?: { declaredUrl?: string; urlLocked?: boolean; auth?: string };
     conventionFindings?: { severity: string; rule?: string; message?: string; source?: string }[];
     extensionName?: string;
     /** 값이 자리표시자라 승인 시 실제 값을 받아야 하는 env 키 */
@@ -79,7 +83,22 @@ export function McpDrafts({ onRefreshAction }: { onRefreshAction?: () => void })
     try {
       // 승인만 env 를 싣는다 — 거부는 값이 필요 없다.
       const body = action === "approve" ? { envOverrides: envInputs[id] ?? {} } : {};
-      await ApiClient.post(`/api/mcp/servers/${id}/${action}`, body);
+      const res = await ApiClient.post<{ oauthRequired?: boolean }>(`/api/mcp/servers/${id}/${action}`, body);
+      // 원격 관리 등록 — 승인만으로는 연결하지 않는다. 곧바로 OAuth 로그인으로 잇는다(콜백이 연결하고 커넥터 탭으로 돌아온다).
+      // 인가가 필요 없는 서버(authorized)는 바로 연결한다.
+      if (action === "approve" && res?.oauthRequired) {
+        try {
+          const start = await ApiClient.post<{ data?: { authorized?: boolean; authorizationUrl?: string | null } }>(
+            `/api/mcp/servers/${encodeURIComponent(id)}/oauth/start`, {});
+          if (start?.data?.authorizationUrl) {
+            window.location.assign(start.data.authorizationUrl);
+            return;
+          }
+          await ApiClient.post(`/api/mcp/servers/${encodeURIComponent(id)}/connect`, {});
+        } catch (e) {
+          alert(t("mcp.oauthStartFailed", { error: e instanceof Error ? e.message : "" }));
+        }
+      }
       await load();
       onRefreshAction?.();
     } catch (err) {
@@ -142,6 +161,14 @@ export function McpDrafts({ onRefreshAction }: { onRefreshAction?: () => void })
                 </h3>
                 {d.git_url && (
                   <p className="mt-1 truncate font-mono text-xs text-muted">{d.git_url}</p>
+                )}
+                {d.manifest_meta?.remoteRegistration?.urlLocked && d.url && (
+                  <div className="mt-1 space-y-0.5">
+                    <p className="flex items-center gap-1 truncate font-mono text-xs text-muted" title={d.url}>
+                      <Globe className="h-3.5 w-3.5 shrink-0 text-accent" />{d.url}
+                    </p>
+                    <p className="text-xs text-muted">{t("mcp.remoteOauthNote")}</p>
+                  </div>
                 )}
               </div>
               <div className="flex shrink-0 gap-2">

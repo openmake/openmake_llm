@@ -237,6 +237,18 @@ export class McpCatalogRepository {
         return result.rows[0] ? maskEnv(result.rows[0]) : null;
     }
 
+    /**
+     * 서버 승인 상태(draft·active·archived) — 승인 전 연결 차단(원격 관리 등록 opt-in)이 쓴다.
+     * getServerById 의 응답 모양(클라이언트로 나간다)을 바꾸지 않으려고 따로 읽는다. 없으면 null.
+     */
+    async getServerStatus(serverId: string): Promise<string | null> {
+        const result = await this.pool.query<{ status: string | null }>(
+            'SELECT status FROM mcp_servers WHERE id = $1',
+            [serverId],
+        );
+        return result.rows[0] ? (result.rows[0].status ?? 'active') : null;
+    }
+
     async listInstances(userId: string): Promise<McpInstance[]> {
         const result = await this.pool.query<McpInstance>(
             `SELECT id, mcp_server_id, user_id, pid, status,

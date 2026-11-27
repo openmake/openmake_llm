@@ -23,6 +23,7 @@ import { classifyConnectError, serializeConnectError } from './connect-error';
 import { MCP_SANDBOX_EGRESS_REQUIRED_CODE, MCP_SANDBOX_REQUIRED_CODE } from './sandbox-docker';
 import { recordSecurityAudit } from '../../runtime-ports/audit-port';
 import { USER_POOL_IDLE_TTL_MS } from '../../config/timeouts';
+import { extensionRemoteMcpEnabled, EXTENSION_REMOTE_MCP_CODES } from '../../runtime-ports/extension-remote-mcp';
 
 const logger = createLogger('LifecycleSupervisor');
 
@@ -50,7 +51,8 @@ type ClientFactory = (config: ServerSpawnConfig) => ExternalMCPClient;
 
 interface SupervisorDeps {
     userPool: UserMCPPool;
-    repo: Pick<McpCatalogRepository, 'listUserServers' | 'recordToolsRefreshed' | 'getServerById' | 'decryptEnvForSpawn' | 'recordInstanceTransition' | 'getCatalogToolAllowlist' | 'listAutoSpawnUserIds' | 'closeOrphanInstances'>;
+    repo: Pick<McpCatalogRepository, 'listUserServers' | 'recordToolsRefreshed' | 'getServerById' | 'decryptEnvForSpawn' | 'recordInstanceTransition' | 'getCatalogToolAllowlist' | 'listAutoSpawnUserIds' | 'closeOrphanInstances'>
+        & Partial<Pick<McpCatalogRepository, 'getServerStatus'>>;
     clientFactory: ClientFactory;
 }
 
@@ -226,6 +228,14 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
         if (!server) throw new Error(`server not found: ${serverId}`);
         if (server.user_id !== userId) {
             throw new Error(`서버 소유자 불일치: u=${userId} owner=${server.user_id}`);
+        }
+        // 원격 관리 등록 opt-in — 승인 전(draft)·회수된(archived) 서버는 수동 연결·OAuth 콜백 연결도 띄우지 않는다.
+        // 자동 경로(로그인·채팅 시작·부팅 복원)는 enabled+auto_spawn 조건이라 원래 draft 를 띄우지 않는다.
+        if (extensionRemoteMcpEnabled() && this.repo.getServerStatus) {
+            const status = await this.repo.getServerStatus(serverId);
+            if (status !== 'active') {
+                throw new Error(`${EXTENSION_REMOTE_MCP_CODES.NOT_APPROVED}: 승인되지 않은 서버는 연결할 수 없습니다 (s=${serverId} status=${status})`);
+            }
         }
         return this.safeSpawn(userId, serverId);
     }

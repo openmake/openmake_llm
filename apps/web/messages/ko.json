@@ -1307,7 +1307,8 @@
     "visibilityOrganization": "조직 공유",
     "orgBadge": "조직",
     "visibilityAria": "에이전트 공개 범위",
-    "viewSystemPrompt": "시스템 프롬프트 보기"
+    "viewSystemPrompt": "시스템 프롬프트 보기",
+    "agentOrigin": "출처: {source}"
   },
   "research": {
     "pageTitle": "딥 리서치 히스토리",
@@ -2670,6 +2671,13 @@
         "endpointMoved": "이 서버는 {date} 에 {url} 로 이동합니다 — 새 주소에서 다시 로그인해야 합니다.",
         "remoteAuth": "원격 서버 — 승인 뒤 로그인(OAuth)이 필요할 수 있습니다."
       }
+    },
+    "deployment": {
+      "required": "필수",
+      "defaultOn": "자동 설치",
+      "requiredHint": "조직이 필수로 배포했습니다 — 지울 수 없습니다",
+      "defaultOnHint": "조직이 자동 설치했습니다 — 지우면 다시 설치하지 않습니다",
+      "removeLocked": "조직이 필수로 배포한 확장은 지울 수 없습니다"
     }
   },
   "mcpInstances": {
@@ -2717,7 +2725,9 @@
       "actionFailed": "처리 실패: {error}",
       "envRequired": "필수 환경변수 — 실제 값을 입력해야 승인됩니다",
       "envPlaceholder": "값 입력",
-      "envMissing": "값이 필요합니다: {keys}"
+      "envMissing": "값이 필요합니다: {keys}",
+      "remoteOauthNote": "확장이 선언한 원격 주소로 고정됩니다. 승인하면 OAuth 로그인으로 이어집니다.",
+      "oauthStartFailed": "승인했지만 OAuth 로그인을 시작하지 못했습니다. 설정 → 커넥터에서 로그인하세요. {error}"
     },
     "agents": {
       "title": "커스텀 에이전트",
@@ -2858,7 +2868,8 @@
       "TOOL_APPROVAL_POLICY_MIN": "에이전트 작업 승인 정책 하한. 요청값보다 엄격하면 하한이 적용됩니다.",
       "MCP_ALLOWED_SERVERS": "설치를 허용할 MCP 카탈로그 템플릿 id 목록(쉼표 구분). 비우면 제한 없음.",
       "BROWSER_SITE_POLICY": "이 조직의 브라우저 사이트 정책. 거부 목록은 글로벌과 합쳐집니다. 허용 목록은 글로벌에 허용 목록이 있으면 양쪽에 똑같이 있는 항목만 남고, 글로벌이 비어 있으면 조직 목록을 씁니다. 해제하면 글로벌을 따릅니다.",
-      "EXTENSION_SOURCE_POLICY": "확장 원본 허용·차단 규칙 JSON(github·git·archive·hostPattern·catalog·internal·local). 차단은 어느 층이든 걸리면 막고, 허용 목록은 글로벌과 조직에 모두 있으면 양쪽에서 일치해야 합니다. allow 를 빼면 제한 없음, [] 이면 전부 차단. EXTENSION_SOURCE_POLICY_ENFORCED 가 켜져 있을 때만 적용됩니다."
+      "EXTENSION_SOURCE_POLICY": "확장 원본 허용·차단 규칙 JSON(github·git·archive·hostPattern·catalog·internal·local). 차단은 어느 층이든 걸리면 막고, 허용 목록은 글로벌과 조직에 모두 있으면 양쪽에서 일치해야 합니다. allow 를 빼면 제한 없음, [] 이면 전부 차단. EXTENSION_SOURCE_POLICY_ENFORCED 가 켜져 있을 때만 적용됩니다.",
+      "EXTENSION_MCP_SERVER_POLICY": "확장 MCP 서버 허용·차단 매처 JSON — 규칙 type 은 url(원격: 스킴·호스트·포트·경로 접두, 호스트 *.example.com 가능)과 command(stdio: 실행 파일 + 선택 package — npx @scope/pkg@1.2.3·@scope/*, uvx pkg==1.0, docker 이미지 ghcr.io/org/img:tag). 차단은 어느 층이든 걸리면 막고 넓게(대소문자·경로 우회·같은 계열 실행기·셸 감싸기까지) 맞추며, 허용 목록은 글로벌과 조직에 모두 있으면 양쪽에서 일치해야 합니다. allow 를 빼면 제한 없음, [] 이면 전부 차단, 깨진 값도 전부 차단. EXTENSION_MCP_SERVER_POLICY_ENFORCED 가 켜져 있을 때만 적용됩니다."
     },
     "history": "변경 이력",
     "noHistory": "변경 이력이 없습니다.",
@@ -3174,7 +3185,13 @@
     "reason": "사유",
     "rule": "일치한 규칙",
     "scopeOrg": "조직 정책",
-    "scopeGlobal": "전역 정책"
+    "scopeGlobal": "전역 정책",
+    "mcpPreviewTitle": "MCP 서버 정책 미리보기",
+    "mcpPreviewHelp": "확장 MCP 서버 정책을 강제로 켰을 때 위 설치들의 MCP 서버 중 막힐 서버입니다(설치 경로와 같은 판정). 강제가 켜지면 설치·업데이트에서 이 서버만 빠지고 나머지 구성요소는 설치됩니다.",
+    "mcpPreviewSummary": "MCP 서버 {checked}개 중 {blocked}개가 막힙니다.",
+    "mcpPreviewUnavailable": "MCP 서버 구성요소를 읽지 못해 MCP 서버 정책은 판정하지 않았습니다.",
+    "mcpServer": "MCP 서버",
+    "mcpIdentity": "식별(정규화)"
   },
   "knowledge": {
     "serverError": "서버 오류가 발생했습니다",
@@ -3619,5 +3636,33 @@
     "pageInfo": "{from}–{to} / {total}",
     "prev": "이전",
     "next": "다음"
+  },
+  "orgExtensionDeployments": {
+    "title": "확장 배포 모드",
+    "description": "조직에 공개된 확장마다 배포 방식을 고릅니다. 갤러리에만(기본) · 자동 설치(멤버가 지울 수 있음) · 필수(일반 멤버는 지울 수 없음). 설치는 멤버 계정으로 진행되고 스킬·MCP 서버는 각자 승인합니다.",
+    "saveFailed": "저장 실패: {error}",
+    "groupsTitle": "그룹",
+    "groupNamePlaceholder": "새 그룹 이름",
+    "addGroup": "그룹 추가",
+    "noGroups": "그룹이 없습니다.",
+    "memberCount": "멤버 {count}명",
+    "deleteGroup": "그룹 삭제",
+    "deleteGroupConfirm": "그룹 \"{name}\"을(를) 삭제할까요? 이 그룹의 덮어쓰기도 함께 지워집니다.",
+    "removeGroupMember": "그룹에서 빼기",
+    "addGroupMember": "멤버 추가",
+    "itemsTitle": "조직 공개 확장",
+    "noItems": "이 조직에 공개된 확장이 없습니다.",
+    "item": "확장",
+    "defaultMode": "기본값",
+    "installed": "설치됨",
+    "defaultModeAria": "{name} 기본 배포 모드",
+    "groupModeAria": "{name} — {group} 그룹 덮어쓰기",
+    "inherit": "기본값 따름",
+    "ruleHint": "그룹 덮어쓰기가 기본값보다 우선하고, 멤버가 여러 그룹에 속하면 가장 강한 값(필수 > 자동 설치 > 갤러리에만)을 따릅니다.",
+    "modes": {
+      "default_off": "갤러리에만",
+      "default_on": "자동 설치",
+      "required": "필수"
+    }
   }
 }

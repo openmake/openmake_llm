@@ -20,7 +20,9 @@ export type ResourceKind =
     | 'mcp_server'
     | 'agent_task_template'
     | 'artifact'
-    | 'agent_task';
+    | 'agent_task'
+    | 'org_extension'
+    | 'org_extension_deployment';
 
 export type ResourceAction = 'read' | 'write' | 'delete';
 
@@ -41,9 +43,32 @@ const PRIVATE_POLICY: ActionPolicy = {
     delete: ['admin', 'owner'],
 };
 
+/**
+ * 조직 소유 확장(212, opt-in EXTENSION_ORG_OWNED_INSTALL_ENABLED) — 소유자가 사람이 아니라 조직(ownerId 없음).
+ * 설치(=그 조직에 대한 write)·수정·업데이트·제거는 그 조직의 관리자(owner·admin) 누구나, 멤버는 읽기만.
+ * 설치한 사람의 개인 권한은 없다(owner 주체가 생기지 않는다 — 조직을 떠나면 권한도 없다).
+ */
+const ORG_OWNED_POLICY: ActionPolicy = {
+    read: ['admin', 'org_owner', 'org_admin', 'org_member'],
+    write: ['admin', 'org_owner', 'org_admin'],
+    delete: ['admin', 'org_owner', 'org_admin'],
+};
+
+/**
+ * 조직 관리 자원(확장 배포 모드·그룹, §8-1) — 소유자 축이 없고(ownerId null) 조직 owner/admin·시스템 admin 만 읽고 바꾼다.
+ * 일반 멤버는 자기에게 적용된 결과만 갤러리·설치 목록에서 본다(이 정책의 read 가 아니다).
+ */
+const ORG_ADMIN_POLICY: ActionPolicy = {
+    read: ['admin', 'org_owner', 'org_admin'],
+    write: ['admin', 'org_owner', 'org_admin'],
+    delete: ['admin', 'org_owner', 'org_admin'],
+};
+
 export const RESOURCE_POLICY: Partial<Record<ResourceKind, ActionPolicy>> = {
     generic: PRIVATE_POLICY,
     agent_task: PRIVATE_POLICY,
+    org_extension: ORG_OWNED_POLICY,
+    org_extension_deployment: ORG_ADMIN_POLICY,
 };
 
 /** 종류별 정책 — 미등록 종류는 DEFAULT_POLICY. */

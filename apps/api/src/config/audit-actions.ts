@@ -64,6 +64,8 @@ const BASE_AUDIT_ACTION_SEVERITY = {
     // ── 운영 설정 ──
     // 조직 정책 변경(129) — 외부 모델 차단·승인 하한·MCP 허용 목록
     'org.policy_changed': 'warning',
+    // 조직 확장 배포 모드·그룹 변경(§8-1, 208·209) — 감사 기록만(알림 없음)
+    'org.extension_deployment_changed': null,
     // 운영 구성 내보내기/가져오기 (F22 Phase E)
     'config.exported': 'warning',
     'config.imported': 'critical',
@@ -80,6 +82,12 @@ const BASE_AUDIT_ACTION_SEVERITY = {
     'extension.permissions_revoked': null,
     // 확장 원본 정책(M2)이 설치·업데이트·동기화를 거절 — 감사 기록만(차단 빈도가 높을 수 있어 알림 없음)
     'extension.source_blocked': null,
+    // 조직 소유 확장 설치·업데이트·제거(212, opt-in) — 감사 기록만
+    'extension.org_owned_installed': null,
+    'extension.org_owned_updated': null,
+    'extension.org_owned_removed': null,
+    // 확장 MCP 서버 정책(§8-3)이 MCP 서버 등록을 거절 — 감사 기록만(알림 없음)
+    'extension.mcp_server_blocked': null,
     'alert.acknowledged': null,
     'tool_circuit_reset': null,
 
