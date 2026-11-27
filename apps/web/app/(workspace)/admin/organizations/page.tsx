@@ -23,12 +23,13 @@ interface AdminUser { id: string; email: string; username?: string }
 
 const inputCls = "h-9 w-full rounded-md border border-border bg-surface-2 px-2 text-sm text-fg focus:border-accent focus:outline-none";
 const selectCls = "h-9 rounded-md border border-border bg-surface-2 px-2 text-sm text-fg focus:border-accent focus:outline-none";
-const POLICY_KEYS = ["EXTERNAL_MODEL_POLICY", "TOOL_APPROVAL_POLICY_MIN", "MCP_ALLOWED_SERVERS", "EXTENSION_SOURCE_POLICY"] as const;
+const POLICY_KEYS = ["EXTERNAL_MODEL_POLICY", "TOOL_APPROVAL_POLICY_MIN", "MCP_ALLOWED_SERVERS", "EXTENSION_SOURCE_POLICY", "EXTENSION_MCP_SERVER_POLICY"] as const;
 /** 값이 JSON 객체인 정책 키 */
-const JSON_POLICY_KEYS: ReadonlySet<string> = new Set(["EXTERNAL_MODEL_POLICY", "EXTENSION_SOURCE_POLICY"]);
+const JSON_POLICY_KEYS: ReadonlySet<string> = new Set(["EXTERNAL_MODEL_POLICY", "EXTENSION_SOURCE_POLICY", "EXTENSION_MCP_SERVER_POLICY"]);
 const POLICY_PLACEHOLDERS: Record<string, string> = {
   EXTERNAL_MODEL_POLICY: '{"deny":["openrouter:*"]}',
   EXTENSION_SOURCE_POLICY: '{"allow":[{"type":"github","repo":"openmake/*"}],"deny":[]}',
+  EXTENSION_MCP_SERVER_POLICY: '{"allow":[{"type":"command","command":"npx","package":"@modelcontextprotocol/*"},{"type":"url","url":"https://mcp.example.com"}],"deny":[]}',
   MCP_ALLOWED_SERVERS: "mcp-github, mcp-notion",
 };
 const ROLES: OrgRole[] = ["owner", "admin", "member"];

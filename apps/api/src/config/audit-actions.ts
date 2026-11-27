@@ -82,6 +82,8 @@ const BASE_AUDIT_ACTION_SEVERITY = {
     'extension.permissions_revoked': null,
     // 확장 원본 정책(M2)이 설치·업데이트·동기화를 거절 — 감사 기록만(차단 빈도가 높을 수 있어 알림 없음)
     'extension.source_blocked': null,
+    // 확장 MCP 서버 정책(§8-3)이 MCP 서버 등록을 거절 — 감사 기록만(알림 없음)
+    'extension.mcp_server_blocked': null,
     'alert.acknowledged': null,
     'tool_circuit_reset': null,
 

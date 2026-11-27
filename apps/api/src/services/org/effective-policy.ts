@@ -13,6 +13,7 @@ import { resolveExternalModelPolicy, type ExternalModelPolicy } from '../../conf
 import { APPROVAL_POLICY_STRICTNESS, ORG_POLICY_KEYS, ORG_POLICY_SCHEMAS, type OrgPolicyKey } from '../../config/org-policy-registry';
 import { ORG_CONTEXT } from '../../config/runtime-limits';
 import { parseExtensionSourcePolicy, type ExtensionSourcePolicyLayer } from '../../config/extension-source-policy';
+import { parseExtensionMcpServerPolicy, type ExtensionMcpServerPolicyLayer } from '../../config/extension-mcp-server-policy';
 import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { activeOrgForStrict, membershipsForStrict, type OrgContext } from './membership-cache';
 
@@ -26,6 +27,8 @@ export interface OrgPolicySet {
     browserSite?: BrowserSitePolicy;
     /** 확장 원본 정책 조직 층 — 깨진 값도 전부 차단 층으로 남긴다(fail-closed) */
     extensionSource?: ExtensionSourcePolicyLayer;
+    /** 확장 MCP 서버 정책 조직 층(§8-3) — 깨진 값도 전부 차단 층으로 남긴다(fail-closed) */
+    extensionMcpServer?: ExtensionMcpServerPolicyLayer;
 }
 
 export interface EffectivePolicy {
@@ -40,6 +43,8 @@ export interface EffectivePolicy {
     browserSite: BrowserSitePolicy;
     /** 확장 원본 정책의 **조직 층**(전역 층은 소비처가 따로 읽어 층으로 겹친다) — undefined = 조직 층 없음 */
     extensionSource?: ExtensionSourcePolicyLayer;
+    /** 확장 MCP 서버 정책의 **조직 층**(§8-3) — undefined = 조직 층 없음 */
+    extensionMcpServer?: ExtensionMcpServerPolicyLayer;
     orgId: string | null;
 }
 
@@ -49,6 +54,10 @@ export function parseOrgPolicyRows(rows: Array<{ key: string; value: unknown }>)
     for (const row of rows) {
         if (row.key === ORG_POLICY_KEYS.EXTENSION_SOURCE_POLICY) {
             out.extensionSource = parseExtensionSourcePolicy(row.value, 'organization');
+            continue;
+        }
+        if (row.key === ORG_POLICY_KEYS.EXTENSION_MCP_SERVER_POLICY) {
+            out.extensionMcpServer = parseExtensionMcpServerPolicy(row.value, 'organization');
             continue;
         }
         const schema = ORG_POLICY_SCHEMAS[row.key as OrgPolicyKey];
@@ -180,6 +189,7 @@ function mergeEffectivePolicy(org: OrgContext | null, set: OrgPolicySet): Effect
         addonAllowlist: set.addonAllowlist,
         browserSite: mergeBrowserSitePolicy(globalSite, set.browserSite),
         extensionSource: set.extensionSource,
+        extensionMcpServer: set.extensionMcpServer,
         orgId: org.orgId,
     };
 }

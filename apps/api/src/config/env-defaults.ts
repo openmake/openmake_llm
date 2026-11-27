@@ -66,6 +66,8 @@ export const DEFAULT_CONFIG: EnvConfig = {
     addonListReflectDbState: false,
     extensionArbitraryUrlInstall: 'allow',
     extensionSourcePolicy: '',
+    extensionMcpServerPolicyEnforced: false,
+    extensionMcpServerPolicy: '',
     extensionCatalogAutoSyncEnabled: false,
     extensionCatalogSyncIntervalMs: 6 * 60 * 60 * 1000,
     extensionCatalogIndexEnabled: false,

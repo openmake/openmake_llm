@@ -28,6 +28,7 @@ import { ConventionChecker, isBlockedByConvention, type ConventionFinding } from
 import { McpServerDraftRepository } from '../data/mcp-server-draft-repository';
 import { MCP_INGEST, SKILL_CREATOR } from '../../../config/constants';
 import { assertInstallSourceAllowed } from '../../../runtime-ports/extension-source-policy';
+import { assertMcpServerRegistrationAllowed } from '../../../runtime-ports/extension-mcp-server-policy';
 
 const logger = createLogger('McpServerIngestService');
 
@@ -115,6 +116,12 @@ export class McpServerIngestService {
             throw new Error(`INVALID_MCPSERVER_MANIFEST: ${validation.errors.join('; ')}`);
         }
         const manifest = validation.manifest;
+        // 확장 MCP 서버 정책(§8-3, opt-in, Base) — LLM 검사·저장 전. 서버 하나짜리 설치라 거절 = 설치 거절(403)
+        await assertMcpServerRegistrationAllowed({
+            userId: input.userId,
+            origin: 'git-ingest',
+            server: { name: manifest.name, transport: manifest.transport_type, command: manifest.command, args: manifest.args, url: manifest.url },
+        });
 
         const llm = this.opts.llmClientFactory(SKILL_CREATOR.authorModel);
         const checker = new ConventionChecker(llm);
