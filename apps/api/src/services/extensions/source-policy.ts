@@ -260,9 +260,21 @@ export interface ExtensionSourceGate {
     evaluate(req: { url: string; ref?: string | null; action: ExtensionSourceAction; gitFirst?: boolean }): SourceVerdict;
 }
 
-/** 정책을 한 번 해석해 여러 원본을 판정한다(카탈로그 동기화의 항목 프로브). 강제 OFF 면 null. */
-export async function loadExtensionSourceGate(userId: string | undefined, deps: ExtensionSourcePolicyDeps = defaultDeps): Promise<ExtensionSourceGate | null> {
-    if (!EXTENSION_SOURCE_POLICY_SETTINGS.enforced) return null;
+export interface LoadExtensionSourceGateOptions {
+    /**
+     * 강제 플래그와 무관하게 해석한다 — 관리자 정책 미리보기(M3)가 "켜면 무엇이 막히는지"를 **같은 판정**으로 보여 주는 길.
+     * 실제 설치 경로는 이 옵션을 쓰지 않는다(강제 OFF = 종전 동작).
+     */
+    force?: boolean;
+}
+
+/** 정책을 한 번 해석해 여러 원본을 판정한다(카탈로그 동기화의 항목 프로브). 강제 OFF 면 null(`force` 면 그래도 해석). */
+export async function loadExtensionSourceGate(
+    userId: string | undefined,
+    deps: ExtensionSourcePolicyDeps = defaultDeps,
+    opts: LoadExtensionSourceGateOptions = {},
+): Promise<ExtensionSourceGate | null> {
+    if (!EXTENSION_SOURCE_POLICY_SETTINGS.enforced && !opts.force) return null;
     const layers: ExtensionSourcePolicyLayer[] = [];
     const globalLayer = EXTENSION_SOURCE_POLICY_SETTINGS.globalLayer;
     if (globalLayer) layers.push(globalLayer);

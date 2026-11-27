@@ -61,6 +61,7 @@ export const DEFAULT_CONFIG: EnvConfig = {
     browserSitePolicy: '',
     extensionSourcePolicyEnforced: false,
     extensionInstallPreviewEnabled: false,
+    extensionAdminInventoryEnabled: false,
     extensionArbitraryUrlInstall: 'allow',
     extensionSourcePolicy: '',
     extensionCatalogAutoSyncEnabled: false,

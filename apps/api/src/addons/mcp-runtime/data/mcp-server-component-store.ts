@@ -17,6 +17,9 @@ import { McpServerDraftRepository } from './mcp-server-draft-repository';
 const EXPORT_COLUMNS = `id, name, transport_type, command, args, url,
                     COALESCE((SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(COALESCE(env, '{}'::jsonb)) k), '{}') AS env_keys`;
 
+/** Postgres undefined_table */
+const UNDEFINED_TABLE = '42P01';
+
 export function mcpServerComponentStore(db: StoreDb): McpServerComponentStore {
     /** 종전 BaseRepository.query 와 같은 재시도 래퍼 */
     const retried = <T extends Record<string, unknown> = Record<string, unknown>>(sql: string, params: unknown[]) =>
@@ -84,6 +87,51 @@ export function mcpServerComponentStore(db: StoreDb): McpServerComponentStore {
                 [extensionId],
             );
             return r.rows;
+        },
+
+        async listLinkedDetails(extensionIds) {
+            if (extensionIds.length === 0) return [];
+            type DetailRow = {
+                id: string; extension_id: string; name: string; status: string; enabled: boolean; transport_type: string;
+                auth_method: string | null; protocol_era: string | null; protocol_version: string | null;
+                sdk_generation: string | null; observed_at: Date | string | null;
+            };
+            const base = `SELECT s.id, s.extension_id, s.name, s.status, s.enabled, s.transport_type`;
+            let rows: DetailRow[];
+            try {
+                rows = (await retried<DetailRow>(
+                    `${base}, o.auth_method, o.protocol_era, o.protocol_version, o.sdk_generation, o.observed_at
+                       FROM mcp_servers s
+                       LEFT JOIN mcp_negotiation_observations o ON o.server_id = s.id
+                      WHERE s.extension_id = ANY($1::text[]) ORDER BY s.name`,
+                    [extensionIds],
+                )).rows;
+            } catch (e) {
+                // 관측 표(팩 마이그레이션 addon:mcp-runtime:001)가 없는 DB — 협상 열 없이 돌려준다
+                if ((e as { code?: string }).code !== UNDEFINED_TABLE) throw e;
+                rows = (await retried<DetailRow>(
+                    `${base}, NULL AS auth_method, NULL AS protocol_era, NULL AS protocol_version, NULL AS sdk_generation, NULL AS observed_at
+                       FROM mcp_servers s WHERE s.extension_id = ANY($1::text[]) ORDER BY s.name`,
+                    [extensionIds],
+                )).rows;
+            }
+            return rows.map((r) => ({
+                id: r.id,
+                extensionId: r.extension_id,
+                name: r.name,
+                status: r.status,
+                enabled: r.enabled === true,
+                transport: r.transport_type,
+                negotiation: r.observed_at && r.auth_method && r.sdk_generation
+                    ? {
+                        authMethod: r.auth_method,
+                        protocolEra: r.protocol_era,
+                        protocolVersion: r.protocol_version,
+                        sdkGeneration: r.sdk_generation,
+                        observedAt: r.observed_at instanceof Date ? r.observed_at.toISOString() : String(r.observed_at),
+                    }
+                    : null,
+            }));
         },
 
         async archiveLinked(extensionId, { unlink }) {

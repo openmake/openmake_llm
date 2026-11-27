@@ -81,3 +81,4 @@ export { default as conversationFoldersRouter } from './conversation-folders.rou
 // Knowledge Base 라우트: 2026-05-19 제거 (메타데이터 CRUD만, 채팅 미연결 — dead code)
 
 export { adminAddonsRouter } from './admin-addons.routes';
+export { adminExtensionsRouter } from './admin-extensions.routes';
