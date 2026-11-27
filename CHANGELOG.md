@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.151.0](https://github.com/openmake/openmake_llm/compare/v1.150.0...v1.151.0) (2026-11-27)
+
+
+### ✨ 기능
+
+* **extensions:** admin extension inventory and source-policy preview (M3) ([b88f8f6](https://github.com/openmake/openmake_llm/commit/b88f8f6027b06e8f6e7da06e7d4106e2f6e0aef3))
+* **extensions:** admin extension inventory and source-policy preview (M3) ([d236109](https://github.com/openmake/openmake_llm/commit/d2361095645f9e7aaa471678df0c5354d3dda8dc))
+
 ## [1.150.0](https://github.com/openmake/openmake_llm/compare/v1.149.3...v1.150.0) (2026-11-27)
 
 
