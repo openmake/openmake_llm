@@ -43,6 +43,19 @@ describe('개인 자원(agent_task) 은 조직 역할을 무시한다', () => {
     });
 });
 
+describe('조직 관리 자원(org_extension_deployment, §8-1) 은 조직 owner/admin·시스템 admin 만', () => {
+    const ORG = { ownerId: null, orgId: 'o1' };
+    const cases: Array<[keyof typeof actors, boolean]> = [
+        ['admin', true], ['orgOwner', true], ['orgAdmin', true],
+        ['orgMember', false], ['otherOrg', false], ['stranger', false], ['guest', false], ['owner', false],
+    ];
+    test.each(cases)('%s → read·write·delete=%s', (who, ok) => {
+        for (const action of ['read', 'write', 'delete'] as const) {
+            expect(canAccess('org_extension_deployment', action, ORG, actors[who])).toBe(ok);
+        }
+    });
+});
+
 describe('인스턴스 공유(visibility shared) 는 읽기 전용', () => {
     const shared = { ownerId: 'u-owner', orgId: null, visibility: 'shared' };
     test('타인이 읽기는 되고 쓰기·삭제는 안 된다', () => {

@@ -2670,6 +2670,13 @@
         "endpointMoved": "This server moves to {url} on {date} — you will need to sign in again at the new address.",
         "remoteAuth": "Remote server — sign-in (OAuth) may be required after approval."
       }
+    },
+    "deployment": {
+      "required": "Required",
+      "defaultOn": "Auto-installed",
+      "requiredHint": "Required by your organization — cannot be removed",
+      "defaultOnHint": "Installed automatically by your organization — it won't be reinstalled if you remove it",
+      "removeLocked": "Extensions your organization requires cannot be removed"
     }
   },
   "mcpInstances": {
@@ -3619,5 +3626,33 @@
     "pageInfo": "{from}–{to} of {total}",
     "prev": "Previous",
     "next": "Next"
+  },
+  "orgExtensionDeployments": {
+    "title": "Extension deployment modes",
+    "description": "Choose how each extension shared with the organization is deployed: gallery only (default) · auto-install (members can remove it) · required (regular members cannot remove it). Installs run under each member's account, and skills and MCP servers are approved by each member.",
+    "saveFailed": "Save failed: {error}",
+    "groupsTitle": "Groups",
+    "groupNamePlaceholder": "New group name",
+    "addGroup": "Add group",
+    "noGroups": "No groups yet.",
+    "memberCount": "{count} members",
+    "deleteGroup": "Delete group",
+    "deleteGroupConfirm": "Delete group \"{name}\"? Its overrides are deleted too.",
+    "removeGroupMember": "Remove from group",
+    "addGroupMember": "Add member",
+    "itemsTitle": "Extensions shared with the organization",
+    "noItems": "No extensions are shared with this organization.",
+    "item": "Extension",
+    "defaultMode": "Default",
+    "installed": "Installed",
+    "defaultModeAria": "Default deployment mode for {name}",
+    "groupModeAria": "{name} — override for group {group}",
+    "inherit": "Use default",
+    "ruleHint": "Group overrides take precedence over the default; a member in several groups gets the strongest value (required > auto-install > gallery only).",
+    "modes": {
+      "default_off": "Gallery only",
+      "default_on": "Auto-install",
+      "required": "Required"
+    }
   }
 }

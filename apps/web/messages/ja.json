@@ -2670,6 +2670,13 @@
         "endpointMoved": "このサーバーは {date} に {url} へ移行します — 新しいアドレスで再ログインが必要です。",
         "remoteAuth": "リモートサーバー — 承認後にログイン(OAuth)が必要な場合があります。"
       }
+    },
+    "deployment": {
+      "required": "必須",
+      "defaultOn": "自動インストール",
+      "requiredHint": "組織が必須として配布しています — 削除できません",
+      "defaultOnHint": "組織が自動でインストールしました — 削除すると再インストールされません",
+      "removeLocked": "組織が必須として配布した拡張は削除できません"
     }
   },
   "mcpInstances": {
@@ -3619,5 +3626,33 @@
     "pageInfo": "{from}–{to} / {total}",
     "prev": "前へ",
     "next": "次へ"
+  },
+  "orgExtensionDeployments": {
+    "title": "拡張の配布モード",
+    "description": "組織に公開された拡張ごとに配布方法を選びます。ギャラリーのみ(既定)・自動インストール(メンバーが削除可能)・必須(一般メンバーは削除不可)。インストールは各メンバーのアカウントで行われ、スキルと MCP サーバーは各自が承認します。",
+    "saveFailed": "保存に失敗しました: {error}",
+    "groupsTitle": "グループ",
+    "groupNamePlaceholder": "新しいグループ名",
+    "addGroup": "グループを追加",
+    "noGroups": "グループがありません。",
+    "memberCount": "メンバー {count} 人",
+    "deleteGroup": "グループを削除",
+    "deleteGroupConfirm": "グループ「{name}」を削除しますか?このグループの上書きも削除されます。",
+    "removeGroupMember": "グループから外す",
+    "addGroupMember": "メンバーを追加",
+    "itemsTitle": "組織に公開された拡張",
+    "noItems": "この組織に公開された拡張はありません。",
+    "item": "拡張",
+    "defaultMode": "既定",
+    "installed": "インストール済み",
+    "defaultModeAria": "{name} の既定の配布モード",
+    "groupModeAria": "{name} — グループ {group} の上書き",
+    "inherit": "既定に従う",
+    "ruleHint": "グループの上書きは既定より優先され、複数のグループに属するメンバーには最も強い値(必須 > 自動インストール > ギャラリーのみ)が適用されます。",
+    "modes": {
+      "default_off": "ギャラリーのみ",
+      "default_on": "自動インストール",
+      "required": "必須"
+    }
   }
 }

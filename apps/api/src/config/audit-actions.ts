@@ -64,6 +64,8 @@ const BASE_AUDIT_ACTION_SEVERITY = {
     // ── 운영 설정 ──
     // 조직 정책 변경(129) — 외부 모델 차단·승인 하한·MCP 허용 목록
     'org.policy_changed': 'warning',
+    // 조직 확장 배포 모드·그룹 변경(§8-1, 208·209) — 감사 기록만(알림 없음)
+    'org.extension_deployment_changed': null,
     // 운영 구성 내보내기/가져오기 (F22 Phase E)
     'config.exported': 'warning',
     'config.imported': 'critical',
