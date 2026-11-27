@@ -1307,7 +1307,8 @@
     "visibilityOrganization": "Organization",
     "orgBadge": "Org",
     "visibilityAria": "Agent visibility",
-    "viewSystemPrompt": "View system prompt"
+    "viewSystemPrompt": "View system prompt",
+    "agentOrigin": "Source: {source}"
   },
   "research": {
     "pageTitle": "Deep Research History",

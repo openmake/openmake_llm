@@ -90,6 +90,8 @@ export interface EnvConfig {
     extensionSourcePolicyEnforced: boolean;
     /** 확장 설치 미리보기(M1b) — config/extension-install-preview */
     extensionInstallPreviewEnabled: boolean;
+    /** 확장 Custom Agent 출처 표시·제거 시 승인 전 에이전트 이름 정리(P8) — config/extension-agent-provenance (기본 OFF) */
+    extensionAgentBundleProvenance: boolean;
     /** 확장 번들 원격 MCP 관리 등록(P8) — config/extension-remote-mcp (기본 OFF) */
     extensionRemoteMcpEnabled: boolean;
     /** 조직 확장 배포 모드(§8-1) — 항목별 default_off/default_on/required + 그룹 덮어쓰기 + 자동 설치 조정(기본 OFF) */
@@ -291,6 +293,7 @@ export function loadConfig(): EnvConfig {
         BROWSER_SITE_POLICY: env('BROWSER_SITE_POLICY'),
         EXTENSION_SOURCE_POLICY_ENFORCED: env('EXTENSION_SOURCE_POLICY_ENFORCED'),
         EXTENSION_INSTALL_PREVIEW_ENABLED: env('EXTENSION_INSTALL_PREVIEW_ENABLED'),
+        EXTENSION_AGENT_BUNDLE_PROVENANCE: env('EXTENSION_AGENT_BUNDLE_PROVENANCE'),
         EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED: env('EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED'),
         EXTENSION_ADMIN_INVENTORY_ENABLED: env('EXTENSION_ADMIN_INVENTORY_ENABLED'),
         EXTENSION_REMOTE_MCP_ENABLED: env('EXTENSION_REMOTE_MCP_ENABLED'),
@@ -431,6 +434,7 @@ export function loadConfig(): EnvConfig {
         // 확장 원본 정책(M2) — 알 수 없는 값은 기본값(종전 동작). 부팅을 막지 않게 스키마는 문자열로 받는다
         extensionSourcePolicyEnforced: parsed.EXTENSION_SOURCE_POLICY_ENFORCED === undefined ? DEFAULT_CONFIG.extensionSourcePolicyEnforced : parsed.EXTENSION_SOURCE_POLICY_ENFORCED === 'true',
         extensionInstallPreviewEnabled: parsed.EXTENSION_INSTALL_PREVIEW_ENABLED === undefined ? DEFAULT_CONFIG.extensionInstallPreviewEnabled : parsed.EXTENSION_INSTALL_PREVIEW_ENABLED === 'true',
+        extensionAgentBundleProvenance: parsed.EXTENSION_AGENT_BUNDLE_PROVENANCE === undefined ? DEFAULT_CONFIG.extensionAgentBundleProvenance : parsed.EXTENSION_AGENT_BUNDLE_PROVENANCE === 'true',
         extensionRemoteMcpEnabled: parsed.EXTENSION_REMOTE_MCP_ENABLED === undefined ? DEFAULT_CONFIG.extensionRemoteMcpEnabled : parsed.EXTENSION_REMOTE_MCP_ENABLED === 'true',
         extensionOrgDeploymentModesEnabled: parsed.EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED === 'true',
         extensionAdminInventoryEnabled: parsed.EXTENSION_ADMIN_INVENTORY_ENABLED === undefined ? DEFAULT_CONFIG.extensionAdminInventoryEnabled : parsed.EXTENSION_ADMIN_INVENTORY_ENABLED === 'true',
