@@ -2717,7 +2717,9 @@
       "actionFailed": "Action failed: {error}",
       "envRequired": "Required environment variables — approval needs real values",
       "envPlaceholder": "Enter value",
-      "envMissing": "Values required: {keys}"
+      "envMissing": "Values required: {keys}",
+      "remoteOauthNote": "Locked to the remote URL the extension declared. Approving continues to OAuth sign-in.",
+      "oauthStartFailed": "Approved, but OAuth sign-in could not start. Sign in from Settings → Connectors. {error}"
     },
     "agents": {
       "title": "Custom agents",

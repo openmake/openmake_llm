@@ -2717,7 +2717,9 @@
       "actionFailed": "処理に失敗しました: {error}",
       "envRequired": "必須の環境変数 — 実際の値を入力すると承認できます",
       "envPlaceholder": "値を入力",
-      "envMissing": "値が必要です: {keys}"
+      "envMissing": "値が必要です: {keys}",
+      "remoteOauthNote": "拡張機能が宣言したリモートURLに固定されます。承認するとOAuthログインに進みます。",
+      "oauthStartFailed": "承認しましたが、OAuthログインを開始できませんでした。設定 → コネクタからログインしてください。{error}"
     },
     "agents": {
       "title": "カスタムエージェント",

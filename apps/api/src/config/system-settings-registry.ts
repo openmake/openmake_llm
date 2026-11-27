@@ -19,6 +19,7 @@ import { EXTENSION_ADMIN_INVENTORY_KEY } from './extension-admin-inventory';
 import { ARBITRARY_URL_INSTALL_MODES, EXTENSION_SOURCE_POLICY_KEYS, extensionSourcePolicyProblems } from './extension-source-policy';
 import { EXTENSION_CATALOG_SYNC_KEYS } from './extension-catalog-sync';
 import { EXTENSION_INSTALL_PREVIEW_FLAG } from './extension-install-preview';
+import { EXTENSION_REMOTE_MCP_FLAG } from './extension-remote-mcp';
 
 /** Base 그룹 또는 add-on 이 기여한 그룹 이름 */
 export type SettingGroup = 'oauth' | 'search' | 'alerts' | 'push' | 'llm' | 'agent' | 'slo' | (string & {});
@@ -147,6 +148,8 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     { key: EXTENSION_CATALOG_SYNC_KEYS.INDEX_ENABLED, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     // 확장 설치 미리보기(M1b, opt-in) — 미리보기 라우트·갤러리 응답이 요청 시점에 읽는다(실시간). config/extension-install-preview
     { key: EXTENSION_INSTALL_PREVIEW_FLAG, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
+    // 확장 번들 원격 MCP 관리 등록(P8, opt-in) — 설치·승인·연결 시점에 읽는다(실시간). config/extension-remote-mcp
+    { key: EXTENSION_REMOTE_MCP_FLAG, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
 
     // ── SLO 목표(F24.8, 145) — 5분 평가 tick 이 호출 시점에 읽는다(실시간) ──
     { key: 'SLO_CHAT_AVAILABILITY_TARGET', group: 'slo', secret: false, requiresRestart: false, validate: percentTarget },

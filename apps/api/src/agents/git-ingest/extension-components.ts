@@ -34,6 +34,8 @@ import { SKILL_CREATOR } from '../../config/constants';
 import { PLUGIN_COMPONENT_LIMITS, UNSUPPORTED_AGENT_FIELDS } from '../../config/skill-compat';
 import type { SkillInstallResult, AgentInstallResult, McpServerInstallResult } from './extension-ingest-types';
 import { planCommandPaths, planAgentPaths, planMcpEntries, mcpNetworkDecision } from './extension-component-plan';
+import { extensionRemoteMcpEnabled, EXTENSION_REMOTE_MCP_CODES } from '../../config/extension-remote-mcp';
+import { buildRemoteRegistrationMeta, checkExtensionMcpServerPolicy, checkExtensionRemoteMcp } from '../../services/extensions/remote-mcp-registration';
 // 설치 미리보기(M1b)가 같은 함수를 쓰도록 재노출
 export { planCommandPaths, planAgentPaths, planMcpEntries, mcpNetworkDecision };
 
@@ -401,6 +403,23 @@ export async function collectMcpDrafts(
             }
             continue;
         }
+        // MCP 서버 정책 훅(§8-3 자리 — 등록이 없으면 언제나 허용) + 원격 관리 등록(opt-in EXTENSION_REMOTE_MCP_ENABLED)
+        const isRemote = entry.transportType !== 'stdio';
+        const policyInput = {
+            phase: 'install' as const, userId: ctx.userId, extensionName: ctx.extensionName, sourceUrl: ctx.gitUrl,
+            serverKey: entry.name, transportType: entry.transportType,
+            url: entry.url ?? null, command: entry.command ?? null, args: entry.args ?? null,
+        };
+        const remoteManaged = isRemote && extensionRemoteMcpEnabled();
+        const gate = remoteManaged ? await checkExtensionRemoteMcp(policyInput) : await checkExtensionMcpServerPolicy(policyInput);
+        if (!gate.allowed) {
+            ctx.warnings.push(`${gate.code}: MCP 서버 '${entry.name}' 제외 — ${gate.reason}`);
+            results.push({ name: entry.name, error: `${gate.code}: ${gate.reason}` });
+            continue;
+        }
+        if (remoteManaged && gate.unresolved) {
+            ctx.warnings.push(`${EXTENSION_REMOTE_MCP_CODES.URL_UNRESOLVED}: 원격 MCP 서버 '${entry.name}' 의 호스트를 지금 확인하지 못했습니다 — 승인할 때 다시 확인합니다`);
+        }
         try {
             const conv = await checker.checkMcpServer(
                 JSON.stringify(entry, null, 2),
@@ -429,6 +448,8 @@ export async function collectMcpDrafts(
                     serverKey: entry.name,
                     // 권한 때문에 네트워크를 막았다는 표시 — 재승인이 이 서버만 골라 되돌린다(user-extension-permission-repository)
                     ...(networkAllowed ? {} : { networkRestrictedByPermission: true }),
+                    // 원격 관리 등록 — 번들 선언 URL 고정·OAuth 전용(승인 라우트가 대조한다)
+                    ...(remoteManaged && entry.url ? buildRemoteRegistrationMeta(entry.url) : {}),
                     conventionFindings: conv.findings,
                     blockedByConvention,
                     tokensUsed: conv.tokensUsed,

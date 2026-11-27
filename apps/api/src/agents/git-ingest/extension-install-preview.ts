@@ -28,6 +28,8 @@ import { UserExtensionRepository } from '../../data/repositories/user-extension-
 import { getMcpInstallHints, type McpInstallHint } from '../../runtime-ports/mcp-install-hints';
 import { ADDON_PERMISSIONS } from '../../config/addon-permissions';
 import { EXTENSION_SECURITY } from '../../config/extension-security';
+import { extensionRemoteMcpEnabled } from '../../config/extension-remote-mcp';
+import { checkRemoteMcpUrlStatic } from '../../services/extensions/remote-mcp-registration';
 import { UNSUPPORTED_AGENT_FIELDS } from '../../config/skill-compat';
 import { SKILL_CREATOR } from '../../config/constants';
 import type { ImportInput, CandidateListResult } from './extension-ingest-types';
@@ -62,6 +64,8 @@ export interface PreviewMcpServer {
     hints: McpInstallHint[];
     /** 설치에서 빠지는 이유(권한 없음·재승인 필요) */
     excluded?: string;
+    /** 원격 관리 등록(EXTENSION_REMOTE_MCP_ENABLED) — 선언 URL 고정, 승인 뒤 OAuth 로그인으로 연결 */
+    remoteRegistration?: { urlLocked: true; auth: 'oauth' };
 }
 
 export interface PreviewAgent {
@@ -169,9 +173,13 @@ export async function previewExtensionInstall(
     const { networkAllowed, networkNeedsReview } = mcpNetworkDecision(ctx);
     const mcpServers: PreviewMcpServer[] = (await planMcpEntries(ctx, manifest.mcpServers)).map(entry => {
         const findings = checkMcpServerStatic({ command: entry.command, args: entry.args });
+        // 원격 관리 등록(opt-in EXTENSION_REMOTE_MCP_ENABLED) — 네트워크 없는 정적 검사만(형식·https·URL 자격증명).
+        // 호스트(SSRF) 확인과 MCP 서버 정책 훅은 설치·승인에서 한다(미리보기는 쓰기·네트워크 없음).
+        const remoteManaged = networkAllowed && entry.transportType !== 'stdio' && extensionRemoteMcpEnabled();
+        const remoteStatic = remoteManaged ? checkRemoteMcpUrlStatic(entry.url) : null;
         const excluded = !networkAllowed && entry.transportType !== 'stdio'
             ? (networkNeedsReview ? `PERMISSION_REVIEW_REQUIRED: ${ADDON_PERMISSIONS.NETWORK_INTERNET} 재승인 필요` : `PERMISSION_DENIED: ${ADDON_PERMISSIONS.NETWORK_INTERNET} 권한 없음`)
-            : undefined;
+            : remoteStatic && !remoteStatic.ok ? `${remoteStatic.code}: ${remoteStatic.reason}` : undefined;
         return {
             name: entry.name,
             transportType: entry.transportType,
@@ -183,6 +191,7 @@ export async function previewExtensionInstall(
             requiredEnv: collectPlaceholderEnvKeys(entry.env),
             hints: getMcpInstallHints({ name: entry.name, transportType: entry.transportType, url: entry.url ?? null, command: entry.command ?? null }),
             ...(excluded ? { excluded } : {}),
+            ...(remoteStatic?.ok ? { remoteRegistration: { urlLocked: true as const, auth: 'oauth' as const } } : {}),
         };
     });
 
