@@ -95,7 +95,8 @@ test('add-on 이 끼우는 승인 섹션·설정 탭의 id 는 서로 겹치지 
   assert.equal(new Set(tabs).size, tabs.length);
   // Base 승인 섹션(tasks·agents)·설정 탭과도 겹치지 않는다
   for (const id of ['tasks', 'agents']) assert.ok(!sections.includes(id), id);
-  for (const id of ['general', 'model', 'interface', 'notifications', 'memory', 'extensions', 'privacy', 'security']) assert.ok(!tabs.includes(id), id);
+  // 확장 탭(extensions)은 §8-2 부터 큐레이션 add-on 의 탭이다 — 종전 딥링크 ?tab=extensions 를 이어받는다
+  for (const id of ['general', 'model', 'interface', 'notifications', 'memory', 'privacy', 'security']) assert.ok(!tabs.includes(id), id);
   // `/` 메뉴는 첫 번째 것만 쓰이므로 둘 이상이면 조용히 무시된다
   assert.ok(WEB_ADDONS.filter((a) => a.slashMenu).length <= 1);
 });

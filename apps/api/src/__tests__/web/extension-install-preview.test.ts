@@ -1,7 +1,7 @@
-/** 설치 미리보기 화면 판정(apps/web/lib/extension-install-preview.ts) — 순수 함수라 api Jest 에서 검증한다. */
+/** 설치 미리보기 화면 판정(apps/web/addons/extension-curation/install-preview.ts) — 순수 함수라 api Jest 에서 검증한다. */
 // apps/api tsconfig rootDir 밖 파일이라 require 로 런타임만 불러온다(ts-jest 가 변환)
 export {};
-const lib = require('../../../../web/lib/extension-install-preview') as {
+const lib = require('../../../../web/addons/extension-curation/install-preview') as {
     catalogInstallMode: (g: unknown) => 'preview' | 'direct';
     previewHintKey: (code: string) => string | null;
     splitWarning: (w: string) => { code: string | null; text: string };
@@ -30,7 +30,7 @@ describe('previewHintKey', () => {
 describe('갤러리 배선(정적) — 플래그 OFF 면 설치 버튼이 바로 설치한다', () => {
     // apps/web 에는 테스트 러너가 없어 소스를 정적으로 확인한다
     const src: string = (require('fs') as typeof import('fs')).readFileSync(
-        (require('path') as typeof import('path')).join(__dirname, '../../../../web/components/settings/extensions-section.tsx'), 'utf8');
+        (require('path') as typeof import('path')).join(__dirname, '../../../../web/addons/extension-curation/components/extensions-section.tsx'), 'utf8');
     it('모드 초기값은 direct, 갤러리 응답으로만 preview 가 된다', () => {
         expect(src).toContain('useState<"preview" | "direct">("direct")');
         expect(src).toContain('setCatalogMode(catalogInstallMode(res?.data))');
@@ -77,13 +77,13 @@ describe('이름 설치 미리보기 — 플래그 OFF 면 이름 입력도 바�
     const read = (rel: string): string => (require('fs') as typeof import('fs')).readFileSync(
         (require('path') as typeof import('path')).join(__dirname, '../../../../web', rel), 'utf8');
     it('이름 입력 폼: 기본 mode 는 direct, 미리보기 대상이 없으면 바로 install', () => {
-        const src = read('components/settings/named-install-form.tsx');
+        const src = read('addons/extension-curation/components/named-install-form.tsx');
         expect(src).toContain('mode = "direct"');
         expect(src).toMatch(/if \(target\) setPreviewTarget\(target\);\s*else void install\(value\);/);
         expect(src).toContain('onConfirm={(tg) => { if (tg.kind === "named") void install(tg.ref); }}');
         expect(src).not.toMatch(/onClick=\{\(\) => void install\(trimmed\)\}/);
     });
     it('갤러리는 카탈로그 모드를 이름 입력 폼에 그대로 넘긴다', () => {
-        expect(read('components/settings/extensions-section.tsx')).toContain('<NamedInstallForm mode={catalogMode}');
+        expect(read('addons/extension-curation/components/extensions-section.tsx')).toContain('<NamedInstallForm mode={catalogMode}');
     });
 });

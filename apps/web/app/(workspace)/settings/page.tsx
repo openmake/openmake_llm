@@ -13,7 +13,6 @@ import {
   ShieldCheck,
   Save,
   Loader2,
-  Package,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -43,20 +42,21 @@ import { MemorySection } from "@/components/settings/memory-section";
 import { OrganizationSection } from "@/components/settings/organization-section";
 import { ProviderKeysSection } from "@/components/settings/provider-keys-section";
 import { ModelAssignmentsSection } from "@/components/settings/model-assignments-section";
-import { ExtensionsSection } from "@/components/settings/extensions-section";
 import { useEnabledWebAddons } from "@/addons/registry";
 
 /* ── 탭 정의 ────────────────────────────────────────────── */
-/** Base 탭 — 순서 값은 10 단위(일반 10 … 보안 80). 켜진 add-on 의 탭(`settingsTabs`)은 그 사이 값으로 끼운다 */
-const BASE_TABS: { id: string; labelKey: string; icon: LucideIcon }[] = [
-  { id: "general", labelKey: "tabs.general", icon: Settings },
-  { id: "model", labelKey: "tabs.model", icon: Bot },
-  { id: "interface", labelKey: "tabs.interface", icon: Palette },
-  { id: "notifications", labelKey: "tabs.notifications", icon: Bell },
-  { id: "memory", labelKey: "tabs.memory", icon: Brain },
-  { id: "extensions", labelKey: "tabs.extensions", icon: Package },
-  { id: "privacy", labelKey: "tabs.privacy", icon: ShieldCheck },
-  { id: "security", labelKey: "tabs.security", icon: ShieldCheck },
+/**
+ * Base 탭 — 순서 값은 10 단위(일반 10 … 보안 80). 켜진 add-on 의 탭(`settingsTabs`)은 그 사이 값으로 끼운다.
+ * 확장 탭(60)은 큐레이션 add-on 이 가진다(§8-2) — 빈 자리의 순서 값을 고정해 개인정보·보안 탭 순서가 그대로다.
+ */
+const BASE_TABS: { id: string; labelKey: string; icon: LucideIcon; order: number }[] = [
+  { id: "general", labelKey: "tabs.general", icon: Settings, order: 10 },
+  { id: "model", labelKey: "tabs.model", icon: Bot, order: 20 },
+  { id: "interface", labelKey: "tabs.interface", icon: Palette, order: 30 },
+  { id: "notifications", labelKey: "tabs.notifications", icon: Bell, order: 40 },
+  { id: "memory", labelKey: "tabs.memory", icon: Brain, order: 50 },
+  { id: "privacy", labelKey: "tabs.privacy", icon: ShieldCheck, order: 70 },
+  { id: "security", labelKey: "tabs.security", icon: ShieldCheck, order: 80 },
 ];
 
 
@@ -195,7 +195,7 @@ export default function SettingsPage() {
   const tabs = useMemo(
     () =>
       [
-        ...BASE_TABS.map((t, i) => ({ id: t.id, label: tSettings(t.labelKey), icon: t.icon, order: (i + 1) * 10 })),
+        ...BASE_TABS.map((t) => ({ id: t.id, label: tSettings(t.labelKey), icon: t.icon, order: t.order })),
         ...addonTabs.map((t) => ({ id: t.id, label: tRoot(t.labelKey), icon: t.Icon, order: t.order })),
       ].sort((a, b) => a.order - b.order),
     [addonTabs, tSettings, tRoot],
@@ -828,7 +828,6 @@ export default function SettingsPage() {
 
             {activeTab === "memory" && <MemorySection />}
 
-            {activeTab === "extensions" && <ExtensionsSection />}
 
             {addonTab && <addonTab.Component />}
 

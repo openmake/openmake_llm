@@ -66,6 +66,6 @@ describe('add-on 꺼짐 → 갤러리 무변화', () => {
         const slot = read('components/settings/gallery-item-badges.tsx');
         expect(slot).toMatch(/if \(badges\.length === 0\) return null;/);
         expect(slot).not.toMatch(/marketplace/i);
-        expect(read('components/settings/extensions-section.tsx')).toMatch(/<GalleryItemBadges catalogId=\{e\.srcId\} pluginName=\{p\.name\} \/>/);
+        expect(read('addons/extension-curation/components/extensions-section.tsx')).toMatch(/<GalleryItemBadges catalogId=\{e\.srcId\} pluginName=\{p\.name\} \/>/);
     });
 });
