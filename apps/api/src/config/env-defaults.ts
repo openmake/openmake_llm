@@ -63,6 +63,7 @@ export const DEFAULT_CONFIG: EnvConfig = {
     extensionAgentBundleProvenance: false,
     extensionInstallPreviewEnabled: false,
     extensionOciInstallEnabled: false,
+    extensionOrgOwnedInstallEnabled: false,
     extensionRemoteMcpEnabled: false,
     extensionOrgDeploymentModesEnabled: false,
     extensionAdminInventoryEnabled: false,

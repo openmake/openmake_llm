@@ -36,7 +36,7 @@ import { translateCatalogDescriptions } from './catalog-translator';
 // 기존 import 경로 호환 재노출 (테스트 등이 이 모듈에서 import)
 export { buildSkillDiscoveryPattern } from './catalog-snapshot';
 import { validateExtensionManifest } from './extension-manifest-validator';
-import { resolveExtensionSource, isSelectionRequired, type SourceResolverDeps } from './extension-source-resolver';
+import { resolveExtensionSource, isSelectionRequired, type SourceResolverDeps, type ResolvedExtensionSource } from './extension-source-resolver';
 import { previewExtensionInstall, type ExtensionInstallPreview } from './extension-install-preview';
 import {
     collectCommandSkills,
@@ -351,6 +351,14 @@ export class ExtensionIngestService {
      * 설치 미리보기(M1b) — 설치와 같은 함수로 원본·구성요소를 풀되 쓰기·LLM 호출이 없다(extension-install-preview).
      * marketplace 목록·후보 선택은 설치와 같은 `selectionRequired` 응답.
      */
+    /**
+     * 원본 해석만(쓰기·LLM 없음) — 설치·미리보기와 같은 함수(원본 정책·URL 해석·매니페스트 검증).
+     * 조직 소유 설치(212)가 구성요소를 만들지 않고 원본·커밋을 고정할 때 쓴다.
+     */
+    async resolveSource(input: ImportInput): Promise<ResolvedExtensionSource | CandidateListResult> {
+        return resolveExtensionSource(this.resolverDeps(), input);
+    }
+
     async preview(input: ImportInput): Promise<ExtensionInstallPreview | CandidateListResult> {
         return previewExtensionInstall({ pool: this.opts.pool, ...this.resolverDeps() }, input);
     }

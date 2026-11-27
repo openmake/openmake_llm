@@ -158,6 +158,7 @@ export const envSchema = z
         EXTENSION_SOURCE_POLICY_ENFORCED: z.string().optional(),
         EXTENSION_INSTALL_PREVIEW_ENABLED: z.string().optional(),
         EXTENSION_OCI_INSTALL_ENABLED: z.string().optional(),
+        EXTENSION_ORG_OWNED_INSTALL_ENABLED: z.string().optional(),
         EXTENSION_AGENT_BUNDLE_PROVENANCE: z.string().optional(),
         /** 조직 확장 배포 모드(§8-1, opt-in) — config/extension-org-deployment */
         EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED: z.string().optional(),

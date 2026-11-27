@@ -25,6 +25,8 @@
  *   POST   /api/users/me/extensions/install-by-name    — `플러그인@마켓플레이스` 이름 설치 (M5, user-extensions-named.routes)
  *   POST   /api/users/me/extensions/preview-by-name    — 이름 설치 미리보기 (M1b 연장, EXTENSION_INSTALL_PREVIEW_ENABLED)
  *   DELETE /api/users/me/extensions/catalog/:id         — 소스 삭제
+ *   GET|POST /api/users/me/extensions/org-owned · POST …/org-owned/:id/update · DELETE …/org-owned/:id
+ *                                                      — 조직 소유 설치(P8, EXTENSION_ORG_OWNED_INSTALL_ENABLED — OFF 면 종전 라우트로)
  *
  * ⚠️ 라우트 등록 순서: '/gallery*'·'/catalog*' 가 '/:id' 보다 먼저여야 한다 (Express 순차 매칭).
  *
@@ -48,6 +50,7 @@ import { CATALOG_INDEX_LIMITS, normalizeCatalogIndexUrl } from '../config/extens
 import { encryptToken } from '../utils/token-crypto';
 import { NAMED_INSTALL_LIMITS, isValidMarketplaceAlias } from '../config/extension-named-install';
 import { registerNamedInstallRoutes } from './user-extensions-named.routes';
+import { registerOrgOwnedRoutes } from './user-extensions-org-owned.routes';
 import { applyDefaultCatalogAlias } from '../services/extensions/catalog-alias';
 import { createLogger } from '../utils/logger';
 import { removeExtensionInstallation } from '../services/addon/addon-state';
@@ -114,10 +117,14 @@ function getUserId(req: Request): string | null {
     return null;
 }
 
-/** 응답에서 내부 필드(source_hash, user_id, 승인자 id) 제외. */
+/**
+ * 응답에서 내부 필드(source_hash, user_id, 승인자 id) 제외. 조직 소유(212) 열은 싣지 않고 — 사람 소유 행의 응답 모양은
+ * 마이그레이션 전과 같다 — 조직 소유 행만 `orgOwned: true` 를 붙인다(설치자 id 는 싣지 않는다).
+ */
 function toPublic(row: UserExtensionRow) {
-    const { source_hash: _hash, user_id: _uid, permissions_reviewed_by: _reviewer, ...rest } = row;
-    return rest;
+    const { source_hash: _hash, user_id: _uid, permissions_reviewed_by: _reviewer, ...rest } = row as UserExtensionRow & { owner_org_id?: string | null; installed_by_user_id?: string | null };
+    const { owner_org_id: ownerOrg, installed_by_user_id: _installer, ...base } = rest;
+    return ownerOrg ? { ...base, orgOwned: true } : base;
 }
 
 /** 요청자가 멤버인 조직 id — 조직에 공개된 확장의 갤러리 노출·설치 판정에 쓴다 (조회 실패는 빈 목록 = 조직 공개분만 안 보인다) */
@@ -392,6 +399,8 @@ export function createUserExtensionsController(): Router {
 
     // 이름 설치(M5)·그 미리보기 — user-extensions-named.routes (같은 설치 입력 namedInstallInput)
     registerNamedInstallRoutes(router, { getUserId, rethrowPolicyError, installSummary });
+    // 조직 소유 설치(P8, opt-in EXTENSION_ORG_OWNED_INSTALL_ENABLED) — OFF 면 next('route') 로 종전 라우트에 넘긴다
+    registerOrgOwnedRoutes(router, { getUserId });
 
     // 설치 미리보기(M1b, opt-in) — 쓰기·LLM 없이 설치될 구성요소·권한·원본·커밋·경고. 플래그 OFF 면 404(라우트가 없는 것과 같다)
     router.post('/catalog/:id/preview', requireAuth, validate(catalogInstallSchema), async (req, res) => {

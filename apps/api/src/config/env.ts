@@ -92,6 +92,8 @@ export interface EnvConfig {
     extensionInstallPreviewEnabled: boolean;
     /** OCI 레지스트리 확장 설치(P8) — config/extension-oci(기본 OFF) */
     extensionOciInstallEnabled: boolean;
+    /** 조직 소유 확장 설치(P8, 212) — config/extension-org-owned(기본 OFF) */
+    extensionOrgOwnedInstallEnabled: boolean;
     /** 확장 Custom Agent 출처 표시·제거 시 승인 전 에이전트 이름 정리(P8) — config/extension-agent-provenance (기본 OFF) */
     extensionAgentBundleProvenance: boolean;
     /** 확장 번들 원격 MCP 관리 등록(P8) — config/extension-remote-mcp (기본 OFF) */
@@ -296,6 +298,7 @@ export function loadConfig(): EnvConfig {
         EXTENSION_SOURCE_POLICY_ENFORCED: env('EXTENSION_SOURCE_POLICY_ENFORCED'),
         EXTENSION_INSTALL_PREVIEW_ENABLED: env('EXTENSION_INSTALL_PREVIEW_ENABLED'),
         EXTENSION_OCI_INSTALL_ENABLED: env('EXTENSION_OCI_INSTALL_ENABLED'),
+        EXTENSION_ORG_OWNED_INSTALL_ENABLED: env('EXTENSION_ORG_OWNED_INSTALL_ENABLED'),
         EXTENSION_AGENT_BUNDLE_PROVENANCE: env('EXTENSION_AGENT_BUNDLE_PROVENANCE'),
         EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED: env('EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED'),
         EXTENSION_ADMIN_INVENTORY_ENABLED: env('EXTENSION_ADMIN_INVENTORY_ENABLED'),
@@ -438,6 +441,7 @@ export function loadConfig(): EnvConfig {
         extensionSourcePolicyEnforced: parsed.EXTENSION_SOURCE_POLICY_ENFORCED === undefined ? DEFAULT_CONFIG.extensionSourcePolicyEnforced : parsed.EXTENSION_SOURCE_POLICY_ENFORCED === 'true',
         extensionInstallPreviewEnabled: parsed.EXTENSION_INSTALL_PREVIEW_ENABLED === undefined ? DEFAULT_CONFIG.extensionInstallPreviewEnabled : parsed.EXTENSION_INSTALL_PREVIEW_ENABLED === 'true',
         extensionOciInstallEnabled: parsed.EXTENSION_OCI_INSTALL_ENABLED === undefined ? DEFAULT_CONFIG.extensionOciInstallEnabled : parsed.EXTENSION_OCI_INSTALL_ENABLED === 'true',
+        extensionOrgOwnedInstallEnabled: parsed.EXTENSION_ORG_OWNED_INSTALL_ENABLED === undefined ? DEFAULT_CONFIG.extensionOrgOwnedInstallEnabled : parsed.EXTENSION_ORG_OWNED_INSTALL_ENABLED === 'true',
         extensionAgentBundleProvenance: parsed.EXTENSION_AGENT_BUNDLE_PROVENANCE === undefined ? DEFAULT_CONFIG.extensionAgentBundleProvenance : parsed.EXTENSION_AGENT_BUNDLE_PROVENANCE === 'true',
         extensionRemoteMcpEnabled: parsed.EXTENSION_REMOTE_MCP_ENABLED === undefined ? DEFAULT_CONFIG.extensionRemoteMcpEnabled : parsed.EXTENSION_REMOTE_MCP_ENABLED === 'true',
         extensionOrgDeploymentModesEnabled: parsed.EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED === 'true',
