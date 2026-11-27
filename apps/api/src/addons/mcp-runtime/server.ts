@@ -29,7 +29,27 @@ import {
     MCPTool
 } from '../../tool-contract/types';
 import { getBuiltInTools } from '../../tools/builtin-tools';
-import { negotiateProtocolVersion } from './mcp-protocol';
+import { MCP_SUPPORTED_PROTOCOL_VERSIONS, negotiateProtocolVersion } from './mcp-protocol';
+import {
+    UNSUPPORTED_PROTOCOL_VERSION_CODE,
+    discoverSupportedVersions,
+    isModernServingEnabled,
+    isSupportedModernVersion,
+    readEnvelopeVersion,
+    stampModernResult,
+} from './mcp-protocol-modern';
+
+/** 사양 형태의 서버 capability — 우리 서버는 도구만 제공한다. */
+const SPEC_SERVER_CAPABILITIES = { tools: {} } as const;
+
+/** MCPServer 생성 옵션. */
+export interface MCPServerOptions {
+    /**
+     * 2026-07-28(modern era) 요청 수용 — 기본은 env `MCP_SERVER_MODERN_PROTOCOL`(기본 OFF).
+     * OFF 면 `server/discover` 미지원·봉투 무시로 종전과 같다(`mcp-protocol-modern.ts`).
+     */
+    modernProtocol?: boolean;
+}
 
 /**
  * MCP 서버 클래스
@@ -56,13 +76,17 @@ export class MCPServer {
     /** STDIO 통신을 위한 readline 인터페이스 */
     private rl: readline.Interface | null = null;
 
+    /** modern era(2026-07-28) 수용 여부 — 생성 시 고정. */
+    private readonly modernProtocol: boolean;
+
     /**
      * MCPServer 인스턴스를 생성합니다.
      *
      * @param name - 서버 이름 (기본값: 'openmake-coder')
      * @param version - 서버 버전 (기본값: '1.0.0')
      */
-    constructor(name: string = 'openmake-coder', version: string = '1.0.0') {
+    constructor(name: string = 'openmake-coder', version: string = '1.0.0', options: MCPServerOptions = {}) {
+        this.modernProtocol = options.modernProtocol ?? isModernServingEnabled();
         this.serverInfo = {
             name,
             version,
@@ -120,6 +144,66 @@ export class MCPServer {
      * @returns MCP JSON-RPC 응답 (result 또는 error)
      */
     async handleRequest(request: MCPRequest): Promise<MCPResponse> {
+        if (this.modernProtocol) {
+            const modern = await this.handleModernRequest(request);
+            if (modern) return modern;
+        }
+        return this.handleLegacyRequest(request);
+    }
+
+    /**
+     * modern era(2026-07-28) 요청 처리 — 해당하지 않으면 null(= 구 리비전 경로).
+     *
+     * - `server/discover`: 지원 리비전(modern + 구 리비전)·capability 응답
+     * - 봉투(`params._meta[protocolVersion]`)가 있는 요청: 모르는 리비전이면 -32022,
+     *   아니면 같은 메서드 처리기로 돌리고 결과를 modern 형태로 봉인한다.
+     */
+    private async handleModernRequest(request: MCPRequest): Promise<MCPResponse | null> {
+        const { id, method, params } = request;
+        const implementation = { name: this.serverInfo.name, version: this.serverInfo.version };
+        const envelopeVersion = readEnvelopeVersion(params);
+
+        if (method === 'server/discover') {
+            if (envelopeVersion !== undefined && !isSupportedModernVersion(envelopeVersion)) {
+                return this.unsupportedVersion(id, envelopeVersion);
+            }
+            return {
+                jsonrpc: '2.0',
+                id,
+                result: stampModernResult(method, {
+                    supportedVersions: discoverSupportedVersions(MCP_SUPPORTED_PROTOCOL_VERSIONS),
+                    capabilities: SPEC_SERVER_CAPABILITIES,
+                }, implementation),
+            };
+        }
+
+        if (envelopeVersion === undefined) return null;
+        if (!isSupportedModernVersion(envelopeVersion)) return this.unsupportedVersion(id, envelopeVersion);
+
+        const response = await this.handleLegacyRequest(request);
+        if (response.result && typeof response.result === 'object' && !Array.isArray(response.result)) {
+            return {
+                ...response,
+                result: stampModernResult(method, response.result as Record<string, unknown>, implementation),
+            };
+        }
+        return response;
+    }
+
+    private unsupportedVersion(id: string | number, requested: string): MCPResponse {
+        return {
+            jsonrpc: '2.0',
+            id,
+            error: {
+                code: UNSUPPORTED_PROTOCOL_VERSION_CODE,
+                message: `지원하지 않는 프로토콜 리비전: ${requested}`,
+                data: { supported: discoverSupportedVersions(MCP_SUPPORTED_PROTOCOL_VERSIONS), requested },
+            },
+        };
+    }
+
+    /** 구 리비전(initialize 핸드셰이크) 요청 처리 — 종전 handleRequest 본문 그대로. */
+    private async handleLegacyRequest(request: MCPRequest): Promise<MCPResponse> {
         const { id, method, params } = request;
 
         try {
@@ -135,7 +219,12 @@ export class MCPServer {
                                 (params as { protocolVersion?: unknown } | undefined)?.protocolVersion
                             ),
                             serverInfo: this.serverInfo,
-                            capabilities: this.serverInfo.capabilities
+                            // ⚠️ 종전 capability 값은 불리언({tools:true})이라 사양(객체)과 다르고
+                            // SDK 2.x 클라이언트가 initialize 결과를 거절한다. 동작 계약 보존을 위해
+                            // 고친 형태는 modern 플래그 ON 에서만 싣는다(OFF = 종전 그대로).
+                            capabilities: this.modernProtocol
+                                ? SPEC_SERVER_CAPABILITIES
+                                : this.serverInfo.capabilities
                         }
                     };
 
@@ -223,24 +312,40 @@ export class MCPServer {
         });
 
         for await (const line of this.rl) {
-            if (!line.trim()) continue;
-
-            try {
-                const request: MCPRequest = JSON.parse(line);
-                const response = await this.handleRequest(request);
-                console.log(JSON.stringify(response));
-            } catch {
-                const errorResponse: MCPResponse = {
-                    jsonrpc: '2.0',
-                    id: 0,
-                    error: {
-                        code: -32700,
-                        message: 'JSON 파싱 오류'
-                    }
-                };
-                console.log(JSON.stringify(errorResponse));
-            }
+            const out = await this.handleLine(line);
+            if (out !== null) console.log(out);
         }
+    }
+
+    /**
+     * stdio 한 줄 처리 — 응답 JSON 문자열, 응답하지 않을 줄이면 null.
+     * (start() 의 루프 본문. 테스트가 같은 경로를 쓰도록 분리했다.)
+     */
+    async handleLine(line: string): Promise<string | null> {
+        if (!line.trim()) return null;
+        try {
+            const request: MCPRequest = JSON.parse(line);
+            // modern era 알림(id 없음 + 봉투)은 응답하지 않는다(JSON-RPC 알림).
+            // OFF 거나 구 리비전 메시지면 종전 그대로 매 줄 응답한다.
+            if (this.modernProtocol && this.isModernNotification(request)) return null;
+            const response = await this.handleRequest(request);
+            return JSON.stringify(response);
+        } catch {
+            const errorResponse: MCPResponse = {
+                jsonrpc: '2.0',
+                id: 0,
+                error: {
+                    code: -32700,
+                    message: 'JSON 파싱 오류'
+                }
+            };
+            return JSON.stringify(errorResponse);
+        }
+    }
+
+    private isModernNotification(request: MCPRequest): boolean {
+        const hasId = (request as { id?: unknown }).id !== undefined && (request as { id?: unknown }).id !== null;
+        return !hasId && readEnvelopeVersion(request.params) !== undefined;
     }
 
     /**
@@ -263,6 +368,6 @@ export class MCPServer {
  * @param version - 서버 버전 (기본값: MCPServer 생성자 기본값)
  * @returns 새 MCPServer 인스턴스
  */
-export function createMCPServer(name?: string, version?: string): MCPServer {
-    return new MCPServer(name, version);
+export function createMCPServer(name?: string, version?: string, options?: MCPServerOptions): MCPServer {
+    return new MCPServer(name, version, options);
 }
