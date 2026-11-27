@@ -123,34 +123,34 @@ export default function AdminExtensionsPage() {
                     <div className="overflow-x-auto">
                       <Table>
                         <thead><tr>
-                          <Th>{t("owner")}</Th><Th>{t("extension")}</Th><Th>{t("source")}</Th>
-                          <Th>{t("components")}</Th><Th>{t("approval")}</Th><Th>{t("mcpNegotiation")}</Th><Th>{t("status")}</Th>
+                          <Th className="whitespace-nowrap">{t("owner")}</Th><Th className="whitespace-nowrap">{t("extension")}</Th><Th className="whitespace-nowrap">{t("source")}</Th>
+                          <Th className="whitespace-nowrap">{t("components")}</Th><Th className="whitespace-nowrap">{t("approval")}</Th><Th className="whitespace-nowrap">{t("mcpNegotiation")}</Th><Th className="whitespace-nowrap">{t("status")}</Th>
                         </tr></thead>
                         <tbody>
                           {items.map((it) => (
                             <tr key={it.id}>
                               <Td><div className="text-sm">{it.owner.username ?? it.owner.id}</div><div className="text-[11px] text-muted">{it.owner.email ?? ""}</div></Td>
                               <Td><div className="text-sm">{it.name}</div><div className="text-[11px] text-muted">v{it.version} · {it.permissionState}</div></Td>
-                              <Td>
+                              <Td className="min-w-[16rem] max-w-[28rem]">
                                 <div className="break-all font-mono text-xs">{it.source.url}</div>
                                 <div className="text-[11px] text-muted">{it.source.trackingRef ?? "HEAD"} · {shortCommit(it.source.commit)}</div>
                               </Td>
-                              <Td className="text-xs">
+                              <Td className="whitespace-nowrap text-xs">
                                 {it.componentsUnavailable ? <span className="text-muted">{t("componentsUnavailable")}</span> : t("componentCounts", {
                                   skills: it.components.skills.length, mcp: it.components.mcpServers.length, agents: it.components.agents.length,
                                 })}
                               </Td>
                               <Td>
-                                <div className="flex flex-wrap gap-1">
+                                <div className="flex flex-wrap gap-1 whitespace-nowrap">
                                   {it.approval.draft > 0 && <Badge tone="warn">{t("draftCount", { n: it.approval.draft })}</Badge>}
                                   {it.approval.active > 0 && <Badge tone="success">{t("activeCount", { n: it.approval.active })}</Badge>}
                                   {it.approval.archived > 0 && <Badge>{t("archivedCount", { n: it.approval.archived })}</Badge>}
                                 </div>
                               </Td>
-                              <Td className="text-[11px] text-muted">
+                              <Td className="whitespace-nowrap text-[11px] text-muted">
                                 {it.components.mcpServers.length === 0 ? "—" : negotiationSummary(it.components.mcpServers).map((line) => <div key={line}>{line}</div>)}
                               </Td>
-                              <Td><Badge tone={it.status === "active" ? "success" : "neutral"}>{it.status === "active" ? t("statusActive") : t("statusRemoved")}</Badge></Td>
+                              <Td className="whitespace-nowrap"><Badge tone={it.status === "active" ? "success" : "neutral"}>{it.status === "active" ? t("statusActive") : t("statusRemoved")}</Badge></Td>
                             </tr>
                           ))}
                         </tbody>
