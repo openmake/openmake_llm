@@ -9,12 +9,16 @@
  *   - ADDON_ALLOWLIST         이 조직이 쓸 수 있는 add-on id 목록(빈 목록 = 제한 없음) — 조직 관리자의 통제 수단(add-on 은 전부 무료, 과금 아님)
  *   - BROWSER_SITE_POLICY     로컬 브라우저에서 승인 없이 입력을 허용할 사이트 — 병합은 EXTERNAL_MODEL_POLICY 와 같다
  *                             (deny 합집합, allow 는 둘 다 있으면 교집합 · 한쪽만 있으면 그쪽). 빈 allow = 모든 입력이 승인 대상
+ *   - EXTENSION_SOURCE_POLICY 확장 원본 규칙 {allow?, deny?}(M2) — 병합하지 않고 **층으로** 겹친다: deny 는 어느 층이든 걸리면 차단,
+ *                             allow 는 정의한 층마다 모두 일치해야 한다(services/extensions/source-policy). allow 미설정 = 제한 없음,
+ *                             `[]` = 전부 차단, 깨진 값 = 전부 차단(fail-closed — 다른 키와 달리 무시하지 않는다)
  *
  * @module config/org-policy-registry
  */
 import { z } from 'zod';
 import { browserSitePolicyProblems } from '@openmake/config';
 import type { TaskSandboxApprovalPolicy } from './task-sandbox';
+import { EXTENSION_SOURCE_POLICY_SCHEMA } from './extension-source-policy';
 
 export const ORG_POLICY_KEYS = {
     EXTERNAL_MODEL_POLICY: 'EXTERNAL_MODEL_POLICY',
@@ -22,6 +26,7 @@ export const ORG_POLICY_KEYS = {
     MCP_ALLOWED_SERVERS: 'MCP_ALLOWED_SERVERS',
     ADDON_ALLOWLIST: 'ADDON_ALLOWLIST',
     BROWSER_SITE_POLICY: 'BROWSER_SITE_POLICY',
+    EXTENSION_SOURCE_POLICY: 'EXTENSION_SOURCE_POLICY',
 } as const;
 export type OrgPolicyKey = typeof ORG_POLICY_KEYS[keyof typeof ORG_POLICY_KEYS];
 
@@ -33,6 +38,7 @@ export const ORG_POLICY_SCHEMAS: Record<OrgPolicyKey, z.ZodTypeAny> = {
     MCP_ALLOWED_SERVERS: z.array(z.string().trim().min(1).max(64)).max(200),
     ADDON_ALLOWLIST: z.array(z.string().trim().min(1).max(120)).max(200),
     BROWSER_SITE_POLICY: z.object({ allow: patternList.optional(), deny: patternList.optional() }).strict(),
+    EXTENSION_SOURCE_POLICY: EXTENSION_SOURCE_POLICY_SCHEMA,
 };
 
 /**

@@ -14,12 +14,17 @@ jest.mock('../../services/cost/quota-reconcile-job', () => ({
     startQuotaReconcileJob: jest.fn(),
     stopQuotaReconcileJob: jest.fn(),
 }));
+jest.mock('../../services/extensions/catalog-sync', () => ({
+    startCatalogAutoSync: jest.fn(),
+    stopCatalogAutoSync: jest.fn(),
+}));
 jest.mock('../../data/db-retention', () => ({ startDbRetention: jest.fn() }));
 jest.mock('../../utils/token-cleanup', () => ({ startPeriodicCleanup: jest.fn(), stopPeriodicCleanup: jest.fn() }));
 
 import { stopAllSchedulers } from '../index';
 import { stopQuotaReconcileJob } from '../../services/cost/quota-reconcile-job';
 import { stopSessionCleanupScheduler } from '../../data/conversation-db';
+import { stopCatalogAutoSync } from '../../services/extensions/catalog-sync';
 
 describe('stopAllSchedulers', () => {
     beforeEach(() => jest.clearAllMocks());
@@ -32,6 +37,11 @@ describe('stopAllSchedulers', () => {
     test('쿼터 정산 잡(자체 타이머)을 중지한다', () => {
         stopAllSchedulers();
         expect(stopQuotaReconcileJob).toHaveBeenCalledTimes(1);
+    });
+
+    test('확장 카탈로그 주기 동기화(자체 타이머)를 중지한다', () => {
+        stopAllSchedulers();
+        expect(stopCatalogAutoSync).toHaveBeenCalledTimes(1);
     });
 
     test('한 잡의 중지 실패가 나머지 중지를 막지 않는다', () => {

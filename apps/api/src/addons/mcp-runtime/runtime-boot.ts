@@ -26,6 +26,17 @@ export function stopMcpIdleSweep(): void {
 /** 외부 MCP 서버 초기화(DB 설정 로드 → 연결) + 샌드박스 자세 관측·고아 컨테이너 정리. 실패는 호출부가 fail-open 으로 다룬다. */
 export async function startToolRuntime(): Promise<void> {
     const { getUnifiedMCPClient } = await import('./index');
+    // 협상 관측(MCP-1) 저장소 — 플래그가 꺼져 있으면 관측기가 쓰지 않는다. 연결 전에 등록해야 첫 연결도 기록된다
+    const [{ setNegotiationSink }, { McpNegotiationRepository }] = await Promise.all([
+        import('./negotiation-observer'), import('./data/mcp-negotiation-repository'),
+    ]);
+    const negotiationRepo = new McpNegotiationRepository(getPool());
+    setNegotiationSink(negotiationRepo);
+    // 같은 관측을 구성요소 관측 포트로 내준다(갤러리 판정 등 다른 add-on 이 읽는다 — 관측이 없으면 빈 결과)
+    const [{ registerComponentInsightProvider }, { mcpServerInsightProvider }] = await Promise.all([
+        import('../../runtime-ports/component-insights'), import('./component-insights'),
+    ]);
+    registerComponentInsightProvider('mcpServers', mcpServerInsightProvider(negotiationRepo));
     await getUnifiedMCPClient().initializeExternalServers(new McpServerRepository(getPool()));
     logger.info('외부 MCP 서버 초기화 완료');
     // 샌드박스 자세 관측(1회) — OFF+docker 가용(격리 권장) / ON+docker 부재(fail-closed 조기 경보)

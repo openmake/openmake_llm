@@ -16,7 +16,6 @@
 import { getComponentStore } from '../../addon-host/addon-data';
 import type { McpServerComponentStore } from '../../runtime-ports/component-stores';
 import { posix } from 'path';
-import { discoverMarkdownComponents, findMcpConfigPath } from './extension-discovery';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import type { Pool } from 'pg';
@@ -25,15 +24,18 @@ import { createLogger } from '../../utils/logger';
 import type { GitFetcher } from './git-fetcher';
 import type { GitIngestService } from './git-ingest-service';
 import { commandFileToSkillMarkdown, agentFileToCustomAgent } from './plugin-component-compat';
-import { parseMcpJsonFile, type NormalizedMcpServer } from './extension-manifest-validator';
-import { ADDON_PERMISSIONS, hasAddonPermission } from '../../config/addon-permissions';
+import type { NormalizedMcpServer } from './extension-manifest-validator';
+import { ADDON_PERMISSIONS } from '../../config/addon-permissions';
 import { collectPlaceholderEnvKeys, buildEnvInputHints, type UserConfigEntry } from '../../tool-contract/env-placeholder';
 import { ConventionChecker, isBlockedByConvention } from './convention-checker';
 import { UserAgentRepository } from '../../data/repositories/user-agent-repository';
 import { EXTENSION_SECURITY } from '../../config/extension-security';
-import { EXTENSION_INGEST, SKILL_CREATOR } from '../../config/constants';
+import { SKILL_CREATOR } from '../../config/constants';
 import { PLUGIN_COMPONENT_LIMITS, UNSUPPORTED_AGENT_FIELDS } from '../../config/skill-compat';
 import type { SkillInstallResult, AgentInstallResult, McpServerInstallResult } from './extension-ingest-types';
+import { planCommandPaths, planAgentPaths, planMcpEntries, mcpNetworkDecision } from './extension-component-plan';
+// 설치 미리보기(M1b)가 같은 함수를 쓰도록 재노출
+export { planCommandPaths, planAgentPaths, planMcpEntries, mcpNetworkDecision };
 
 const logger = createLogger('ExtensionIngestService');
 
@@ -140,12 +142,8 @@ export async function collectCommandSkills(
     skillService: GitIngestService,
     skillResults: SkillInstallResult[],
 ): Promise<void> {
-    let commandPaths = discoverMarkdownComponents(ctx.tree.entries, ctx.root, 'commands', ctx.commandPaths);
+    const commandPaths = planCommandPaths(ctx);
     if (commandPaths.length === 0) return;
-    if (commandPaths.length > PLUGIN_COMPONENT_LIMITS.maxCommands) {
-        ctx.warnings.push(`COMMANDS_TRUNCATED: ${commandPaths.length}개 중 ${PLUGIN_COMPONENT_LIMITS.maxCommands}개만 설치`);
-        commandPaths = commandPaths.slice(0, PLUGIN_COMPONENT_LIMITS.maxCommands);
-    }
     for (const path of commandPaths) {
         try {
             const raw = await ctx.fetcher.fetchFile(ctx.owner, ctx.repo, ctx.sha, path, SKILL_CREATOR.gitMaxFileSize ?? 262144);
@@ -185,12 +183,8 @@ export async function collectCommandSkills(
  * 업데이트 시엔 종전 승인을 이어받는다(`carryOverAgentApprovals` — 지문 opt-in 이면 내용이 같을 때만).
  */
 export async function collectPluginAgents(ctx: ComponentContext): Promise<AgentInstallResult[]> {
-    let agentPaths = discoverMarkdownComponents(ctx.tree.entries, ctx.root, 'agents');
+    const agentPaths = planAgentPaths(ctx);
     if (agentPaths.length === 0) return [];
-    if (agentPaths.length > PLUGIN_COMPONENT_LIMITS.maxAgents) {
-        ctx.warnings.push(`AGENTS_TRUNCATED: ${agentPaths.length}개 중 ${PLUGIN_COMPONENT_LIMITS.maxAgents}개만 설치`);
-        agentPaths = agentPaths.slice(0, PLUGIN_COMPONENT_LIMITS.maxAgents);
-    }
 
     const results: AgentInstallResult[] = [];
     const agentRepo = new UserAgentRepository(ctx.pool);
@@ -261,6 +255,65 @@ export function referencedBundlePaths(content: string, filePath: string, root: s
     return out;
 }
 
+/** 번들 파일 후보 한 건 — tree 엔트리 + 스킬 디렉토리 기준 상대 경로 */
+export interface AssetCandidate { entry: { path: string; size: number }; relPath: string }
+
+/**
+ * 스킬 하나의 번들 파일 후보(상한 적용) — 설치·미리보기 공용. 형제 `scripts|references|assets/` + 본문이 가리키는 번들 안 파일.
+ * 상한 초과는 ctx.warnings 에 남긴다. 본문 조회 실패는 형제 디렉토리만(fail-soft).
+ */
+export async function planSkillAssetCandidates(
+    ctx: Pick<ComponentContext, 'fetcher' | 'owner' | 'repo' | 'sha' | 'tree' | 'root' | 'warnings'>,
+    skill: { path: string; name?: string; fromCommand?: boolean },
+): Promise<AssetCandidate[]> {
+    const dir = skill.path.slice(0, skill.path.lastIndexOf('/') + 1);
+    // ① SKILL.md 형제 디렉토리(commands/ 변환분은 commands/ 를 여러 명령이 공유하므로 해당 없음)
+    const siblings: AssetCandidate[] = skill.fromCommand || !dir ? [] : ctx.tree.entries.filter(e =>
+        e.path.startsWith(dir)
+        && e.path !== skill.path
+        && /^(scripts|references|assets)\//.test(e.path.slice(dir.length))
+    ).map(e => ({ entry: e, relPath: e.path.slice(dir.length) }));
+    // ② 본문이 가리키는 번들 안 파일(`../../CONNECTORS.md` 등) — SKILL.md·commands 공통
+    let referenced: AssetCandidate[] = [];
+    try {
+        const body = await ctx.fetcher.fetchFile(ctx.owner, ctx.repo, ctx.sha, skill.path, SKILL_CREATOR.gitMaxFileSize ?? 262144);
+        const known = new Set(siblings.map(c => c.entry.path));
+        referenced = referencedBundlePaths(body, skill.path, ctx.root, ctx.tree.entries)
+            .filter(r => !known.has(r.repoPath))
+            .map(r => ({ entry: ctx.tree.entries.find(e => e.path === r.repoPath)!, relPath: r.relPath }));
+    } catch (e) {
+        logger.debug(`참조 파일 탐색 실패(형제 디렉토리만 수집): ${e instanceof Error ? e.message : String(e)}`);
+    }
+    const candidates = [...siblings, ...referenced];
+    if (candidates.length > PLUGIN_COMPONENT_LIMITS.maxAssetsPerSkill) {
+        ctx.warnings.push(`ASSETS_TRUNCATED: ${skill.name ?? skill.path} 의 번들 파일 ${candidates.length}개 중 ${PLUGIN_COMPONENT_LIMITS.maxAssetsPerSkill}개만 저장`);
+        return candidates.slice(0, PLUGIN_COMPONENT_LIMITS.maxAssetsPerSkill);
+    }
+    return candidates;
+}
+
+/**
+ * 번들 파일 후보 하나의 저장 판정(형식·크기·합계 상한) — 설치·미리보기 공용. 내용(UTF-8 무손실) 확인은 설치 때 내려받으며 한 번 더 한다.
+ * `total` 은 지금까지 저장한 바이트(미리보기는 tree 크기 합).
+ */
+export function screenAssetCandidate(
+    c: AssetCandidate,
+    total: number,
+    skillLabel: string,
+): { action: 'take' | 'skip' | 'stop'; warning?: string } {
+    if (!isStorableAsset(c.entry.path)) {
+        // fetcher 가 UTF-8 문자열만 주므로 바이너리는 저장 시 원본이 깨진다 — 건너뛴다
+        return { action: 'skip', warning: `ASSET_BINARY_SKIPPED: ${c.relPath} — 텍스트가 아닌 파일은 보존하지 않습니다` };
+    }
+    if (c.entry.size > PLUGIN_COMPONENT_LIMITS.maxAssetBytes) {
+        return { action: 'skip', warning: `ASSET_TOO_LARGE: ${c.relPath} (${c.entry.size}B) 는 상한 초과로 건너뜀` };
+    }
+    if (total + c.entry.size > PLUGIN_COMPONENT_LIMITS.maxAssetTotalBytes) {
+        return { action: 'stop', warning: `ASSETS_BUDGET_EXCEEDED: ${skillLabel} 의 번들 파일 합계 상한 초과 — 이후 파일 생략` };
+    }
+    return { action: 'take' };
+}
+
 /**
  * 스킬 번들 파일 수집 — SKILL.md 와 같은 디렉토리의 `scripts/`·`references/`·`assets/` + 본문이 가리키는 번들 안 파일.
  *
@@ -276,48 +329,15 @@ export async function collectSkillAssets(
     const skills = getComponentStore('skills', ctx.pool);
     for (const result of skillResults) {
         if (!result.skillId) continue;
-        const dir = result.path.slice(0, result.path.lastIndexOf('/') + 1);
-        // ① SKILL.md 형제 디렉토리(commands/ 변환분은 commands/ 를 여러 명령이 공유하므로 해당 없음)
-        const siblings = result.fromCommand || !dir ? [] : ctx.tree.entries.filter(e =>
-            e.path.startsWith(dir)
-            && e.path !== result.path
-            && /^(scripts|references|assets)\//.test(e.path.slice(dir.length))
-        ).map(e => ({ entry: e, relPath: e.path.slice(dir.length) }));
-        // ② 본문이 가리키는 번들 안 파일(`../../CONNECTORS.md` 등) — SKILL.md·commands 공통
-        let referenced: typeof siblings = [];
-        try {
-            const body = await ctx.fetcher.fetchFile(ctx.owner, ctx.repo, ctx.sha, result.path, SKILL_CREATOR.gitMaxFileSize ?? 262144);
-            const known = new Set(siblings.map(c => c.entry.path));
-            referenced = referencedBundlePaths(body, result.path, ctx.root, ctx.tree.entries)
-                .filter(r => !known.has(r.repoPath))
-                .map(r => ({ entry: ctx.tree.entries.find(e => e.path === r.repoPath)!, relPath: r.relPath }));
-        } catch (e) {
-            logger.debug(`참조 파일 탐색 실패(형제 디렉토리만 수집): ${e instanceof Error ? e.message : String(e)}`);
-        }
-        const candidates = [...siblings, ...referenced];
-        if (candidates.length === 0) continue;
-
-        let picked = candidates;
-        if (picked.length > PLUGIN_COMPONENT_LIMITS.maxAssetsPerSkill) {
-            ctx.warnings.push(`ASSETS_TRUNCATED: ${result.name ?? result.path} 의 번들 파일 ${picked.length}개 중 ${PLUGIN_COMPONENT_LIMITS.maxAssetsPerSkill}개만 저장`);
-            picked = picked.slice(0, PLUGIN_COMPONENT_LIMITS.maxAssetsPerSkill);
-        }
+        const picked = await planSkillAssetCandidates(ctx, result);
+        if (picked.length === 0) continue;
         const stored: string[] = [];
         let total = 0;
         for (const { entry, relPath } of picked) {
-            if (!isStorableAsset(entry.path)) {
-                // fetcher 가 UTF-8 문자열만 주므로 바이너리는 저장 시 원본이 깨진다 — 건너뛴다
-                ctx.warnings.push(`ASSET_BINARY_SKIPPED: ${relPath} — 텍스트가 아닌 파일은 보존하지 않습니다`);
-                continue;
-            }
-            if (entry.size > PLUGIN_COMPONENT_LIMITS.maxAssetBytes) {
-                ctx.warnings.push(`ASSET_TOO_LARGE: ${relPath} (${entry.size}B) 는 상한 초과로 건너뜀`);
-                continue;
-            }
-            if (total + entry.size > PLUGIN_COMPONENT_LIMITS.maxAssetTotalBytes) {
-                ctx.warnings.push(`ASSETS_BUDGET_EXCEEDED: ${result.name ?? result.path} 의 번들 파일 합계 상한 초과 — 이후 파일 생략`);
-                break;
-            }
+            const screen = screenAssetCandidate({ entry, relPath }, total, result.name ?? result.path);
+            if (screen.warning) ctx.warnings.push(screen.warning);
+            if (screen.action === 'skip') continue;
+            if (screen.action === 'stop') break;
             try {
                 const raw = await ctx.fetcher.fetchFile(
                     ctx.owner, ctx.repo, ctx.sha, entry.path, PLUGIN_COMPONENT_LIMITS.maxAssetBytes,
@@ -362,42 +382,14 @@ export async function collectMcpDrafts(
     llmClientFactory: (model: string) => LLMClient,
     userConfig?: Record<string, UserConfigEntry>,
 ): Promise<McpServerInstallResult[]> {
-    let mcpEntries: NormalizedMcpServer[] = manifestServers;
-    if (mcpEntries.length === 0) {
-        // plugin.json `mcpServers` 문자열 경로 우선, 없으면 루트 mcp.json/.mcp.json
-        const mcpJsonPath = findMcpConfigPath(ctx.tree.entries, ctx.root, ctx.mcpServersPath);
-        if (ctx.mcpServersPath && !mcpJsonPath) {
-            ctx.warnings.push(`MCP_CONFIG_NOT_FOUND: plugin.json 이 가리키는 ${ctx.mcpServersPath} 이(가) 저장소에 없음`);
-        }
-        if (mcpJsonPath) {
-            const mcpRaw = await ctx.fetcher.fetchFile(ctx.owner, ctx.repo, ctx.sha, mcpJsonPath, EXTENSION_INGEST.manifestMaxBytes);
-            const parsedMcp = parseMcpJsonFile(mcpRaw);
-            // 항목 단위 — 일부 실패해도 나머지는 설치된다 (upstream 의 빈 url placeholder 등)
-            if (parsedMcp.errors.length > 0) {
-                ctx.warnings.push(`MCP_ENTRIES_SKIPPED: ${parsedMcp.errors.join('; ')}`);
-            }
-            if (parsedMcp.warnings.length > 0) {
-                ctx.warnings.push(`MCP_FIELDS_IGNORED: ${parsedMcp.warnings.join('; ')}`);
-            }
-            mcpEntries = parsedMcp.servers;
-        }
-    }
-    if (mcpEntries.length > EXTENSION_INGEST.maxMcpServersPerExtension) {
-        ctx.warnings.push(`MCP_SERVERS_TRUNCATED: ${mcpEntries.length}개 중 ${EXTENSION_INGEST.maxMcpServersPerExtension}개만 설치`);
-        mcpEntries = mcpEntries.slice(0, EXTENSION_INGEST.maxMcpServersPerExtension);
-    }
+    const mcpEntries = await planMcpEntries(ctx, manifestServers);
     if (mcpEntries.length === 0) return [];
 
     const results: McpServerInstallResult[] = [];
     const checker = new ConventionChecker(llmClientFactory(SKILL_CREATOR.authorModel));
     // MCP 서버 테이블은 MCP add-on 소유 — 데이터 모듈의 저장 연산으로(같은 풀, SQL 동일)
     const mcpServers = getComponentStore('mcpServers', ctx.pool);
-    // add-on 권한 집행 — 허용 권한이 정해진 설치만(deny by default, legacy_unreviewed 는 undefined 라 종전 동작).
-    // 네트워크 권한이 없으면 stdio 서버는 `--network none` 샌드박스로 저장하고, 원격(HTTP) 서버는 성립할 수 없어 제외한다.
-    const enforcePermissions = ctx.addonPermissions !== undefined;
-    const networkAllowed = !enforcePermissions || hasAddonPermission(ctx.addonPermissions, ADDON_PERMISSIONS.NETWORK_INTERNET);
-    // 요청은 했지만 승인 범위 밖(재승인 필요)인지, 처음부터 요청하지 않았는지 — 안내 문구만 다르다
-    const networkNeedsReview = !networkAllowed && !!ctx.blockedPermissions?.includes(ADDON_PERMISSIONS.NETWORK_INTERNET);
+    const { networkAllowed, networkNeedsReview } = mcpNetworkDecision(ctx);
     for (const entry of mcpEntries) {
         if (!networkAllowed && entry.transportType !== 'stdio') {
             if (networkNeedsReview) {

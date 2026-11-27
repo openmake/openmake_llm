@@ -1465,6 +1465,40 @@
         "no_tools": "接続済みですがツールがないため、モデルは使えません。",
         "meta_tools_off": "グローバルサーバーは mcp_call でのみ使えますが、その機能がオフです。"
       }
+    },
+    "transportNotice": {
+      "label": {
+        "deprecated-transport": "SSE 転送は廃止予定",
+        "endpoint-sunset": "エンドポイント終了予定",
+        "endpoint-moved": "新しいアドレスへ移行が必要"
+      },
+      "hint": {
+        "deprecated-transport": "SSE 転送は MCP 仕様で非推奨になりました。現在はそのまま接続できます。",
+        "endpoint-sunset": "このサーバーのアドレスはまもなく停止します。",
+        "endpoint-moved": "このサーバーは新しいアドレスに移行します。"
+      },
+      "sunsetOn": "期日: {date}。",
+      "replacement": "新しいアドレス: {url}",
+      "replacementCandidate": "Streamable HTTP アドレスの候補: {url}（サーバーの案内で確認してください）",
+      "reauth": "新しいアドレスで再登録し、再度ログインしてください（以前の OAuth 接続は使えません）。"
+    },
+    "declaredExtensions": {
+      "label": {
+        "skills": "スキル提供サーバー",
+        "apps": "MCP Apps(UI)未対応",
+        "tasks": "Tasks 未対応",
+        "events": "Events 未対応",
+        "auth": "認証拡張 未対応",
+        "unknown": "不明な拡張"
+      },
+      "hint": {
+        "skills": "このサーバーは Skills over MCP でスキルを提供します。OpenMake はまだこの経路でスキルを読み込みません — サーバーのツールはそのまま使えます。",
+        "apps": "このサーバーは MCP Apps(対話型 UI)を宣言しています。OpenMake は UI を表示せず、ツール結果のみ受け取ります。",
+        "tasks": "このサーバーは MCP Tasks(長時間処理)を宣言しています。OpenMake は Tasks を使わず通常のツール呼び出しで使います。",
+        "events": "このサーバーは MCP Events を宣言しています。OpenMake はイベントを購読しません。",
+        "auth": "このサーバーは認証拡張を宣言しています。OpenMake はこの拡張を使わず既存の OAuth でログインします。",
+        "unknown": "このサーバーは OpenMake が認識しない MCP 拡張を宣言しています。サーバーの基本ツールはそのまま使えます。"
+      }
     }
   },
   "mcpCatalog": {
@@ -2566,7 +2600,71 @@
       "sourceAria": "ソースフィルター",
       "sourceAll": "すべてのソース ({count})",
       "searchAria": "キーワード検索",
-      "searchPlaceholder": "名前・説明を検索"
+      "searchPlaceholder": "名前・説明を検索",
+      "admin": {
+        "statusOk": "前回の同期に成功",
+        "statusError": "前回の同期に失敗",
+        "statusRateLimited": "前回の同期: レート制限(自動再試行は間隔を延ばします)",
+        "statusNever": "同期履歴なし",
+        "lastAttempt": "最終試行: {time}",
+        "credentialSaved": "ソーストークン保存済み",
+        "credentialNone": "ソーストークンなし(認証なし)",
+        "tokenPlaceholder": "ソースアクセストークン(保存後は再表示されません)",
+        "saveToken": "トークンを保存",
+        "clearToken": "トークンを削除",
+        "clearTokenConfirm": "保存済みのソーストークンを削除しますか?",
+        "subpathPlaceholder": "サブパス(例: plugins/market、空欄でリポジトリルート)",
+        "saveSubpath": "パスを保存",
+        "saveFailed": "保存に失敗しました",
+        "saved": "保存しました",
+        "syncHint": "サブパスとトークンの変更は次回の同期から反映されます。",
+        "aliasLabel": "名前インストール用エイリアス",
+        "aliasPlaceholder": "エイリアス(空欄で {name})",
+        "saveAlias": "エイリアスを保存",
+        "aliasConflict": "他のカタログが使用中のエイリアスです"
+      },
+      "named": {
+        "placeholder": "プラグイン@マーケットプレイス (例: code-review@openmake-marketplace)",
+        "install": "名前でインストール",
+        "formatHint": "形式: プラグイン@マーケットプレイス — 英数字・. _ -、英数字で始まる",
+        "installed": "インストールしました: {name}(構成要素は承認後に有効化)",
+        "failed": "名前でのインストールに失敗しました",
+        "candidates": "候補:"
+      }
+    },
+    "preview": {
+      "title": "インストールのプレビュー — {name}",
+      "loading": "インストールされる構成要素を確認しています…",
+      "failed": "プレビューを読み込めませんでした。",
+      "source": "ソース",
+      "commit": "コミット",
+      "existingUpdate": "インストール済み(v{version}) — 確定するとこのバージョンに更新します。",
+      "existingUpToDate": "最新バージョンがすでにインストールされています。",
+      "existingOtherSource": "同じ名前の拡張機能が別のソースからインストールされています。先に削除してください。",
+      "components": "構成要素 — スキル {skills} · MCP サーバー {mcpServers} · エージェント {agents}",
+      "skill": "スキル",
+      "command": "コマンド",
+      "mcp": "MCP",
+      "agent": "エージェント",
+      "assets": "同梱ファイル {count} 件",
+      "mcpBlocked": "危険なコマンドパターンによりブロック表示",
+      "networkRestricted": "ネットワーク遮断サンドボックス",
+      "requiredEnv": "承認時に入力: {keys}",
+      "agentApproval": "承認後に使用",
+      "draftNote": "構成要素は下書きとして作成され、承認ページで承認すると有効になります。",
+      "permissions": "権限",
+      "permissionsLegacy": "権限の宣言なし(従来の動作 — ネットワーク許可)",
+      "permissionsNone": "要求された権限なし",
+      "permissionsBlocked": "再承認までブロックされる権限: {list}",
+      "warnings": "警告",
+      "cancel": "キャンセル",
+      "confirm": "インストール",
+      "hint": {
+        "deprecatedTransport": "SSE トランスポートは廃止予定です(Streamable HTTP 候補: {url})。",
+        "endpointSunset": "このアドレスは {date} に終了します — 新しいアドレス: {url}",
+        "endpointMoved": "このサーバーは {date} に {url} へ移行します — 新しいアドレスで再ログインが必要です。",
+        "remoteAuth": "リモートサーバー — 承認後にログイン(OAuth)が必要な場合があります。"
+      }
     }
   },
   "mcpInstances": {
@@ -2754,7 +2852,8 @@
       "EXTERNAL_MODEL_POLICY": "外部モデルの許可/拒否グロブ JSON。deny はグローバルと和集合、allow は積集合 — グローバルの拒否は解除できません。",
       "TOOL_APPROVAL_POLICY_MIN": "エージェント作業の承認ポリシー下限。要求より厳しければ下限が適用されます。",
       "MCP_ALLOWED_SERVERS": "インストールを許可する MCP カタログテンプレート id（カンマ区切り）。空 = 制限なし。",
-      "BROWSER_SITE_POLICY": "この組織のブラウザサイトポリシー。拒否リストはグローバルと和集合になります。グローバルに許可リストがある場合は両方に同じ項目だけが残り、グローバルが空なら組織のリストを使います。解除するとグローバルに従います。"
+      "BROWSER_SITE_POLICY": "この組織のブラウザサイトポリシー。拒否リストはグローバルと和集合になります。グローバルに許可リストがある場合は両方に同じ項目だけが残り、グローバルが空なら組織のリストを使います。解除するとグローバルに従います。",
+      "EXTENSION_SOURCE_POLICY": "拡張ソースの許可・拒否ルール JSON(github・git・archive・hostPattern・catalog・internal・local)。拒否はどの層でも一致すればブロックし、許可リストがグローバルと組織の両方にある場合は両方で一致する必要があります。allow を省略すると制限なし、[] はすべてブロック。EXTENSION_SOURCE_POLICY_ENFORCED がオンのときのみ適用されます。"
     },
     "history": "変更履歴",
     "noHistory": "変更履歴はありません。",
@@ -3378,5 +3477,45 @@
     "login": "ログイン",
     "snapshotNote": "{date} 時点の会話です — 元の会話が続いてもこの画面は変わりません。",
     "scope": "公開範囲: {scope}"
+  },
+  "marketVerdicts": {
+    "verdict": {
+      "supported": "対応",
+      "partial": "一部対応",
+      "unsupported": "非対応"
+    },
+    "reason": {
+      "NOT_INSTALLABLE": "インストールできるスキル・MCP サーバーがない",
+      "INSTALLABILITY_UNKNOWN": "インストール可否が不明(別リポジトリの項目)",
+      "SKILL_MCP_TOOL_IDIOM": "スキルが Claude Code の MCP ツール表記(mcp__server__tool)を使用",
+      "SKILL_ASSET_OUTSIDE_DIR": "スキルがフォルダー外のファイルを参照(同梱されない)",
+      "SKILL_COMMAND_ASSETS_SKIPPED": "コマンドから変換したスキルが同梱されないファイルを参照",
+      "SKILL_CLAUDE_DIR_PATH": "スキルが .claude/ パスを指している",
+      "SKILL_CLAUDE_INSTALL_GUIDE": "スキルに Claude Code のセットアップ手順が含まれる",
+      "SKILL_TOOL_UNSUPPORTED": "スキルが挙げるツールの一部がこの環境にない",
+      "SKILL_REQUIRED_TOOL_MISSING": "スキルに必要なツールがない",
+      "SKILL_EXECUTION_BLOCKED": "実行がブロックされたスキルがある",
+      "COMPONENTS_UNSUPPORTED": "非対応のコンポーネントがある",
+      "MCP_ENTRIES_SKIPPED": "スキップされた MCP 項目がある",
+      "MCP_BLOCKED_BY_CONVENTION": "規約チェックでブロックされた MCP サーバーがある",
+      "ASSETS_SKIPPED": "スキップされた同梱ファイルがある",
+      "COMPONENTS_TRUNCATED": "サイズ上限で切り捨てられたコンポーネントがある",
+      "MCP_TRANSPORT_SSE_DEPRECATED": "MCP サーバーが非推奨の SSE トランスポートを使用",
+      "MCP_EXT_APPS_UNSUPPORTED": "MCP Apps 拡張は非対応",
+      "MCP_EXT_TASKS_UNSUPPORTED": "MCP Tasks 拡張は非対応",
+      "MCP_EXT_UNRECOGNIZED": "MCP サーバーが不明な拡張を宣言",
+      "MCP_SKILLS_PROVIDER": "MCP サーバーがスキルを提供(Skills over MCP)",
+      "MCP_AUTH_DYNAMIC_REGISTRATION": "MCP サーバーが動的クライアント登録でサインイン",
+      "MCP_PROTOCOL_MODERN": "MCP サーバーが最新プロトコルを使用",
+      "MCP_PROTOCOL_LEGACY": "MCP サーバーが旧プロトコルを使用",
+      "CROSS_REPO_SOURCE": "別リポジトリにある項目",
+      "CONTENT_NOT_EVALUATED": "内容はまだ評価していない"
+    },
+    "provenance": {
+      "publisher": "公開者: {value}",
+      "commit": "コミット: {value}",
+      "license": "ライセンス: {value}"
+    },
+    "snapshotOnly": "カタログのスナップショットのみで判定 — インストールすると内容も確認します"
   }
 }

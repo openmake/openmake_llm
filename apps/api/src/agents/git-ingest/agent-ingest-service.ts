@@ -30,6 +30,7 @@ import { ConventionChecker, type ConventionFinding } from './convention-checker'
 import { CustomAgentRepository, type CustomAgentRow } from '../../data/repositories/custom-agent-repository';
 import { GitIngestService } from './git-ingest-service';
 import { SKILL_CREATOR } from '../../config/constants';
+import { assertExtensionSourceAllowed } from '../../services/extensions/source-policy';
 
 const logger = createLogger('AgentIngestService');
 
@@ -92,6 +93,8 @@ export class AgentIngestService {
         const parsed = parseGitUrl(input.gitUrl);
         if (!parsed) throw new Error(`INVALID_GIT_URL: ${input.gitUrl}`);
         const { owner, repo } = parsed;
+        // 확장 원본 정책(M2, opt-in) — fetch 전. `git-url:` 스킬 참조는 하위 GitIngestService 가 그 원본으로 다시 판정한다
+        await assertExtensionSourceAllowed({ url: input.gitUrl, ref: input.gitRef, userId: input.userId, action: 'install', gitFirst: true });
 
         // (2) fetcher
         const fetcher = this.opts.fetcherFactory({ accessToken: input.accessToken });

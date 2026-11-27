@@ -3,6 +3,9 @@
  * 페이지(mcp-catalog-page.tsx)에서 분리해 tests/web/mcp-catalog-args.test.ts 가 직접 검증한다.
  */
 
+import { parseTransportNotice, type TransportNoticeView } from "../transport-notice";
+import { parseDeclaredExtensions, type DeclaredExtensionView } from "../declared-extensions";
+
 export type CatalogKind = "server" | "skill";
 
 /**
@@ -32,6 +35,10 @@ export interface CatalogEntry {
   argFields: InstallField[];
   /** 설치 폼에 노출할 env 필드 — 필수 먼저, 선택(채널 제한·베이스 URL 등)이 뒤. */
   envFields: InstallField[];
+  /** 전송·엔드포인트 퇴역 안내(MCP-3) — 백엔드 플래그가 꺼져 있거나 해당 없으면 null */
+  transportNotice: TransportNoticeView | null;
+  /** 이 템플릿으로 설치된 서버가 선언한 MCP 확장(MCP-5, 인식만) — 없으면 빈 배열 */
+  declaredExtensions: DeclaredExtensionView[];
 }
 
 /* ── 백엔드 응답 타입 (GET /api/mcp/catalog) ──────────────── */
@@ -52,6 +59,10 @@ export interface ApiCatalogTemplate {
   is_enabled?: boolean;
   args_schema?: ApiFieldSchema;
   env_schema?: ApiFieldSchema;
+  /** 전송·엔드포인트 퇴역 안내 (apps/api addons/mcp-runtime/transport-notices.ts) */
+  transportNotice?: unknown;
+  /** 선언 확장 (apps/api addons/mcp-runtime/extension-awareness.ts) */
+  declaredExtensions?: unknown;
 }
 
 /** JSON schema type → 변환용 타입. integer 는 number 로, 모르는 값은 string. */
@@ -94,6 +105,8 @@ export function mapTemplate(t: ApiCatalogTemplate): CatalogEntry {
     kind: "server",
     argFields: toFields(t.args_schema, "arg"),
     envFields: toFields(t.env_schema, "env"),
+    transportNotice: parseTransportNotice(t.transportNotice),
+    declaredExtensions: parseDeclaredExtensions(t.declaredExtensions),
   };
 }
 

@@ -63,13 +63,15 @@ describe('매니페스트 defaultState 스키마', () => {
 });
 
 describe('기존 내장 add-on 무영향', () => {
-    it('지금 내장 add-on 은 defaultState 를 선언하지 않는다 → 전부 enabled(종전 동작)', () => {
+    it('defaultState 를 선언한 내장 add-on 은 목록의 것뿐이다 — 나머지는 전부 enabled(종전 동작)', () => {
         const { listBuiltinAddonDefs, builtinAddonDefaultState } = jest.requireActual('../builtin-registry');
         const defs = listBuiltinAddonDefs() as BuiltinAddon[];
         expect(defs.length).toBeGreaterThan(5);
         // 기본 꺼짐 add-on 을 새로 들이면(마켓플레이스 등) 이 목록에 그 id 를 더한다
-        expect(defs.filter(a => a.manifest.defaultState !== undefined).map(a => a.id)).toEqual([]);
-        for (const a of defs) expect(builtinAddonDefaultState(a.id)).toBe('enabled');
+        const declared = ['extension-marketplace'];
+        expect(defs.filter(a => a.manifest.defaultState !== undefined).map(a => a.id)).toEqual(declared);
+        for (const id of declared) expect(builtinAddonDefaultState(id)).toBe('disabled');
+        for (const a of defs.filter(d => !declared.includes(d.id))) expect(builtinAddonDefaultState(a.id)).toBe('enabled');
         expect(builtinAddonDefaultState('ext:some-extension')).toBe('enabled');
     });
 });

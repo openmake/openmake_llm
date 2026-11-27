@@ -9,6 +9,7 @@ import { ApiClient } from "@/lib/api-client";
 import { deepResearchAddon } from "./deep-research";
 import { discordAddon } from "./discord";
 import { discussionAddon } from "./discussion";
+import { extensionMarketplaceAddon } from "./extension-marketplace";
 import { kakaoMapAddon } from "./kakao-map";
 import { knowledgeAddon } from "./knowledge";
 import { mcpRuntimeAddon } from "./mcp-runtime";
@@ -19,6 +20,7 @@ import type { WebAddon } from "./types";
 
 export const WEB_ADDONS: readonly WebAddon[] = [
   kakaoMapAddon, notebooklmAddon, discordAddon, discussionAddon, deepResearchAddon, knowledgeAddon, skillRuntimeAddon, mcpRuntimeAddon,
+  extensionMarketplaceAddon,
 ];
 
 /** 채팅 모드를 가진 add-on — 소켓 훅처럼 React 밖에서 진행 이벤트를 매핑할 때 쓴다(꺼진 add-on 은 이벤트를 보내지 않는다) */

@@ -1465,6 +1465,40 @@
         "no_tools": "Connected but has no tools, so the model cannot use it.",
         "meta_tools_off": "Global servers are reachable only via mcp_call, which is turned off."
       }
+    },
+    "transportNotice": {
+      "label": {
+        "deprecated-transport": "SSE transport deprecated",
+        "endpoint-sunset": "Endpoint shutting down",
+        "endpoint-moved": "Moving to a new address"
+      },
+      "hint": {
+        "deprecated-transport": "The SSE transport is deprecated in the MCP spec. It still connects for now.",
+        "endpoint-sunset": "This server address will be shut down.",
+        "endpoint-moved": "This server is moving to a new address."
+      },
+      "sunsetOn": "Date: {date}.",
+      "replacement": "New address: {url}",
+      "replacementCandidate": "Likely Streamable HTTP address: {url} (confirm with the server docs)",
+      "reauth": "Register the server again at the new address and sign in again (the old OAuth connection will not work)."
+    },
+    "declaredExtensions": {
+      "label": {
+        "skills": "Skill provider",
+        "apps": "MCP Apps (UI) not supported",
+        "tasks": "Tasks not supported",
+        "events": "Events not supported",
+        "auth": "Auth extension not supported",
+        "unknown": "Unknown extension"
+      },
+      "hint": {
+        "skills": "This server provides skills via Skills over MCP. OpenMake doesn't load skills this way yet — the server's tools still work.",
+        "apps": "This server declares MCP Apps (interactive UI). OpenMake doesn't render the UI — it only receives tool results.",
+        "tasks": "This server declares MCP Tasks (long-running work). OpenMake doesn't use Tasks and calls its tools normally.",
+        "events": "This server declares MCP Events. OpenMake doesn't subscribe to events.",
+        "auth": "This server declares an auth extension. OpenMake doesn't use it and signs in with its existing OAuth flow.",
+        "unknown": "This server declares an MCP extension OpenMake doesn't recognize. The server's basic tools still work."
+      }
     }
   },
   "mcpCatalog": {
@@ -2566,7 +2600,71 @@
       "sourceAria": "Source filter",
       "sourceAll": "All sources ({count})",
       "searchAria": "Keyword search",
-      "searchPlaceholder": "Search name/description"
+      "searchPlaceholder": "Search name/description",
+      "admin": {
+        "statusOk": "Last sync succeeded",
+        "statusError": "Last sync failed",
+        "statusRateLimited": "Last sync: rate limited (automatic retries back off)",
+        "statusNever": "Never synced",
+        "lastAttempt": "Last attempt: {time}",
+        "credentialSaved": "Source token saved",
+        "credentialNone": "No source token (unauthenticated)",
+        "tokenPlaceholder": "Source access token (not shown again after saving)",
+        "saveToken": "Save token",
+        "clearToken": "Remove token",
+        "clearTokenConfirm": "Remove the saved source token?",
+        "subpathPlaceholder": "Subpath (e.g. plugins/market; empty = repository root)",
+        "saveSubpath": "Save path",
+        "saveFailed": "Save failed",
+        "saved": "Saved",
+        "syncHint": "Subpath and token changes apply from the next sync.",
+        "aliasLabel": "Install-by-name alias",
+        "aliasPlaceholder": "Alias (empty = {name})",
+        "saveAlias": "Save alias",
+        "aliasConflict": "Another catalog already uses this alias"
+      },
+      "named": {
+        "placeholder": "plugin@marketplace (e.g. code-review@openmake-marketplace)",
+        "install": "Install by name",
+        "formatHint": "Format: plugin@marketplace — letters, digits, . _ -, starting with a letter or digit",
+        "installed": "Installed: {name} (components activate after approval)",
+        "failed": "Install by name failed",
+        "candidates": "Did you mean:"
+      }
+    },
+    "preview": {
+      "title": "Install preview — {name}",
+      "loading": "Checking what will be installed…",
+      "failed": "Could not load the preview.",
+      "source": "Source",
+      "commit": "Commit",
+      "existingUpdate": "Already installed (v{version}) — confirming updates it to this version.",
+      "existingUpToDate": "The latest version is already installed.",
+      "existingOtherSource": "An extension with the same name is installed from a different source. Remove it first.",
+      "components": "Components — skills {skills} · MCP servers {mcpServers} · agents {agents}",
+      "skill": "Skill",
+      "command": "Command",
+      "mcp": "MCP",
+      "agent": "Agent",
+      "assets": "{count} bundled files",
+      "mcpBlocked": "flagged as blocked by a risky command pattern",
+      "networkRestricted": "network-isolated sandbox",
+      "requiredEnv": "enter on approval: {keys}",
+      "agentApproval": "usable after approval",
+      "draftNote": "Components are created as drafts and become active once approved in Approvals.",
+      "permissions": "Permissions",
+      "permissionsLegacy": "No permissions declared (previous behavior — network allowed)",
+      "permissionsNone": "No permissions requested",
+      "permissionsBlocked": "Blocked until re-approved: {list}",
+      "warnings": "Warnings",
+      "cancel": "Cancel",
+      "confirm": "Install",
+      "hint": {
+        "deprecatedTransport": "The SSE transport is being retired (Streamable HTTP candidate: {url}).",
+        "endpointSunset": "This endpoint shuts down on {date} — new address: {url}",
+        "endpointMoved": "This server moves to {url} on {date} — you will need to sign in again at the new address.",
+        "remoteAuth": "Remote server — sign-in (OAuth) may be required after approval."
+      }
     }
   },
   "mcpInstances": {
@@ -2754,7 +2852,8 @@
       "EXTERNAL_MODEL_POLICY": "Allow/deny globs for external models as JSON. deny is unioned with global, allow is intersected — an org cannot lift a global block.",
       "TOOL_APPROVAL_POLICY_MIN": "Minimum approval policy for agent tasks. If stricter than the request, the minimum wins.",
       "MCP_ALLOWED_SERVERS": "Comma-separated MCP catalog template ids allowed for installation. Empty = no restriction.",
-      "BROWSER_SITE_POLICY": "Browser site policy for this organization. The deny list is unioned with global. If global has an allow list, only entries present in both remain; if global is empty, the org list applies. Clear it to follow global."
+      "BROWSER_SITE_POLICY": "Browser site policy for this organization. The deny list is unioned with global. If global has an allow list, only entries present in both remain; if global is empty, the org list applies. Clear it to follow global.",
+      "EXTENSION_SOURCE_POLICY": "Extension source allow/deny rules as JSON (github, git, archive, hostPattern, catalog, internal, local). A deny in any layer blocks; if both global and organization define allow, a source must match both. Omit allow for no restriction; [] blocks everything. Applied only when EXTENSION_SOURCE_POLICY_ENFORCED is on."
     },
     "history": "Change history",
     "noHistory": "No changes yet.",
@@ -3378,5 +3477,45 @@
     "login": "Sign in",
     "snapshotNote": "Conversation as of {date} — this page does not change when the original conversation continues.",
     "scope": "Visibility: {scope}"
+  },
+  "marketVerdicts": {
+    "verdict": {
+      "supported": "Supported",
+      "partial": "Partial",
+      "unsupported": "Unsupported"
+    },
+    "reason": {
+      "NOT_INSTALLABLE": "No installable skills or MCP servers",
+      "INSTALLABILITY_UNKNOWN": "Installability unknown (cross-repo entry)",
+      "SKILL_MCP_TOOL_IDIOM": "Skills use Claude Code MCP tool names (mcp__server__tool)",
+      "SKILL_ASSET_OUTSIDE_DIR": "Skills reference files outside their folder (not bundled)",
+      "SKILL_COMMAND_ASSETS_SKIPPED": "Converted commands reference files that are not bundled",
+      "SKILL_CLAUDE_DIR_PATH": "Skills point to .claude/ paths",
+      "SKILL_CLAUDE_INSTALL_GUIDE": "Skills include Claude Code setup instructions",
+      "SKILL_TOOL_UNSUPPORTED": "Some tools named by skills have no equivalent here",
+      "SKILL_REQUIRED_TOOL_MISSING": "A tool required by a skill is missing",
+      "SKILL_EXECUTION_BLOCKED": "A skill is blocked from running",
+      "COMPONENTS_UNSUPPORTED": "Some components are not supported",
+      "MCP_ENTRIES_SKIPPED": "Some MCP entries were skipped",
+      "MCP_BLOCKED_BY_CONVENTION": "An MCP server was blocked by the convention check",
+      "ASSETS_SKIPPED": "Some bundled files were skipped",
+      "COMPONENTS_TRUNCATED": "Some components were cut at the size limit",
+      "MCP_TRANSPORT_SSE_DEPRECATED": "MCP server uses the deprecated SSE transport",
+      "MCP_EXT_APPS_UNSUPPORTED": "MCP Apps extension is not supported",
+      "MCP_EXT_TASKS_UNSUPPORTED": "MCP Tasks extension is not supported",
+      "MCP_EXT_UNRECOGNIZED": "MCP server declares an unrecognized extension",
+      "MCP_SKILLS_PROVIDER": "MCP server provides skills (Skills over MCP)",
+      "MCP_AUTH_DYNAMIC_REGISTRATION": "MCP server signs in with dynamic client registration",
+      "MCP_PROTOCOL_MODERN": "MCP server speaks the modern protocol",
+      "MCP_PROTOCOL_LEGACY": "MCP server speaks a legacy protocol",
+      "CROSS_REPO_SOURCE": "Hosted in a different repository",
+      "CONTENT_NOT_EVALUATED": "Contents not evaluated yet"
+    },
+    "provenance": {
+      "publisher": "Publisher: {value}",
+      "commit": "Commit: {value}",
+      "license": "License: {value}"
+    },
+    "snapshotOnly": "Judged from the catalog snapshot only — install to check contents"
   }
 }

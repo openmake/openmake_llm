@@ -12,6 +12,7 @@ import { getConfig } from '../../config/env';
 import { resolveExternalModelPolicy, type ExternalModelPolicy } from '../../config/external-model-policy';
 import { APPROVAL_POLICY_STRICTNESS, ORG_POLICY_KEYS, ORG_POLICY_SCHEMAS, type OrgPolicyKey } from '../../config/org-policy-registry';
 import { ORG_CONTEXT } from '../../config/runtime-limits';
+import { parseExtensionSourcePolicy, type ExtensionSourcePolicyLayer } from '../../config/extension-source-policy';
 import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { activeOrgForStrict, membershipsForStrict, type OrgContext } from './membership-cache';
 
@@ -23,6 +24,8 @@ export interface OrgPolicySet {
     mcpAllowedServers?: string[];
     addonAllowlist?: string[];
     browserSite?: BrowserSitePolicy;
+    /** 확장 원본 정책 조직 층 — 깨진 값도 전부 차단 층으로 남긴다(fail-closed) */
+    extensionSource?: ExtensionSourcePolicyLayer;
 }
 
 export interface EffectivePolicy {
@@ -35,6 +38,8 @@ export interface EffectivePolicy {
     addonAllowlist?: string[];
     /** 로컬 브라우저 사이트 허용 목록(Companion P2) — 비어 있으면 모든 입력이 승인 대상 */
     browserSite: BrowserSitePolicy;
+    /** 확장 원본 정책의 **조직 층**(전역 층은 소비처가 따로 읽어 층으로 겹친다) — undefined = 조직 층 없음 */
+    extensionSource?: ExtensionSourcePolicyLayer;
     orgId: string | null;
 }
 
@@ -42,6 +47,10 @@ export interface EffectivePolicy {
 export function parseOrgPolicyRows(rows: Array<{ key: string; value: unknown }>): OrgPolicySet {
     const out: OrgPolicySet = {};
     for (const row of rows) {
+        if (row.key === ORG_POLICY_KEYS.EXTENSION_SOURCE_POLICY) {
+            out.extensionSource = parseExtensionSourcePolicy(row.value, 'organization');
+            continue;
+        }
         const schema = ORG_POLICY_SCHEMAS[row.key as OrgPolicyKey];
         if (!schema) continue;
         const parsed = schema.safeParse(row.value);
@@ -170,6 +179,7 @@ function mergeEffectivePolicy(org: OrgContext | null, set: OrgPolicySet): Effect
         mcpAllowedServers: set.mcpAllowedServers,
         addonAllowlist: set.addonAllowlist,
         browserSite: mergeBrowserSitePolicy(globalSite, set.browserSite),
+        extensionSource: set.extensionSource,
         orgId: org.orgId,
     };
 }

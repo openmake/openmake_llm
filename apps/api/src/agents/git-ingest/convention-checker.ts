@@ -90,6 +90,30 @@ export function isBlockedByConvention(findings: ConventionFinding[] | undefined)
     );
 }
 
+/**
+ * MCP 서버 정의의 **정적 전용** 검사 — LLM 을 부르지 않는다(설치 미리보기 M1b·v3.5 B-S).
+ * 차단 권한이 있는 결정적 룰(`MCP_INGEST.riskyCommandPatterns`)만 돌리므로, 실제 설치의 `checkMcpServer` 1단계와 결과가 같다.
+ */
+export function checkMcpServerStatic(execSpec: { command?: string; args?: string[] }): ConventionFinding[] {
+    const findings: ConventionFinding[] = [];
+    const joined = [
+        execSpec.command || '',
+        ...(execSpec.args || []),
+    ].join(' ');
+    for (const rule of MCP_INGEST.riskyCommandPatterns) {
+        if (rule.pattern.test(joined)) {
+            findings.push({
+                severity: rule.severity,
+                rule: rule.rule,
+                message: rule.message,
+                snippet: joined.slice(0, 60),
+                source: 'static',
+            });
+        }
+    }
+    return findings;
+}
+
 export class ConventionChecker {
     constructor(private llm: Pick<LLMClient, 'chat'>) {}
 
@@ -141,24 +165,7 @@ export class ConventionChecker {
         bodyMarkdown: string,
         execSpec: { command?: string; args?: string[] },
     ): Promise<ConventionCheckResult> {
-        const findings: ConventionFinding[] = [];
-
-        const joined = [
-            execSpec.command || '',
-            ...(execSpec.args || []),
-        ].join(' ');
-
-        for (const rule of MCP_INGEST.riskyCommandPatterns) {
-            if (rule.pattern.test(joined)) {
-                findings.push({
-                    severity: rule.severity,
-                    rule: rule.rule,
-                    message: rule.message,
-                    snippet: joined.slice(0, 60),
-                    source: 'static',
-                });
-            }
-        }
+        const findings: ConventionFinding[] = checkMcpServerStatic(execSpec);
 
         try {
             const llmResult = await this.check(manifestYaml, bodyMarkdown, 'mcp-server');

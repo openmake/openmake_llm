@@ -27,7 +27,7 @@ interface ValidateOptions {
     availableToolNames: Set<string>;
 }
 
-type ValidateResult =
+export type ValidateResult =
     | {
         ok: true;
         manifest: SkillManifestFrontmatter;

@@ -27,9 +27,10 @@ import { GitFetcher } from './git-fetcher';
 import { isNonGitSourceUrl, nonGitPseudoRepo } from './internal-bundle-fetcher';
 import { scanForSkillManifests, type ManifestCandidate } from './repo-scanner';
 import { ConventionChecker, type ConventionFinding } from './convention-checker';
-import { parseSkillFile, validateManifest } from '../manifest-validator';
-import { adaptSkillContent } from './skill-compat';
+import { parseSkillFile, validateManifest, type ValidateResult } from '../manifest-validator';
+import { adaptSkillContent, type SkillCompatResult } from './skill-compat';
 import { SKILL_CREATOR } from '../../config/constants';
+import { assertExtensionSourceAllowed } from '../../services/extensions/source-policy';
 
 const logger = createLogger('GitIngestService');
 
@@ -83,6 +84,11 @@ interface GitIngestOptions {
     fetcherFactory: (opts: { accessToken?: string }) => GitFetcher;
     /** tree 상한 override — 확장 번들 체인이 거대 마켓플레이스 repo 용으로 상향 주입 (기본: 스킬 ingest 상한) */
     maxTreeEntries?: number;
+    /**
+     * 원본 정책(M2) 판정을 상위 서비스가 같은 원본으로 이미 했다 — 확장 번들이 스킬마다 이 서비스를 부를 때만(생성자 옵션이라
+     * 도구 인자로는 켤 수 없다). 에이전트 매니페스트의 `git-url:` 스킬 참조는 **다른 원본**이라 켜지 않는다.
+     */
+    sourcePolicyPrechecked?: boolean;
 }
 
 /** `skills/<dir>/SKILL.md` → `<dir>`, 루트 `SKILL.md` → fallback (repo 이름). 유도 불가면 undefined. */
@@ -91,6 +97,37 @@ export function deriveSkillNameFromPath(path: string, fallback: string): string 
     const dir = segments.length >= 2 ? segments[segments.length - 2] : fallback;
     const normalized = dir.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
     return normalized || undefined;
+}
+
+/**
+ * SKILL.md 원문 → 검증된 매니페스트 + 설치 시 적응본. DB·LLM 을 쓰지 않는다 — 설치와 설치 미리보기(M1b)가 공유한다.
+ * name 이 없으면 경로에서 유도하고 `warnings` 에 남긴다. 검증 실패는 `MANIFEST_INVALID` 예외.
+ */
+export async function prepareSkillContent(
+    content: string, path: string, repo: string, warnings: string[],
+): Promise<{ validation: Extract<ValidateResult, { ok: true }>; adapted: SkillCompatResult }> {
+    const parsedFile = parseSkillFile(content);
+    // name 누락 시 디렉토리명 폴백 — Claude Code 는 SKILL.md 의 name 을 디렉토리에서 유도한다
+    // (vanta·logrocket·windsor-ai 실사례, 2026-08-29). 루트 SKILL.md 는 repo 이름.
+    if (!parsedFile.frontmatter.name) {
+        const derived = deriveSkillNameFromPath(path, repo);
+        if (derived) {
+            parsedFile.frontmatter.name = derived;
+            warnings.push(`SKILL_NAME_DERIVED: frontmatter name 누락 → "${derived}" (경로에서 유도)`);
+        }
+    }
+    const validation = await validateManifest(parsedFile, { availableToolNames: new Set() });
+    if (!validation.ok) {
+        throw new Error(`MANIFEST_INVALID: ${validation.errors.join('; ')}`);
+    }
+    // (5-b) 설치 시 적응 — 외부 생태계(Claude Code 등) 표현을 이 환경 기준으로 안내.
+    // 본문 재작성이 아니라 앞단 호환 노트 주입 + 버려지던 frontmatter 보존이라
+    // 적응할 것이 없으면 원문 그대로다(기존 스킬 무영향).
+    const adapted = adaptSkillContent({
+        frontmatter: validation.raw_frontmatter,
+        promptMd: validation.prompt_md,
+    });
+    return { validation, adapted };
 }
 
 export class GitIngestService {
@@ -103,6 +140,10 @@ export class GitIngestService {
             ?? (isNonGitSourceUrl(input.gitUrl) ? nonGitPseudoRepo(input.gitUrl) : null);
         if (!parsed) throw new Error(`INVALID_GIT_URL: ${input.gitUrl}`);
         const { owner, repo } = parsed;
+        // 확장 원본 정책(M2, opt-in) — fetch 전. 확장·에이전트 번들의 하위 호출은 상위가 이미 판정(sourcePolicyPrechecked)
+        if (!this.opts.sourcePolicyPrechecked) {
+            await assertExtensionSourceAllowed({ url: input.gitUrl, ref: input.gitRef, userId: input.userId, action: 'install', gitFirst: true });
+        }
 
         // (2) target=system soft-fail
         let effectiveTarget: 'user' | 'system' = input.target ?? 'user';
@@ -138,28 +179,8 @@ export class GitIngestService {
         const maxFileSize = SKILL_CREATOR.gitMaxFileSize ?? 256 * 1024;
         const content = input.contentOverride
             ?? await fetcher.fetchFile(owner, repo, sha, candidate.path, maxFileSize);
-        const parsedFile = parseSkillFile(content);
-        // name 누락 시 디렉토리명 폴백 — Claude Code 는 SKILL.md 의 name 을 디렉토리에서 유도한다
-        // (vanta·logrocket·windsor-ai 실사례, 2026-08-29). 루트 SKILL.md 는 repo 이름.
-        if (!parsedFile.frontmatter.name) {
-            const derived = deriveSkillNameFromPath(candidate.path, repo);
-            if (derived) {
-                parsedFile.frontmatter.name = derived;
-                warnings.push(`SKILL_NAME_DERIVED: frontmatter name 누락 → "${derived}" (경로에서 유도)`);
-            }
-        }
-        const validation = await validateManifest(parsedFile, { availableToolNames: new Set() });
-        if (!validation.ok) {
-            throw new Error(`MANIFEST_INVALID: ${validation.errors.join('; ')}`);
-        }
-
-        // (5-b) 설치 시 적응 — 외부 생태계(Claude Code 등) 표현을 이 환경 기준으로 안내.
-        // 본문 재작성이 아니라 앞단 호환 노트 주입 + 버려지던 frontmatter 보존이라
-        // 적응할 것이 없으면 원문 그대로다(기존 스킬 무영향).
-        const adapted = adaptSkillContent({
-            frontmatter: validation.raw_frontmatter,
-            promptMd: validation.prompt_md,
-        });
+        // (5)·(5-b) 검증 + 설치 시 적응 — 설치 미리보기(M1b)와 같은 함수
+        const { validation, adapted } = await prepareSkillContent(content, candidate.path, repo, warnings);
         const skillContent = adapted.content;
         // checksum 은 실제 저장 본문 기준 — 적응본과 skill_manifests.prompt_md 가 일치해야 한다
         const skillChecksum = adapted.adapted

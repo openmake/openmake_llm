@@ -55,7 +55,7 @@ export interface SkillCompatReport {
     blockedReason: string | null;
 }
 
-interface SkillCompatResult {
+export interface SkillCompatResult {
     /** 적응된 본문 (변경 없으면 원문 그대로) */
     content: string;
     /** 지원 수준·필수 도구·검토 필요 여부 — 적응할 것이 없어도 항상 채운다 */

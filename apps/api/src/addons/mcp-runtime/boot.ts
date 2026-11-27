@@ -15,11 +15,15 @@ import { createLogger } from '../../utils/logger';
 import { mcpToolRuntime } from './runtime';
 import { mcpMetaTools } from './mcp-meta-tools';
 import { importMcpServerFromGitTool } from './mcp-server-ingest-tool';
+import { registerMcpInstallHints } from '../../runtime-ports/mcp-install-hints';
+import { mcpInstallHints } from './install-hints';
 
 const logger = createLogger('McpRuntimeAddon');
 
 export async function startMcpRuntime(): Promise<AddonRuntimeHandle> {
     registerToolRuntime(mcpToolRuntime);
+    // 설치 미리보기의 MCP 전송·인증 경고 — Base 는 포트만 안다
+    registerMcpInstallHints(mcpInstallHints);
     contributeBuiltInTools('mcp-runtime', [
         ...mcpMetaTools,
         importMcpServerFromGitTool as MCPToolDefinition,

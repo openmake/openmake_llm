@@ -14,6 +14,10 @@
  *   교차 저장소 엔트리는 accessToken 있을 때만 대상 repo 를 프로브한다
  *   (무인증 GitHub API 60/hr 실측 — 토큰 없으면 판정 미상 유지).
  *
+ * 하위 경로(subpath, M4 — extension_catalog_sources.source_subpath): 저장소 안 그 디렉터리를 카탈로그 루트로 본다 —
+ *   marketplace.json·plugin.json 탐색을 그 아래로 한정하고, 같은 저장소 항목의 경로는 그 루트 기준이다.
+ *   없으면(null) 종전대로 저장소 루트. 설치(ExtensionIngestService.import 의 catalogSubpath)도 같은 규칙.
+ *
  * @module agents/git-ingest/catalog-snapshot
  */
 import { parseGitUrl } from '../../schemas/git-ingest.schema';
@@ -29,13 +33,15 @@ export { buildSkillDiscoveryPattern } from './extension-discovery';
 export interface CatalogSnapshot {
     name: string;
     description: string | null;
-    plugins: Array<{ name: string; description?: string; version?: string; installable?: boolean; category?: string; description_ko?: string }>;
+    plugins: Array<{ name: string; description?: string; version?: string; installable?: boolean; category?: string; description_ko?: string; source?: string }>;
 }
 
 interface CatalogSnapshotDeps {
     fetcherFactory: (opts: { accessToken?: string }) => GitFetcher;
     /** .zip 아카이브 소스용 fetcher (ExtensionIngestService.makeArchiveFetcher 위임) */
     archiveFetcherFor: (url: string) => GitFetcher;
+    /** 원본 정책(M2) 강제 시 — 교차 저장소 항목 원본 판정. false 면 프로브(네트워크)하지 않는다 */
+    isEntrySourceAllowed?: (url: string) => boolean;
 }
 
 type ExternalRepoCache = Map<string, { sha: string; treeEntries: TreeEntry[] | null } | 'notfound' | 'error'>;
@@ -44,7 +50,9 @@ export async function fetchCatalogSnapshot(
     deps: CatalogSnapshotDeps,
     url: string,
     accessToken?: string,
+    subpath?: string | null,
 ): Promise<CatalogSnapshot> {
+    const sp = catalogRootPrefix(subpath);
     const isArchive = isNonGitSourceUrl(url);
     const parsed = isArchive ? nonGitPseudoRepo(url) : parseGitUrl(url);
     if (!parsed) throw new Error(`INVALID_GIT_URL: ${url}`);
@@ -57,7 +65,7 @@ export async function fetchCatalogSnapshot(
     // (a) marketplace.json 표준 경로 직접 조회 — 거대 repo 의 listTree 상한(maxTreeEntries)
     //     우회 (jeremylongshore 22,982 blobs 실측). 실패 시 tree 스캔 폴백.
     let marketplace: ReturnType<typeof parseMarketplaceFile> | null = null;
-    for (const mkPath of ['.claude-plugin/marketplace.json', 'marketplace.json']) {
+    for (const mkPath of [`${sp}.claude-plugin/marketplace.json`, `${sp}marketplace.json`]) {
         try {
             const mkRaw = await fetcher.fetchFile(parsed.owner, parsed.repo, sha, mkPath, EXTENSION_INGEST.marketplaceMaxBytes);
             const mk = parseMarketplaceFile(mkRaw);
@@ -69,7 +77,7 @@ export async function fetchCatalogSnapshot(
     if (!marketplace) {
         const tree = await fetcher.listTree(parsed.owner, parsed.repo, sha, EXTENSION_INGEST.maxTreeEntries);
         treeEntries = tree.entries;
-        const mkCandidates = scanForMarketplaceManifests(tree.entries);
+        const mkCandidates = scanForMarketplaceManifests(underPrefix(tree.entries, sp));
         if (mkCandidates.length > 0) {
             const mkRaw = await fetcher.fetchFile(parsed.owner, parsed.repo, sha, mkCandidates[0].path, EXTENSION_INGEST.marketplaceMaxBytes);
             const mk = parseMarketplaceFile(mkRaw);
@@ -86,7 +94,7 @@ export async function fetchCatalogSnapshot(
             }
         }
         const entries = marketplace.marketplace.plugins;
-        const enriched: Array<{ name: string; description?: string; installable?: boolean; category?: string }> = [];
+        const enriched: CatalogSnapshot['plugins'] = [];
         // 교차 저장소 repo 별 resolveRef/listTree 재사용 캐시 (한 sync 실행 한정)
         const externalCache: ExternalRepoCache = new Map();
         // 소규모 동시성 배치 — raw fetch 위주라 rate limit 부담 낮음
@@ -98,14 +106,15 @@ export async function fetchCatalogSnapshot(
                 if (p.url) {
                     const p2 = parseGitUrl(p.url);
                     if (p2 && (p2.owner !== parsed.owner || p2.repo !== parsed.repo)) {
-                        if (!accessToken) return { name: p.name, description: p.description, category: p.category };
+                        // source = 항목의 실제 원본 — 원본 정책 catalog-only 의 '등록 원본' 판정(스냅샷이 원본을 알아야 업데이트가 통과한다)
+                        const base = { name: p.name, description: p.description, category: p.category, source: p.url };
+                        if (!accessToken) return base;
+                        if (deps.isEntrySourceAllowed && !deps.isEntrySourceAllowed(p.url)) return base;   // 정책상 막힌 원본엔 요청하지 않는다
                         const installable = await probeExternalEntry(fetcher, p2.owner, p2.repo, p.ref, p.path, externalCache);
-                        return installable === undefined
-                            ? { name: p.name, description: p.description, category: p.category }
-                            : { name: p.name, description: p.description, installable, category: p.category };
+                        return installable === undefined ? base : { ...base, installable };
                     }
                 }
-                const prefix = p.path ? `${p.path}/` : '';
+                const prefix = `${sp}${p.path ? `${p.path}/` : ''}`;
                 const installable = await probeInstallableAt(fetcher, parsed.owner, parsed.repo, sha, prefix, treeEntries);
                 return { name: p.name, description: p.description, installable, category: p.category };
             }));
@@ -118,7 +127,7 @@ export async function fetchCatalogSnapshot(
     if (!treeEntries) {
         treeEntries = (await fetcher.listTree(parsed.owner, parsed.repo, sha, EXTENSION_INGEST.maxTreeEntries)).entries;
     }
-    const candidates = scanForExtensionManifests(treeEntries).slice(0, 10);
+    const candidates = scanForExtensionManifests(underPrefix(treeEntries, sp)).slice(0, 10);
     if (candidates.length === 0) {
         throw new Error(`NO_EXTENSION_FOUND: 소스에 marketplace.json/plugin.json 없음 (${url})`);
     }
@@ -219,4 +228,14 @@ async function probeExternalEntry(
     } catch {
         return undefined;
     }
+}
+
+/** 카탈로그 루트 prefix — null/빈 값 = 저장소 루트('') */
+export function catalogRootPrefix(subpath: string | null | undefined): string {
+    return subpath ? `${subpath.replace(/\/+$/, '')}/` : '';
+}
+
+/** prefix 아래 항목만 (prefix '' = 전부) */
+export function underPrefix(entries: TreeEntry[], prefix: string): TreeEntry[] {
+    return prefix ? entries.filter((e) => e.path.startsWith(prefix)) : entries;
 }

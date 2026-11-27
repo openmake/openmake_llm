@@ -125,6 +125,8 @@ export interface CatalogTemplateInstall {
     argsSchema: Record<string, unknown>;
     envSchema: Record<string, unknown>;
     toolAllowlist?: string[];
+    /** 이전 판의 연결 필드 — 관리자가 고치지 않은 행을 지금 판으로 이관할 때 비교한다 */
+    supersedes?: ReadonlyArray<{ transportType: 'stdio' | 'sse' | 'streamable-http'; commandTemplate?: string; urlTemplate?: string }>;
     defaultEnabled: boolean;
 }
 
@@ -140,6 +142,11 @@ export interface McpServerComponentStore extends ExtensionLinkedStore {
     getForExport(userId: string, ids: readonly string[]): Promise<ExportMcpServer[]>;
     /** 팩 카탈로그 템플릿 — 이미 있는 행(관리자 수정 포함)은 덮어쓰지 않는다 */
     installCatalogTemplate(template: CatalogTemplateInstall): Promise<void>;
+    /**
+     * 행의 연결 필드(transport·command·url)가 `template.supersedes` 중 하나와 정확히 같을 때만 지금 판으로 바꾼다
+     * (관리자가 고친 행·지운 행은 그대로). 이름·설명·스키마·켜짐은 건드리지 않는다. 바꿨으면 true.
+     */
+    upgradeSupersededCatalogTemplate?(template: CatalogTemplateInstall): Promise<boolean>;
 }
 
 /** 구성요소 종류 → DB 연결에 묶이는 저장 연산 팩토리 */

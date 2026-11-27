@@ -22,7 +22,7 @@
  * 5. disconnect() → 클라이언트 및 전송 정리
  */
 
-import { Client, StreamableHTTPClientTransport, SSEClientTransport } from '@modelcontextprotocol/client';
+import { Client, StreamableHTTPClientTransport, SSEClientTransport, type PriorDiscovery } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { StringDecoder } from 'string_decoder';
 import type { MCPServerConfig, MCPConnectionStatus, MCPTool, MCPToolResult } from '../../tool-contract/types';
@@ -40,6 +40,8 @@ import { sdkToolToMCPTool, type SDKTool } from './tool-schema';
 import { offloadMediaBlocks } from './media-content';
 import { ElicitationCallTracker } from './elicitation-bridge';
 import { getConfig } from '../../config/env';
+import { observeNegotiation } from './negotiation-observer';
+import { forgetVerdict, priorFor, rememberVerdict, resolveNegotiationMode, versionNegotiationOption } from './protocol-negotiation';
 
 const logger = createLogger('ExternalMCP');
 
@@ -117,6 +119,8 @@ export class ExternalMCPClient extends EventEmitter {
     private serverCapabilities: ReturnType<Client['getServerCapabilities']> = undefined;
     /** 사용자 입력 요청(F13.10) — 플래그 ON + 사용자 풀 서버만. 채팅·전역 서버는 elicitation 을 광고하지 않는다 */
     private readonly elicitation: ElicitationCallTracker | null;
+    /** 이번 연결의 OAuth provider — 협상 관측(MCP-1)이 인증 방식 분류에만 쓴다 */
+    private authProvider: McpOAuthProvider | undefined;
     /** 마지막 활동 시각(ms) — connect·callTool 에서 갱신. 사용자 풀 유휴 회수(R6)의 입력 */
     lastUsedAt = 0;
 
@@ -148,13 +152,19 @@ export class ExternalMCPClient extends EventEmitter {
         this.lastError = undefined;
 
         try {
+            this.authProvider = undefined;
             this.transport = await this.createTransport();
             this.stderrTail = '';
             this.captureStderr(this.transport);
 
+            // MCP-2 협상 방식 — legacy(기본)면 옵션·prior 를 넘기지 않아 종전과 같고, auto 면 탐지 후 폴백한다.
+            const negotiationMode = resolveNegotiationMode();
+            const negotiation = versionNegotiationOption(negotiationMode);
+            const prior = priorFor(this.config.id, negotiationMode);
             this.client = new Client(
                 { name: 'openmake-llm', version: '1.0.0' },
                 {
+                    ...(negotiation ? { versionNegotiation: negotiation } : {}),
                     capabilities: this.elicitation ? { elicitation: { form: {} } } : {},
                     // 서버가 tools listChanged 를 광고하면 SDK 가 알림을 구독해 갱신 목록을 넘긴다(F13.12).
                     // 미광고 서버는 조용히 건너뛰므로 stale 폴링(refreshToolsIfStale)이 안전망.
@@ -174,7 +184,8 @@ export class ExternalMCPClient extends EventEmitter {
             this.client.onclose = () => this.handleUnexpectedClose();
             this.elicitation?.attach(this.client);
 
-            await this.client.connect(this.transport);
+            await (prior ? this.client.connect(this.transport, { prior: prior as PriorDiscovery }) : this.client.connect(this.transport));
+            rememberVerdict(this.config.id, negotiationMode, this.client, prior);
             this.serverCapabilities = this.client.getServerCapabilities?.();
 
             // 도구 목록 검색
@@ -186,10 +197,13 @@ export class ExternalMCPClient extends EventEmitter {
             this.lastUsedAt = Date.now();
             this.lastPing = new Date().toISOString();
             logger.info(`Connected to "${this.config.name}" — ${this.discoveredTools.length} tools discovered`);
+            // 협상 관측(MCP-1) — 플래그 OFF 면 즉시 끝나고, 기다리지 않으며 실패해도 연결에 영향이 없다.
+            void observeNegotiation(this.config, this.client, this.authProvider).catch(() => undefined);
         } catch (error) {
             this.status = 'error';
             this.lastError = error instanceof Error ? error.message : String(error);
             this.discoveredTools = [];
+            forgetVerdict(this.config.id);
             logger.error(`Failed to connect to "${this.config.name}":`, this.lastError);
             throw error;
         }
@@ -461,8 +475,8 @@ export class ExternalMCPClient extends EventEmitter {
      * UnauthorizedError 를 던진다 → `auth_required` 로 분류돼 화면에 [로그인] 이 뜬다.
      */
     private createAuthProvider(): McpOAuthProvider | undefined {
-        if (!this.config.user_id) return undefined;
-        return new McpOAuthProvider({ serverId: this.config.id, userId: this.config.user_id });
+        if (!this.config.user_id) return (this.authProvider = undefined);
+        return (this.authProvider = new McpOAuthProvider({ serverId: this.config.id, userId: this.config.user_id }));
     }
 
     private async createTransport(): Promise<TransportInstance> {

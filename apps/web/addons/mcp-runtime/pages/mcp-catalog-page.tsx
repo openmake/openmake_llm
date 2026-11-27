@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { DeclaredExtensionBadges, TransportNoticeBadge } from "../components/server-status-badges";
 
 import {
   buildInstallPayload,
@@ -212,6 +213,8 @@ export function McpCatalogPage() {
                           접속처(예: 앱 DB용 / 분석 DB용 postgres)에 이름만 달리해 여러 개 둘 수 있다.
                           종전에는 설치되면 버튼이 잠겨 두 번째 인스턴스를 만들 수 없었다. */}
                       {e.installed && <Badge tone="success">{t("installed")}</Badge>}
+                      <TransportNoticeBadge notice={e.transportNotice} />
+                      <DeclaredExtensionBadges extensions={e.declaredExtensions} />
                       <Button
                         size="sm"
                         variant={e.installed ? "outline" : "default"}

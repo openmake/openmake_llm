@@ -5,6 +5,7 @@
  *   GET /admin/mcp/monitoring/summary       — 전역 instance summary
  *   GET /admin/mcp/monitoring/top-crashed   — crash count desc top 10
  *   GET /admin/mcp/monitoring/crash-trend   — 24h spawn/crash timeline
+ *   GET /admin/mcp/negotiation              — 서버별 협상 관측(MCP-1, MCP_NEGOTIATION_OBSERVE_ENABLED 일 때 쌓인다)
  *   /admin/mcp/servers/*                     — 관리자 bridge 허용 옵션(mcp-admin-servers.routes, 2026-11-08 점검 후속)
  *
  * @module routes/mcp-admin-monitoring.routes
@@ -16,6 +17,9 @@ import { success } from '../../../utils/api-response';
 import { McpAdminMonitoringRepository } from '../data/mcp-admin-monitoring-repository';
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
 import { mcpAdminServersRouter } from './mcp-admin-servers.routes';
+import { McpNegotiationRepository } from '../data/mcp-negotiation-repository';
+import { isNegotiationObserveEnabled } from '../negotiation-observer';
+import { declaredExtensionFields, extensionAwarenessEnabled } from '../extension-awareness';
 
 export const mcpAdminMonitoringRouter = Router();
 mcpAdminMonitoringRouter.use(requireAuth, requireAdmin);
@@ -39,4 +43,20 @@ mcpAdminMonitoringRouter.get('/monitoring/crash-trend', asyncHandler(async (_req
     const repo = new McpAdminMonitoringRepository(getUnifiedDatabase().getPool());
     const timeline = await repo.getCrashTrendByHour();
     res.json(success({ timeline }));
+}));
+
+/** 협상 관측 목록 — 관리자 현황(M3)·호환 판정(M1)의 입력. 플래그가 꺼져 있으면 기록이 늘지 않을 뿐 조회는 된다 */
+mcpAdminMonitoringRouter.get('/negotiation', asyncHandler(async (req: Request, res: Response) => {
+    const repo = new McpNegotiationRepository(getUnifiedDatabase().getPool());
+    const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+    const limitRaw = parseInt(String(req.query.limit ?? ''), 10);
+    const items = await repo.list({
+        transport: str(req.query.transport),
+        protocolEra: str(req.query.protocolEra),
+        limit: Number.isFinite(limitRaw) ? limitRaw : undefined,
+    });
+    // MCP-5 — 플래그가 켜져 있으면 선언 확장 분류(declaredExtensions)를 덧붙인다(꺼져 있으면 종전 그대로)
+    const aware = extensionAwarenessEnabled();
+    const out = aware ? items.map(i => ({ ...i, ...declaredExtensionFields(i.extensions) })) : items;
+    res.json(success({ items: out, observeEnabled: isNegotiationObserveEnabled() }));
 }));
