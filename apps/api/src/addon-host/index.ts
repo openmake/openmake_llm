@@ -21,7 +21,8 @@ import { APP_VERSION } from '../config/constants';
 import { satisfiesOpenmakeRange } from './manifest';
 import { ADDON_PERMISSIONS, hasAddonPermission } from '../config/addon-permissions';
 import { loadAddonEntry } from './entry-loader';
-import { installPackCatalog } from './pack-catalog';
+import { installPackCatalog, CATALOG_SUPERSEDE_MIGRATE_FLAG } from './pack-catalog';
+import { readSettingValue } from '../config/env';
 import { installPackSkills } from './pack-skills';
 import { recordAddonBootCandidates, setAddonRuntimeStatus } from './activation';
 import { ensureLegacyCapabilityBridge, LEGACY_BRIDGE_CAPABILITIES } from './legacy-capability-bridge';
@@ -55,8 +56,11 @@ async function installBuiltinPack(id: string): Promise<void> {
     for (const reason of failed) logger.error(`내장 팩 '${id}' 스킬 설치 실패 — ${reason}`);
 
     const { AddonInstallRepository } = await import('../data/repositories/addon-install-repository');
-    const catalog = await installPackCatalog(id, new AddonInstallRepository(getUnifiedDatabase().getPool()));
+    const catalog = await installPackCatalog(id, new AddonInstallRepository(getUnifiedDatabase().getPool()), {
+        upgradeSuperseded: readSettingValue(CATALOG_SUPERSEDE_MIGRATE_FLAG) === 'true',
+    });
     if (catalog.installed.length > 0) logger.info(`내장 팩 '${id}' 카탈로그 템플릿 신규 설치: ${catalog.installed.join(', ')}`);
+    if (catalog.upgraded.length > 0) logger.info(`내장 팩 '${id}' 카탈로그 템플릿 이전 판 이관: ${catalog.upgraded.join(', ')}`);
     for (const reason of catalog.failed) logger.error(`내장 팩 '${id}' 카탈로그 설치 실패 — ${reason}`);
 }
 

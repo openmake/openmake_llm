@@ -1465,6 +1465,22 @@
         "no_tools": "接続済みですがツールがないため、モデルは使えません。",
         "meta_tools_off": "グローバルサーバーは mcp_call でのみ使えますが、その機能がオフです。"
       }
+    },
+    "transportNotice": {
+      "label": {
+        "deprecated-transport": "SSE 転送は廃止予定",
+        "endpoint-sunset": "エンドポイント終了予定",
+        "endpoint-moved": "新しいアドレスへ移行が必要"
+      },
+      "hint": {
+        "deprecated-transport": "SSE 転送は MCP 仕様で非推奨になりました。現在はそのまま接続できます。",
+        "endpoint-sunset": "このサーバーのアドレスはまもなく停止します。",
+        "endpoint-moved": "このサーバーは新しいアドレスに移行します。"
+      },
+      "sunsetOn": "期日: {date}。",
+      "replacement": "新しいアドレス: {url}",
+      "replacementCandidate": "Streamable HTTP アドレスの候補: {url}（サーバーの案内で確認してください）",
+      "reauth": "新しいアドレスで再登録し、再度ログインしてください（以前の OAuth 接続は使えません）。"
     }
   },
   "mcpCatalog": {

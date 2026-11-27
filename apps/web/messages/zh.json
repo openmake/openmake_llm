@@ -1465,6 +1465,22 @@
         "no_tools": "已连接但没有工具，模型无法使用。",
         "meta_tools_off": "全局服务器只能通过 mcp_call 使用，但该功能已关闭。"
       }
+    },
+    "transportNotice": {
+      "label": {
+        "deprecated-transport": "SSE 传输即将停用",
+        "endpoint-sunset": "端点即将关闭",
+        "endpoint-moved": "需迁移到新地址"
+      },
+      "hint": {
+        "deprecated-transport": "MCP 规范已弃用 SSE 传输。目前仍可正常连接。",
+        "endpoint-sunset": "此服务器地址即将关闭。",
+        "endpoint-moved": "此服务器正在迁移到新地址。"
+      },
+      "sunsetOn": "日期：{date}。",
+      "replacement": "新地址：{url}",
+      "replacementCandidate": "可能的 Streamable HTTP 地址：{url}（请以服务器说明为准）",
+      "reauth": "请在新地址重新注册并重新登录（旧的 OAuth 连接将无法使用）。"
     }
   },
   "mcpCatalog": {

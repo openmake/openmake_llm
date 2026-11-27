@@ -50,6 +50,7 @@ import { getAuditService } from '../../../services/AuditService';
 import { validateOutboundUrl } from '../../../security/ssrf-guard';
 import { auditMcpServerCreated, auditMcpServerDeleted, auditMcpDeleteDenied, auditMcpRegisterDenied, auditMcpUrlBlocked } from './mcp-server-audit';
 import { McpCatalogInputError } from '../data/mcp-catalog-input';
+import { transportNoticeFields } from '../transport-notices';
 
 const logger = createLogger('McpRoutes');
 
@@ -172,6 +173,7 @@ export const mcpRouter = Router();
               /** 원격 서버에 OAuth 토큰이 저장돼 있는가 (stdio 는 항상 false) */
               oauthConnected: oauthConnected.has(server.id),
               modelExposure: exposureOfServer(server, effective), // 연결과 별개 — 모델이 도구를 받는 조건
+              ...transportNoticeFields(server.transport_type, server.url), // MCP-3 퇴역 안내(플래그 OFF 면 없음)
           };
       });
 
@@ -256,7 +258,7 @@ export const mcpRouter = Router();
       }
 
       auditMcpServerCreated(req, { id, name: config.name, source: 'manual' });
-      res.status(201).json(success({ server: config, connectionStatus: status }));
+      res.status(201).json(success({ server: config, connectionStatus: status, ...transportNoticeFields(config.transport_type, config.url) }));
   }));
 
   // 서버 제거 (DELETE) — 소유자 + admin
