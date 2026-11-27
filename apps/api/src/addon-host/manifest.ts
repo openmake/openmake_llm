@@ -16,6 +16,9 @@ export const ADDON_MANIFEST_FILENAME = 'openmake-addon.json';
 const ADDON_ID_PATTERN = /^[a-z0-9][a-z0-9.-]*$/;
 
 export const ADDON_SCOPES = ['system', 'organization', 'user'] as const;
+/** 매니페스트 `defaultState` 값 — 설치 표의 의도(`desired_state`)와 같은 두 값 */
+export const ADDON_DEFAULT_STATES = ['enabled', 'disabled'] as const;
+export type AddonDefaultState = typeof ADDON_DEFAULT_STATES[number];
 export const ADDON_KINDS = ['content', 'integration', 'runtime'] as const;
 
 /**
@@ -130,6 +133,13 @@ export const addonManifestSchema = z.object({
      * 모르는 값은 거절한다: 선언만 있고 아무것도 막지 않는 권한을 받아 주면 거짓 안심이 된다.
      */
     permissions: z.array(z.enum(ADDON_PERMISSION_VALUES)).max(20).optional(),
+    /**
+     * 설치 표(`addon_installations`)에 **처음 들어갈 때**의 상태(2026-11-27, 마켓플레이스 계획 v3.4 A1). 생략하면 `enabled`(종전 동작).
+     * `disabled` 면 첫 발견 시 꺼진 채 기록되고 관리자가 `/admin/addons` 에서 켠다 — 이미 있는 행은 건드리지 않는다
+     * (발견 upsert 가 state 를 덮지 않는 규칙 그대로). 행이 없거나 아직 읽지 못한 동안의 켜짐 판정도 이 값을 따른다(fail-closed).
+     * env `ADDON_BUILTIN_DISABLED` 가 이 값보다 우선한다.
+     */
+    defaultState: z.enum(ADDON_DEFAULT_STATES).optional(),
     entitlement: z.object({ sku: z.string().min(1).max(120) }).optional(),
 }).strict();
 

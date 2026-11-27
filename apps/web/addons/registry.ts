@@ -14,6 +14,7 @@ import { knowledgeAddon } from "./knowledge";
 import { mcpRuntimeAddon } from "./mcp-runtime";
 import { notebooklmAddon } from "./notebooklm";
 import { skillRuntimeAddon } from "./skill-runtime";
+import { selectEnabledWebAddons } from "./enabled-filter";
 import type { WebAddon } from "./types";
 
 export const WEB_ADDONS: readonly WebAddon[] = [
@@ -26,6 +27,7 @@ export const WEB_CHAT_MODES = WEB_ADDONS.flatMap((a) => (a.chatMode ? [{ id: a.i
 /**
  * 서버에서 켜져 있는 add-on 만. 조회 실패·로딩 중에는 전부 켜진 것으로 본다(fail-open) —
  * 라우트가 없는 배포에서 진입점이 보이는 것보다, 일시 오류로 기능이 사라지는 쪽이 더 나쁘다.
+ * 단 `hideUntilEnabledKnown` add-on 은 응답에서 켜짐이 확인될 때만 보인다(fail-closed).
  */
 export function useEnabledWebAddons(): readonly WebAddon[] {
   const { data } = useQuery({
@@ -34,8 +36,5 @@ export function useEnabledWebAddons(): readonly WebAddon[] {
     staleTime: Infinity,
   });
   // 같은 응답이면 같은 배열을 돌려준다 — 호출부의 useMemo 의존성이 렌더마다 바뀌지 않게
-  return useMemo(() => {
-    const disabled = new Set((data?.data?.addons ?? []).filter((a) => !a.enabled).map((a) => a.id));
-    return disabled.size === 0 ? WEB_ADDONS : WEB_ADDONS.filter((a) => !disabled.has(a.id));
-  }, [data]);
+  return useMemo(() => selectEnabledWebAddons(WEB_ADDONS, data?.data?.addons), [data]);
 }

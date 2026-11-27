@@ -108,6 +108,12 @@ export interface WebAddon {
   adminQuickLinks?: readonly AdminQuickLinkExtension[];
   /** 입력창 `/` 메뉴 — 켜진 add-on 중 첫 번째 것만 쓴다 */
   slashMenu?: SlashMenuExtension;
+  /**
+   * 켜짐을 확인하기 전에는 숨긴다(fail-closed). 기본(생략)은 종전대로 조회 전·실패 시 켜진 것으로 본다(fail-open).
+   * 서버 매니페스트가 `defaultState: "disabled"` 인 add-on 이 쓴다 — 관리자가 켜기 전 진입점이 잠깐이라도 보이면 안 된다.
+   * 목록 응답에 이 add-on 의 id 가 없을 때도 숨긴다.
+   */
+  hideUntilEnabledKnown?: boolean;
 }
 
 /** 승인함(/approvals) 섹션 — Base 섹션(에이전트 작업 10 · Custom Agent 40) 사이에 순서 값으로 들어간다 */

@@ -20,6 +20,8 @@ Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트
 ① 매니페스트 발견·strict 검증 → ② 앱 버전 호환 → ③ env(`ADDON_BUILTIN_DISABLED`) ∧ DB 의도(`addon_installations.desired_state`)로 대상 확정 → ④ 허용된 add-on 의 migration → ⑤ 성공한 add-on 만 `entry.runtime` 호출 → ⑥ 팩 설치(스킬·카탈로그, 백그라운드·fail-open) → ⑦ 대상 밖 add-on 의 시스템 스킬 보관.
 실패한 add-on 의 후속 단계는 차단하고 `last_failure_code` 로 남긴다. 다른 add-on 과 서버 기동은 계속된다.
 
+**기본 꺼짐(매니페스트 `defaultState`, 2026-11-27)**: `defaultState: "disabled"` 를 선언한 add-on 은 첫 발견 때 설치 표에 `disabled` 로 들어가고(`upsertDiscovered` 의 `initialState` — 첫 insert 에만, 이미 있는 행은 그대로) 관리자가 `/admin/addons` 에서 켠다. 행이 없거나 의도를 읽지 못한 동안은 부팅(③)·켜짐 판정(`addon-state`)·클라이언트 목록(`GET /api/addons`) 모두 꺼짐으로 본다(fail-closed). 선언이 없는 add-on 은 종전 그대로다 — 행이 없으면 enabled, `GET /api/addons` 는 env 판정만. env `ADDON_BUILTIN_DISABLED` 가 이 값보다 우선한다.
+
 ## 7.2 활성 축 (`addon-host/activation.ts`)
 
 | 축 | 뜻 | 반영 시점 |
@@ -189,7 +191,7 @@ add-on 을 모두 꺼도 데이터 모듈 로드만 허용된다 — `all-builti
 
 ## 8.8 웹 확장점 (`apps/web/addons/types.ts`)
 
-Base 화면은 켜진 add-on(`useEnabledWebAddons` — `GET /api/addons`, 조회 실패·로딩 중엔 전부 켜짐)의 확장만 순회한다. Base 항목은 10 단위 순서 값이고 add-on 은 그 사이 값으로 끼운다.
+Base 화면은 켜진 add-on(`useEnabledWebAddons` — `GET /api/addons`, 조회 실패·로딩 중엔 전부 켜짐)의 확장만 순회한다. 단 `hideUntilEnabledKnown: true` add-on 은 응답에서 켜짐이 확인될 때만 보인다(로딩 중·실패·목록에 없음 → 숨김, 판정 `addons/enabled-filter.ts`) — 서버 `defaultState: "disabled"` add-on 이 쓴다. Base 항목은 10 단위 순서 값이고 add-on 은 그 사이 값으로 끼운다.
 
 | 확장점 | Base 소비처 | 지금 쓰는 add-on |
 |---|---|---|
