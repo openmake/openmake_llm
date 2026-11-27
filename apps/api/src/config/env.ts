@@ -94,6 +94,8 @@ export interface EnvConfig {
     extensionRemoteMcpEnabled: boolean;
     /** 관리자 확장 현황(M3) — 현황·정책 미리보기 라우트와 /admin/extensions 화면(기본 OFF) */
     extensionAdminInventoryEnabled: boolean;
+    /** `GET /api/addons` 가 모든 add-on 의 켜짐을 라우트 게이트와 같은 판정(env × DB 상태 × 프로세스 준비)으로 답한다(opt-in, config/addon-list-state) */
+    addonListReflectDbState: boolean;
     /** 'allow'(기본) · 'catalog-only' — 강제 ON 일 때만 의미 */
     extensionArbitraryUrlInstall: 'allow' | 'catalog-only';
     /** 전역 확장 원본 규칙 원문(JSON {allow?,deny?}) — 빈 값 = 전역 층 없음 */
@@ -285,6 +287,7 @@ export function loadConfig(): EnvConfig {
         EXTENSION_INSTALL_PREVIEW_ENABLED: env('EXTENSION_INSTALL_PREVIEW_ENABLED'),
         EXTENSION_ADMIN_INVENTORY_ENABLED: env('EXTENSION_ADMIN_INVENTORY_ENABLED'),
         EXTENSION_REMOTE_MCP_ENABLED: env('EXTENSION_REMOTE_MCP_ENABLED'),
+        ADDON_LIST_REFLECT_DB_STATE: env('ADDON_LIST_REFLECT_DB_STATE'),
         EXTENSION_ARBITRARY_URL_INSTALL: env('EXTENSION_ARBITRARY_URL_INSTALL'),
         EXTENSION_SOURCE_POLICY: env('EXTENSION_SOURCE_POLICY'),
         EXTENSION_CATALOG_AUTO_SYNC_ENABLED: env('EXTENSION_CATALOG_AUTO_SYNC_ENABLED'),
@@ -421,6 +424,7 @@ export function loadConfig(): EnvConfig {
         extensionInstallPreviewEnabled: parsed.EXTENSION_INSTALL_PREVIEW_ENABLED === undefined ? DEFAULT_CONFIG.extensionInstallPreviewEnabled : parsed.EXTENSION_INSTALL_PREVIEW_ENABLED === 'true',
         extensionRemoteMcpEnabled: parsed.EXTENSION_REMOTE_MCP_ENABLED === undefined ? DEFAULT_CONFIG.extensionRemoteMcpEnabled : parsed.EXTENSION_REMOTE_MCP_ENABLED === 'true',
         extensionAdminInventoryEnabled: parsed.EXTENSION_ADMIN_INVENTORY_ENABLED === undefined ? DEFAULT_CONFIG.extensionAdminInventoryEnabled : parsed.EXTENSION_ADMIN_INVENTORY_ENABLED === 'true',
+        addonListReflectDbState: parsed.ADDON_LIST_REFLECT_DB_STATE === undefined ? DEFAULT_CONFIG.addonListReflectDbState : parsed.ADDON_LIST_REFLECT_DB_STATE === 'true',
         extensionArbitraryUrlInstall: parsed.EXTENSION_ARBITRARY_URL_INSTALL === 'catalog-only' ? 'catalog-only' : DEFAULT_CONFIG.extensionArbitraryUrlInstall,
         extensionSourcePolicy: parsed.EXTENSION_SOURCE_POLICY ?? DEFAULT_CONFIG.extensionSourcePolicy,
         // 확장 카탈로그 주기 동기화(M4) — 'true' 만 켠다, 간격은 양의 정수만(그 외 기본값)

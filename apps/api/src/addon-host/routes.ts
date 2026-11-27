@@ -12,6 +12,7 @@ import { createLogger } from '../utils/logger';
 import { enabledBuiltinAddons, isBuiltinAddonEnabled, listBuiltinAddonDefs } from './builtin-registry';
 import type { ADDON_KINDS } from './manifest';
 import { loadAddonEntry } from './entry-loader';
+import { isAddonListReflectDbStateEnabled } from '../config/addon-list-state';
 
 const logger = createLogger('AddonHost');
 
@@ -32,12 +33,17 @@ export function listBuiltinAddons(): AddonListEntry[] {
     return addonListCache;
 }
 
+/** 테스트 전용 — 목록 캐시를 비운다(매니페스트·env 를 바꿔 가며 같은 모듈로 검증할 때) */
+export function __resetAddonListCacheForTest(): void {
+    addonListCache = null;
+}
+
 /** `GET /api/addons` — 클라이언트가 꺼진 add-on 의 UI 를 숨기는 데 쓴다. 민감 정보 없음(인증 불요). */
 function createAddonListRouter(): Router {
     const router = Router();
     router.get('/', (_req, res) => {
-        // 기본 꺼짐 add-on 이 없으면 종전과 같은 동기 응답(env 판정) — 기존 add-on 의 목록 계약 그대로
-        if (defaultOffAddonIds().size === 0) {
+        // 기본 꺼짐 add-on 이 없고 DB 상태 반영(opt-in)도 꺼져 있으면 종전과 같은 동기 응답(env 판정) — 기존 add-on 의 목록 계약 그대로
+        if (defaultOffAddonIds().size === 0 && !isAddonListReflectDbStateEnabled()) {
             res.json(success({ addons: listBuiltinAddons() }));
             return;
         }
@@ -54,16 +60,27 @@ function defaultOffAddonIds(): Set<string> {
 /**
  * 클라이언트용 목록 — 종전 add-on 은 env 판정(`listBuiltinAddons`) 그대로다. `defaultState: disabled` add-on 만 DB 상태까지
  * 겹친다: 관리자가 켜기 전에는 진입점을 숨겨야 해서다(관리자 토글은 요청마다 반영된다). 상태를 확인하지 못하면 꺼짐으로 답한다.
+ *
+ * `ADDON_LIST_REFLECT_DB_STATE`(opt-in, §8-4)가 켜져 있으면 **종전 add-on 도** 라우트 게이트와 같은 판정
+ * (`readAddonEnabledStrict` — env × DB 상태 × 이 프로세스의 준비 상태)으로 답한다: 게이트가 404(꺼짐)·503 `ADDON_FAILED`(미준비)로
+ * 답할 add-on 은 `enabled:false` 라 웹이 진입점을 숨긴다. 단 **확인 불가**(게이트는 재시도 가능한 503 `ADDON_STATE_UNKNOWN` — 꺼짐과
+ * 구분한다)에는 꺼짐을 주장하지 않고 종전 env 판정을 둔다 — 웹의 종전 add-on 은 fail-open(일시 오류로 기능이 사라지지 않게)이다.
  */
 export async function listAddonsForClient(): Promise<AddonListEntry[]> {
     const base = listBuiltinAddons();
     const defaultOff = defaultOffAddonIds();
-    if (defaultOff.size === 0) return base;
+    const reflectAll = isAddonListReflectDbStateEnabled();
+    if (defaultOff.size === 0 && !reflectAll) return base;
     const { readAddonEnabledStrict } = await import('../services/addon/addon-state');
     return Promise.all(base.map(async (a) => {
-        if (!defaultOff.has(a.id) || !a.enabled) return a;
+        if (!a.enabled) return a;
+        if (defaultOff.has(a.id)) {
+            const verdict = await readAddonEnabledStrict(a.id).catch(() => ({ known: false as const }));
+            return { ...a, enabled: verdict.known && verdict.enabled };
+        }
+        if (!reflectAll) return a;
         const verdict = await readAddonEnabledStrict(a.id).catch(() => ({ known: false as const }));
-        return { ...a, enabled: verdict.known && verdict.enabled };
+        return verdict.known ? { ...a, enabled: verdict.enabled } : a;
     }));
 }
 
