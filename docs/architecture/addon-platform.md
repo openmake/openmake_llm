@@ -189,6 +189,8 @@ Knowledge 는 바인딩(연결·해제·해석·사이드바 숨김)과 Space �
 
 add-on 을 모두 꺼도 데이터 모듈 로드만 허용된다 — `all-builtin-addons-off.test.ts` 는 코드 로더 호출을 데이터 모듈 진입점으로만 제한한다.
 
+**확장 공유·게시 (§8-2, 2026-11-28 — add-on `extension-curation`, 기본 켜짐)**: 갤러리(`GET /api/users/me/extensions/gallery`·`POST …/gallery/:id/install`)·공유 토글(`PATCH /api/users/me/extensions/:id/visibility`)·내부 게시(`/api/marketplace`)는 이 add-on 의 라우트다 — 경로·응답은 종전 Base 라우트 그대로이고, add-on 게이트(꺼짐 404 · 조직 allowlist 밖 403)를 지난다. 앱이 add-on 라우트를 Base 확장 라우터보다 먼저 마운트하므로 `/gallery` 가 Base `/:id` 에 잡히지 않는다. Base 라우트 사이의 한 경로만 가지려고 매니페스트 `mountPath` 가 경로 매개변수 세그먼트(`/:id`)를 받는다. **저장소·설치 엔진·원본 정책은 Base** 다 — `user_extensions`·카탈로그 원본·`marketplace_bundles` 저장소, `git-ingest`, 원본 정책(M2)·카탈로그 관리(등록·동기화·자격증명·별칭·색인)·이름 설치(M5)·조직 배포 모드(§8-1)·`runtime-ports/extension-catalog` 는 채팅 설치·다른 add-on 이 쓰고 add-on 을 꺼도 정책이 강제돼야 해서다. add-on 은 포트 `runtime-ports/extension-sharing`(저장소 팩토리·공유 설치·번들 빌더)와 `runtime-ports/request-auth`(인증·검증 미들웨어)로만 Base 를 쓴다(래칫 추가 0). 꺼도 Base 확장 목록·원본 정책 403·채팅 설치 도구가 그대로인지는 `__tests__/extension-sharing-addon-off.test.ts` 가 고정한다.
+
 ## 8.8 웹 확장점 (`apps/web/addons/types.ts`)
 
 Base 화면은 켜진 add-on(`useEnabledWebAddons` — `GET /api/addons`, 조회 실패·로딩 중엔 전부 켜짐)의 확장만 순회한다. 단 `hideUntilEnabledKnown: true` add-on 은 응답에서 켜짐이 확인될 때만 보인다(로딩 중·실패·목록에 없음 → 숨김, 판정 `addons/enabled-filter.ts`) — 서버 `defaultState: "disabled"` add-on 이 쓴다. Base 항목은 10 단위 순서 값이고 add-on 은 그 사이 값으로 끼운다.

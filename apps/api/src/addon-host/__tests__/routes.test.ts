@@ -41,14 +41,20 @@ describe('mountAddonRoutes', () => {
             '/api/addons',
             '/api/agents/skills', '/api/agents/skills', '/api/agents',
             '/api/mcp', '/api/mcp', '/api/mcp', '/api/mcp/servers', '/api/admin/mcp', '/api/admin/mcp',
-            '/api/knowledge', '/api/extension-marketplace', '/api/mcp', '/api/embed', '/api/integrations/discord', '/api/research',
+            '/api/knowledge',
+            '/api/users/me/extensions/gallery', '/api/users/me/extensions/:id/visibility', '/api/marketplace',
+            '/api/extension-marketplace', '/api/mcp', '/api/embed', '/api/integrations/discord', '/api/research',
         ]);
     });
 
     it('꺼진 add-on 의 라우트는 마운트되지 않고, 목록 API 는 항상 마운트된다', async () => {
         const { paths, addons: pending } = mountWith('notebooklm,discord,skill-runtime,mcp-runtime');
         const addons = await pending;
-        expect(paths).toEqual(['/api/addons', '/api/knowledge', '/api/extension-marketplace', '/api/embed', '/api/research']);
+        expect(paths).toEqual([
+            '/api/addons', '/api/knowledge',
+            '/api/users/me/extensions/gallery', '/api/users/me/extensions/:id/visibility', '/api/marketplace',
+            '/api/extension-marketplace', '/api/embed', '/api/research',
+        ]);
         expect(addons.find(a => a.id === 'mcp-runtime')).toMatchObject({ enabled: false, kind: 'runtime' });
         expect(addons.find(a => a.id === 'skill-runtime')).toMatchObject({ enabled: false, kind: 'runtime' });
         expect(addons.find(a => a.id === 'notebooklm')).toMatchObject({ enabled: false, kind: 'integration' });

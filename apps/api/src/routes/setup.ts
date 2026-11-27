@@ -16,7 +16,6 @@ import { agentTaskShareRouter } from './agent-task-share.routes';
 import { conversationShareRouter } from './conversation-share.routes';
 import { agentTaskSubagentRouter } from './agent-task-subagent.routes';
 import { agentTaskAuditRouter } from './agent-task-audit.routes';
-import { marketplacePublishRouter } from './marketplace-publish.routes';
 import * as path from 'path';
 import * as fs from 'fs';
 import { randomUUID } from 'node:crypto';
@@ -230,7 +229,6 @@ export function setupApiRoutes(
     mountAddonRoutes(app);
     app.use('/api/agents', agentRouter);
     app.use('/api/monitoring', tokenMonitoringRouter);
-    app.use('/api/marketplace', marketplacePublishRouter);   // 마켓플레이스 게시 (발행형)
     app.use('/api/admin', adminModelRolesRouter);
     app.use('/api/admin', adminCapabilityModelsRouter);
     app.use('/api/admin', adminModelAssignmentsRouter);   // 통합 모델 배정(슬롯) 전역 (2026-09-24)
