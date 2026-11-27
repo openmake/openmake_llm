@@ -11,4 +11,8 @@ export const mcpRuntimeContributions: AddonContribution = {
         { name: 'mcp', description: 'MCP 서버 모드로 실행', entry: 'cli-mcp-server#runMcpServerMode' },
     ],
     firstRunHooks: ['first-run#applySandboxDefault'],
+    settings: [
+        // MCP-4 CIMD(기본 OFF) — 공개 HTTPS origin 이 있을 때만, CIMD 를 광고하는 인가 서버에 동적 등록 없이 로그인한다.
+        { key: 'MCP_OAUTH_CIMD_ENABLED', group: 'agent', secret: false, requiresRestart: false, validate: 'boolean' },
+    ],
 };
