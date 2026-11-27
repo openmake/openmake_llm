@@ -19,7 +19,8 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
-import { ModelExposureBadge, ServerPermissionBadge, TransportNoticeBadge, parseExposure, type ModelExposureView } from "./server-status-badges";
+import { DeclaredExtensionBadges, ModelExposureBadge, ServerPermissionBadge, TransportNoticeBadge, parseExposure, type ModelExposureView } from "./server-status-badges";
+import { parseDeclaredExtensions, type DeclaredExtensionView } from "../declared-extensions";
 import { parseTransportNotice, type TransportNoticeView } from "../transport-notice";
 import { cn } from "@/lib/utils";
 import { McpInstancesPanel } from "@/addons/mcp-runtime/components/mcp-instances-panel";
@@ -42,6 +43,8 @@ interface McpServer {
   exposure: ModelExposureView | null;
   /** 전송·엔드포인트 퇴역 안내(MCP-3) — 백엔드 플래그가 꺼져 있거나 해당 없으면 null */
   transportNotice: TransportNoticeView | null;
+  /** 서버가 선언한 MCP 확장(MCP-5, 인식만) — 백엔드 플래그가 꺼져 있거나 선언이 없으면 빈 배열 */
+  declaredExtensions: DeclaredExtensionView[];
   /** 이 서버를 설치한 확장 id — 단독 설치면 null */
   extensionId: string | null;
   transport: Transport;
@@ -104,6 +107,8 @@ interface ApiMcpServer {
   extension_id?: string | null;
   /** 전송·엔드포인트 퇴역 안내 (apps/api addons/mcp-runtime/transport-notices.ts) */
   transportNotice?: unknown;
+  /** 선언 확장 (apps/api addons/mcp-runtime/extension-awareness.ts) */
+  declaredExtensions?: unknown;
 }
 
 /** 카탈로그 템플릿의 env 스키마 — 설치 후 미설정 선택 항목을 찾는 데만 쓴다. */
@@ -152,6 +157,7 @@ function mapServer(s: ApiMcpServer, t: Translator): McpServer {
     name: s.name,
     exposure: parseExposure(s.modelExposure),
     transportNotice: parseTransportNotice(s.transportNotice),
+    declaredExtensions: parseDeclaredExtensions(s.declaredExtensions),
     extensionId: s.extension_id ?? null,
     transport: TRANSPORT_MAP[s.transport_type] ?? "stdio",
     toolCount: s.toolCount ?? 0,
@@ -921,10 +927,11 @@ export function ConnectorsSection() {
                           );
                         })()}
                         {/* 연결과 별개인 상태: 모델에 실리는 조건 · 확장 설치분의 권한 승인 상태 */}
-                        {(s.exposure || s.transportNotice || (s.extensionId && s.extensionId in extPermissions)) && (
+                        {(s.exposure || s.transportNotice || s.declaredExtensions.length > 0 || (s.extensionId && s.extensionId in extPermissions)) && (
                           <div className="mt-1 flex flex-wrap items-center gap-1">
                             <ModelExposureBadge exposure={s.exposure} />
                             <TransportNoticeBadge notice={s.transportNotice} />
+                            <DeclaredExtensionBadges extensions={s.declaredExtensions} />
                             {s.extensionId && <ServerPermissionBadge permissionState={extPermissions[s.extensionId]} />}
                           </div>
                         )}

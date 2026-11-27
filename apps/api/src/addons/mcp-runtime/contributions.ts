@@ -24,5 +24,7 @@ export const mcpRuntimeContributions: AddonContribution = {
         { key: 'MCP_CATALOG_SUPERSEDE_MIGRATE', group: 'agent', secret: false, requiresRestart: true, validate: 'boolean' },
         // MCP-4 CIMD(기본 OFF) — 공개 HTTPS origin 이 있을 때만, CIMD 를 광고하는 인가 서버에 동적 등록 없이 로그인한다.
         { key: 'MCP_OAUTH_CIMD_ENABLED', group: 'agent', secret: false, requiresRestart: false, validate: 'boolean' },
+        // MCP-5 확장 인식(기본 OFF) — 서버가 선언한 확장(MCP Apps·Tasks·Skills over MCP 등)을 분류해 응답에 붙일 뿐 실행하지 않는다.
+        { key: 'MCP_EXTENSION_AWARENESS', group: 'agent', secret: false, requiresRestart: false, validate: 'boolean' },
     ],
 };
