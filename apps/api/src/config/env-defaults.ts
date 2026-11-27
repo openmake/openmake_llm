@@ -63,6 +63,7 @@ export const DEFAULT_CONFIG: EnvConfig = {
     extensionInstallPreviewEnabled: false,
     extensionOrgDeploymentModesEnabled: false,
     extensionAdminInventoryEnabled: false,
+    addonListReflectDbState: false,
     extensionArbitraryUrlInstall: 'allow',
     extensionSourcePolicy: '',
     extensionCatalogAutoSyncEnabled: false,
