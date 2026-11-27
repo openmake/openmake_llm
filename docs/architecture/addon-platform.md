@@ -167,7 +167,7 @@ Knowledge 는 바인딩(연결·해제·해석·사이드바 숨김)과 Space �
 
 포트의 actor 범위도 코드 경계다. `ownerOf`·`summaries` 는 actor 를 받지 않고, `exists`·`listIdsForUser` 의 actor 는 호출자(add-on)가 만든다 — Base 가 요청 문맥에서 발급한 actor 가 아니다. 물리 SQL 권한 격리와 Base 발급 actor 는 2차 후보다.
 
-**DB 테스트**: `*.db.test.ts` 는 `TEST_DATABASE_URL` 이 있을 때만 돈다. CI 는 Gate 1.5 에서 job 안의 일회용 PostgreSQL(`pgvector/pgvector:0.8.7-pg16-trixie`)에 `scripts/setup-test-db.sh` 로 코어+add-on 마이그레이션을 적용하고 `npm run test:db` 로 그 파일들만 `--runInBand` 로 돌린다 — 마지막 줄 `db tests ran: N` 이 0 이면(전부 skip) 실패다. 로컬도 같은 두 명령이다. CI 에서 실제로 도는 DB 테스트는 `*.db.test.ts` 뿐이다 — `TEST_DATABASE_URL||DATABASE_URL` 로 게이트된 다른 테스트 7개(027_mcp_server_draft·128_org_scoped_sharing·mcp-catalog-repository.metrics·mcp-server-draft-repository·mcp-catalog-admin.routes·mcp-server-ingest.routes·mcp-server-ingest-service)는 이름 변경(`*.db.test.ts`)이 후속이다.
+**DB 테스트**: `*.db.test.ts` 는 `TEST_DATABASE_URL` 이 있을 때만 돈다. CI 는 Gate 1.5 에서 job 안의 일회용 PostgreSQL(`pgvector/pgvector:0.8.7-pg16-trixie`)에 `scripts/setup-test-db.sh` 로 코어+add-on 마이그레이션을 적용하고 `npm run test:db` 로 그 파일들만 `--runInBand` 로 돌린다 — 마지막 줄 `db tests ran: N` 이 0 이면(전부 skip) 실패다. 로컬도 같은 두 명령이다. CI 에서 실제로 도는 DB 테스트는 `*.db.test.ts` 뿐이다 — DB 를 쓰는 테스트는 이 이름 규약을 따라야 CI 에서 돈다(마이그레이션 테스트 `027_mcp_server_draft`·`128_org_scoped_sharing` 과 MCP 저장소·라우트 테스트 5개도 `*.db.test.ts` 다).
 
 ## 8.7 데이터 모듈(`entry.data`)과 구성요소 저장
 
