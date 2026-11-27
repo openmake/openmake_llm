@@ -12,7 +12,7 @@ import { enabledBuiltinAddons } from './builtin-registry';
 import { loadAddonEntry } from './entry-loader';
 
 /** 설정 값 검증기 이름 — 실제 zod 스키마는 config/system-settings-registry 가 가진다 */
-export type AddonSettingValidator = 'nonEmpty' | 'apiKey' | 'nonNegativeInt' | 'boolean';
+export type AddonSettingValidator = 'nonEmpty' | 'apiKey' | 'nonNegativeInt' | 'boolean' | 'oneOf';
 
 export interface AddonSettingDef {
     key: string;
@@ -21,6 +21,8 @@ export interface AddonSettingDef {
     secret: boolean;
     requiresRestart: boolean;
     validate: AddonSettingValidator;
+    /** `validate: 'oneOf'` 일 때 허용 값 목록(대소문자 구분, 비어 있으면 어떤 값도 저장할 수 없다) */
+    allowedValues?: readonly string[];
     issueUrl?: string;
 }
 

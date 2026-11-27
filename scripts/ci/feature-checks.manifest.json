@@ -48,6 +48,12 @@
     "apps/api/src/errors/all-nodes-failed.error.ts": ["apps/api/src/tool-contract/__tests__/tool-health-circuit.test.ts", "apps/api/src/__tests__/routes-setup.test.ts"]
   },
   "fixedTests": {
+    "apps/api/src/addons/mcp-runtime/__tests__/fixtures/negotiation-legacy-server.mjs": [
+      "apps/api/src/addons/mcp-runtime/__tests__/external-client-protocol-negotiation.test.ts"
+    ],
+    "apps/api/src/addons/mcp-runtime/__tests__/fixtures/negotiation-modern-server.mjs": [
+      "apps/api/src/addons/mcp-runtime/__tests__/external-client-protocol-negotiation.test.ts"
+    ],
     "packages/plugin-contracts/src/contributions.ts": [
       "apps/api/src/__tests__/plugin-contracts-compat.test.ts"
     ],
