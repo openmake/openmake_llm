@@ -3465,5 +3465,45 @@
     "login": "ログイン",
     "snapshotNote": "{date} 時点の会話です — 元の会話が続いてもこの画面は変わりません。",
     "scope": "公開範囲: {scope}"
+  },
+  "marketVerdicts": {
+    "verdict": {
+      "supported": "対応",
+      "partial": "一部対応",
+      "unsupported": "非対応"
+    },
+    "reason": {
+      "NOT_INSTALLABLE": "インストールできるスキル・MCP サーバーがない",
+      "INSTALLABILITY_UNKNOWN": "インストール可否が不明(別リポジトリの項目)",
+      "SKILL_MCP_TOOL_IDIOM": "スキルが Claude Code の MCP ツール表記(mcp__server__tool)を使用",
+      "SKILL_ASSET_OUTSIDE_DIR": "スキルがフォルダー外のファイルを参照(同梱されない)",
+      "SKILL_COMMAND_ASSETS_SKIPPED": "コマンドから変換したスキルが同梱されないファイルを参照",
+      "SKILL_CLAUDE_DIR_PATH": "スキルが .claude/ パスを指している",
+      "SKILL_CLAUDE_INSTALL_GUIDE": "スキルに Claude Code のセットアップ手順が含まれる",
+      "SKILL_TOOL_UNSUPPORTED": "スキルが挙げるツールの一部がこの環境にない",
+      "SKILL_REQUIRED_TOOL_MISSING": "スキルに必要なツールがない",
+      "SKILL_EXECUTION_BLOCKED": "実行がブロックされたスキルがある",
+      "COMPONENTS_UNSUPPORTED": "非対応のコンポーネントがある",
+      "MCP_ENTRIES_SKIPPED": "スキップされた MCP 項目がある",
+      "MCP_BLOCKED_BY_CONVENTION": "規約チェックでブロックされた MCP サーバーがある",
+      "ASSETS_SKIPPED": "スキップされた同梱ファイルがある",
+      "COMPONENTS_TRUNCATED": "サイズ上限で切り捨てられたコンポーネントがある",
+      "MCP_TRANSPORT_SSE_DEPRECATED": "MCP サーバーが非推奨の SSE トランスポートを使用",
+      "MCP_EXT_APPS_UNSUPPORTED": "MCP Apps 拡張は非対応",
+      "MCP_EXT_TASKS_UNSUPPORTED": "MCP Tasks 拡張は非対応",
+      "MCP_EXT_UNRECOGNIZED": "MCP サーバーが不明な拡張を宣言",
+      "MCP_SKILLS_PROVIDER": "MCP サーバーがスキルを提供(Skills over MCP)",
+      "MCP_AUTH_DYNAMIC_REGISTRATION": "MCP サーバーが動的クライアント登録でサインイン",
+      "MCP_PROTOCOL_MODERN": "MCP サーバーが最新プロトコルを使用",
+      "MCP_PROTOCOL_LEGACY": "MCP サーバーが旧プロトコルを使用",
+      "CROSS_REPO_SOURCE": "別リポジトリにある項目",
+      "CONTENT_NOT_EVALUATED": "内容はまだ評価していない"
+    },
+    "provenance": {
+      "publisher": "公開者: {value}",
+      "commit": "コミット: {value}",
+      "license": "ライセンス: {value}"
+    },
+    "snapshotOnly": "カタログのスナップショットのみで判定 — インストールすると内容も確認します"
   }
 }

@@ -92,6 +92,15 @@ export interface ChatContextBannerExtension {
   Component: ComponentType<{ sessionId: string | null }>;
 }
 
+/**
+ * 확장 갤러리 항목 배지 — 카탈로그 항목(원본 id + 플러그인 이름) 옆에 붙는다. 표시일 뿐 설치 가능 여부의 근거가 아니다
+ * (설치는 서버가 다시 판정한다). 항목마다 렌더되므로 조회는 원본 단위로 묶어 캐시할 것(react-query 같은 키).
+ */
+export interface GalleryItemBadgeExtension {
+  order: number;
+  Component: ComponentType<{ catalogId: string; pluginName: string }>;
+}
+
 export interface WebAddon {
   /** 서버 add-on id (`GET /api/addons`) */
   id: string;
@@ -106,6 +115,7 @@ export interface WebAddon {
   approvalSections?: readonly ApprovalSectionExtension[];
   settingsTabs?: readonly SettingsTabExtension[];
   adminQuickLinks?: readonly AdminQuickLinkExtension[];
+  galleryItemBadges?: readonly GalleryItemBadgeExtension[];
   /** 입력창 `/` 메뉴 — 켜진 add-on 중 첫 번째 것만 쓴다 */
   slashMenu?: SlashMenuExtension;
   /**

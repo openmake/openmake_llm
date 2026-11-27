@@ -1,0 +1,25 @@
+{
+  "id": "extension-marketplace",
+  "name": "Extension Marketplace",
+  "version": "1.0.0",
+  "description": "확장 갤러리 호환 판정 — 카탈로그 항목마다 지원·부분 지원·불가와 사유·출처 배지(LLM·외부 전송 없음)",
+  "requires": {
+    "openmake": ">=1.0.0 <2.0.0"
+  },
+  "scope": "system",
+  "kind": "integration",
+  "order": 38,
+  "defaultState": "disabled",
+  "permissions": ["database:addon"],
+  "components": {
+    "migrations": "./migrations"
+  },
+  "entry": {
+    "routes": [
+      {
+        "mountPath": "/api/extension-marketplace",
+        "module": "routes#extensionMarketplaceRouter"
+      }
+    ]
+  }
+}
