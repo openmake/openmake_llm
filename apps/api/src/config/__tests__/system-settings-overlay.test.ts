@@ -80,6 +80,8 @@ describe('system-settings-registry', () => {
             // 확장 원본 정책(M2) — 불리언·모드
             else if (def.key === 'EXTENSION_SOURCE_POLICY_ENFORCED') sample[def.key] = 'true';
             else if (def.key === 'EXTENSION_ARBITRARY_URL_INSTALL') sample[def.key] = 'catalog-only';
+            // 확장 설치 미리보기(M1b) — 불리언
+            else if (def.key === 'EXTENSION_INSTALL_PREVIEW_ENABLED') sample[def.key] = 'true';
             // SLO 목표(F24.8) — 백분율·정수
             else if (def.key === 'SLO_CHAT_AVAILABILITY_TARGET') sample[def.key] = '97.51';
             else if (def.key === 'SLO_AGENT_TASK_SUCCESS_TARGET') sample[def.key] = '97.52';

@@ -156,6 +156,7 @@ export const envSchema = z
         BROWSER_SITE_POLICY: z.string().optional(),
         /** 확장 원본 정책(M2, opt-in) — 해석·검증은 config/extension-source-policy · system-settings-registry */
         EXTENSION_SOURCE_POLICY_ENFORCED: z.string().optional(),
+        EXTENSION_INSTALL_PREVIEW_ENABLED: z.string().optional(),
         EXTENSION_ARBITRARY_URL_INSTALL: z.string().optional(),
         EXTENSION_SOURCE_POLICY: z.string().optional(),
         /**

@@ -2601,6 +2601,40 @@
       "sourceAll": "全部来源 ({count})",
       "searchAria": "关键词搜索",
       "searchPlaceholder": "搜索名称/描述"
+    },
+    "preview": {
+      "title": "安装预览 — {name}",
+      "loading": "正在检查将安装的组件…",
+      "failed": "无法加载预览。",
+      "source": "来源",
+      "commit": "提交",
+      "existingUpdate": "已安装(v{version}) — 确认后将更新到此版本。",
+      "existingUpToDate": "已安装最新版本。",
+      "existingOtherSource": "已从其他来源安装了同名扩展,无法安装。请先移除。",
+      "components": "组件 — 技能 {skills} · MCP 服务器 {mcpServers} · 代理 {agents}",
+      "skill": "技能",
+      "command": "命令",
+      "mcp": "MCP",
+      "agent": "代理",
+      "assets": "{count} 个捆绑文件",
+      "mcpBlocked": "因危险命令模式被标记为阻止",
+      "networkRestricted": "网络隔离沙箱",
+      "requiredEnv": "批准时填写: {keys}",
+      "agentApproval": "批准后可用",
+      "draftNote": "组件以草稿形式创建,在审批页批准后才会启用。",
+      "permissions": "权限",
+      "permissionsLegacy": "未声明权限(原有行为 — 允许网络)",
+      "permissionsNone": "未请求权限",
+      "permissionsBlocked": "重新批准前被阻止的权限: {list}",
+      "warnings": "警告",
+      "cancel": "取消",
+      "confirm": "安装",
+      "hint": {
+        "deprecatedTransport": "SSE 传输即将停用(Streamable HTTP 候选: {url})。",
+        "endpointSunset": "此地址将于 {date} 停用 — 新地址: {url}",
+        "endpointMoved": "此服务器将于 {date} 迁移到 {url} — 需要在新地址重新登录。",
+        "remoteAuth": "远程服务器 — 批准后可能需要登录(OAuth)。"
+      }
     }
   },
   "mcpInstances": {

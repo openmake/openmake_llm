@@ -2601,6 +2601,40 @@
       "sourceAll": "すべてのソース ({count})",
       "searchAria": "キーワード検索",
       "searchPlaceholder": "名前・説明を検索"
+    },
+    "preview": {
+      "title": "インストールのプレビュー — {name}",
+      "loading": "インストールされる構成要素を確認しています…",
+      "failed": "プレビューを読み込めませんでした。",
+      "source": "ソース",
+      "commit": "コミット",
+      "existingUpdate": "インストール済み(v{version}) — 確定するとこのバージョンに更新します。",
+      "existingUpToDate": "最新バージョンがすでにインストールされています。",
+      "existingOtherSource": "同じ名前の拡張機能が別のソースからインストールされています。先に削除してください。",
+      "components": "構成要素 — スキル {skills} · MCP サーバー {mcpServers} · エージェント {agents}",
+      "skill": "スキル",
+      "command": "コマンド",
+      "mcp": "MCP",
+      "agent": "エージェント",
+      "assets": "同梱ファイル {count} 件",
+      "mcpBlocked": "危険なコマンドパターンによりブロック表示",
+      "networkRestricted": "ネットワーク遮断サンドボックス",
+      "requiredEnv": "承認時に入力: {keys}",
+      "agentApproval": "承認後に使用",
+      "draftNote": "構成要素は下書きとして作成され、承認ページで承認すると有効になります。",
+      "permissions": "権限",
+      "permissionsLegacy": "権限の宣言なし(従来の動作 — ネットワーク許可)",
+      "permissionsNone": "要求された権限なし",
+      "permissionsBlocked": "再承認までブロックされる権限: {list}",
+      "warnings": "警告",
+      "cancel": "キャンセル",
+      "confirm": "インストール",
+      "hint": {
+        "deprecatedTransport": "SSE トランスポートは廃止予定です(Streamable HTTP 候補: {url})。",
+        "endpointSunset": "このアドレスは {date} に終了します — 新しいアドレス: {url}",
+        "endpointMoved": "このサーバーは {date} に {url} へ移行します — 新しいアドレスで再ログインが必要です。",
+        "remoteAuth": "リモートサーバー — 承認後にログイン(OAuth)が必要な場合があります。"
+      }
     }
   },
   "mcpInstances": {
