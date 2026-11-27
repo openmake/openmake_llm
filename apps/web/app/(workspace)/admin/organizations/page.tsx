@@ -2,7 +2,7 @@
 
 /**
  * /admin/organizations — 조직 관리 콘솔 (F22 Phase E-1).
- * 조직 CRUD·멤버 역할·조직 정책(129)·변경 이력(130)·운영 구성 내보내기/가져오기.
+ * 조직 CRUD·멤버 역할·조직 정책(129)·확장 배포 모드·그룹(208·209, opt-in)·변경 이력(130)·운영 구성 내보내기/가져오기.
  * REST: /api/admin/organizations*, /api/admin/config/{export,import}. fetch 직접 호출 금지 — ApiClient 경유.
  */
 import { useCallback, useEffect, useState } from "react";
@@ -11,6 +11,7 @@ import { Building2, Plus, Trash2, Users, ShieldCheck, History, Download, Upload,
 import { PageHeader, PageBody, Card, CardHeader, CardTitle, CardContent, Badge, Button, Table, Th, Td } from "@/components/ui/primitives";
 import { AdminTabs } from "@/components/hub-tabs";
 import { BrowserSitePolicyEditor, BROWSER_SITE_POLICY_SETTING_KEY } from "@/components/admin/browser-site-policy-editor";
+import { OrgExtensionDeploymentsPanel } from "@/components/admin/org-extension-deployments";
 import type { ApiSuccess, OrgRole } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 
@@ -224,6 +225,9 @@ function OrgDetail({ org, users, onChanged }: { org: Org; users: AdminUser[]; on
         <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-fg"><ShieldCheck className="h-3.5 w-3.5" /> {t("policies")}</p>
         <PolicyEditor orgId={org.id} policies={policies} onChanged={() => void load()} />
       </div>
+
+      {/* 조직 확장 배포 모드·그룹(§8-1, opt-in) — 꺼져 있으면 패널이 스스로 숨는다 */}
+      <OrgExtensionDeploymentsPanel orgId={org.id} members={members.map((m) => ({ userId: m.user_id, label: label(m.user_id) }))} />
 
       <div>
         <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-fg"><History className="h-3.5 w-3.5" /> {t("history")}</p>

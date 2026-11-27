@@ -20,7 +20,8 @@ export type ResourceKind =
     | 'mcp_server'
     | 'agent_task_template'
     | 'artifact'
-    | 'agent_task';
+    | 'agent_task'
+    | 'org_extension_deployment';
 
 export type ResourceAction = 'read' | 'write' | 'delete';
 
@@ -41,9 +42,20 @@ const PRIVATE_POLICY: ActionPolicy = {
     delete: ['admin', 'owner'],
 };
 
+/**
+ * 조직 관리 자원(확장 배포 모드·그룹, §8-1) — 소유자 축이 없고(ownerId null) 조직 owner/admin·시스템 admin 만 읽고 바꾼다.
+ * 일반 멤버는 자기에게 적용된 결과만 갤러리·설치 목록에서 본다(이 정책의 read 가 아니다).
+ */
+const ORG_ADMIN_POLICY: ActionPolicy = {
+    read: ['admin', 'org_owner', 'org_admin'],
+    write: ['admin', 'org_owner', 'org_admin'],
+    delete: ['admin', 'org_owner', 'org_admin'],
+};
+
 export const RESOURCE_POLICY: Partial<Record<ResourceKind, ActionPolicy>> = {
     generic: PRIVATE_POLICY,
     agent_task: PRIVATE_POLICY,
+    org_extension_deployment: ORG_ADMIN_POLICY,
 };
 
 /** 종류별 정책 — 미등록 종류는 DEFAULT_POLICY. */

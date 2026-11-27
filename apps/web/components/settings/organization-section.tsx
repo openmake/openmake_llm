@@ -2,7 +2,7 @@
 
 /**
  * 설정 → 일반: 활성 조직 스위처 (F22 Phase B-2).
- * 멤버십이 없으면 렌더하지 않는다(조직은 선택 구조). 변경 후 /api/auth/me 를 재동기화해
+ * 멤버십이 없으면 렌더하지 않는다(조직은 선택 구조). 활성 조직의 owner/admin 에겐 확장 배포 모드 패널(§8-1)을 함께 보인다. 변경 후 /api/auth/me 를 재동기화해
  * store 의 activeOrgId 가 곧바로 커스텀 에이전트·템플릿 화면의 공유 토글에 반영되게 한다.
  */
 import { useCallback, useEffect, useState } from "react";
@@ -13,6 +13,7 @@ import type { ApiSuccess, OrgMembership } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
 import { syncAuthFromServer } from "@/lib/auth-sync";
+import { OrgExtensionDeploymentsPanel } from "@/components/admin/org-extension-deployments";
 
 type OrgsResponse = ApiSuccess<{ organizations: OrgMembership[]; activeOrgId: string | null }>;
 
@@ -33,6 +34,10 @@ export function OrganizationSection() {
   useEffect(() => { void load(); }, [load]);
 
   if (!orgs || orgs.length === 0) return null;
+
+  // 활성 조직의 관리자(owner/admin)면 확장 배포 모드·그룹 패널(§8-1, opt-in — 꺼져 있으면 패널이 스스로 숨는다)
+  const activeMembership = orgs.find((o) => o.orgId === activeOrgId);
+  const canManage = activeMembership?.role === "owner" || activeMembership?.role === "admin";
 
   const roleLabel = (role: OrgMembership["role"]) =>
     role === "owner" ? t("roleOwner") : role === "admin" ? t("roleAdmin") : t("roleMember");
@@ -75,6 +80,11 @@ export function OrganizationSection() {
             ))}
           </NativeSelect>
         </div>
+        {canManage && activeOrgId && (
+          <div className="border-t border-border py-4">
+            <OrgExtensionDeploymentsPanel orgId={activeOrgId} />
+          </div>
+        )}
       </CardContent>
     </Card>
   );

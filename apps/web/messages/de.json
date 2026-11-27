@@ -2670,6 +2670,13 @@
         "endpointMoved": "Dieser Server zieht am {date} nach {url} um — an der neuen Adresse ist eine erneute Anmeldung nötig.",
         "remoteAuth": "Remote-Server — nach der Freigabe kann eine Anmeldung (OAuth) nötig sein."
       }
+    },
+    "deployment": {
+      "required": "Erforderlich",
+      "defaultOn": "Automatisch installiert",
+      "requiredHint": "Von deiner Organisation vorgeschrieben — kann nicht entfernt werden",
+      "defaultOnHint": "Von deiner Organisation automatisch installiert — wird nach dem Entfernen nicht erneut installiert",
+      "removeLocked": "Von der Organisation vorgeschriebene Erweiterungen können nicht entfernt werden"
     }
   },
   "mcpInstances": {
@@ -3628,5 +3635,33 @@
     "pageInfo": "{from}–{to} von {total}",
     "prev": "Zurück",
     "next": "Weiter"
+  },
+  "orgExtensionDeployments": {
+    "title": "Bereitstellungsmodi für Erweiterungen",
+    "description": "Lege für jede mit der Organisation geteilte Erweiterung fest, wie sie bereitgestellt wird: nur in der Galerie (Standard) · automatisch installieren (Mitglieder können sie entfernen) · erforderlich (normale Mitglieder können sie nicht entfernen). Installationen laufen unter dem Konto des jeweiligen Mitglieds; Skills und MCP-Server genehmigt jedes Mitglied selbst.",
+    "saveFailed": "Speichern fehlgeschlagen: {error}",
+    "groupsTitle": "Gruppen",
+    "groupNamePlaceholder": "Name der neuen Gruppe",
+    "addGroup": "Gruppe hinzufügen",
+    "noGroups": "Noch keine Gruppen.",
+    "memberCount": "{count} Mitglieder",
+    "deleteGroup": "Gruppe löschen",
+    "deleteGroupConfirm": "Gruppe „{name}“ löschen? Ihre Überschreibungen werden ebenfalls gelöscht.",
+    "removeGroupMember": "Aus Gruppe entfernen",
+    "addGroupMember": "Mitglied hinzufügen",
+    "itemsTitle": "Mit der Organisation geteilte Erweiterungen",
+    "noItems": "Mit dieser Organisation sind keine Erweiterungen geteilt.",
+    "item": "Erweiterung",
+    "defaultMode": "Standard",
+    "installed": "Installiert",
+    "defaultModeAria": "Standard-Bereitstellungsmodus für {name}",
+    "groupModeAria": "{name} — Überschreibung für Gruppe {group}",
+    "inherit": "Standard verwenden",
+    "ruleHint": "Gruppenüberschreibungen haben Vorrang vor dem Standard; ein Mitglied in mehreren Gruppen erhält den stärksten Wert (erforderlich > automatisch installieren > nur Galerie).",
+    "modes": {
+      "default_off": "Nur Galerie",
+      "default_on": "Automatisch installieren",
+      "required": "Erforderlich"
+    }
   }
 }
