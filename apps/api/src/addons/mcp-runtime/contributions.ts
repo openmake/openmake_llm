@@ -11,4 +11,8 @@ export const mcpRuntimeContributions: AddonContribution = {
         { name: 'mcp', description: 'MCP 서버 모드로 실행', entry: 'cli-mcp-server#runMcpServerMode' },
     ],
     firstRunHooks: ['first-run#applySandboxDefault'],
+    settings: [
+        // MCP-1 협상 관측(기본 OFF) — 연결 뒤 서버별 전송·인증·리비전·선언 확장을 기록한다. 연결 동작은 바꾸지 않는다.
+        { key: 'MCP_NEGOTIATION_OBSERVE_ENABLED', group: 'agent', secret: false, requiresRestart: false, validate: 'boolean' },
+    ],
 };

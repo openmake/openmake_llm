@@ -40,6 +40,7 @@ import { sdkToolToMCPTool, type SDKTool } from './tool-schema';
 import { offloadMediaBlocks } from './media-content';
 import { ElicitationCallTracker } from './elicitation-bridge';
 import { getConfig } from '../../config/env';
+import { observeNegotiation } from './negotiation-observer';
 
 const logger = createLogger('ExternalMCP');
 
@@ -117,6 +118,8 @@ export class ExternalMCPClient extends EventEmitter {
     private serverCapabilities: ReturnType<Client['getServerCapabilities']> = undefined;
     /** 사용자 입력 요청(F13.10) — 플래그 ON + 사용자 풀 서버만. 채팅·전역 서버는 elicitation 을 광고하지 않는다 */
     private readonly elicitation: ElicitationCallTracker | null;
+    /** 이번 연결의 OAuth provider — 협상 관측(MCP-1)이 인증 방식 분류에만 쓴다 */
+    private authProvider: McpOAuthProvider | undefined;
     /** 마지막 활동 시각(ms) — connect·callTool 에서 갱신. 사용자 풀 유휴 회수(R6)의 입력 */
     lastUsedAt = 0;
 
@@ -148,6 +151,7 @@ export class ExternalMCPClient extends EventEmitter {
         this.lastError = undefined;
 
         try {
+            this.authProvider = undefined;
             this.transport = await this.createTransport();
             this.stderrTail = '';
             this.captureStderr(this.transport);
@@ -186,6 +190,8 @@ export class ExternalMCPClient extends EventEmitter {
             this.lastUsedAt = Date.now();
             this.lastPing = new Date().toISOString();
             logger.info(`Connected to "${this.config.name}" — ${this.discoveredTools.length} tools discovered`);
+            // 협상 관측(MCP-1) — 플래그 OFF 면 즉시 끝나고, 기다리지 않으며 실패해도 연결에 영향이 없다.
+            void observeNegotiation(this.config, this.client, this.authProvider).catch(() => undefined);
         } catch (error) {
             this.status = 'error';
             this.lastError = error instanceof Error ? error.message : String(error);
@@ -461,8 +467,8 @@ export class ExternalMCPClient extends EventEmitter {
      * UnauthorizedError 를 던진다 → `auth_required` 로 분류돼 화면에 [로그인] 이 뜬다.
      */
     private createAuthProvider(): McpOAuthProvider | undefined {
-        if (!this.config.user_id) return undefined;
-        return new McpOAuthProvider({ serverId: this.config.id, userId: this.config.user_id });
+        if (!this.config.user_id) return (this.authProvider = undefined);
+        return (this.authProvider = new McpOAuthProvider({ serverId: this.config.id, userId: this.config.user_id }));
     }
 
     private async createTransport(): Promise<TransportInstance> {
