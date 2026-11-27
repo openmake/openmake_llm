@@ -1,0 +1,29 @@
+{
+  "id": "extension-curation",
+  "name": "Extension Curation",
+  "version": "1.0.0",
+  "description": "확장 갤러리(공유 확장 + 큐레이션 카탈로그)·갤러리 설치·공유 토글·내부 게시. 저장소·설치 엔진·원본 정책·카탈로그 관리는 Base",
+  "requires": {
+    "openmake": ">=1.0.0 <2.0.0"
+  },
+  "scope": "system",
+  "kind": "integration",
+  "order": 36,
+  "components": {},
+  "entry": {
+    "routes": [
+      {
+        "mountPath": "/api/users/me/extensions/gallery",
+        "module": "routes#galleryRouter"
+      },
+      {
+        "mountPath": "/api/users/me/extensions/:id/visibility",
+        "module": "routes#visibilityRouter"
+      },
+      {
+        "mountPath": "/api/marketplace",
+        "module": "routes#marketplacePublishRouter"
+      }
+    ]
+  }
+}

@@ -19,6 +19,9 @@ export const ADDON_SCOPES = ['system', 'organization', 'user'] as const;
 /** 매니페스트 `defaultState` 값 — 설치 표의 의도(`desired_state`)와 같은 두 값 */
 export const ADDON_DEFAULT_STATES = ['enabled', 'disabled'] as const;
 export type AddonDefaultState = typeof ADDON_DEFAULT_STATES[number];
+/** 전용 라우트 마운트 경로 — `/` 로 나뉜 세그먼트가 영문·숫자·`_`·`-` 이거나 경로 매개변수(`:name`) */
+export const MOUNT_PATH_PATTERN = /^(?:\/(?::[A-Za-z][A-Za-z0-9_]*|[A-Za-z0-9_-]*))+$/;
+
 export const ADDON_KINDS = ['content', 'integration', 'runtime'] as const;
 
 /**
@@ -56,7 +59,8 @@ const addonEntrySchema = z.object({
     }).strict()).max(5).optional(),
     /** 전용 라우트 — `within: 'v1'` 은 v1 라우터(API 키 인증·스코프·rate limit 뒤) 안에 건다 */
     routes: z.array(z.object({
-        mountPath: z.string().min(1).max(200).regex(/^\/[A-Za-z0-9/_-]*$/),
+        // 경로 매개변수 세그먼트(`/:id`)도 받는다 — Base 라우트 사이의 한 경로만 add-on 이 가질 때(§8-2 공유 토글). 종전 형식은 그대로 통과
+        mountPath: z.string().min(1).max(200).regex(MOUNT_PATH_PATTERN),
         module: entryRefSchema,
         within: z.enum(['v1']).optional(),
     }).strict()).max(20).optional(),

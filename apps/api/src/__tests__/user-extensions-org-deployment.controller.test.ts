@@ -1,6 +1,7 @@
 /**
  * 확장 라우트 × 조직 배포 모드(§8-1) — 무DB.
- *  - 플래그 OFF: 목록·갤러리 응답이 종전과 바이트 단위로 같고, 제거는 판정 없이 진행(배포 저장소 미호출)
+ *  (갤러리 응답의 deployment_mode 는 큐레이션 add-on 테스트 addons/extension-curation/__tests__/gallery-routes.test.ts)
+ *  - 플래그 OFF: 목록 응답이 종전과 바이트 단위로 같고, 제거는 판정 없이 진행(배포 저장소 미호출)
  *  - 플래그 ON: required 설치본 제거는 403 EXTENSION_REQUIRED(제거 미실행), default_on 은 제거 후 user_removed 기록,
  *    목록 행엔 org_deployment, 갤러리 조직 항목엔 deployment_mode
  */
@@ -64,7 +65,6 @@ function app() {
 
 /** 종전 응답 — 배포 필드가 하나도 없는 모양 */
 const { source_hash: _h, user_id: _u, permissions_reviewed_by: _p, ...PUBLIC_ROW } = ROW;
-const { source_hash: _h2, user_id: _u2, permissions_reviewed_by: _p2, ...PUBLIC_ORG_ROW } = ORG_ROW;
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -75,11 +75,9 @@ afterAll(() => { if (ORIGINAL === undefined) delete process.env[FLAG]; else proc
 
 describe('플래그 OFF — 종전과 같다', () => {
     beforeEach(() => setFlag(false));
-    test('목록·갤러리 응답 data 에 배포 필드가 없다(종전 모양 그대로)', async () => {
+    test('목록 응답 data 에 배포 필드가 없다(종전 모양 그대로)', async () => {
         const list = await request(app()).get('/api/users/me/extensions');
         expect(list.body.data).toEqual({ extensions: [PUBLIC_ROW] });
-        const gallery = await request(app()).get('/api/users/me/extensions/gallery');
-        expect(gallery.body.data).toEqual({ extensions: [{ ...PUBLIC_ORG_ROW, owned: false }], catalog: [] });
         for (const fn of Object.values(depRepo)) expect(fn).not.toHaveBeenCalled();
     });
     test('required 로 배포된 설치본이라도 제거된다(판정 없음)', async () => {
@@ -112,10 +110,8 @@ describe('플래그 ON', () => {
         expect(res.status).toBe(200);
         expect(depRepo.markUserRemoved).not.toHaveBeenCalled();
     });
-    test('목록 행에 org_deployment, 갤러리 조직 항목에 deployment_mode', async () => {
+    test('목록 행에 org_deployment', async () => {
         const list = await request(app()).get('/api/users/me/extensions');
         expect(list.body.data.extensions[0].org_deployment).toEqual({ mode: 'required', removable: false });
-        const gallery = await request(app()).get('/api/users/me/extensions/gallery');
-        expect(gallery.body.data.extensions[0].deployment_mode).toBe('required');
     });
 });

@@ -189,6 +189,8 @@ Knowledge 는 바인딩(연결·해제·해석·사이드바 숨김)과 Space �
 
 add-on 을 모두 꺼도 데이터 모듈 로드만 허용된다 — `all-builtin-addons-off.test.ts` 는 코드 로더 호출을 데이터 모듈 진입점으로만 제한한다.
 
+**확장 공유·게시 (§8-2, 2026-11-28 — add-on `extension-curation`, 기본 켜짐)**: 갤러리(`GET /api/users/me/extensions/gallery`·`POST …/gallery/:id/install`)·공유 토글(`PATCH /api/users/me/extensions/:id/visibility`)·내부 게시(`/api/marketplace`)는 이 add-on 의 라우트다 — 경로·응답은 종전 Base 라우트 그대로이고, add-on 게이트(꺼짐 404 · 조직 allowlist 밖 403)를 지난다. 앱이 add-on 라우트를 Base 확장 라우터보다 먼저 마운트하므로 `/gallery` 가 Base `/:id` 에 잡히지 않는다. Base 라우트 사이의 한 경로만 가지려고 매니페스트 `mountPath` 가 경로 매개변수 세그먼트(`/:id`)를 받는다. **저장소·설치 엔진·원본 정책은 Base** 다 — `user_extensions`·카탈로그 원본·`marketplace_bundles` 저장소, `git-ingest`, 원본 정책(M2)·카탈로그 관리(등록·동기화·자격증명·별칭·색인)·이름 설치(M5)·조직 배포 모드(§8-1)·`runtime-ports/extension-catalog` 는 채팅 설치·다른 add-on 이 쓰고 add-on 을 꺼도 정책이 강제돼야 해서다. add-on 은 포트 `runtime-ports/extension-sharing`(저장소 팩토리·공유 설치·번들 빌더)와 `runtime-ports/request-auth`(인증·검증 미들웨어)로만 Base 를 쓴다(래칫 추가 0). 꺼도 Base 확장 목록·원본 정책 403·채팅 설치 도구가 그대로인지는 `__tests__/extension-sharing-addon-off.test.ts` 가 고정한다.
+
 ## 8.8 웹 확장점 (`apps/web/addons/types.ts`)
 
 Base 화면은 켜진 add-on(`useEnabledWebAddons` — `GET /api/addons`, 조회 실패·로딩 중엔 전부 켜짐)의 확장만 순회한다. 단 `hideUntilEnabledKnown: true` add-on 은 응답에서 켜짐이 확인될 때만 보인다(로딩 중·실패·목록에 없음 → 숨김, 판정 `addons/enabled-filter.ts`) — 서버 `defaultState: "disabled"` add-on 이 쓴다. Base 항목은 10 단위 순서 값이고 add-on 은 그 사이 값으로 끼운다.
@@ -197,7 +199,7 @@ Base 화면은 켜진 add-on(`useEnabledWebAddons` — `GET /api/addons`, 조회
 |---|---|---|
 | `hubTabs` | `components/hub-tabs.tsx`(history·agents·developer·admin 허브) | 딥리서치 `/research` · 스킬 `/skill-library` · MCP `/admin/mcp-monitoring`·`/admin/mcp-catalog` |
 | `approvalSections`(+ `countPending`) | `/approvals` 섹션 · 사이드바 승인 배지 합산 | 스킬 draft(20) · MCP 서버 draft(30) — Base 는 에이전트 작업(10)·Custom Agent(40) |
-| `settingsTabs`(`ownsSaving` 이면 공용 저장 버튼을 숨긴다) | `/settings` 탭 — 모르는·꺼진 탭은 일반 탭으로 연다 | MCP 커넥터(65) |
+| `settingsTabs`(`ownsSaving` 이면 공용 저장 버튼을 숨긴다) | `/settings` 탭 — 모르는·꺼진 탭은 일반 탭으로 연다. Base 탭은 순서 값을 고정해 둔다(빈 자리가 생겨도 뒤 탭이 당겨지지 않게) | 확장(60, `extension-curation` — 갤러리·이름 설치·공유·게시·카탈로그 원본 관리, §8-2) · MCP 커넥터(65) |
 | `adminQuickLinks` | `/admin` 바로가기 | MCP 카탈로그(5) |
 | `slashMenu`(첫 번째 것만) | 입력창 `/` 메뉴 — 감지·디바운스·키보드 이동은 Base, 후보·정렬·삽입 텍스트·전체 보기·표시는 add-on. 없으면 메뉴가 뜨지 않는다 | 스킬(`/<slug> ` 삽입) |
 | `messageBlocks`·`composerContext`·`chatMode`·`settingsGroups`·`apiKeyScopePresets`·`sidebarSections`·`chatContextBanners` | 메시지 렌더·컴포저·관리자 시스템 설정·API 키·사이드바·대화 배너 | 지도·노트북·디스코드·토론·딥리서치·Knowledge |

@@ -76,3 +76,18 @@ describe('설치형 add-on 매니페스트 (확장 설치 경로)', () => {
         expect(parseInstallableAddonManifest(JSON.stringify({ ...base, components: { server: './server' } }), '1.75.0').errors.length).toBeGreaterThan(0);
     });
 });
+
+describe('전용 라우트 mountPath', () => {
+    const base = { id: 'route-test', name: 'r', version: '1.0.0', requires: { openmake: '>=1.0.0' }, scope: 'system', components: {} };
+    const parse = (mountPath: string) => addonManifestSchema.safeParse({ ...base, entry: { routes: [{ mountPath, module: 'routes#r' }] } }).success;
+
+    it('종전 형식은 그대로 통과한다', () => {
+        for (const p of ['/api/mcp', '/api/integrations/discord', '/', '/api/a_b-c']) expect(parse(p)).toBe(true);
+    });
+    it('세그먼트 전체가 경로 매개변수(`:name`)인 경로를 받는다 (§8-2 공유 토글)', () => {
+        expect(parse('/api/users/me/extensions/:id/visibility')).toBe(true);
+    });
+    it('세그먼트 중간의 `:`·숫자로 시작하는 매개변수·와일드카드·질의는 거절한다', () => {
+        for (const p of ['/api/a:b', '/api/:', '/api/:1x', '/api/*', '/api/x?y', 'api/x']) expect(parse(p)).toBe(false);
+    });
+});

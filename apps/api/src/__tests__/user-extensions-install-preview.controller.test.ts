@@ -1,5 +1,6 @@
 /**
  * 확장 설치 미리보기(M1b) 라우트 — 플래그 OFF 면 404·갤러리 응답에 필드 없음(종전 흐름), ON 이면 미리보기를 낸다.
+ * 갤러리 응답의 installPreview 필드는 큐레이션 add-on 테스트(addons/extension-curation/__tests__/gallery-routes.test.ts)가 고정한다.
  * 원본 정책(M2) 거절은 어떤 네트워크 조회보다 먼저 403 EXTENSION_SOURCE_BLOCKED. LLM 은 부르지 않는다(무DB).
  */
 import { resetConfig } from '../config/env';
@@ -88,21 +89,10 @@ describe('플래그 OFF — 종전 흐름', () => {
         expect(mockGetById).not.toHaveBeenCalled();
         expect(mockFetcher.resolveRef).not.toHaveBeenCalled();
     });
-
-    it('갤러리 응답에 installPreview 필드가 없다(응답 모양 불변)', async () => {
-        const res = await request(app()).get('/api/users/me/extensions/gallery');
-        expect(res.status).toBe(200);
-        expect(Object.keys(res.body.data).sort()).toEqual(['catalog', 'extensions']);
-    });
 });
 
 describe('플래그 ON', () => {
     beforeEach(() => setEnv('EXTENSION_INSTALL_PREVIEW_ENABLED', 'true'));
-
-    it('갤러리 응답이 installPreview:true 를 싣는다', async () => {
-        const res = await request(app()).get('/api/users/me/extensions/gallery');
-        expect(res.body.data.installPreview).toBe(true);
-    });
 
     it('구성요소·권한·원본·커밋·경고를 내고, LLM 0회·쓰기 SQL 0회', async () => {
         const res = await request(app()).post('/api/users/me/extensions/catalog/c1/preview').send({});
