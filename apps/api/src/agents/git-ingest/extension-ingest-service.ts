@@ -61,6 +61,7 @@ import { evaluatePermissionState } from '../../services/extensions/permission-st
 import { listLinkedMcpServerIds, releaseLinkedMcpServers } from '../../services/extensions/release-linked-mcp';
 import { EXTENSION_INGEST, SKILL_CREATOR } from '../../config/constants';
 import { EXTENSION_SECURITY } from '../../config/extension-security';
+import { assertExtensionSourceAllowed, checkCatalogSource, type CatalogSourcePolicyInput } from '../../services/extensions/source-policy';
 
 const logger = createLogger('ExtensionIngestService');
 
@@ -100,6 +101,8 @@ export class ExtensionIngestService {
         if (isLocalSourceUrl(input.gitUrl) && !input.isAdmin) {
             throw new Error('LOCAL_SOURCE_ADMIN_ONLY: 로컬 디렉터리 설치는 관리자만 가능합니다');
         }
+        // 확장 원본 정책(M2, opt-in) — 어떤 네트워크·파일 작업보다 먼저. 채팅 도구·갤러리·카탈로그·내부 게시·업데이트 공통 진입점
+        await assertExtensionSourceAllowed({ url: input.gitUrl, ref: input.gitRef, userId: input.userId, action: 'install' });
 
         // (1) URL parse — .zip 아카이브 URL 은 pseudo repo (ArchiveFetcher 가 owner/repo 무시)
         const isArchive = isNonGitSourceUrl(input.gitUrl);
@@ -153,6 +156,8 @@ export class ExtensionIngestService {
                     if (entry.url) {
                         const p2 = parseGitUrl(entry.url);
                         if (p2 && (p2.owner !== owner || p2.repo !== repo)) {
+                            // 항목의 실제 원본도 검사 — 카탈로그만 허용한 정책이 교차 저장소 항목으로 우회되지 않게(재조회 전에)
+                            await assertExtensionSourceAllowed({ url: entry.url, userId: input.userId, action: 'entry' });
                             owner = p2.owner;
                             repo = p2.repo;
                             effectiveGitUrl = entry.url;
@@ -297,6 +302,8 @@ export class ExtensionIngestService {
             fetcherFactory: isArchive ? () => fetcher : this.opts.fetcherFactory,
             // 거대 마켓플레이스 repo — 확장 경로 상한으로 재조회 (스킬 ingest 기본 상한이면 REPO_TOO_LARGE)
             maxTreeEntries: EXTENSION_INGEST.maxTreeEntries,
+            // 원본 정책은 이 서비스 진입부·항목에서 이미 판정 — 스킬마다(고정 sha ref 로) 다시 판정하지 않는다
+            sourcePolicyPrechecked: true,
         });
         const skillResults: SkillInstallResult[] = await importSkillPaths(skillService, skillPaths, {
             userId: input.userId, isAdmin: input.isAdmin, gitUrl: effectiveGitUrl, sha, accessToken: input.accessToken,
@@ -475,7 +482,9 @@ export class ExtensionIngestService {
         currentRef: string;
         trackingRef?: string | null;
         accessToken?: string;
+        userId?: string;   // 원본 정책(M2) 판정 대상 — 활성 조직 층
     }): Promise<UpdateCheckResult> {
+        await assertExtensionSourceAllowed({ url: input.sourceUrl, ref: input.trackingRef, userId: input.userId, action: 'update-check' });
         // 아카이브 소스: 재다운로드 sha256 을 latestRef 로 사용 (내용 변경 감지)
         const isArchive = isNonGitSourceUrl(input.sourceUrl);
         const parsed = isArchive ? nonGitPseudoRepo(input.sourceUrl) : parseGitUrl(input.sourceUrl);
@@ -502,10 +511,13 @@ export class ExtensionIngestService {
      * 카탈로그 스냅샷 (admin 큐레이션 갤러리) — catalog-snapshot.ts 위임.
      * 판정 규칙·형식은 그 모듈 doc 참고 (600줄 파일 가드 분할).
      */
-    async fetchCatalogSnapshot(url: string, accessToken?: string): Promise<CatalogSnapshot> {
+    async fetchCatalogSnapshot(url: string, accessToken?: string, policy: CatalogSourcePolicyInput = { action: 'catalog-sync' }): Promise<CatalogSnapshot> {
+        // 원본 정책(M2) — 카탈로그 원본은 받기 전에 판정, 교차 저장소 항목은 프로브(네트워크) 전에 같은 해석본으로 판정
+        const isEntrySourceAllowed = await checkCatalogSource(url, policy);
         return fetchCatalogSnapshotImpl({
             fetcherFactory: this.opts.fetcherFactory,
             archiveFetcherFor: (u) => this.makeArchiveFetcher(u),
+            isEntrySourceAllowed,
         }, url, accessToken);
     }
 

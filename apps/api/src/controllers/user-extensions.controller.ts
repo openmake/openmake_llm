@@ -39,6 +39,7 @@ import { createLogger } from '../utils/logger';
 import { removeExtensionInstallation } from '../services/addon/addon-state';
 import { activeOrgFor, membershipsFor } from '../services/org/membership-cache';
 import { success, internalError, unauthorized, notFound, badRequest } from '../utils/api-response';
+import { ExtensionSourceBlockedError } from '../errors/extension-source-blocked.error';
 
 const updateCheckSchema = z.object({
     // private repo 접근/rate limit 우회용 (요청 한정 — DB 미저장)
@@ -66,6 +67,11 @@ const catalogInstallSchema = z.object({
 });
 
 const log = createLogger('UserExtensionsController');
+
+/** 원본 정책 거절(403 EXTENSION_SOURCE_BLOCKED)은 기존 400 변환을 타지 않고 전역 errorHandler 로 넘긴다 */
+function rethrowPolicyError(err: unknown): void {
+    if (err instanceof ExtensionSourceBlockedError) throw err;
+}
 
 function getUserId(req: Request): string | null {
     if (!req.user) return null;
@@ -194,6 +200,7 @@ export function createUserExtensionsController(): Router {
                 validationWarnings: result.validationWarnings,
             }));
         } catch (err) {
+            rethrowPolicyError(err);
             const msg = err instanceof Error ? err.message : String(err);
             log.warn(`gallery install 실패: ${msg}`);
             res.status(400).json(badRequest(`갤러리 설치 실패: ${msg}`));
@@ -222,7 +229,7 @@ export function createUserExtensionsController(): Router {
             if (dup) { res.status(400).json(badRequest(`이미 등록된 소스입니다 (${dup.id})`)); return; }
 
             const service = await buildIngestService();
-            const snapshot = await service.fetchCatalogSnapshot(body.url.trim(), body.accessToken);
+            const snapshot = await service.fetchCatalogSnapshot(body.url.trim(), body.accessToken, { userId, action: 'catalog-register' });
             const row = await repo.insert({
                 url: body.url.trim(),
                 name: snapshot.name,
@@ -237,6 +244,7 @@ export function createUserExtensionsController(): Router {
                 .then(() => repo.updateSnapshot(row.id, snapshot))
                 .catch((e) => log.warn(`catalog 번역 실패 (등록은 완료): ${e instanceof Error ? e.message : String(e)}`));
         } catch (err) {
+            rethrowPolicyError(err);
             const msg = err instanceof Error ? err.message : String(err);
             log.warn(`catalog 등록 실패: ${msg}`);
             res.status(400).json(badRequest(`카탈로그 등록 실패: ${msg}`));
@@ -251,7 +259,7 @@ export function createUserExtensionsController(): Router {
             const service = await buildIngestService();
             // accessToken(요청 한정): GitHub API 무인증 rate limit(60/hr) 회피 (2026-08-16 실측)
             const body = req.body as z.infer<typeof galleryInstallSchema>;
-            const snapshot = await service.fetchCatalogSnapshot(row.url, body.accessToken);
+            const snapshot = await service.fetchCatalogSnapshot(row.url, body.accessToken, { userId: getUserId(req) ?? undefined, action: 'catalog-sync' });
             // 기존 번역 재사용 (name+description 일치) — 재동기화 시 신규/변경분만 LLM 대상
             const updated = await repo.updateSnapshot(row.id, snapshot);
             log.info(`카탈로그 동기화: ${row.id} (${snapshot.plugins.length} plugins)`);
@@ -261,6 +269,7 @@ export function createUserExtensionsController(): Router {
                 .then(() => repo.updateSnapshot(row.id, snapshot))
                 .catch((e) => log.warn(`catalog 번역 실패 (동기화는 완료): ${e instanceof Error ? e.message : String(e)}`));
         } catch (err) {
+            rethrowPolicyError(err);
             const msg = err instanceof Error ? err.message : String(err);
             log.warn(`catalog 동기화 실패: ${msg}`);
             res.status(400).json(badRequest(`카탈로그 동기화 실패: ${msg}`));
@@ -316,6 +325,7 @@ export function createUserExtensionsController(): Router {
                 validationWarnings: result.validationWarnings,
             }));
         } catch (err) {
+            rethrowPolicyError(err);
             const msg = err instanceof Error ? err.message : String(err);
             log.warn(`catalog install 실패: ${msg}`);
             res.status(400).json(badRequest(`카탈로그 설치 실패: ${msg}`));
@@ -375,9 +385,11 @@ export function createUserExtensionsController(): Router {
                 currentRef: row.source_ref,
                 trackingRef: row.tracking_ref,
                 accessToken: body.accessToken,
+                userId,
             });
             res.json(success({ ...result, currentVersion: row.version }));
         } catch (err) {
+            rethrowPolicyError(err);
             // 원격 조회 실패(레포 삭제/권한/rate limit)는 사용자 입력 기인 — 400 으로 사유 전달
             const msg = err instanceof Error ? err.message : String(err);
             log.warn(`update-check 실패: ${msg}`);

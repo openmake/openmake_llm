@@ -8,6 +8,7 @@
  * @module addons/skill-runtime/routes/skills-route-helpers
  */
 
+import { EXTENSION_SOURCE_BLOCKED_CODE } from '../../../runtime-ports/extension-source-policy';
 import { Request } from 'express';
 import multer from 'multer';
 import { ipKeyGenerator } from 'express-rate-limit';
@@ -36,6 +37,7 @@ export const skillUpload = multer({
 });
 
 export function mapGitIngestErrorToStatus(code: string): number {
+    if (code === EXTENSION_SOURCE_BLOCKED_CODE) return 403;   // 확장 원본 정책(M2, Base)
     switch (code) {
         case 'INVALID_GIT_URL': case 'INVALID_REF': case 'MANIFEST_INVALID': return 400;
         case 'REPO_NOT_FOUND': return 404;
