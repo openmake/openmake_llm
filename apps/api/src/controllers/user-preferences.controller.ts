@@ -31,6 +31,7 @@ import { UserRepository } from '../data/repositories/user-repository';
 import { createLogger } from '../utils/logger';
 import { success, internalError, unauthorized, badRequest } from '../utils/api-response';
 import { membershipsFor, activeOrgFor, clearOrgMembershipCache } from '../services/org/membership-cache';
+import { triggerMemberReconcile } from '../services/extensions/org-deployment';
 
 const log = createLogger('UserPreferencesController');
 
@@ -193,6 +194,8 @@ export function createUserPreferencesController(): Router {
             clearOrgMembershipCache(userId);
             const active = await activeOrgFor(userId);
             log.info(`활성 조직 변경: userId=${userId} orgId=${orgId ?? 'none'}`);
+            // 조직 배포 모드(§8-1, opt-in) — 새 활성 조직의 자동 설치 항목을 맞춘다(fire-and-forget, 꺼져 있으면 아무것도 안 함)
+            if (active) triggerMemberReconcile(userId);
             res.json(success({ activeOrgId: active?.orgId ?? null, activeOrgRole: active?.orgRole ?? null }));
         } catch (err) {
             log.error('활성 조직 변경 실패:', err);
