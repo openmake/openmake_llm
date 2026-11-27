@@ -158,6 +158,8 @@ export const envSchema = z
         EXTENSION_SOURCE_POLICY_ENFORCED: z.string().optional(),
         EXTENSION_INSTALL_PREVIEW_ENABLED: z.string().optional(),
         EXTENSION_ADMIN_INVENTORY_ENABLED: z.string().optional(),
+        /** `GET /api/addons` DB 상태 반영(opt-in) — config/addon-list-state */
+        ADDON_LIST_REFLECT_DB_STATE: z.string().optional(),
         EXTENSION_ARBITRARY_URL_INSTALL: z.string().optional(),
         EXTENSION_SOURCE_POLICY: z.string().optional(),
         /** 확장 카탈로그 주기 동기화(M4, opt-in) — 해석은 config/env, 검증은 system-settings-registry */
