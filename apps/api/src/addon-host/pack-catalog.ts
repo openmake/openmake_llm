@@ -23,12 +23,24 @@ const catalogTemplateSchema = z.object({
     argsSchema: z.record(z.string(), z.unknown()),
     envSchema: z.record(z.string(), z.unknown()),
     toolAllowlist: z.array(z.string()).optional(),
+    /**
+     * 이 템플릿의 이전 판(연결 필드) — 서버가 주소를 옮겼을 때 적는다. opt-in 이관(`upgradeSuperseded`)은
+     * DB 행의 연결 필드가 이 중 하나와 **정확히 같을 때만**(관리자가 고치지 않은 행) 지금 판으로 바꾼다.
+     */
+    supersedes: z.array(z.object({
+        transportType: z.enum(['stdio', 'sse', 'streamable-http']),
+        commandTemplate: z.string().min(1).max(1000).optional(),
+        urlTemplate: z.string().min(1).max(1000).optional(),
+    }).strict()).max(10).optional(),
     /** 처음 설치될 때의 is_enabled — 이후는 관리자가 정한다 */
     defaultEnabled: z.boolean(),
 }).strict().refine(
     t => (t.transportType === 'stdio' ? !!t.commandTemplate : !!t.urlTemplate),
     'stdio 는 commandTemplate, streamable-http 는 urlTemplate 이 필요하다',
 );
+
+/** opt-in — 관리자가 고치지 않은 이전 판 카탈로그 행을 부팅 때 지금 판으로 이관한다(기본 OFF, 재시작 필요) */
+export const CATALOG_SUPERSEDE_MIGRATE_FLAG = 'MCP_CATALOG_SUPERSEDE_MIGRATE';
 
 export type PackCatalogTemplate = z.infer<typeof catalogTemplateSchema>;
 
@@ -53,17 +65,31 @@ export function disabledCatalogTemplateIds(): string[] {
 
 interface PackCatalogStore {
     installCatalogTemplateOnce(addonId: string, template: PackCatalogTemplate): Promise<boolean>;
+    /** 이미 설치된 행이 `supersedes` 의 이전 판 그대로면 지금 판으로 바꾼다 — 바꿨으면 true */
+    upgradeSupersededTemplate?(template: PackCatalogTemplate): Promise<boolean>;
 }
 
-export async function installPackCatalog(id: string, store: PackCatalogStore): Promise<{ installed: string[]; failed: string[] }> {
+export interface InstallPackCatalogOptions {
+    /** opt-in — 관리자가 고치지 않은 이전 판 행을 지금 판으로 이관한다(기본 false = 종전 "항목당 1회 설치" 그대로) */
+    upgradeSuperseded?: boolean;
+}
+
+export async function installPackCatalog(
+    id: string,
+    store: PackCatalogStore,
+    options: InstallPackCatalogOptions = {},
+): Promise<{ installed: string[]; failed: string[]; upgraded: string[] }> {
     const installed: string[] = [];
     const failed: string[] = [];
+    const upgraded: string[] = [];
     for (const template of loadPackCatalog(id)) {
         try {
             if (await store.installCatalogTemplateOnce(id, template)) installed.push(template.id);
+            else if (options.upgradeSuperseded && template.supersedes?.length && store.upgradeSupersededTemplate
+                && await store.upgradeSupersededTemplate(template)) upgraded.push(template.id);
         } catch (err) {
             failed.push(`${template.id}: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
-    return { installed, failed };
+    return { installed, failed, upgraded };
 }

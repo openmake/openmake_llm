@@ -16,6 +16,10 @@
  * 그 항목의 scope 는 라우트가 `auth({ scope })` 로 넘기고(없으면 SDK 가 보호 리소스의 scopes_supported 전체를 요청한다),
  * authorization_params 는 인가 URL 에 덧붙인다(Google `access_type=offline` 등).
  *
+ * CIMD(MCP-4, opt-in `MCP_OAUTH_CIMD_ENABLED`): 사전 등록도 저장된 등록도 없고 인가 서버가
+ * `client_id_metadata_document_supported` 를 광고하면, SDK 가 `clientMetadataUrl`(우리 공개 메타데이터 문서 URL)을
+ * client_id 로 써서 동적 등록 없이 진행한다(`oauth-cimd.ts`). 등록 순서는 사전 등록 → CIMD → DCR 이다.
+ *
  * @module mcp/oauth-provider
  */
 import type {
@@ -32,6 +36,7 @@ import {
     MCP_OAUTH_KV_PREFIX,
     resolveMcpOAuthRedirectUrl,
 } from '../../config/mcp-oauth';
+import { isCimdClientId, resolveCimdClientMetadataUrl } from './oauth-cimd';
 
 interface McpOAuthProviderOptions {
     serverId: string;
@@ -87,6 +92,14 @@ export class McpOAuthProvider implements OAuthClientProvider {
         return resolveMcpOAuthRedirectUrl();
     }
 
+    /**
+     * CIMD 문서 URL — SDK 는 저장된 등록이 없고 인가 서버가 CIMD 를 광고할 때만 이것을 client_id 로 쓴다.
+     * 플래그 OFF·공개 HTTPS origin 없음이면 undefined(SDK 는 CIMD 를 시도하지 않는다).
+     */
+    get clientMetadataUrl(): string | undefined {
+        return resolveCimdClientMetadataUrl();
+    }
+
     get clientMetadata(): OAuthClientMetadata {
         return {
             client_name: MCP_OAUTH_CLIENT_NAME,
@@ -114,7 +127,11 @@ export class McpOAuthProvider implements OAuthClientProvider {
                 ...(fixed.tokenEndpointAuthMethod ? { token_endpoint_auth_method: fixed.tokenEndpointAuthMethod } : {}),
             };
         }
-        return this.repo.getClientInformation(this.opts.serverId, this.opts.userId);
+        const stored = await this.repo.getClientInformation(this.opts.serverId, this.opts.userId);
+        // CIMD 로 저장된 등록은 지금도 같은 문서 URL 을 제공할 때만 유효하다 — 플래그를 끄거나 origin 이 바뀌면
+        // 인가 서버가 문서를 가져갈 수 없으니 버리고 SDK 가 다시 고르게 한다(DCR 또는 새 URL).
+        if (stored && isCimdClientId(stored.client_id) && stored.client_id !== resolveCimdClientMetadataUrl()) return undefined;
+        return stored;
     }
 
     async saveClientInformation(info: OAuthClientInformationMixed): Promise<void> {

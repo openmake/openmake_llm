@@ -16,6 +16,7 @@ jest.mock('../../../storage', () => ({
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ getPool: () => ({}) }) }));
 jest.mock('../../../config/env', () => ({
     getConfig: () => ({ oauthRedirectUri: 'https://chat.example.com/api/auth/callback/google', port: 52416 }),
+    readSettingValue: () => undefined,
 }));
 
 import { McpOAuthProvider, consumeMcpOAuthState } from '../oauth-provider';
