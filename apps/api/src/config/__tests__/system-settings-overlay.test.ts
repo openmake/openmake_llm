@@ -89,6 +89,8 @@ describe('system-settings-registry', () => {
             else if (def.key === 'EXTENSION_CATALOG_INDEX_ENABLED') sample[def.key] = 'true';
             // 확장 설치 미리보기(M1b) — 불리언
             else if (def.key === 'EXTENSION_INSTALL_PREVIEW_ENABLED') sample[def.key] = 'true';
+            // 확장 번들 원격 MCP 관리 등록(P8) — 불리언
+            else if (def.key === 'EXTENSION_REMOTE_MCP_ENABLED') sample[def.key] = 'true';
             // 조직 확장 배포 모드(§8-1) — 불리언
             else if (def.key === 'EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED') sample[def.key] = 'true';
             // 관리자 확장 현황(M3) — 불리언

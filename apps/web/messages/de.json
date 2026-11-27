@@ -2724,7 +2724,9 @@
       "actionFailed": "Aktion fehlgeschlagen: {error}",
       "envRequired": "Erforderliche Umgebungsvariablen — für die Freigabe sind echte Werte nötig",
       "envPlaceholder": "Wert eingeben",
-      "envMissing": "Werte erforderlich: {keys}"
+      "envMissing": "Werte erforderlich: {keys}",
+      "remoteOauthNote": "Auf die von der Erweiterung angegebene Remote-URL festgelegt. Nach der Freigabe folgt die OAuth-Anmeldung.",
+      "oauthStartFailed": "Freigegeben, aber die OAuth-Anmeldung konnte nicht gestartet werden. Melden Sie sich unter Einstellungen → Konnektoren an. {error}"
     },
     "agents": {
       "title": "Benutzerdefinierte Agents",
