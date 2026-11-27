@@ -3,7 +3,7 @@
  *
  * 규칙(구조화 원본 객체, config/extension-source-policy.ts 스키마):
  *   github {repo:'owner/repo'|'owner/*', ref?, path?} · git {url, ref?, path?} · archive {url} · hostPattern {pattern}
- *   · catalog {id} · internal · local
+ *   · catalog {id} · internal · local · oci {registry, repository?}(P8 — EXTENSION_OCI_INSTALL_ENABLED 일 때만 원본이 생긴다)
  *
  * 원본 식별 — 실제로 내려받는 곳 기준(설치 엔진과 같은 판정 순서): `.zip` URL·`internal://`·`local://` 은 비-git,
  * 나머지는 parseGitUrl 이 뽑은 GitHub `owner/repo`(fetcher 가 GitHub API 로 그 저장소를 받는다). GitHub 저장소 id 는
@@ -15,6 +15,10 @@
  *     저장소의 git URL 도 막는다, ref·path 없는 규칙은 모든 ref·경로를, 원본에 ref 가 없으면(HEAD) ref 규칙도 막는다.
  *   - allow: 정확 일치(ref·path 가 같거나 양쪽 다 없음). hostPattern 만 정규식. 이름으로는 매칭하지 않는다.
  *   - 층(전역·조직)마다 allow 가 있으면 **모든 층에서** 일치해야 한다. allow 미설정 = 제한 없음, `[]` = 전부 차단.
+ *   - oci: 원본·규칙 모두 설치 엔진과 **같은 파서**(oci-reference)로 정규화한다(레지스트리 소문자·:443 제거·Docker Hub
+ *     별칭 → docker.io, 문법 밖 입력은 원본으로 인정하지 않아 설치도 거절). repository 는 경로 구성요소 단위 접두
+ *     (`org` 는 `org`·`org/x` 에 맞고 `org-evil/x` 에는 안 맞는다). deny 는 포트 없는 규칙이 그 호스트의 모든 포트를 막고,
+ *     allow 는 host[:port] 정확 일치. hostPattern 은 레지스트리 호스트에도 적용된다. 태그·digest 는 원본 식별이 아니다.
  *   - catalog 규칙은 그 카탈로그 원본 URL 자체에만 맞는다 — 마켓 항목이 가리키는 다른 저장소(entry)는 독립으로 검사한다
  *     (카탈로그만 허용해 둔 정책이 교차 저장소 항목으로 우회되지 않게).
  *   - `catalog-only`(EXTENSION_ARBITRARY_URL_INSTALL): 설치·업데이트·업데이트 확인의 원본은 등록(enabled) 카탈로그의
@@ -30,6 +34,7 @@ import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import { isArchiveUrl } from '../../agents/git-ingest/archive-fetcher';
 import { isInternalBundleUrl } from '../../agents/git-ingest/internal-bundle-fetcher';
 import { isLocalSourceUrl } from '../../agents/git-ingest/local-directory-fetcher';
+import { isEnabledOciSourceUrl, normalizeOciRegistry, parseOciReference } from '../../agents/git-ingest/oci-reference';
 import { createLogger } from '../../utils/logger';
 import {
     EXTENSION_SOURCE_POLICY_SETTINGS,
@@ -52,7 +57,8 @@ export type ExtensionSourceDescriptor =
     | { kind: 'github'; repo: string; owner: string; host: string; url: string; ref?: string; path?: string }
     | { kind: 'archive'; host: string; url: string; urlNoQuery: string }
     | { kind: 'internal'; url: string }
-    | { kind: 'local'; url: string };
+    | { kind: 'local'; url: string }
+    | { kind: 'oci'; registry: string; host: string; repository: string; url: string };
 
 export interface CatalogRef { id: string; url: string; plugins?: Array<{ source?: string }> }
 
@@ -91,6 +97,12 @@ function hostOf(url: string): string {
 export function describeExtensionSource(rawUrl: string, opts: { ref?: string | null; gitFirst?: boolean } = {}): ExtensionSourceDescriptor | null {
     const url = rawUrl.trim();
     const ref = opts.ref && opts.ref !== 'HEAD' ? opts.ref : undefined;
+    // OCI(opt-in) — git 파서보다 먼저(경로에 github.com/ 이 든 OCI 참조가 GitHub 원본으로 오인되지 않게). 문법 밖이면 null
+    if (isEnabledOciSourceUrl(url)) {
+        const o = parseOciReference(url);
+        if (!o) return null;
+        return { kind: 'oci', registry: o.registry, host: o.registry.replace(/:\d+$/, ''), repository: o.repository, url: `oci://${o.registry}/${o.repository}` };
+    }
     const nonGit = (): ExtensionSourceDescriptor | null => {
         if (isInternalBundleUrl(url)) return { kind: 'internal', url };
         if (isLocalSourceUrl(url)) return { kind: 'local', url };
@@ -113,6 +125,7 @@ export function describeExtensionSource(rawUrl: string, opts: { ref?: string | n
 function identityKey(d: ExtensionSourceDescriptor): string {
     if (d.kind === 'github') return `github:${d.repo}`;
     if (d.kind === 'archive') return `archive:${d.url}`;
+    if (d.kind === 'oci') return `oci:${d.registry}/${d.repository}`;
     return `${d.kind}:${d.url}`;
 }
 
@@ -155,8 +168,20 @@ export function ruleMatches(
             const n = normalizeSourceUrl(rule.url);
             return mode === 'deny' ? broadArchiveKey(n) === d.urlNoQuery : n === d.url;
         }
+        case 'oci': {
+            if (d.kind !== 'oci') return false;
+            const reg = normalizeOciRegistry(rule.registry);
+            if (!reg) return mode === 'deny';
+            const regOk = mode === 'deny' && !/:\d+$/.test(reg.registry)
+                ? d.host === reg.registry
+                : d.registry === reg.registry;
+            if (!regOk) return false;
+            if (rule.repository === undefined) return true;
+            const prefix = rule.repository.replace(/\/+$/, '').toLowerCase();
+            return d.repository === prefix || d.repository.startsWith(`${prefix}/`);
+        }
         case 'hostPattern': {
-            if (d.kind !== 'github' && d.kind !== 'archive') return false;
+            if (d.kind !== 'github' && d.kind !== 'archive' && d.kind !== 'oci') return false;
             try { return new RegExp(rule.pattern).test(d.host); } catch { return mode === 'deny'; }
         }
         case 'catalog': {
@@ -207,7 +232,7 @@ export function evaluateExtensionSource(input: {
         }
     }
     if (input.arbitraryUrlInstall === 'catalog-only' && CATALOG_ONLY_ACTIONS.has(action)
-        && (source.kind === 'github' || source.kind === 'archive') && !isCatalogMember(source, catalogs)) {
+        && (source.kind === 'github' || source.kind === 'archive' || source.kind === 'oci') && !isCatalogMember(source, catalogs)) {
         return { allowed: false, reason: 'CATALOG_ONLY', source: shown };
     }
     return { allowed: true };

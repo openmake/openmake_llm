@@ -23,7 +23,7 @@ export const ADDON_DESIRED_STATES: typeof CONTRACT_ADDON_DESIRED_STATES = ['enab
 export const ADDON_FAILURE_CODES: typeof CONTRACT_ADDON_FAILURE_CODES = ['migration_failed', 'runtime_failed', 'version_mismatch', 'registration_failed', 'needs_retry'];
 export type { AddonDesiredState, AddonFailureCode, AddonState } from '@openmake/plugin-contracts';
 
-export const ADDON_SOURCES = ['builtin', 'git', 'zip', 'local', 'marketplace'] as const;
+export const ADDON_SOURCES = ['builtin', 'git', 'zip', 'local', 'marketplace', 'oci'] as const;
 export type AddonSource = typeof ADDON_SOURCES[number];
 
 export interface AddonInstallationRow {
