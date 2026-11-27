@@ -1307,7 +1307,8 @@
     "visibilityOrganization": "Organisation",
     "orgBadge": "Org",
     "visibilityAria": "Sichtbarkeit des Agenten",
-    "viewSystemPrompt": "System-Prompt anzeigen"
+    "viewSystemPrompt": "System-Prompt anzeigen",
+    "agentOrigin": "Quelle: {source}"
   },
   "research": {
     "pageTitle": "Deep-Research-Verlauf",

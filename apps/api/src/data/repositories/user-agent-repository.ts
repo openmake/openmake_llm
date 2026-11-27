@@ -45,6 +45,13 @@ interface UserAgent {
     updated_at: string;
 }
 
+/** 승인 대기 목록의 출처 — 확장 이름·원본 URL·커밋(확장 레코드가 없으면 NULL) */
+export interface UserAgentPendingOrigin {
+    extension_name: string | null;
+    extension_source_url: string | null;
+    extension_source_ref: string | null;
+}
+
 /** 목록 응답용 — 소유 여부 플래그 부착(다른 사용자의 공유 에이전트 구분). */
 interface UserAgentWithOwnership extends UserAgent {
     owned: boolean;
@@ -195,15 +202,28 @@ export class UserAgentRepository extends BaseRepository {
         return result.rows[0] as UserAgent | undefined;
     }
 
-    /** 승인 대기(확장 설치분) — 소유자 본인 것만. 승인함이 시스템 프롬프트를 보여 주고 검토하게 한다. */
-    async listPendingForUser(userId: string): Promise<UserAgent[]> {
-        const result = await this.query<UserAgent>(
-            `SELECT * FROM user_agents
+    /**
+     * 승인 대기(확장 설치분) — 소유자 본인 것만. 승인함이 시스템 프롬프트를 보여 주고 검토하게 한다.
+     * `withOrigin`(승인 대기 설치 opt-in 일 때 호출부가 켠다)이면 어느 확장·원본·커밋에서 왔는지를 함께 싣는다 —
+     * 승인자가 출처를 보고 판단하게(꺼져 있으면 종전 SQL·모양 그대로).
+     */
+    async listPendingForUser(userId: string, opts?: { withOrigin?: boolean }): Promise<Array<UserAgent & Partial<UserAgentPendingOrigin>>> {
+        const result = opts?.withOrigin
+            ? await this.query<UserAgent & UserAgentPendingOrigin>(
+                `SELECT ua.*, e.name AS extension_name, e.source_url AS extension_source_url, e.source_ref AS extension_source_ref
+                   FROM user_agents ua
+                   LEFT JOIN user_extensions e ON e.id = ua.extension_id
+                  WHERE ua.user_id = $1 AND ua.is_active = TRUE AND ua.approval_status = 'pending'
+                  ORDER BY ua.created_at DESC`,
+                [userId],
+            )
+            : await this.query<UserAgent>(
+                `SELECT * FROM user_agents
              WHERE user_id = $1 AND is_active = TRUE AND approval_status = 'pending'
              ORDER BY created_at DESC`,
-            [userId],
-        );
-        return result.rows as UserAgent[];
+                [userId],
+            );
+        return result.rows as Array<UserAgent & Partial<UserAgentPendingOrigin>>;
     }
 
     async countPendingForUser(userId: string): Promise<number> {

@@ -16,6 +16,7 @@ import { getComponentStore } from '../../addon-host/addon-data';
 import type { ExtensionPermissionState } from '../../config/addon-permissions';
 import type { ApprovedSkillSnapshot } from '../../runtime-ports/component-stores';
 import { jsonbParam, type SavePermissionStateInput } from './user-extension-permission-repository';
+import { EXTENSION_SECURITY } from '../../config/extension-security';
 
 export interface UserExtensionRow {
     id: string;
@@ -389,10 +390,25 @@ export class UserExtensionRepository extends BaseRepository {
 
         // 스킬은 배정도 함께 걷는다 — archived 스킬에 배정이 남으면 도구 바인딩이 계속 따라온다(2026-09-20). 링크는 남긴다(제거 기록)
         await this.skills().archiveLinked(id, { unlink: false });
-        await this.query(
-            `UPDATE user_agents SET is_active=FALSE, updated_at=NOW() WHERE extension_id=$1`,
-            [id]
-        );
+        if (EXTENSION_SECURITY.AGENT_APPROVAL_REQUIRED) {
+            // 승인 대기 설치 opt-in — 한 번도 승인되지 않은 에이전트는 거절과 같은 규칙으로 이름도 비켜 준다
+            // (UNIQUE(user_id, name) 은 soft-delete 행에도 걸려, 남겨 두면 같은 확장을 다시 설치할 때 이름이 표류한다).
+            // 승인된 에이전트는 종전 그대로(이름 유지 — 제거 기록).
+            await this.query(
+                `UPDATE user_agents
+                    SET is_active=FALSE, updated_at=NOW(),
+                        name = CASE WHEN approval_status='pending' AND is_active
+                                    THEN name || '-removed-' || substr(md5(random()::text), 1, 6)
+                                    ELSE name END
+                  WHERE extension_id=$1`,
+                [id]
+            );
+        } else {
+            await this.query(
+                `UPDATE user_agents SET is_active=FALSE, updated_at=NOW() WHERE extension_id=$1`,
+                [id]
+            );
+        }
         await this.mcpServers().archiveLinked(id, { unlink: false });
         const r = await this.query<UserExtensionRow>(
             `UPDATE user_extensions SET status='removed', updated_at=NOW()
