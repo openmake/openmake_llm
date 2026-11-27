@@ -43,6 +43,7 @@ import { releaseLinkedMcpServers } from '../services/extensions/release-linked-m
 import { UserExtensionRepository, type UserExtensionRow } from '../data/repositories/user-extension-repository';
 import { ExtensionCatalogRepository, toPublicCatalogSource } from '../data/repositories/extension-catalog-repository';
 import { buildExtensionIngestService } from '../services/extensions/ingest-service-factory';
+import { installSharedExtension } from '../services/extensions/shared-install';
 import { syncCatalogSource } from '../services/extensions/catalog-sync';
 import { EXTENSION_CATALOG_SYNC_LIMITS, normalizeCatalogSubpath } from '../config/extension-catalog-sync';
 import { CATALOG_INDEX_LIMITS, normalizeCatalogIndexUrl } from '../config/extension-catalog-index';
@@ -54,7 +55,8 @@ import { applyDefaultCatalogAlias } from '../services/extensions/catalog-alias';
 import { createLogger } from '../utils/logger';
 import { removeExtensionInstallation } from '../services/addon/addon-state';
 import { activeOrgFor, membershipsFor } from '../services/org/membership-cache';
-import { success, internalError, unauthorized, notFound, badRequest, conflict } from '../utils/api-response';
+import { success, internalError, unauthorized, notFound, badRequest, conflict, error as apiError } from '../utils/api-response';
+import { decideExtensionRemoval, galleryDeploymentModes, installedDeploymentInfo, recordExtensionRemoval } from '../services/extensions/org-deployment';
 import { ExtensionSourceBlockedError } from '../errors/extension-source-blocked.error';
 import { extensionInstallPreviewEnabled } from '../config/extension-install-preview';
 
@@ -161,7 +163,13 @@ export function createUserExtensionsController(): Router {
         try {
             const repo = new UserExtensionRepository(getPool());
             const rows = await repo.listActiveForUser(userId);
-            res.json(success({ extensions: rows.map(toPublic) }));
+            // 조직 배포 모드(§8-1, opt-in) — 배포로 설치된 행에만 org_deployment 를 싣는다. 꺼져 있으면 null(응답 종전 그대로)
+            const deployment = await installedDeploymentInfo(userId, isAdminRole(req.user?.role));
+            res.json(success({
+                extensions: deployment
+                    ? rows.map((r) => { const d = deployment.get(r.id); return d ? { ...toPublic(r), org_deployment: d } : toPublic(r); })
+                    : rows.map(toPublic),
+            }));
         } catch (err) {
             log.error('list 실패:', err);
             res.status(500).json(internalError('확장 목록 조회 실패'));
@@ -176,7 +184,13 @@ export function createUserExtensionsController(): Router {
             const repo = new UserExtensionRepository(getPool());
             const rows = await repo.listShared(undefined, await memberOrgIds(userId));
             // 타인 user_id 는 노출하지 않고 owned 플래그만 제공 (user_agents 관용구 동형)
-            const extensions = rows.map((r) => ({ ...toPublic(r), owned: r.user_id === userId }));
+            const modes = await galleryDeploymentModes(userId);
+            const extensions = rows.map((r) => {
+                const item = { ...toPublic(r), owned: r.user_id === userId };
+                // 조직 배포 모드(§8-1, opt-in) — 활성 조직 공개 항목에만 이 멤버의 적용 모드. 꺼져 있으면 필드 없음(종전)
+                const mode = modes?.get(r.id);
+                return mode ? { ...item, deployment_mode: mode } : item;
+            });
             // admin 큐레이션 카탈로그 (enabled 소스만) — 실패해도 갤러리 자체는 응답 (fail-open)
             let catalog: Array<Record<string, unknown>> = [];
             try {
@@ -205,18 +219,8 @@ export function createUserExtensionsController(): Router {
             if (!shared) { res.status(404).json(notFound('공유 확장 없음')); return; }
 
             const body = req.body as z.infer<typeof galleryInstallSchema>;
-            const service = await buildIngestService({ userId, isAdmin: isAdminRole(req.user?.role) });
-            // 설치자 본인 계정으로 동일 소스 ingest 재실행 — 구성요소는 본인 소유 draft 로 생성
-            const result = await service.import({
-                userId,
-                isAdmin: false,
-                gitUrl: shared.source_url,
-                gitRef: shared.tracking_ref ?? undefined,
-                gitPath: shared.source_path,
-                // 합성 매니페스트 설치본(plugin.json 없는 마켓 엔트리)의 이름 — 가상 source_path 재설치 시 사용
-                plugin: shared.name,
-                accessToken: body.accessToken,
-            });
+            // 설치자 본인 계정으로 동일 소스 ingest 재실행 — 구성요소는 본인 소유 draft 로 생성 (조직 배포 조정과 같은 입력)
+            const result = await installSharedExtension(shared, userId, { isAdmin: isAdminRole(req.user?.role), accessToken: body.accessToken });
             if ('selectionRequired' in result && result.selectionRequired) {
                 // 명시 gitPath 라 도달 불가 — 방어
                 res.status(400).json(badRequest('plugin.json 후보가 모호합니다'));
@@ -528,8 +532,18 @@ export function createUserExtensionsController(): Router {
         if (!userId) { res.status(401).json(unauthorized()); return; }
         try {
             const repo = new UserExtensionRepository(getPool());
+            // 조직 배포 모드(§8-1, opt-in) — required 설치본은 일반 멤버가 지울 수 없다. 꺼져 있으면 언제나 허용(종전)
+            const decision = await decideExtensionRemoval(req.params.id, userId, isAdminRole(req.user?.role));
+            if (!decision.allowed) {
+                res.status(403).json(apiError('EXTENSION_REQUIRED', '조직이 필수로 배포한 확장은 지울 수 없습니다. 조직 관리자에게 문의하세요.'));
+                return;
+            }
             const removed = await repo.remove(req.params.id, userId, false);
             if (!removed) { res.status(404).json(notFound('확장 없음 또는 이미 제거됨')); return; }
+            // 배포로 설치된 항목 — 지운 기록을 남겨 default_on 이 다시 설치하지 않게 한다(실패해도 제거는 유지)
+            if (decision.link) {
+                await recordExtensionRemoval(decision.link).catch((e) => log.warn(`배포 제거 기록 실패 (제거는 완료): ${e instanceof Error ? e.message : String(e)}`));
+            }
             // 설치 상태 표에서도 지운다 — 남겨 두면 관리 화면이 지운 확장을 계속 보여 준다.
             await removeExtensionInstallation(removed.id);
             // 회수한(archived·enabled=false) MCP 서버의 떠 있는 연결을 닫는다 — 제거한 확장의 프로세스가 계속 돌지 않게.

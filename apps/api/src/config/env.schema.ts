@@ -158,9 +158,16 @@ export const envSchema = z
         EXTENSION_SOURCE_POLICY_ENFORCED: z.string().optional(),
         EXTENSION_INSTALL_PREVIEW_ENABLED: z.string().optional(),
         EXTENSION_ORG_OWNED_INSTALL_ENABLED: z.string().optional(),
+        /** 조직 확장 배포 모드(§8-1, opt-in) — config/extension-org-deployment */
+        EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED: z.string().optional(),
         EXTENSION_ADMIN_INVENTORY_ENABLED: z.string().optional(),
+        /** `GET /api/addons` DB 상태 반영(opt-in) — config/addon-list-state */
+        ADDON_LIST_REFLECT_DB_STATE: z.string().optional(),
         EXTENSION_ARBITRARY_URL_INSTALL: z.string().optional(),
         EXTENSION_SOURCE_POLICY: z.string().optional(),
+        /** 확장 MCP 서버 정책(§8-3, opt-in) — 해석·검증은 config/extension-mcp-server-policy · system-settings-registry */
+        EXTENSION_MCP_SERVER_POLICY_ENFORCED: z.string().optional(),
+        EXTENSION_MCP_SERVER_POLICY: z.string().optional(),
         /** 확장 카탈로그 주기 동기화(M4, opt-in) — 해석은 config/env, 검증은 system-settings-registry */
         EXTENSION_CATALOG_AUTO_SYNC_ENABLED: z.string().optional(),
         EXTENSION_CATALOG_SYNC_INTERVAL_MS: z.string().optional(),

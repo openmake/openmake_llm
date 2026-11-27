@@ -134,6 +134,18 @@ export function mcpServerComponentStore(db: StoreDb): McpServerComponentStore {
             }));
         },
 
+        async listLinkedConnections(extensionIds) {
+            if (extensionIds.length === 0) return [];
+            const r = await retried<{ id: string; extension_id: string; name: string; transport_type: string; command: string | null; args: unknown[] | null; url: string | null }>(
+                `SELECT id, extension_id, name, transport_type, command, args, url
+                   FROM mcp_servers
+                  WHERE extension_id = ANY($1::text[]) AND status <> 'archived'
+                  ORDER BY extension_id, name`,
+                [extensionIds],
+            );
+            return r.rows.map((x) => ({ id: x.id, extensionId: x.extension_id, name: x.name, transport: x.transport_type, command: x.command, args: x.args, url: x.url }));
+        },
+
         async archiveLinked(extensionId, { unlink }) {
             await retried(
                 unlink

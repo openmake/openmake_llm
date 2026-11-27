@@ -26,6 +26,9 @@ import { auditMcpServerCreated, auditMcpRegisterDenied } from './mcp-server-audi
 import { transportNoticeFields } from '../transport-notices';
 import { catalogExtensionLookup } from '../extension-awareness';
 import { McpNegotiationRepository } from '../data/mcp-negotiation-repository';
+import { assertMcpServerRegistrationAllowed } from '../../../runtime-ports/extension-mcp-server-policy';
+import { renderArgs, renderUrl } from '../data/mcp-catalog-helpers';
+import { validateCatalogInput } from '../data/mcp-catalog-input';
 
 const logger = createLogger('McpCatalogRoutes');
 
@@ -79,6 +82,19 @@ mcpCatalogRouter.post(
 
         let created;
         try {
+            // 확장 MCP 서버 정책(§8-3, opt-in, Base) — 저장·즉시 spawn 전, 저장될 값과 같은 렌더 결과로 판정(거절 403).
+            // 렌더는 강제 ON 일 때만(지연 함수) — OFF 면 입력 오류 문구·순서가 종전 그대로다(createFromCatalog 가 검증).
+            await assertMcpServerRegistrationAllowed({
+                userId: actor.id,
+                origin: 'catalog',
+                server: () => (validateCatalogInput(template, payload), {
+                    name: payload.name,
+                    transport: template.transport_type,
+                    command: template.transport_type === 'stdio' ? ((template.command_template ?? '').split(/\s+/).filter(Boolean)[0] ?? null) : null,
+                    args: renderArgs(template, payload.args) as string[],
+                    url: renderUrl(template, payload.args),
+                }),
+            });
             created = await repo.createFromCatalog(payload, template, actor.id);
         } catch (e) {
             if (e instanceof McpCatalogInputError) { res.status(400).json(badRequest(e.message)); return; }

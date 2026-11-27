@@ -25,6 +25,9 @@ import type { McpLinkedServerDetail } from '../../runtime-ports/component-stores
 import type { ExtensionSourceBlockDetail } from '../../errors/extension-source-blocked.error';
 import { createLogger } from '../../utils/logger';
 import { loadExtensionSourceGate, type ExtensionSourceGate, type ExtensionSourcePolicyDeps } from './source-policy';
+import { EXTENSION_MCP_SERVER_POLICY_SETTINGS } from '../../config/extension-mcp-server-policy';
+import type { ExtensionMcpServerBlockDetail } from '../../errors/extension-mcp-server-blocked.error';
+import { loadExtensionMcpServerGate, type ExtensionMcpServerGate, type ExtensionMcpServerPolicyDeps } from './mcp-server-policy';
 
 const logger = createLogger('ExtensionInventory');
 
@@ -172,6 +175,14 @@ export interface PolicyPreviewBlocked {
     verdict: ExtensionSourceBlockDetail;
 }
 
+export interface PolicyPreviewMcpBlocked {
+    extensionId: string;
+    name: string;
+    owner: { id: string; username: string | null };
+    server: { id: string; name: string; transport: string };
+    verdict: ExtensionMcpServerBlockDetail;
+}
+
 export interface PolicyPreviewResult {
     /** 지금 강제가 켜져 있는가(미리보기는 꺼져 있어도 같은 판정으로 돈다) */
     enforced: boolean;
@@ -180,13 +191,18 @@ export interface PolicyPreviewResult {
     blocked: PolicyPreviewBlocked[];
     /** 상한(PREVIEW_MAX)을 넘어 뒤쪽 설치를 판정하지 않았다 */
     truncated: boolean;
+    /**
+     * 확장 MCP 서버 정책(§8-3) 미리보기 — 같은 설치들의 (보관되지 않은) MCP 서버를 설치 경로와 같은 판정으로.
+     * `unavailable` = MCP 구성요소 저장 연산을 쓰지 못해 판정하지 않았다(그 add-on 데이터 모듈 없음 등).
+     */
+    mcpServers: { enforced: boolean; checked: number; blocked: PolicyPreviewMcpBlocked[]; unavailable?: true };
 }
 
 /**
  * 정책 미리보기 — 활성 설치마다 소유자 기준 판정. 사용자별로 정책을 한 번만 해석한다.
  * `deps` 는 테스트 주입용(기본 = M2 의 기본 의존성).
  */
-export async function previewExtensionSourcePolicy(pool: Pool, deps?: ExtensionSourcePolicyDeps): Promise<PolicyPreviewResult> {
+export async function previewExtensionSourcePolicy(pool: Pool, deps?: ExtensionSourcePolicyDeps, mcpDeps?: ExtensionMcpServerPolicyDeps): Promise<PolicyPreviewResult> {
     const rows = await new ExtensionInventoryRepository(pool).listActiveForPreview(LIMITS.PREVIEW_MAX);
     const truncated = rows.length > LIMITS.PREVIEW_MAX;
     const targets = rows.slice(0, LIMITS.PREVIEW_MAX);
@@ -216,5 +232,50 @@ export async function previewExtensionSourcePolicy(pool: Pool, deps?: ExtensionS
         checked: targets.length,
         blocked,
         truncated,
+        mcpServers: await previewMcpServerPolicy(pool, targets, mcpDeps),
     };
+}
+
+/** MCP 서버 정책 미리보기 — 소유자별로 정책을 한 번 해석하고, 저장된 연결 설정(설치 때 저장한 값 그대로)을 같은 판정에 넣는다 */
+async function previewMcpServerPolicy(
+    pool: Pool,
+    targets: Array<{ id: string; name: string; user_id: string; username: string | null }>,
+    deps?: ExtensionMcpServerPolicyDeps,
+): Promise<PolicyPreviewResult['mcpServers']> {
+    const enforced = EXTENSION_MCP_SERVER_POLICY_SETTINGS.enforced;
+    let servers;
+    try {
+        const store = getComponentStore('mcpServers', pool);
+        if (!store.listLinkedConnections) return { enforced, checked: 0, blocked: [], unavailable: true };
+        servers = await store.listLinkedConnections(targets.map((t) => t.id));
+    } catch (e) {
+        logger.warn('MCP 서버 연결 설정 조회 실패 — MCP 서버 정책 미리보기를 건너뛴다:', e);
+        return { enforced, checked: 0, blocked: [], unavailable: true };
+    }
+    const byId = new Map(targets.map((t) => [t.id, t]));
+    const gates = new Map<string, ExtensionMcpServerGate>();
+    const blocked: PolicyPreviewMcpBlocked[] = [];
+    let checked = 0;
+    for (const s of servers) {
+        const ext = byId.get(s.extensionId);
+        if (!ext) continue;
+        let gate = gates.get(ext.user_id);
+        if (!gate) {
+            gate = (await loadExtensionMcpServerGate(ext.user_id, deps, { force: true }))!;
+            gates.set(ext.user_id, gate);
+        }
+        checked += 1;
+        const verdict = gate.evaluate({ transport: s.transport, command: s.command, args: s.args, url: s.url });
+        if (!verdict.allowed) {
+            const { allowed: _a, ...detail } = verdict;
+            blocked.push({
+                extensionId: ext.id,
+                name: ext.name,
+                owner: { id: ext.user_id, username: ext.username },
+                server: { id: s.id, name: s.name, transport: s.transport },
+                verdict: detail,
+            });
+        }
+    }
+    return { enforced, checked, blocked };
 }

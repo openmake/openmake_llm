@@ -2670,6 +2670,13 @@
         "endpointMoved": "このサーバーは {date} に {url} へ移行します — 新しいアドレスで再ログインが必要です。",
         "remoteAuth": "リモートサーバー — 承認後にログイン(OAuth)が必要な場合があります。"
       }
+    },
+    "deployment": {
+      "required": "必須",
+      "defaultOn": "自動インストール",
+      "requiredHint": "組織が必須として配布しています — 削除できません",
+      "defaultOnHint": "組織が自動でインストールしました — 削除すると再インストールされません",
+      "removeLocked": "組織が必須として配布した拡張は削除できません"
     }
   },
   "mcpInstances": {
@@ -2858,7 +2865,8 @@
       "TOOL_APPROVAL_POLICY_MIN": "エージェント作業の承認ポリシー下限。要求より厳しければ下限が適用されます。",
       "MCP_ALLOWED_SERVERS": "インストールを許可する MCP カタログテンプレート id（カンマ区切り）。空 = 制限なし。",
       "BROWSER_SITE_POLICY": "この組織のブラウザサイトポリシー。拒否リストはグローバルと和集合になります。グローバルに許可リストがある場合は両方に同じ項目だけが残り、グローバルが空なら組織のリストを使います。解除するとグローバルに従います。",
-      "EXTENSION_SOURCE_POLICY": "拡張ソースの許可・拒否ルール JSON(github・git・archive・hostPattern・catalog・internal・local)。拒否はどの層でも一致すればブロックし、許可リストがグローバルと組織の両方にある場合は両方で一致する必要があります。allow を省略すると制限なし、[] はすべてブロック。EXTENSION_SOURCE_POLICY_ENFORCED がオンのときのみ適用されます。"
+      "EXTENSION_SOURCE_POLICY": "拡張ソースの許可・拒否ルール JSON(github・git・archive・hostPattern・catalog・internal・local)。拒否はどの層でも一致すればブロックし、許可リストがグローバルと組織の両方にある場合は両方で一致する必要があります。allow を省略すると制限なし、[] はすべてブロック。EXTENSION_SOURCE_POLICY_ENFORCED がオンのときのみ適用されます。",
+      "EXTENSION_MCP_SERVER_POLICY": "拡張 MCP サーバーの許可・拒否マッチャー JSON — ルール type は url(リモート: スキーム・ホスト・ポート・パス接頭辞、ホストは *.example.com 可)と command(stdio: 実行ファイル + 任意の package — npx @scope/pkg@1.2.3・@scope/*、uvx pkg==1.0、docker イメージ ghcr.io/org/img:tag)。拒否はどの層でも一致すればブロックし広く(大文字小文字・パスの迂回・同系統の実行器・シェルのラップまで)照合します。許可リストがグローバルと組織の両方にある場合は両方で一致する必要があります。allow を省略すると制限なし、[] はすべてブロック、不正な値もすべてブロック。EXTENSION_MCP_SERVER_POLICY_ENFORCED がオンのときのみ適用されます。"
     },
     "history": "変更履歴",
     "noHistory": "変更履歴はありません。",
@@ -3174,7 +3182,13 @@
     "reason": "理由",
     "rule": "一致したルール",
     "scopeOrg": "組織ポリシー",
-    "scopeGlobal": "全体ポリシー"
+    "scopeGlobal": "全体ポリシー",
+    "mcpPreviewTitle": "MCP サーバーポリシーのプレビュー",
+    "mcpPreviewHelp": "拡張 MCP サーバーポリシーを強制した場合に、上記インストールの MCP サーバーのうちブロックされるものです(インストール経路と同じ判定)。強制すると、インストール・更新でこのサーバーだけが除外され、他の構成要素はインストールされます。",
+    "mcpPreviewSummary": "MCP サーバー {checked} 件中 {blocked} 件がブロックされます。",
+    "mcpPreviewUnavailable": "MCP サーバー構成要素を読み取れなかったため、MCP サーバーポリシーは判定していません。",
+    "mcpServer": "MCP サーバー",
+    "mcpIdentity": "識別(正規化)"
   },
   "knowledge": {
     "serverError": "サーバーエラーが発生しました",
@@ -3619,5 +3633,33 @@
     "pageInfo": "{from}–{to} / {total}",
     "prev": "前へ",
     "next": "次へ"
+  },
+  "orgExtensionDeployments": {
+    "title": "拡張の配布モード",
+    "description": "組織に公開された拡張ごとに配布方法を選びます。ギャラリーのみ(既定)・自動インストール(メンバーが削除可能)・必須(一般メンバーは削除不可)。インストールは各メンバーのアカウントで行われ、スキルと MCP サーバーは各自が承認します。",
+    "saveFailed": "保存に失敗しました: {error}",
+    "groupsTitle": "グループ",
+    "groupNamePlaceholder": "新しいグループ名",
+    "addGroup": "グループを追加",
+    "noGroups": "グループがありません。",
+    "memberCount": "メンバー {count} 人",
+    "deleteGroup": "グループを削除",
+    "deleteGroupConfirm": "グループ「{name}」を削除しますか?このグループの上書きも削除されます。",
+    "removeGroupMember": "グループから外す",
+    "addGroupMember": "メンバーを追加",
+    "itemsTitle": "組織に公開された拡張",
+    "noItems": "この組織に公開された拡張はありません。",
+    "item": "拡張",
+    "defaultMode": "既定",
+    "installed": "インストール済み",
+    "defaultModeAria": "{name} の既定の配布モード",
+    "groupModeAria": "{name} — グループ {group} の上書き",
+    "inherit": "既定に従う",
+    "ruleHint": "グループの上書きは既定より優先され、複数のグループに属するメンバーには最も強い値(必須 > 自動インストール > ギャラリーのみ)が適用されます。",
+    "modes": {
+      "default_off": "ギャラリーのみ",
+      "default_on": "自動インストール",
+      "required": "必須"
+    }
   }
 }

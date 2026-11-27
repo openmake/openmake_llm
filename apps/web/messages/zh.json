@@ -2670,6 +2670,13 @@
         "endpointMoved": "此服务器将于 {date} 迁移到 {url} — 需要在新地址重新登录。",
         "remoteAuth": "远程服务器 — 批准后可能需要登录(OAuth)。"
       }
+    },
+    "deployment": {
+      "required": "必需",
+      "defaultOn": "自动安装",
+      "requiredHint": "组织要求安装 — 无法删除",
+      "defaultOnHint": "由组织自动安装 — 删除后不会再次安装",
+      "removeLocked": "组织要求的扩展无法删除"
     }
   },
   "mcpInstances": {
@@ -2858,7 +2865,8 @@
       "TOOL_APPROVAL_POLICY_MIN": "智能体任务审批策略下限。若比请求值更严格，则以下限为准。",
       "MCP_ALLOWED_SERVERS": "允许安装的 MCP 目录模板 id（逗号分隔）。留空 = 不限制。",
       "BROWSER_SITE_POLICY": "此组织的浏览器站点策略。拒绝列表与全局取并集。全局有允许列表时只保留两边都有的条目；全局为空时使用组织列表。清除后跟随全局。",
-      "EXTENSION_SOURCE_POLICY": "扩展来源允许/拒绝规则 JSON(github、git、archive、hostPattern、catalog、internal、local)。任一层的拒绝规则命中即阻止;若全局和组织都定义了允许列表,来源必须同时匹配两者。省略 allow 表示不限制,[] 表示全部阻止。仅在 EXTENSION_SOURCE_POLICY_ENFORCED 开启时生效。"
+      "EXTENSION_SOURCE_POLICY": "扩展来源允许/拒绝规则 JSON(github、git、archive、hostPattern、catalog、internal、local)。任一层的拒绝规则命中即阻止;若全局和组织都定义了允许列表,来源必须同时匹配两者。省略 allow 表示不限制,[] 表示全部阻止。仅在 EXTENSION_SOURCE_POLICY_ENFORCED 开启时生效。",
+      "EXTENSION_MCP_SERVER_POLICY": "扩展 MCP 服务器允许/拒绝匹配器 JSON——规则 type 为 url(远程:协议、主机、端口和路径前缀,主机可用 *.example.com)和 command(stdio:可执行文件加可选 package——npx @scope/pkg@1.2.3 或 @scope/*、uvx pkg==1.0、docker 镜像 ghcr.io/org/img:tag)。任一层的拒绝规则命中即阻止,并做宽松匹配(大小写、路径绕过、同类运行器与 shell 包装);若全局和组织都定义了允许列表,服务器必须同时匹配两者。省略 allow 表示不限制,[] 表示全部阻止,无效值也全部阻止。仅在 EXTENSION_MCP_SERVER_POLICY_ENFORCED 开启时生效。"
     },
     "history": "变更历史",
     "noHistory": "暂无变更。",
@@ -3174,7 +3182,13 @@
     "reason": "原因",
     "rule": "匹配的规则",
     "scopeOrg": "组织策略",
-    "scopeGlobal": "全局策略"
+    "scopeGlobal": "全局策略",
+    "mcpPreviewTitle": "MCP 服务器策略预览",
+    "mcpPreviewHelp": "若强制执行扩展 MCP 服务器策略,上述安装中会被阻止的 MCP 服务器(与安装路径相同的判定)。强制执行后,安装与更新只会跳过这些服务器,其余组件照常安装。",
+    "mcpPreviewSummary": "{checked} 个 MCP 服务器中有 {blocked} 个会被阻止。",
+    "mcpPreviewUnavailable": "无法读取 MCP 服务器组件,因此未判定 MCP 服务器策略。",
+    "mcpServer": "MCP 服务器",
+    "mcpIdentity": "标识(规范化)"
   },
   "knowledge": {
     "serverError": "发生服务器错误",
@@ -3619,5 +3633,33 @@
     "pageInfo": "{from}–{to} / {total}",
     "prev": "上一页",
     "next": "下一页"
+  },
+  "orgExtensionDeployments": {
+    "title": "扩展部署模式",
+    "description": "为每个向组织公开的扩展选择部署方式:仅在库中显示(默认)· 自动安装(成员可删除)· 必需(普通成员无法删除)。安装以各成员的账户进行,技能和 MCP 服务器由各成员自行批准。",
+    "saveFailed": "保存失败: {error}",
+    "groupsTitle": "分组",
+    "groupNamePlaceholder": "新分组名称",
+    "addGroup": "添加分组",
+    "noGroups": "暂无分组。",
+    "memberCount": "{count} 名成员",
+    "deleteGroup": "删除分组",
+    "deleteGroupConfirm": "删除分组“{name}”?该分组的覆盖设置也会一并删除。",
+    "removeGroupMember": "移出分组",
+    "addGroupMember": "添加成员",
+    "itemsTitle": "向组织公开的扩展",
+    "noItems": "没有向此组织公开的扩展。",
+    "item": "扩展",
+    "defaultMode": "默认",
+    "installed": "已安装",
+    "defaultModeAria": "{name} 的默认部署模式",
+    "groupModeAria": "{name} — 分组 {group} 的覆盖",
+    "inherit": "沿用默认",
+    "ruleHint": "分组覆盖优先于默认值;成员属于多个分组时采用最强的值(必需 > 自动安装 > 仅在库中显示)。",
+    "modes": {
+      "default_off": "仅在库中显示",
+      "default_on": "自动安装",
+      "required": "必需"
+    }
   }
 }
