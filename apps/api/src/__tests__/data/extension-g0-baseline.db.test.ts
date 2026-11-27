@@ -153,7 +153,7 @@ describeOrSkip('확장 설치 기준선 G0 (보안 플래그 4조합)', () => {
     /** 구성요소 상태 — 이름 기준(id 는 실행마다 다르다) */
     async function componentsOf(userId: string) {
         const skills = await pool.query<{ name: string; status: string; linked: boolean }>(
-            `SELECT name, status, extension_id IS NOT NULL AS linked FROM agent_skills WHERE created_by=$1 ORDER BY name, status`,
+            `SELECT name, status, extension_id IS NOT NULL AS linked FROM agent_skills WHERE created_by=$1 ORDER BY name, status, linked`,
             [userId],
         );
         const agents = await pool.query<{ name: string; is_active: boolean; approval_status: string; linked: boolean }>(

@@ -2631,6 +2631,40 @@
         "failed": "Install by name failed",
         "candidates": "Did you mean:"
       }
+    },
+    "preview": {
+      "title": "Install preview — {name}",
+      "loading": "Checking what will be installed…",
+      "failed": "Could not load the preview.",
+      "source": "Source",
+      "commit": "Commit",
+      "existingUpdate": "Already installed (v{version}) — confirming updates it to this version.",
+      "existingUpToDate": "The latest version is already installed.",
+      "existingOtherSource": "An extension with the same name is installed from a different source. Remove it first.",
+      "components": "Components — skills {skills} · MCP servers {mcpServers} · agents {agents}",
+      "skill": "Skill",
+      "command": "Command",
+      "mcp": "MCP",
+      "agent": "Agent",
+      "assets": "{count} bundled files",
+      "mcpBlocked": "flagged as blocked by a risky command pattern",
+      "networkRestricted": "network-isolated sandbox",
+      "requiredEnv": "enter on approval: {keys}",
+      "agentApproval": "usable after approval",
+      "draftNote": "Components are created as drafts and become active once approved in Approvals.",
+      "permissions": "Permissions",
+      "permissionsLegacy": "No permissions declared (previous behavior — network allowed)",
+      "permissionsNone": "No permissions requested",
+      "permissionsBlocked": "Blocked until re-approved: {list}",
+      "warnings": "Warnings",
+      "cancel": "Cancel",
+      "confirm": "Install",
+      "hint": {
+        "deprecatedTransport": "The SSE transport is being retired (Streamable HTTP candidate: {url}).",
+        "endpointSunset": "This endpoint shuts down on {date} — new address: {url}",
+        "endpointMoved": "This server moves to {url} on {date} — you will need to sign in again at the new address.",
+        "remoteAuth": "Remote server — sign-in (OAuth) may be required after approval."
+      }
     }
   },
   "mcpInstances": {

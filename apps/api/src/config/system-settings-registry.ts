@@ -17,6 +17,7 @@ import { browserSitePolicyProblems } from '@openmake/config';
 import { contributedSettings, type AddonSettingValidator } from '../addon-host/contributions';
 import { ARBITRARY_URL_INSTALL_MODES, EXTENSION_SOURCE_POLICY_KEYS, extensionSourcePolicyProblems } from './extension-source-policy';
 import { EXTENSION_CATALOG_SYNC_KEYS } from './extension-catalog-sync';
+import { EXTENSION_INSTALL_PREVIEW_FLAG } from './extension-install-preview';
 
 /** Base 그룹 또는 add-on 이 기여한 그룹 이름 */
 export type SettingGroup = 'oauth' | 'search' | 'alerts' | 'push' | 'llm' | 'agent' | 'slo' | (string & {});
@@ -140,6 +141,8 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     // 확장 카탈로그 주기 동기화(M4, opt-in) — 5분 점검 tick 이 호출 시점에 읽는다(실시간). 간격은 양의 정수 ms
     { key: EXTENSION_CATALOG_SYNC_KEYS.AUTO_SYNC_ENABLED, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     { key: EXTENSION_CATALOG_SYNC_KEYS.SYNC_INTERVAL_MS, group: 'agent', secret: false, requiresRestart: false, validate: positiveIntString },
+    // 확장 설치 미리보기(M1b, opt-in) — 미리보기 라우트·갤러리 응답이 요청 시점에 읽는다(실시간). config/extension-install-preview
+    { key: EXTENSION_INSTALL_PREVIEW_FLAG, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
 
     // ── SLO 목표(F24.8, 145) — 5분 평가 tick 이 호출 시점에 읽는다(실시간) ──
     { key: 'SLO_CHAT_AVAILABILITY_TARGET', group: 'slo', secret: false, requiresRestart: false, validate: percentTarget },
