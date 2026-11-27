@@ -89,6 +89,8 @@ describe('system-settings-registry', () => {
             else if (def.key === 'EXTENSION_CATALOG_INDEX_ENABLED') sample[def.key] = 'true';
             // 확장 설치 미리보기(M1b) — 불리언
             else if (def.key === 'EXTENSION_INSTALL_PREVIEW_ENABLED') sample[def.key] = 'true';
+            // 조직 소유 확장 설치(P8) — 불리언
+            else if (def.key === 'EXTENSION_ORG_OWNED_INSTALL_ENABLED') sample[def.key] = 'true';
             // 확장 Custom Agent 출처·정리(P8) — 불리언
             else if (def.key === 'EXTENSION_AGENT_BUNDLE_PROVENANCE') sample[def.key] = 'true';
             // 확장 번들 원격 MCP 관리 등록(P8) — 불리언
