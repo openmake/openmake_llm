@@ -2868,7 +2868,7 @@
       "TOOL_APPROVAL_POLICY_MIN": "Minimum approval policy for agent tasks. If stricter than the request, the minimum wins.",
       "MCP_ALLOWED_SERVERS": "Comma-separated MCP catalog template ids allowed for installation. Empty = no restriction.",
       "BROWSER_SITE_POLICY": "Browser site policy for this organization. The deny list is unioned with global. If global has an allow list, only entries present in both remain; if global is empty, the org list applies. Clear it to follow global.",
-      "EXTENSION_SOURCE_POLICY": "Extension source allow/deny rules as JSON (github, git, archive, hostPattern, catalog, internal, local). A deny in any layer blocks; if both global and organization define allow, a source must match both. Omit allow for no restriction; [] blocks everything. Applied only when EXTENSION_SOURCE_POLICY_ENFORCED is on.",
+      "EXTENSION_SOURCE_POLICY": "Extension source allow/deny rules as JSON (github, git, archive, hostPattern, catalog, internal, local, oci). A deny in any layer blocks; if both global and organization define allow, a source must match both. Omit allow for no restriction; [] blocks everything. Applied only when EXTENSION_SOURCE_POLICY_ENFORCED is on.",
       "EXTENSION_MCP_SERVER_POLICY": "Extension MCP server allow/deny matchers as JSON — rule types are url (remote: scheme, host, port and path prefix; host may be *.example.com) and command (stdio: executable plus optional package — npx @scope/pkg@1.2.3 or @scope/*, uvx pkg==1.0, docker image ghcr.io/org/img:tag). A deny in any layer blocks and matches broadly (case, path tricks, sibling runners and shell wrappers); if both global and organization define allow, a server must match both. Omit allow for no restriction; [] blocks everything, and an invalid value blocks everything. Applied only when EXTENSION_MCP_SERVER_POLICY_ENFORCED is on."
     },
     "history": "Change history",
@@ -3140,6 +3140,7 @@
     }
   },
   "adminExtensions": {
+    "orgOwner": "Organization-owned",
     "title": "Extensions",
     "description": "Installed extensions per user with source, commit, components, approval state, and how each MCP server negotiated. Preview what a source policy would block before enforcing it.",
     "loadError": "Failed to load.",

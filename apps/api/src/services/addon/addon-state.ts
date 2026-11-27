@@ -165,7 +165,7 @@ export async function isAddonEnabled(addonId: string): Promise<boolean> {
  * 실패는 삼킨다 — 설치 자체는 이미 성공했고, 이 기록은 관리 화면의 가시성용이다.
  */
 export async function recordExtensionInstallation(input: {
-    extensionId: string; name: string; version: string; source: 'git' | 'zip' | 'local' | 'marketplace';
+    extensionId: string; name: string; version: string; source: 'git' | 'zip' | 'local' | 'marketplace' | 'oci';
 }): Promise<void> {
     try {
         const { getUnifiedDatabase } = await import('../../data/models/unified-database');

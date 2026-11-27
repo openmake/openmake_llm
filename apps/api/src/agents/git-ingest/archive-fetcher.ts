@@ -36,6 +36,51 @@ export function archivePseudoRepo(url: string): { owner: string; repo: string } 
     return { owner: 'archive', repo: hash };
 }
 
+/** 압축 해제 엔트리 방어 상한 — ZIP(ArchiveFetcher)·OCI 레이어(OciFetcher) 공용 */
+export interface ArchiveEntryLimits {
+    maxEntries: number;
+    maxTotalBytes: number;
+}
+
+/**
+ * PURE: 해제한 엔트리 → 설치용 파일 맵. **ZIP 과 OCI 레이어가 같은 함수**로 방어한다.
+ *   - 디렉토리 엔트리(끝 `/`) 제외 · zip-slip 차단(`..` 포함·절대경로 엔트리 제외)
+ *   - 총 해제 크기·엔트리 수 상한(압축 폭탄 방어) · 빈 아카이브 거절
+ *   - 공통 최상위 디렉토리 1겹 제거(GitHub 소스 zip·oras 디렉토리 push 래핑)
+ * 오류 코드 접두어(`code`)·빈 아카이브 문구는 호출부 것을 쓴다(ZIP 은 종전 문구 그대로).
+ */
+export function collectArchiveFiles(
+    raw: Iterable<[string, Uint8Array]>,
+    limits: ArchiveEntryLimits,
+    labels: { code: string; emptyDetail: string } = { code: 'ARCHIVE', emptyDetail: 'zip 에 파일 없음' },
+): Map<string, Uint8Array> {
+    // zip-slip/폭탄 방어 + 정규화
+    const entries: Array<[string, Uint8Array]> = [];
+    let total = 0;
+    for (const [path, data] of raw) {
+        if (path.endsWith('/')) continue;                       // 디렉토리 엔트리
+        if (path.includes('..') || path.startsWith('/')) continue;  // zip-slip
+        total += data.byteLength;
+        if (total > limits.maxTotalBytes) {
+            throw new Error(`${labels.code}_TOO_LARGE: 해제 총 크기 > ${limits.maxTotalBytes} (압축 폭탄 의심)`);
+        }
+        entries.push([path, data]);
+        if (entries.length > limits.maxEntries) {
+            throw new Error(`${labels.code}_TOO_MANY_ENTRIES: > ${limits.maxEntries}`);
+        }
+    }
+    if (entries.length === 0) throw new Error(`${labels.code}_EMPTY: ${labels.emptyDetail}`);
+
+    // 공통 최상위 디렉토리 1겹 제거 (GitHub 소스 zip: repo-ref/ 래핑)
+    const roots = new Set(entries.map(([p]) => p.split('/')[0]));
+    const allWrapped = roots.size === 1 && entries.every(([p]) => p.includes('/'));
+    const files = new Map<string, Uint8Array>();
+    for (const [p, data] of entries) {
+        files.set(allWrapped ? p.slice(p.indexOf('/') + 1) : p, data);
+    }
+    return files;
+}
+
 interface ArchiveFetcherLimits {
     /** 압축 파일 자체 크기 상한 (bytes) */
     maxArchiveBytes: number;
@@ -78,30 +123,7 @@ export class ArchiveFetcher {
             throw new Error(`ARCHIVE_INVALID: zip 해제 실패 — ${e instanceof Error ? e.message : String(e)}`);
         }
 
-        // zip-slip/폭탄 방어 + 정규화
-        const entries: Array<[string, Uint8Array]> = [];
-        let total = 0;
-        for (const [path, data] of Object.entries(raw)) {
-            if (path.endsWith('/')) continue;                       // 디렉토리 엔트리
-            if (path.includes('..') || path.startsWith('/')) continue;  // zip-slip
-            total += data.byteLength;
-            if (total > this.limits.maxTotalBytes) {
-                throw new Error(`ARCHIVE_TOO_LARGE: 해제 총 크기 > ${this.limits.maxTotalBytes} (압축 폭탄 의심)`);
-            }
-            entries.push([path, data]);
-            if (entries.length > this.limits.maxEntries) {
-                throw new Error(`ARCHIVE_TOO_MANY_ENTRIES: > ${this.limits.maxEntries}`);
-            }
-        }
-        if (entries.length === 0) throw new Error('ARCHIVE_EMPTY: zip 에 파일 없음');
-
-        // 공통 최상위 디렉토리 1겹 제거 (GitHub 소스 zip: repo-ref/ 래핑)
-        const roots = new Set(entries.map(([p]) => p.split('/')[0]));
-        const allWrapped = roots.size === 1 && entries.every(([p]) => p.includes('/'));
-        const files = new Map<string, Uint8Array>();
-        for (const [p, data] of entries) {
-            files.set(allWrapped ? p.slice(p.indexOf('/') + 1) : p, data);
-        }
+        const files = collectArchiveFiles(Object.entries(raw), this.limits);
         logger.info(`archive loaded: ${this.url} (${buf.byteLength}B, ${files.size} files, sha=${sha.slice(0, 8)})`);
         return { sha, files };
     }

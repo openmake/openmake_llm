@@ -24,6 +24,7 @@ import {
 import type { McpLinkedServerDetail } from '../../runtime-ports/component-stores';
 import type { ExtensionSourceBlockDetail } from '../../errors/extension-source-blocked.error';
 import { createLogger } from '../../utils/logger';
+import { extensionOrgOwnedInstallEnabled } from '../../config/extension-org-owned';
 import { loadExtensionSourceGate, type ExtensionSourceGate, type ExtensionSourcePolicyDeps } from './source-policy';
 import { EXTENSION_MCP_SERVER_POLICY_SETTINGS } from '../../config/extension-mcp-server-policy';
 import type { ExtensionMcpServerBlockDetail } from '../../errors/extension-mcp-server-blocked.error';
@@ -42,7 +43,7 @@ export interface InventoryItem {
     name: string;
     version: string;
     status: string;
-    owner: { id: string; username: string | null; email: string | null };
+    owner: { id: string; username: string | null; email: string | null } & OrgOwnerMark;
     source: { url: string; ref: string; trackingRef: string | null; path: string; commit: string };
     visibility: string;
     orgId: string | null;
@@ -113,13 +114,33 @@ async function loadSkillsAndMcp(pool: Pool, ids: string[]): Promise<{
     return { skills, mcp, unavailable };
 }
 
+/** 조직 소유 행(212)의 소유자 표시 — 플래그가 켜져 있을 때만 붙는다(꺼져 있으면 응답 모양이 종전과 같다) */
+export interface OrgOwnerMark { org?: { id: string; name: string | null } }
+
+/**
+ * 소유자 칸 — 사람 소유는 종전 그대로(users JOIN). 조직 소유(212)는 user_id 가 없어 비어 보이므로,
+ * EXTENSION_ORG_OWNED_INSTALL_ENABLED 가 켜져 있으면 소유 조직 이름을 username 자리에 싣고 `org` 를 붙인다.
+ */
+type OwnerSource = Pick<ExtensionInventoryRow, 'user_id' | 'username' | 'owner_org_id' | 'owner_org_name'> & { email?: string | null };
+
+function ownerOf(row: OwnerSource): { id: string; username: string | null; email: string | null } & OrgOwnerMark {
+    const base = { id: row.user_id, username: row.username, email: row.email ?? null };
+    if (!row.owner_org_id || !extensionOrgOwnedInstallEnabled()) return base;
+    return { ...base, username: row.owner_org_name ?? row.owner_org_id, org: { id: row.owner_org_id, name: row.owner_org_name ?? null } };
+}
+
+function shortOwnerOf(row: OwnerSource): { id: string; username: string | null } & OrgOwnerMark {
+    const { email: _e, ...rest } = ownerOf(row);
+    return rest;
+}
+
 function toItem(row: ExtensionInventoryRow, comps: InventoryItem['components'], unavailable: boolean): InventoryItem {
     return {
         id: row.id,
         name: row.name,
         version: row.version,
         status: row.status,
-        owner: { id: row.user_id, username: row.username, email: row.email },
+        owner: ownerOf(row),
         source: { url: row.source_url, ref: row.source_ref, trackingRef: row.tracking_ref, path: row.source_path, commit: row.source_hash },
         visibility: row.visibility,
         orgId: row.org_id,
@@ -170,7 +191,7 @@ export async function listExtensionInventory(
 export interface PolicyPreviewBlocked {
     extensionId: string;
     name: string;
-    owner: { id: string; username: string | null };
+    owner: { id: string; username: string | null } & OrgOwnerMark;
     source: { url: string; trackingRef: string | null };
     verdict: ExtensionSourceBlockDetail;
 }
@@ -178,7 +199,7 @@ export interface PolicyPreviewBlocked {
 export interface PolicyPreviewMcpBlocked {
     extensionId: string;
     name: string;
-    owner: { id: string; username: string | null };
+    owner: { id: string; username: string | null } & OrgOwnerMark;
     server: { id: string; name: string; transport: string };
     verdict: ExtensionMcpServerBlockDetail;
 }
@@ -220,7 +241,7 @@ export async function previewExtensionSourcePolicy(pool: Pool, deps?: ExtensionS
             blocked.push({
                 extensionId: row.id,
                 name: row.name,
-                owner: { id: row.user_id, username: row.username },
+                owner: shortOwnerOf(row),
                 source: { url: row.source_url, trackingRef: row.tracking_ref },
                 verdict: detail,
             });
@@ -239,7 +260,7 @@ export async function previewExtensionSourcePolicy(pool: Pool, deps?: ExtensionS
 /** MCP 서버 정책 미리보기 — 소유자별로 정책을 한 번 해석하고, 저장된 연결 설정(설치 때 저장한 값 그대로)을 같은 판정에 넣는다 */
 async function previewMcpServerPolicy(
     pool: Pool,
-    targets: Array<{ id: string; name: string; user_id: string; username: string | null }>,
+    targets: Array<{ id: string; name: string; user_id: string; username: string | null; owner_org_id?: string | null; owner_org_name?: string | null }>,
     deps?: ExtensionMcpServerPolicyDeps,
 ): Promise<PolicyPreviewResult['mcpServers']> {
     const enforced = EXTENSION_MCP_SERVER_POLICY_SETTINGS.enforced;
@@ -271,7 +292,7 @@ async function previewMcpServerPolicy(
             blocked.push({
                 extensionId: ext.id,
                 name: ext.name,
-                owner: { id: ext.user_id, username: ext.username },
+                owner: shortOwnerOf(ext),
                 server: { id: s.id, name: s.name, transport: s.transport },
                 verdict: detail,
             });

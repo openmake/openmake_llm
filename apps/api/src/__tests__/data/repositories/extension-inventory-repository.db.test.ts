@@ -24,7 +24,8 @@ describeOrSkip('ExtensionInventoryRepository (TEMP 표)', () => {
             source_url TEXT NOT NULL, source_ref TEXT NOT NULL DEFAULT 'sha', source_path TEXT NOT NULL DEFAULT 'plugin.json',
             source_hash TEXT NOT NULL DEFAULT 'h', tracking_ref TEXT, status TEXT NOT NULL DEFAULT 'active',
             visibility TEXT NOT NULL DEFAULT 'private', org_id TEXT, permission_state TEXT NOT NULL DEFAULT 'legacy_unreviewed',
-            created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+            owner_org_id TEXT, created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+        await client.query(`CREATE TEMP TABLE organizations (id TEXT PRIMARY KEY, name TEXT NOT NULL)`);
         await client.query(`CREATE TEMP TABLE addon_installations (addon_id TEXT PRIMARY KEY, state TEXT NOT NULL)`);
         await client.query(`CREATE TEMP TABLE user_agents (
             id TEXT PRIMARY KEY, extension_id TEXT, name TEXT NOT NULL, is_active BOOLEAN NOT NULL DEFAULT TRUE, approval_status TEXT)`);

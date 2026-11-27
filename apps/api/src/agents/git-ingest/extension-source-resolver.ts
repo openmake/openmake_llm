@@ -51,8 +51,8 @@ export interface ResolvedExtensionSource {
 
 export interface SourceResolverDeps {
     fetcherFactory: (opts: { accessToken?: string }) => GitFetcher;
-    /** git 이 아닌 소스(.zip · internal:// · local://) fetcher */
-    makeArchiveFetcher: (url: string) => GitFetcher;
+    /** git 이 아닌 소스(.zip · internal:// · local:// · oci://) fetcher — OCI 사설 레지스트리는 accessToken */
+    makeArchiveFetcher: (url: string, source?: { accessToken?: string }) => GitFetcher;
 }
 
 export async function resolveExtensionSource(
@@ -82,7 +82,7 @@ export async function resolveExtensionSource(
 
     // (2) fetcher — 아카이브면 safeFetch 기반 ArchiveFetcher (SSRF 가드 + 압축 폭탄 방어)
     const fetcher = isArchive
-        ? deps.makeArchiveFetcher(input.gitUrl)
+        ? deps.makeArchiveFetcher(input.gitUrl, { accessToken: input.accessToken })
         : deps.fetcherFactory({ accessToken: input.accessToken });
     let sha = await fetcher.resolveRef(owner, repo, input.gitRef ?? 'HEAD');
 
