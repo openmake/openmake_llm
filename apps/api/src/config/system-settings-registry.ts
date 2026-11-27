@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { browserSitePolicyProblems } from '@openmake/config';
 import { contributedSettings, type AddonSettingValidator } from '../addon-host/contributions';
 import { ARBITRARY_URL_INSTALL_MODES, EXTENSION_SOURCE_POLICY_KEYS, extensionSourcePolicyProblems } from './extension-source-policy';
+import { EXTENSION_CATALOG_SYNC_KEYS } from './extension-catalog-sync';
 
 /** Base 그룹 또는 add-on 이 기여한 그룹 이름 */
 export type SettingGroup = 'oauth' | 'search' | 'alerts' | 'push' | 'llm' | 'agent' | 'slo' | (string & {});
@@ -43,6 +44,10 @@ const nonNegativeIntString = z
     .string()
     .trim()
     .regex(/^\d+$/, '0 이상의 정수여야 합니다');
+const positiveIntString = z
+    .string()
+    .trim()
+    .regex(/^[1-9]\d*$/, '1 이상의 정수여야 합니다');
 /** JSON 객체 문자열 — 외부 모델 정책({"allow":[…],"deny":[…]}) 같은 구조 설정. */
 const jsonObject = nonEmpty.refine((v) => {
     try { const o = JSON.parse(v); return !!o && typeof o === 'object' && !Array.isArray(o); } catch { return false; }
@@ -132,6 +137,9 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     { key: EXTENSION_SOURCE_POLICY_KEYS.ENFORCED, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     { key: EXTENSION_SOURCE_POLICY_KEYS.ARBITRARY_URL_INSTALL, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(ARBITRARY_URL_INSTALL_MODES) },
     { key: EXTENSION_SOURCE_POLICY_KEYS.POLICY, group: 'agent', secret: false, requiresRestart: false, validate: extensionSourcePolicy },
+    // 확장 카탈로그 주기 동기화(M4, opt-in) — 5분 점검 tick 이 호출 시점에 읽는다(실시간). 간격은 양의 정수 ms
+    { key: EXTENSION_CATALOG_SYNC_KEYS.AUTO_SYNC_ENABLED, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
+    { key: EXTENSION_CATALOG_SYNC_KEYS.SYNC_INTERVAL_MS, group: 'agent', secret: false, requiresRestart: false, validate: positiveIntString },
 
     // ── SLO 목표(F24.8, 145) — 5분 평가 tick 이 호출 시점에 읽는다(실시간) ──
     { key: 'SLO_CHAT_AVAILABILITY_TARGET', group: 'slo', secret: false, requiresRestart: false, validate: percentTarget },
@@ -147,18 +155,28 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     { key: 'NVIDIA_API_KEY', group: 'llm', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.nvidiaNim },
 ];
 
-/** add-on 기여 설정의 검증기 이름 → zod 스키마 */
-const CONTRIBUTED_VALIDATORS: Readonly<Record<AddonSettingValidator, z.ZodType<string>>> = {
+/** add-on 기여 설정의 검증기 이름 → zod 스키마 (`oneOf` 는 기여가 준 허용 값으로 만든다 — contributedValidator) */
+const CONTRIBUTED_VALIDATORS: Readonly<Record<Exclude<AddonSettingValidator, 'oneOf'>, z.ZodType<string>>> = {
     nonEmpty,
     apiKey: apiKeyLike,
     nonNegativeInt: nonNegativeIntString,
     boolean: z.enum(['true', 'false']),
 };
 
+/** 기여 설정 하나의 검증기 — 열거형(`oneOf`)은 allowedValues 밖의 값을 거절한다(목록이 비면 전부 거절) */
+export function contributedValidator(d: { validate: AddonSettingValidator; allowedValues?: readonly string[] }): z.ZodType<string> {
+    if (d.validate !== 'oneOf') return CONTRIBUTED_VALIDATORS[d.validate];
+    const allowed = [...(d.allowedValues ?? [])];
+    return z.string().trim().refine((v) => allowed.includes(v), `다음 중 하나여야 합니다: ${allowed.join(', ') || '(허용 값 없음)'}`);
+}
+
 /** Base 설정 + 켜진 add-on 이 기여한 설정 (addon-host/contributions) */
 export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
     ...BASE_SYSTEM_SETTINGS,
-    ...contributedSettings().map((d) => ({ ...d, validate: CONTRIBUTED_VALIDATORS[d.validate] })),
+    ...contributedSettings().map((d) => {
+        const { allowedValues: _allowedValues, ...def } = d;
+        return { ...def, validate: contributedValidator(d) };
+    }),
 ];
 
 export const SETTING_DEFS_BY_KEY: ReadonlyMap<string, SystemSettingDef> = new Map(

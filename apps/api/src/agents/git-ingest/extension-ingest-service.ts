@@ -28,7 +28,7 @@ import { isLocalSourceUrl } from './local-directory-fetcher';
 import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import { GitFetcher } from './git-fetcher';
 import { isNonGitSourceUrl, nonGitPseudoRepo, type LoadedBundle } from './internal-bundle-fetcher';
-import { fetchCatalogSnapshot as fetchCatalogSnapshotImpl, type CatalogSnapshot } from './catalog-snapshot';
+import { fetchCatalogSnapshot as fetchCatalogSnapshotImpl, catalogRootPrefix, underPrefix, type CatalogSnapshot } from './catalog-snapshot';
 import { translateCatalogDescriptions } from './catalog-translator';
 // 기존 import 경로 호환 재노출 (테스트 등이 이 모듈에서 import)
 export { buildSkillDiscoveryPattern } from './catalog-snapshot';
@@ -128,8 +128,10 @@ export class ExtensionIngestService {
         let synthesized: { name: string; description?: string } | undefined;
 
         // (3-a) marketplace.json 인덱스 (gitPath 미지정 시) — Claude Code 마켓플레이스 저장소
+        // 카탈로그 하위 경로(M4) — 그 디렉터리를 카탈로그 루트로 본다(스냅샷과 같은 규칙). 없으면 저장소 루트
+        const catalogRoot = catalogRootPrefix(input.catalogSubpath);
         if (!input.gitPath) {
-            const mkCandidates = scanForMarketplaceManifests(tree.entries);
+            const mkCandidates = scanForMarketplaceManifests(underPrefix(tree.entries, catalogRoot));
             if (mkCandidates.length > 0) {
                 const mkRaw = await fetcher.fetchFile(owner, repo, sha, mkCandidates[0].path, EXTENSION_INGEST.marketplaceMaxBytes);
                 const mk = parseMarketplaceFile(mkRaw);
@@ -169,7 +171,9 @@ export class ExtensionIngestService {
                         tree = await fetcher.listTree(owner, repo, sha, EXTENSION_INGEST.maxTreeEntries);
                     }
                     if (entry.ref) effectiveTrackingRef = entry.ref;
-                    const prefix = entry.path ? `${entry.path}/` : '';
+                    // 같은 저장소 항목은 카탈로그 루트 기준, 다른 저장소 항목은 그 저장소 루트 기준
+                    const entryRoot = effectiveGitUrl === input.gitUrl ? catalogRoot : '';
+                    const prefix = `${entryRoot}${entry.path ? `${entry.path}/` : ''}`;
                     // plugin.json > gemini-extension.json (단일 소스 경로·카탈로그 판정과 같은 우선순위)
                     const manifestPath = findExtensionManifestPath(tree.entries, prefix);
                     const pj = manifestPath ? tree.entries.find(e => e.path === manifestPath) : undefined;
@@ -511,14 +515,14 @@ export class ExtensionIngestService {
      * 카탈로그 스냅샷 (admin 큐레이션 갤러리) — catalog-snapshot.ts 위임.
      * 판정 규칙·형식은 그 모듈 doc 참고 (600줄 파일 가드 분할).
      */
-    async fetchCatalogSnapshot(url: string, accessToken?: string, policy: CatalogSourcePolicyInput = { action: 'catalog-sync' }): Promise<CatalogSnapshot> {
+    async fetchCatalogSnapshot(url: string, accessToken?: string, policy: CatalogSourcePolicyInput = { action: 'catalog-sync' }, subpath?: string | null): Promise<CatalogSnapshot> {
         // 원본 정책(M2) — 카탈로그 원본은 받기 전에 판정, 교차 저장소 항목은 프로브(네트워크) 전에 같은 해석본으로 판정
         const isEntrySourceAllowed = await checkCatalogSource(url, policy);
         return fetchCatalogSnapshotImpl({
             fetcherFactory: this.opts.fetcherFactory,
             archiveFetcherFor: (u) => this.makeArchiveFetcher(u),
             isEntrySourceAllowed,
-        }, url, accessToken);
+        }, url, accessToken, subpath);
     }
 
     /**
