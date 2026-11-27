@@ -140,6 +140,24 @@ export class ExtensionCatalogRepository extends BaseRepository {
         return r.rows[0] ?? null;
     }
 
+    /**
+     * 이름 설치 별칭 지정 (M5). 다른 원본이 이미 쓰는 별칭이면 null 을 돌려준다(UNIQUE 위반 — 호출측이 409).
+     * `onlyIfUnset` 이면 별칭이 비어 있을 때만 채운다(등록·동기화 시 스냅샷 name 기본값).
+     */
+    async setAlias(id: string, alias: string | null, opts: { onlyIfUnset?: boolean } = {}): Promise<{ row: ExtensionCatalogRow | null; conflict: boolean }> {
+        try {
+            const r = await this.query<ExtensionCatalogRow>(
+                `UPDATE extension_catalog_sources SET alias=$1, updated_at=NOW()
+                 WHERE id=$2 ${opts.onlyIfUnset ? 'AND alias IS NULL' : ''} RETURNING *`,
+                [alias, id]
+            );
+            return { row: r.rows[0] ?? null, conflict: false };
+        } catch (err) {
+            if ((err as { code?: string })?.code === '23505') return { row: null, conflict: true };
+            throw err;
+        }
+    }
+
     /** 동기화 시도 결과 기록 — 성공이면 사유를 지운다. 스냅샷(last_synced_at)은 updateSnapshot 이 따로 갱신 */
     async recordSyncResult(id: string, status: 'ok' | 'error' | 'rate_limited', error: string | null): Promise<void> {
         await this.query(

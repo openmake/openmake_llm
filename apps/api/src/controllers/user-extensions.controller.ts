@@ -20,7 +20,8 @@
  *   POST   /api/users/me/extensions/catalog             — 소스 등록 + 스냅샷 동기화
  *   POST   /api/users/me/extensions/catalog/:id/sync    — 스냅샷 재동기화 (응답에 sync_status·last_sync_error, M4)
  *   PUT    /api/users/me/extensions/catalog/:id/credential — 원본 접근 토큰 저장·삭제 (write-only, 암호화 — M4)
- *   PATCH  /api/users/me/extensions/catalog/:id         — 하위 경로(source_subpath) 지정 (M4)
+ *   PATCH  /api/users/me/extensions/catalog/:id         — 하위 경로(source_subpath)·이름 설치 별칭(alias) 지정 (M4·M5)
+ *   POST   /api/users/me/extensions/install-by-name    — `플러그인@마켓플레이스` 이름 설치 (M5)
  *   DELETE /api/users/me/extensions/catalog/:id         — 소스 삭제
  *
  * ⚠️ 라우트 등록 순서: '/gallery*'·'/catalog*' 가 '/:id' 보다 먼저여야 한다 (Express 순차 매칭).
@@ -41,10 +42,13 @@ import { buildExtensionIngestService } from '../services/extensions/ingest-servi
 import { syncCatalogSource } from '../services/extensions/catalog-sync';
 import { EXTENSION_CATALOG_SYNC_LIMITS, normalizeCatalogSubpath } from '../config/extension-catalog-sync';
 import { encryptToken } from '../utils/token-crypto';
+import { NAMED_INSTALL_LIMITS, isValidMarketplaceAlias } from '../config/extension-named-install';
+import { NamedInstallError, resolveNamedInstall } from '../services/extensions/named-install';
+import { applyDefaultCatalogAlias } from '../services/extensions/catalog-alias';
 import { createLogger } from '../utils/logger';
 import { removeExtensionInstallation } from '../services/addon/addon-state';
 import { activeOrgFor, membershipsFor } from '../services/org/membership-cache';
-import { success, internalError, unauthorized, notFound, badRequest } from '../utils/api-response';
+import { success, internalError, unauthorized, notFound, badRequest, conflict } from '../utils/api-response';
 import { ExtensionSourceBlockedError } from '../errors/extension-source-blocked.error';
 
 const updateCheckSchema = z.object({
@@ -74,7 +78,14 @@ const catalogCredentialSchema = z.object({
 });
 
 const catalogPatchSchema = z.object({
-    sourceSubpath: z.string().max(EXTENSION_CATALOG_SYNC_LIMITS.SUBPATH_MAX_CHARS).nullable(),
+    sourceSubpath: z.string().max(EXTENSION_CATALOG_SYNC_LIMITS.SUBPATH_MAX_CHARS).nullable().optional(),
+    // 이름 설치 별칭(M5) — null 이면 지워 스냅샷 name 을 쓴다
+    alias: z.string().max(NAMED_INSTALL_LIMITS.NAME_MAX_CHARS).nullable().optional(),
+}).refine((b) => b.sourceSubpath !== undefined || b.alias !== undefined, '변경할 항목이 없습니다');
+
+const namedInstallSchema = z.object({
+    ref: z.string().min(3).max(NAMED_INSTALL_LIMITS.NAME_MAX_CHARS * 2 + 1),
+    accessToken: z.string().max(200).optional(),
 });
 
 const catalogInstallSchema = z.object({
@@ -116,6 +127,21 @@ async function memberOrgIds(userId: string): Promise<string[]> {
 
 /** ExtensionIngestService 조립 — services/extensions/ingest-service-factory (카탈로그 주기 동기화와 공용) */
 const buildIngestService = buildExtensionIngestService;
+
+/** 설치 결과 응답 — 카탈로그 설치·이름 설치 공용 */
+function installSummary(result: Extract<Awaited<ReturnType<Awaited<ReturnType<typeof buildIngestService>>['import']>>, { extensionId: string }>) {
+    return {
+        extensionId: result.extensionId,
+        name: result.name,
+        version: result.version,
+        updated: result.updated ?? false,
+        upToDate: (result.upToDate ?? false) || result.deduped,
+        skills: result.skills,
+        mcpServers: result.mcpServers,
+        agents: result.agents,
+        validationWarnings: result.validationWarnings,
+    };
+}
 
 export function createUserExtensionsController(): Router {
     const router = Router();
@@ -242,7 +268,9 @@ export function createUserExtensionsController(): Router {
                 plugins: snapshot.plugins,
                 addedBy: userId,
             });
-            const row = subpath ? (await repo.setSubpath(inserted.id, subpath)) ?? inserted : inserted;
+            const withSubpath = subpath ? (await repo.setSubpath(inserted.id, subpath)) ?? inserted : inserted;
+            // 이름 설치 별칭 기본값 = 스냅샷 name (규칙에 맞고 다른 원본이 안 쓸 때만 — 충돌이면 비워 두고 관리자가 지정)
+            const row = await applyDefaultCatalogAlias(repo, withSubpath);
             log.info(`카탈로그 소스 등록: ${row.id} "${row.name}" (${row.plugins.length} plugins, by=${userId})`);
             res.json(success({ source: toPublicCatalogSource(row) }));
             // 설명 한국어 번역 — 응답 후 백그라운드 (LLM 배치가 CF 100s 상한을 넘을 수 있어 동기 금지, fail-open)
@@ -302,14 +330,28 @@ export function createUserExtensionsController(): Router {
     router.patch('/catalog/:id', requireAuth, requireAdmin, validate(catalogPatchSchema), async (req, res) => {
         try {
             const body = req.body as z.infer<typeof catalogPatchSchema>;
-            let subpath: string | null;
-            try { subpath = normalizeCatalogSubpath(body.sourceSubpath); } catch (e) {
-                res.status(400).json(badRequest(e instanceof Error ? e.message : String(e))); return;
-            }
             const repo = new ExtensionCatalogRepository(getPool());
-            const row = await repo.setSubpath(req.params.id, subpath);
+            let row = await repo.getById(req.params.id);
             if (!row) { res.status(404).json(notFound('카탈로그 소스 없음')); return; }
-            log.info(`카탈로그 하위 경로: ${row.id} → ${subpath ?? '(루트)'}`);
+            if (body.sourceSubpath !== undefined) {
+                let subpath: string | null;
+                try { subpath = normalizeCatalogSubpath(body.sourceSubpath); } catch (e) {
+                    res.status(400).json(badRequest(e instanceof Error ? e.message : String(e))); return;
+                }
+                row = (await repo.setSubpath(row.id, subpath)) ?? row;
+                log.info(`카탈로그 하위 경로: ${row.id} → ${subpath ?? '(루트)'}`);
+            }
+            if (body.alias !== undefined) {
+                const alias = body.alias?.trim() || null;
+                if (alias && !isValidMarketplaceAlias(alias)) {
+                    res.status(400).json(badRequest(`INVALID_CATALOG_ALIAS: "${alias}" — 영문·숫자·. _ -, 영문·숫자로 시작, .. 금지, 예약어(internal·builtin·local) 불가`));
+                    return;
+                }
+                const r = await repo.setAlias(row.id, alias);
+                if (r.conflict) { res.status(409).json(conflict(`별칭 "${alias}" 는 다른 카탈로그가 쓰고 있습니다`)); return; }
+                row = r.row ?? row;
+                log.info(`카탈로그 별칭: ${row.id} → ${alias ?? '(스냅샷 name)'}`);
+            }
             res.json(success({ source: toPublicCatalogSource(row) }));
         } catch (err) {
             log.error('catalog patch 실패:', err);
@@ -327,6 +369,40 @@ export function createUserExtensionsController(): Router {
         } catch (err) {
             log.error('catalog 삭제 실패:', err);
             res.status(500).json(internalError('카탈로그 삭제 실패'));
+        }
+    });
+
+    // 이름 설치(M5) — 등록 카탈로그(DB)에서 해석해 그 원본으로 설치. 모르는 이름은 후보만 400 으로(자동 치환 없음)
+    router.post('/install-by-name', requireAuth, validate(namedInstallSchema), async (req, res) => {
+        const userId = getUserId(req);
+        if (!userId) { res.status(401).json(unauthorized()); return; }
+        const body = req.body as z.infer<typeof namedInstallSchema>;
+        try {
+            const target = await resolveNamedInstall(body.ref, new ExtensionCatalogRepository(getPool()));
+            const service = await buildIngestService();
+            // 설치자 본인 계정 — 카탈로그 설치와 같은 시맨틱(권한 상승 없음). 원본 정책(M2)은 설치 엔진이 해석된 원본 URL 로 검사
+            const result = await service.import({
+                userId,
+                isAdmin: false,
+                gitUrl: target.gitUrl,
+                plugin: target.plugin,
+                accessToken: body.accessToken,
+                catalogSubpath: target.catalogSubpath,
+                pinEntrySha: true,
+            });
+            if ('selectionRequired' in result && result.selectionRequired) {
+                res.status(400).json(badRequest(`플러그인을 특정하지 못했습니다: ${body.ref}`));
+                return;
+            }
+            log.info(`named install: ${body.ref} → ${result.extensionId} (user=${userId})`);
+            res.json(success({ ...installSummary(result), source: { id: target.sourceId, marketplace: target.marketplace, plugin: target.plugin } }));
+        } catch (err) {
+            rethrowPolicyError(err);
+            const msg = err instanceof Error ? err.message : String(err);
+            log.warn(`named install 실패: ${msg}`);
+            res.status(400).json(err instanceof NamedInstallError
+                ? badRequest(msg, { code: err.code, candidates: err.candidates })
+                : badRequest(`이름 설치 실패: ${msg}`));
         }
     });
 
@@ -355,17 +431,7 @@ export function createUserExtensionsController(): Router {
                 return;
             }
             log.info(`catalog install: ${source.id}/${body.plugin ?? '(single)'} → ${result.extensionId} (user=${userId})`);
-            res.json(success({
-                extensionId: result.extensionId,
-                name: result.name,
-                version: result.version,
-                updated: result.updated ?? false,
-                upToDate: (result.upToDate ?? false) || result.deduped,
-                skills: result.skills,
-                mcpServers: result.mcpServers,
-                agents: result.agents,
-                validationWarnings: result.validationWarnings,
-            }));
+            res.json(success(installSummary(result)));
         } catch (err) {
             rethrowPolicyError(err);
             const msg = err instanceof Error ? err.message : String(err);

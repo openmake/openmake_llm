@@ -15,6 +15,7 @@
  *
  * @module agents/git-ingest/extension-manifest-validator
  */
+import { PINNED_COMMIT_SHA_PATTERN } from '../../config/extension-named-install';
 import { z } from 'zod';
 import { UNSUPPORTED_MCP_FIELDS } from '../../config/skill-compat';
 import { EXTENSION_INGEST } from '../../config/constants';
@@ -208,6 +209,8 @@ const marketplaceSourceSchema = z.union([
         url: z.string().max(500).optional(),
         path: z.string().max(500).optional(),
         ref: z.string().max(200).optional(),
+        // 고정 커밋 (Claude Code marketplace 규칙 — 40자 소문자 hex 만 채택, 그 밖의 값은 무시)
+        sha: z.string().max(200).optional(),
     }),
 ]);
 
@@ -230,6 +233,8 @@ interface MarketplacePluginEntry {
     path?: string;
     /** 고정 ref (태그/브랜치/SHA) — 설치 시 tracking_ref 로 영속 */
     ref?: string;
+    /** 고정 커밋 (40자 소문자 hex) — 이름 설치(M5)는 ref 보다 우선한다 */
+    sha?: string;
     /** 마켓플레이스 분류 (카탈로그 UI 필터용 — 자유 문자열) */
     category?: string;
 }
@@ -261,19 +266,21 @@ export function parseMarketplaceFile(jsonText: string): MarketplaceParseResult {
         let url: string | undefined;
         let path: string | undefined;
         let ref: string | undefined;
+        let sha: string | undefined;
         if (typeof p.source === 'string') {
             path = p.source;
         } else if (p.source) {
             url = p.source.url;
             path = p.source.path;
             ref = p.source.ref;
+            sha = p.source.sha && PINNED_COMMIT_SHA_PATTERN.test(p.source.sha) ? p.source.sha : undefined;
         }
         path = path?.replace(/^\.\//, '').replace(/\/+$/, '');
         if (path && path.includes('..')) {
             errors.push(`${p.name}: path traversal 차단 — .. 미허용`);
             continue;
         }
-        plugins.push({ name: p.name, description: p.description, url, path, ref, category: p.category });
+        plugins.push({ name: p.name, description: p.description, url, path, ref, ...(sha ? { sha } : {}), category: p.category });
     }
     if (plugins.length === 0) {
         return { ok: false, errors: errors.length > 0 ? errors : ['plugins 목록이 비어있음'] };
