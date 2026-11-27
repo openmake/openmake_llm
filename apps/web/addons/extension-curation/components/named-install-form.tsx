@@ -10,8 +10,8 @@ import { useTranslations } from "next-intl";
 import { AtSign, Loader2 } from "lucide-react";
 import { Button, Input } from "@/components/ui/primitives";
 import { ApiClient, ApiError } from "@/lib/api-client";
-import { ExtensionInstallPreviewDialog } from "@/components/settings/extension-install-preview-dialog";
-import { namedInstallPreviewTarget, type InstallPreviewTarget } from "@/lib/extension-install-preview";
+import { ExtensionInstallPreviewDialog } from "./extension-install-preview-dialog";
+import { namedInstallPreviewTarget, type InstallPreviewTarget } from "../install-preview";
 
 /** 서버 이름 규칙과 같은 형식 검사(제출 전 안내용 — 판정 권한은 서버) */
 const NAMED_REF = /^[A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9._-]*$/;

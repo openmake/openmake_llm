@@ -199,7 +199,7 @@ Base 화면은 켜진 add-on(`useEnabledWebAddons` — `GET /api/addons`, 조회
 |---|---|---|
 | `hubTabs` | `components/hub-tabs.tsx`(history·agents·developer·admin 허브) | 딥리서치 `/research` · 스킬 `/skill-library` · MCP `/admin/mcp-monitoring`·`/admin/mcp-catalog` |
 | `approvalSections`(+ `countPending`) | `/approvals` 섹션 · 사이드바 승인 배지 합산 | 스킬 draft(20) · MCP 서버 draft(30) — Base 는 에이전트 작업(10)·Custom Agent(40) |
-| `settingsTabs`(`ownsSaving` 이면 공용 저장 버튼을 숨긴다) | `/settings` 탭 — 모르는·꺼진 탭은 일반 탭으로 연다 | MCP 커넥터(65) |
+| `settingsTabs`(`ownsSaving` 이면 공용 저장 버튼을 숨긴다) | `/settings` 탭 — 모르는·꺼진 탭은 일반 탭으로 연다. Base 탭은 순서 값을 고정해 둔다(빈 자리가 생겨도 뒤 탭이 당겨지지 않게) | 확장(60, `extension-curation` — 갤러리·이름 설치·공유·게시·카탈로그 원본 관리, §8-2) · MCP 커넥터(65) |
 | `adminQuickLinks` | `/admin` 바로가기 | MCP 카탈로그(5) |
 | `slashMenu`(첫 번째 것만) | 입력창 `/` 메뉴 — 감지·디바운스·키보드 이동은 Base, 후보·정렬·삽입 텍스트·전체 보기·표시는 add-on. 없으면 메뉴가 뜨지 않는다 | 스킬(`/<slug> ` 삽입) |
 | `messageBlocks`·`composerContext`·`chatMode`·`settingsGroups`·`apiKeyScopePresets`·`sidebarSections`·`chatContextBanners` | 메시지 렌더·컴포저·관리자 시스템 설정·API 키·사이드바·대화 배너 | 지도·노트북·디스코드·토론·딥리서치·Knowledge |

@@ -18,7 +18,7 @@ import {
   splitWarning,
   type ExtensionInstallPreview,
   type InstallPreviewTarget,
-} from "@/lib/extension-install-preview";
+} from "../install-preview";
 
 export function ExtensionInstallPreviewDialog({
   target,

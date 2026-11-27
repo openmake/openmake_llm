@@ -6,15 +6,15 @@ import { Package, Trash2, Loader2, ChevronDown, ChevronLeft, ChevronRight, Puzzl
 import { Button, Card, CardHeader, CardTitle, CardContent, Input } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient, ApiError } from "@/lib/api-client";
-import { GalleryItemBadges } from "./gallery-item-badges";
+import { GalleryItemBadges } from "@/components/settings/gallery-item-badges";
 import { DeploymentModeBadge, type ExtensionDeploymentMode, type ExtensionOrgDeployment } from "./extension-deployment-badge";
-import { MarketplacePublishSection } from "@/components/settings/marketplace-publish-section";
-import { ExtensionPermissionBadge, ExtensionPermissionPanel } from "@/components/settings/extension-permission-panel";
-import { CatalogSourceAdmin } from "@/components/settings/catalog-source-admin";
-import { NamedInstallForm } from "@/components/settings/named-install-form";
+import { MarketplacePublishSection } from "./marketplace-publish-section";
+import { ExtensionPermissionBadge, ExtensionPermissionPanel } from "./extension-permission-panel";
+import { CatalogSourceAdmin } from "./catalog-source-admin";
+import { NamedInstallForm } from "./named-install-form";
 import { useAppStore } from "@/lib/store";
-import { ExtensionInstallPreviewDialog } from "@/components/settings/extension-install-preview-dialog";
-import { catalogInstallMode, type InstallPreviewTarget } from "@/lib/extension-install-preview";
+import { ExtensionInstallPreviewDialog } from "./extension-install-preview-dialog";
+import { catalogInstallMode, type InstallPreviewTarget } from "../install-preview";
 
 interface UserExtension {
   id: string;
