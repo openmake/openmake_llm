@@ -3431,5 +3431,45 @@
     "login": "로그인",
     "snapshotNote": "{date} 시점의 대화입니다 — 원본 대화가 이어져도 이 화면은 바뀌지 않습니다.",
     "scope": "공개 범위: {scope}"
+  },
+  "marketVerdicts": {
+    "verdict": {
+      "supported": "지원",
+      "partial": "부분 지원",
+      "unsupported": "지원 안 됨"
+    },
+    "reason": {
+      "NOT_INSTALLABLE": "설치할 스킬·MCP 서버가 없음",
+      "INSTALLABILITY_UNKNOWN": "설치 가능 여부 미상(다른 저장소 항목)",
+      "SKILL_MCP_TOOL_IDIOM": "스킬이 Claude Code MCP 도구 표기(mcp__server__tool)를 씀",
+      "SKILL_ASSET_OUTSIDE_DIR": "스킬이 자기 폴더 밖 파일을 참조함(함께 설치되지 않음)",
+      "SKILL_COMMAND_ASSETS_SKIPPED": "명령에서 바꾼 스킬이 함께 설치되지 않는 파일을 참조함",
+      "SKILL_CLAUDE_DIR_PATH": "스킬이 .claude/ 경로를 가리킴",
+      "SKILL_CLAUDE_INSTALL_GUIDE": "스킬에 Claude Code 설치 안내가 들어 있음",
+      "SKILL_TOOL_UNSUPPORTED": "스킬이 언급한 도구 일부가 이 환경에 없음",
+      "SKILL_REQUIRED_TOOL_MISSING": "스킬에 필요한 도구가 없음",
+      "SKILL_EXECUTION_BLOCKED": "실행이 막힌 스킬이 있음",
+      "COMPONENTS_UNSUPPORTED": "지원하지 않는 구성요소가 있음",
+      "MCP_ENTRIES_SKIPPED": "건너뛴 MCP 항목이 있음",
+      "MCP_BLOCKED_BY_CONVENTION": "규약 검사에서 막힌 MCP 서버가 있음",
+      "ASSETS_SKIPPED": "건너뛴 번들 파일이 있음",
+      "COMPONENTS_TRUNCATED": "크기 상한에서 잘린 구성요소가 있음",
+      "MCP_TRANSPORT_SSE_DEPRECATED": "MCP 서버가 폐기 예정인 SSE 전송을 씀",
+      "MCP_EXT_APPS_UNSUPPORTED": "MCP Apps 확장은 지원하지 않음",
+      "MCP_EXT_TASKS_UNSUPPORTED": "MCP Tasks 확장은 지원하지 않음",
+      "MCP_EXT_UNRECOGNIZED": "MCP 서버가 알 수 없는 확장을 선언함",
+      "MCP_SKILLS_PROVIDER": "MCP 서버가 스킬을 제공함(Skills over MCP)",
+      "MCP_AUTH_DYNAMIC_REGISTRATION": "MCP 서버가 동적 클라이언트 등록으로 로그인함",
+      "MCP_PROTOCOL_MODERN": "MCP 서버가 최신 프로토콜을 씀",
+      "MCP_PROTOCOL_LEGACY": "MCP 서버가 이전 프로토콜을 씀",
+      "CROSS_REPO_SOURCE": "다른 저장소에 있는 항목",
+      "CONTENT_NOT_EVALUATED": "아직 내용을 평가하지 않음"
+    },
+    "provenance": {
+      "publisher": "게시자: {value}",
+      "commit": "커밋: {value}",
+      "license": "라이선스: {value}"
+    },
+    "snapshotOnly": "카탈로그 스냅샷만으로 판정 — 설치하면 내용까지 확인합니다"
   }
 }

@@ -115,6 +115,30 @@ export class McpNegotiationRepository implements NegotiationSink, DeclaredExtens
             observationCount: row.observation_count,
         }));
     }
+    /** 서버별 관측 요약(M1 판정용 구성요소 관측 포트) — 관측이 없는 서버는 맵에 없다. 주소·명령은 읽지 않는다 */
+    async summariesByServerIds(serverIds: readonly string[]): Promise<Map<string, Pick<McpNegotiationObservation,
+        'serverId' | 'transport' | 'authMethod' | 'protocolEra' | 'protocolVersion' | 'extensions'>>> {
+        const out = new Map<string, Pick<McpNegotiationObservation,
+            'serverId' | 'transport' | 'authMethod' | 'protocolEra' | 'protocolVersion' | 'extensions'>>();
+        if (serverIds.length === 0) return out;
+        const r = await this.pool.query<Pick<Row, 'server_id' | 'transport' | 'auth_method' | 'protocol_era' | 'protocol_version' | 'extensions'>>(
+            `SELECT server_id, transport, auth_method, protocol_era, protocol_version, extensions
+               FROM mcp_negotiation_observations WHERE server_id = ANY($1::text[])`,
+            [[...serverIds]],
+        );
+        for (const row of r.rows) {
+            out.set(row.server_id, {
+                serverId: row.server_id,
+                transport: row.transport as McpNegotiationObservation['transport'],
+                authMethod: row.auth_method as McpNegotiationObservation['authMethod'],
+                protocolEra: row.protocol_era as McpNegotiationObservation['protocolEra'],
+                protocolVersion: row.protocol_version,
+                extensions: row.extensions ?? [],
+            });
+        }
+        return out;
+    }
+
     /** 서버별 선언 확장(MCP-5) — 관측이 없는 서버는 맵에 없다 */
     async extensionsByServerIds(serverIds: readonly string[]): Promise<Map<string, McpExtensionRef[]>> {
         const out = new Map<string, McpExtensionRef[]>();

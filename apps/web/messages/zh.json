@@ -3431,5 +3431,45 @@
     "login": "登录",
     "snapshotNote": "截至 {date} 的对话 — 原对话继续进行时此页面不会改变。",
     "scope": "公开范围：{scope}"
+  },
+  "marketVerdicts": {
+    "verdict": {
+      "supported": "支持",
+      "partial": "部分支持",
+      "unsupported": "不支持"
+    },
+    "reason": {
+      "NOT_INSTALLABLE": "没有可安装的技能或 MCP 服务器",
+      "INSTALLABILITY_UNKNOWN": "无法确定能否安装(跨仓库条目)",
+      "SKILL_MCP_TOOL_IDIOM": "技能使用 Claude Code 的 MCP 工具写法(mcp__server__tool)",
+      "SKILL_ASSET_OUTSIDE_DIR": "技能引用了所在文件夹之外的文件(不会一起安装)",
+      "SKILL_COMMAND_ASSETS_SKIPPED": "由命令转换的技能引用了未打包的文件",
+      "SKILL_CLAUDE_DIR_PATH": "技能指向 .claude/ 路径",
+      "SKILL_CLAUDE_INSTALL_GUIDE": "技能包含 Claude Code 安装说明",
+      "SKILL_TOOL_UNSUPPORTED": "技能提到的部分工具在此环境中没有对应",
+      "SKILL_REQUIRED_TOOL_MISSING": "缺少技能所需的工具",
+      "SKILL_EXECUTION_BLOCKED": "有技能被禁止运行",
+      "COMPONENTS_UNSUPPORTED": "有不支持的组件",
+      "MCP_ENTRIES_SKIPPED": "跳过了部分 MCP 条目",
+      "MCP_BLOCKED_BY_CONVENTION": "有 MCP 服务器被规范检查拦截",
+      "ASSETS_SKIPPED": "跳过了部分打包文件",
+      "COMPONENTS_TRUNCATED": "有组件因大小上限被截断",
+      "MCP_TRANSPORT_SSE_DEPRECATED": "MCP 服务器使用已弃用的 SSE 传输",
+      "MCP_EXT_APPS_UNSUPPORTED": "不支持 MCP Apps 扩展",
+      "MCP_EXT_TASKS_UNSUPPORTED": "不支持 MCP Tasks 扩展",
+      "MCP_EXT_UNRECOGNIZED": "MCP 服务器声明了无法识别的扩展",
+      "MCP_SKILLS_PROVIDER": "MCP 服务器提供技能(Skills over MCP)",
+      "MCP_AUTH_DYNAMIC_REGISTRATION": "MCP 服务器通过动态客户端注册登录",
+      "MCP_PROTOCOL_MODERN": "MCP 服务器使用新版协议",
+      "MCP_PROTOCOL_LEGACY": "MCP 服务器使用旧版协议",
+      "CROSS_REPO_SOURCE": "位于其他仓库的条目",
+      "CONTENT_NOT_EVALUATED": "尚未评估内容"
+    },
+    "provenance": {
+      "publisher": "发布者: {value}",
+      "commit": "提交: {value}",
+      "license": "许可证: {value}"
+    },
+    "snapshotOnly": "仅根据目录快照判定 — 安装后会检查内容"
   }
 }
