@@ -5,6 +5,7 @@ import { PageTabs } from "@/components/ui/page-tabs";
 import { useEnabledWebAddons } from "@/addons/registry";
 import type { HubId } from "@/addons/types";
 import { useAppStore } from "@/lib/store";
+import { useExtensionAdminInventoryEnabled } from "@/lib/extension-admin-inventory";
 
 /**
  * 사이드바 통폐합(2026-07-11 1차, 2026-07-17 2차)으로 묶인 허브별 탭 정의.
@@ -64,6 +65,8 @@ export function AdminTabs() {
   const t = useTranslations("pageTabs");
   const tNav = useTranslations("nav");
   const role = useAppStore((s) => s.auth.currentUser?.role);
+  // 확장 현황(M3)은 서버 플래그가 켜졌다고 확인될 때만 — 관리자에게서만 묻는다
+  const extensionsEnabled = useExtensionAdminInventoryEnabled(role === "admin");
   // 훅은 역할 확인보다 먼저 — 역할이 바뀌어도 훅 호출 순서가 같아야 한다
   const tabs = useHubTabs("admin", [
     { href: "/admin", label: t("dashboard") },
@@ -77,6 +80,7 @@ export function AdminTabs() {
     { href: "/admin/model-roles", label: tNav("items.modelRolesAdmin") },
     { href: "/admin/system-settings", label: tNav("items.systemSettingsAdmin") },
     { href: "/admin/addons", label: tNav("items.addonsAdmin") },
+    ...(extensionsEnabled ? [{ href: "/admin/extensions", label: tNav("items.extensionsAdmin") }] : []),
     { href: "/admin/organizations", label: tNav("items.organizationsAdmin") },
     { href: "/admin/cost-rates", label: tNav("items.costRatesAdmin") },
     { href: "/admin/bridge-devices", label: tNav("items.bridgeDevicesAdmin") },

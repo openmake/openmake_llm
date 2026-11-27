@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import { browserSitePolicyProblems } from '@openmake/config';
 import { contributedSettings, type AddonSettingValidator } from '../addon-host/contributions';
+import { EXTENSION_ADMIN_INVENTORY_KEY } from './extension-admin-inventory';
 import { ARBITRARY_URL_INSTALL_MODES, EXTENSION_SOURCE_POLICY_KEYS, extensionSourcePolicyProblems } from './extension-source-policy';
 
 /** Base 그룹 또는 add-on 이 기여한 그룹 이름 */
@@ -132,6 +133,8 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     { key: EXTENSION_SOURCE_POLICY_KEYS.ENFORCED, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     { key: EXTENSION_SOURCE_POLICY_KEYS.ARBITRARY_URL_INSTALL, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(ARBITRARY_URL_INSTALL_MODES) },
     { key: EXTENSION_SOURCE_POLICY_KEYS.POLICY, group: 'agent', secret: false, requiresRestart: false, validate: extensionSourcePolicy },
+    // 관리자 확장 현황·정책 미리보기(M3, opt-in) — 라우트가 요청마다 읽는다(실시간)
+    { key: EXTENSION_ADMIN_INVENTORY_KEY, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
 
     // ── SLO 목표(F24.8, 145) — 5분 평가 tick 이 호출 시점에 읽는다(실시간) ──
     { key: 'SLO_CHAT_AVAILABILITY_TARGET', group: 'slo', secret: false, requiresRestart: false, validate: percentTarget },
