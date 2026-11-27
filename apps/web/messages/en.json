@@ -20,6 +20,7 @@
       "metrics": "Metrics",
       "alerts": "Alerts",
       "mcpCatalogAdmin": "MCP Catalog Admin",
+      "mcpRegistry": "MCP Registry",
       "modelRolesAdmin": "Model Assignments Admin",
       "systemSettingsAdmin": "System Settings",
       "developer": "Developer",
@@ -3520,5 +3521,54 @@
       "license": "License: {value}"
     },
     "snapshotOnly": "Judged from the catalog snapshot only — install to check contents"
+  },
+  "marketRegistry": {
+    "pageTitle": "MCP Registry",
+    "pageDescription": "Review the copy of the official MCP Registry, approve or hide entries, and promote approved ones to disabled MCP catalog drafts.",
+    "never": "never",
+    "syncOn": "Sync on",
+    "syncOff": "Sync off",
+    "syncOffHint": "Turn on the {key} setting to sync",
+    "lastSuccess": "Last sync",
+    "inProgress": "Resuming",
+    "backoffUntil": "Waiting until {at}",
+    "lastError": "Last error",
+    "counts": "Pending {pending} · Approved {approved} · Hidden {hidden} · Deleted in registry {tombstoned}",
+    "syncNow": "Sync now",
+    "syncResult": "Sync result: {status}",
+    "actionError": "Request failed",
+    "curated": "Saved",
+    "promoted": "Added to the MCP catalog as a disabled draft: {id}",
+    "promoteExists": "Already in the catalog: {id}",
+    "publisherVerified": "Publisher verified",
+    "publisherVerifiedHint": "The registry verified ownership of the namespace. This is not a code or security review.",
+    "noInstall": "No install info",
+    "curation": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "hidden": "Hidden"
+    },
+    "registryStatus": {
+      "active": "Active",
+      "deprecated": "Deprecated",
+      "deleted": "Deleted"
+    },
+    "tombstoned": "Deleted in registry",
+    "approve": "Approve",
+    "hide": "Hide",
+    "reset": "Back to pending",
+    "promote": "Promote to catalog",
+    "filterAll": "All",
+    "searchPlaceholder": "Search name or description (Enter)",
+    "showTombstoned": "Include deleted",
+    "colServer": "Server",
+    "colInstall": "Install",
+    "colState": "State",
+    "colActions": "Actions",
+    "loading": "Loading...",
+    "empty": "No entries",
+    "pageInfo": "{from}–{to} of {total}",
+    "prev": "Previous",
+    "next": "Next"
   }
 }

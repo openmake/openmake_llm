@@ -20,6 +20,7 @@
       "metrics": "メトリクス",
       "alerts": "アラート",
       "mcpCatalogAdmin": "MCPカタログ管理",
+      "mcpRegistry": "MCPレジストリ",
       "modelRolesAdmin": "モデル割り当て管理",
       "systemSettingsAdmin": "システム設定",
       "developer": "開発者",
@@ -3520,5 +3521,54 @@
       "license": "ライセンス: {value}"
     },
     "snapshotOnly": "カタログのスナップショットのみで判定 — インストールすると内容も確認します"
+  },
+  "marketRegistry": {
+    "pageTitle": "MCPレジストリ",
+    "pageDescription": "公式MCP Registryのコピーを確認して承認・非表示にし、承認した項目を無効状態のMCPカタログ下書きとして追加します。",
+    "never": "なし",
+    "syncOn": "同期オン",
+    "syncOff": "同期オフ",
+    "syncOffHint": "同期するには設定 {key} をオンにしてください",
+    "lastSuccess": "最終同期",
+    "inProgress": "続きから取得中",
+    "backoffUntil": "{at} まで待機",
+    "lastError": "最終エラー",
+    "counts": "確認待ち {pending} · 承認 {approved} · 非表示 {hidden} · レジストリで削除 {tombstoned}",
+    "syncNow": "今すぐ同期",
+    "syncResult": "同期結果: {status}",
+    "actionError": "リクエストに失敗しました",
+    "curated": "保存しました",
+    "promoted": "MCPカタログに無効の下書きとして追加しました: {id}",
+    "promoteExists": "すでにカタログにあります: {id}",
+    "publisherVerified": "公開者確認済み",
+    "publisherVerifiedHint": "レジストリが名前空間の所有を確認したという意味です。コードやセキュリティの審査ではありません。",
+    "noInstall": "インストール情報なし",
+    "curation": {
+      "pending": "確認待ち",
+      "approved": "承認",
+      "hidden": "非表示"
+    },
+    "registryStatus": {
+      "active": "有効",
+      "deprecated": "非推奨",
+      "deleted": "削除済み"
+    },
+    "tombstoned": "レジストリで削除",
+    "approve": "承認",
+    "hide": "非表示",
+    "reset": "確認待ちに戻す",
+    "promote": "カタログに追加",
+    "filterAll": "すべて",
+    "searchPlaceholder": "名前・説明を検索 (Enter)",
+    "showTombstoned": "削除済みを含める",
+    "colServer": "サーバー",
+    "colInstall": "インストール方法",
+    "colState": "状態",
+    "colActions": "操作",
+    "loading": "読み込み中...",
+    "empty": "項目がありません",
+    "pageInfo": "{from}–{to} / {total}",
+    "prev": "前へ",
+    "next": "次へ"
   }
 }
