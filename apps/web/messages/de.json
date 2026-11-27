@@ -3413,5 +3413,45 @@
     "login": "Anmelden",
     "snapshotNote": "Unterhaltung mit Stand {date} – diese Seite ändert sich nicht, wenn die ursprüngliche Unterhaltung weitergeht.",
     "scope": "Sichtbarkeit: {scope}"
+  },
+  "marketVerdicts": {
+    "verdict": {
+      "supported": "Unterstützt",
+      "partial": "Teilweise",
+      "unsupported": "Nicht unterstützt"
+    },
+    "reason": {
+      "NOT_INSTALLABLE": "Keine installierbaren Skills oder MCP-Server",
+      "INSTALLABILITY_UNKNOWN": "Installierbarkeit unbekannt (Eintrag aus anderem Repository)",
+      "SKILL_MCP_TOOL_IDIOM": "Skills verwenden Claude-Code-MCP-Toolnamen (mcp__server__tool)",
+      "SKILL_ASSET_OUTSIDE_DIR": "Skills verweisen auf Dateien außerhalb ihres Ordners (nicht mitinstalliert)",
+      "SKILL_COMMAND_ASSETS_SKIPPED": "Umgewandelte Befehle verweisen auf nicht mitgelieferte Dateien",
+      "SKILL_CLAUDE_DIR_PATH": "Skills verweisen auf .claude/-Pfade",
+      "SKILL_CLAUDE_INSTALL_GUIDE": "Skills enthalten Claude-Code-Einrichtungsanleitungen",
+      "SKILL_TOOL_UNSUPPORTED": "Einige von Skills genannte Tools gibt es hier nicht",
+      "SKILL_REQUIRED_TOOL_MISSING": "Ein von einem Skill benötigtes Tool fehlt",
+      "SKILL_EXECUTION_BLOCKED": "Ein Skill ist für die Ausführung gesperrt",
+      "COMPONENTS_UNSUPPORTED": "Einige Komponenten werden nicht unterstützt",
+      "MCP_ENTRIES_SKIPPED": "Einige MCP-Einträge wurden übersprungen",
+      "MCP_BLOCKED_BY_CONVENTION": "Ein MCP-Server wurde von der Konventionsprüfung blockiert",
+      "ASSETS_SKIPPED": "Einige mitgelieferte Dateien wurden übersprungen",
+      "COMPONENTS_TRUNCATED": "Einige Komponenten wurden an der Größengrenze abgeschnitten",
+      "MCP_TRANSPORT_SSE_DEPRECATED": "MCP-Server nutzt den veralteten SSE-Transport",
+      "MCP_EXT_APPS_UNSUPPORTED": "MCP-Apps-Erweiterung wird nicht unterstützt",
+      "MCP_EXT_TASKS_UNSUPPORTED": "MCP-Tasks-Erweiterung wird nicht unterstützt",
+      "MCP_EXT_UNRECOGNIZED": "MCP-Server deklariert eine unbekannte Erweiterung",
+      "MCP_SKILLS_PROVIDER": "MCP-Server stellt Skills bereit (Skills over MCP)",
+      "MCP_AUTH_DYNAMIC_REGISTRATION": "MCP-Server meldet sich per dynamischer Client-Registrierung an",
+      "MCP_PROTOCOL_MODERN": "MCP-Server spricht das aktuelle Protokoll",
+      "MCP_PROTOCOL_LEGACY": "MCP-Server spricht ein älteres Protokoll",
+      "CROSS_REPO_SOURCE": "Liegt in einem anderen Repository",
+      "CONTENT_NOT_EVALUATED": "Inhalt noch nicht bewertet"
+    },
+    "provenance": {
+      "publisher": "Herausgeber: {value}",
+      "commit": "Commit: {value}",
+      "license": "Lizenz: {value}"
+    },
+    "snapshotOnly": "Nur anhand des Katalog-Snapshots bewertet — nach der Installation wird auch der Inhalt geprüft"
   }
 }

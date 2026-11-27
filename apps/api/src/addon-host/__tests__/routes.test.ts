@@ -7,8 +7,14 @@ const ENV_KEY = 'ADDON_BUILTIN_DISABLED';
 
 type AddonRow = { id: string; enabled: boolean; kind: string };
 
+// 기본 꺼짐 add-on(extension-marketplace)의 DB 상태 — 관리자가 아직 켜지 않음
+jest.mock('../../services/addon/addon-state', () => ({
+    ...jest.requireActual('../../services/addon/addon-state'),
+    readAddonEnabledStrict: async () => ({ known: true, enabled: false }),
+}));
+
 /** env 는 호출 시점에 읽히므로 목록 조회까지 같은 env 범위 안에서 끝낸다. */
-function mountWith(disabled: string | undefined): { paths: string[]; addons: AddonRow[] } {
+function mountWith(disabled: string | undefined): { paths: string[]; addons: Promise<AddonRow[]> } {
     const before = process.env[ENV_KEY];
     if (disabled === undefined) delete process.env[ENV_KEY]; else process.env[ENV_KEY] = disabled;
     try {
@@ -16,8 +22,10 @@ function mountWith(disabled: string | undefined): { paths: string[]; addons: Add
         const app = { use: (path: string, handler: unknown) => { mounted.push({ path, handler }); } } as unknown as Application;
         jest.isolateModules(() => { require('../routes').mountAddonRoutes(app); });
         const listRouter = mounted.find(m => m.path === '/api/addons')!.handler as { stack: Array<{ route: { stack: Array<{ handle: (req: unknown, res: { json: (body: { data: { addons: AddonRow[] } }) => void }) => void }> } }> };
-        let addons: AddonRow[] = [];
-        listRouter.stack[0].route.stack[0].handle({}, { json: (body: { data: { addons: AddonRow[] } }) => { addons = body.data.addons; } });
+        // 기본 꺼짐 add-on 이 있으면 목록은 DB 상태를 겹쳐 비동기로 답한다
+        const addons = new Promise<AddonRow[]>((resolve) => {
+            listRouter.stack[0].route.stack[0].handle({}, { json: (body: { data: { addons: AddonRow[] } }) => resolve(body.data.addons) });
+        });
         return { paths: mounted.map(m => m.path), addons };
     } finally {
         if (before === undefined) delete process.env[ENV_KEY]; else process.env[ENV_KEY] = before;
@@ -33,18 +41,21 @@ describe('mountAddonRoutes', () => {
             '/api/addons',
             '/api/agents/skills', '/api/agents/skills', '/api/agents',
             '/api/mcp', '/api/mcp', '/api/mcp', '/api/mcp/servers', '/api/admin/mcp', '/api/admin/mcp',
-            '/api/knowledge', '/api/mcp', '/api/embed', '/api/integrations/discord', '/api/research',
+            '/api/knowledge', '/api/extension-marketplace', '/api/mcp', '/api/embed', '/api/integrations/discord', '/api/research',
         ]);
     });
 
-    it('꺼진 add-on 의 라우트는 마운트되지 않고, 목록 API 는 항상 마운트된다', () => {
-        const { paths, addons } = mountWith('notebooklm,discord,skill-runtime,mcp-runtime');
-        expect(paths).toEqual(['/api/addons', '/api/knowledge', '/api/embed', '/api/research']);
+    it('꺼진 add-on 의 라우트는 마운트되지 않고, 목록 API 는 항상 마운트된다', async () => {
+        const { paths, addons: pending } = mountWith('notebooklm,discord,skill-runtime,mcp-runtime');
+        const addons = await pending;
+        expect(paths).toEqual(['/api/addons', '/api/knowledge', '/api/extension-marketplace', '/api/embed', '/api/research']);
         expect(addons.find(a => a.id === 'mcp-runtime')).toMatchObject({ enabled: false, kind: 'runtime' });
         expect(addons.find(a => a.id === 'skill-runtime')).toMatchObject({ enabled: false, kind: 'runtime' });
         expect(addons.find(a => a.id === 'notebooklm')).toMatchObject({ enabled: false, kind: 'integration' });
         expect(addons.find(a => a.id === 'kakao-map')).toMatchObject({ enabled: true, kind: 'integration' });
         expect(addons.find(a => a.id === 'industry-pack')).toMatchObject({ enabled: true, kind: 'content' });
+        // 기본 꺼짐 add-on 은 라우트는 걸리되(요청마다 게이트가 404) 목록에는 DB 상태(꺼짐)로 실린다
+        expect(addons.find(a => a.id === 'extension-marketplace')).toMatchObject({ enabled: false, kind: 'integration' });
     });
 
     it('목록은 한 번만 만들어 재사용한다 (요청마다 매니페스트를 다시 읽지 않는다)', () => {
