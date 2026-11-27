@@ -12,6 +12,8 @@
  *   - EXTENSION_SOURCE_POLICY 확장 원본 규칙 {allow?, deny?}(M2) — 병합하지 않고 **층으로** 겹친다: deny 는 어느 층이든 걸리면 차단,
  *                             allow 는 정의한 층마다 모두 일치해야 한다(services/extensions/source-policy). allow 미설정 = 제한 없음,
  *                             `[]` = 전부 차단, 깨진 값 = 전부 차단(fail-closed — 다른 키와 달리 무시하지 않는다)
+ *   - EXTENSION_MCP_SERVER_POLICY 확장 MCP 서버 매처 {allow?, deny?}(§8-3 — url·command 규칙) — EXTENSION_SOURCE_POLICY 와 같은
+ *                             층 규칙(services/extensions/mcp-server-policy). MCP_ALLOWED_SERVERS(템플릿 id)와는 별개 키다
  *
  * @module config/org-policy-registry
  */
@@ -19,6 +21,7 @@ import { z } from 'zod';
 import { browserSitePolicyProblems } from '@openmake/config';
 import type { TaskSandboxApprovalPolicy } from './task-sandbox';
 import { EXTENSION_SOURCE_POLICY_SCHEMA } from './extension-source-policy';
+import { EXTENSION_MCP_SERVER_POLICY_SCHEMA } from './extension-mcp-server-policy';
 
 export const ORG_POLICY_KEYS = {
     EXTERNAL_MODEL_POLICY: 'EXTERNAL_MODEL_POLICY',
@@ -27,6 +30,7 @@ export const ORG_POLICY_KEYS = {
     ADDON_ALLOWLIST: 'ADDON_ALLOWLIST',
     BROWSER_SITE_POLICY: 'BROWSER_SITE_POLICY',
     EXTENSION_SOURCE_POLICY: 'EXTENSION_SOURCE_POLICY',
+    EXTENSION_MCP_SERVER_POLICY: 'EXTENSION_MCP_SERVER_POLICY',
 } as const;
 export type OrgPolicyKey = typeof ORG_POLICY_KEYS[keyof typeof ORG_POLICY_KEYS];
 
@@ -39,6 +43,7 @@ export const ORG_POLICY_SCHEMAS: Record<OrgPolicyKey, z.ZodTypeAny> = {
     ADDON_ALLOWLIST: z.array(z.string().trim().min(1).max(120)).max(200),
     BROWSER_SITE_POLICY: z.object({ allow: patternList.optional(), deny: patternList.optional() }).strict(),
     EXTENSION_SOURCE_POLICY: EXTENSION_SOURCE_POLICY_SCHEMA,
+    EXTENSION_MCP_SERVER_POLICY: EXTENSION_MCP_SERVER_POLICY_SCHEMA,
 };
 
 /**

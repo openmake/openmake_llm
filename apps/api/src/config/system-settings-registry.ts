@@ -17,6 +17,7 @@ import { browserSitePolicyProblems } from '@openmake/config';
 import { contributedSettings, type AddonSettingValidator } from '../addon-host/contributions';
 import { EXTENSION_ADMIN_INVENTORY_KEY } from './extension-admin-inventory';
 import { ARBITRARY_URL_INSTALL_MODES, EXTENSION_SOURCE_POLICY_KEYS, extensionSourcePolicyProblems } from './extension-source-policy';
+import { EXTENSION_MCP_SERVER_POLICY_KEYS, extensionMcpServerPolicyProblems } from './extension-mcp-server-policy';
 import { EXTENSION_CATALOG_SYNC_KEYS } from './extension-catalog-sync';
 import { EXTENSION_INSTALL_PREVIEW_FLAG } from './extension-install-preview';
 
@@ -66,6 +67,13 @@ const extensionSourcePolicy = nonEmpty.superRefine((v, ctx) => {
     const problems = extensionSourcePolicyProblems(v);
     if (problems.length > 0) {
         ctx.addIssue({ code: 'custom', message: `확장 원본 정책이 올바르지 않습니다 (예: {"allow":[{"type":"github","repo":"openmake/*"}],"deny":[]}): ${problems.join(', ')}` });
+    }
+});
+/** 확장 MCP 서버 정책 — 조직 정책과 같은 스키마(config/extension-mcp-server-policy) */
+const extensionMcpServerPolicy = nonEmpty.superRefine((v, ctx) => {
+    const problems = extensionMcpServerPolicyProblems(v);
+    if (problems.length > 0) {
+        ctx.addIssue({ code: 'custom', message: `확장 MCP 서버 정책이 올바르지 않습니다 (예: {"allow":[{"type":"command","command":"npx","package":"@modelcontextprotocol/*"},{"type":"url","url":"https://mcp.example.com"}],"deny":[]}): ${problems.join(', ')}` });
     }
 });
 /** 백분율 목표 — 0 초과 100 미만 소수(예: 99.5) */
@@ -139,6 +147,9 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     { key: EXTENSION_SOURCE_POLICY_KEYS.ENFORCED, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     { key: EXTENSION_SOURCE_POLICY_KEYS.ARBITRARY_URL_INSTALL, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(ARBITRARY_URL_INSTALL_MODES) },
     { key: EXTENSION_SOURCE_POLICY_KEYS.POLICY, group: 'agent', secret: false, requiresRestart: false, validate: extensionSourcePolicy },
+    // 확장 MCP 서버 정책(§8-3, opt-in) — 확장 설치·MCP git 설치·카탈로그 등록이 호출 시점에 읽는다(실시간). 규칙은 config/extension-mcp-server-policy
+    { key: EXTENSION_MCP_SERVER_POLICY_KEYS.ENFORCED, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
+    { key: EXTENSION_MCP_SERVER_POLICY_KEYS.POLICY, group: 'agent', secret: false, requiresRestart: false, validate: extensionMcpServerPolicy },
     // 관리자 확장 현황·정책 미리보기(M3, opt-in) — 라우트가 요청마다 읽는다(실시간)
     { key: EXTENSION_ADMIN_INVENTORY_KEY, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     // 확장 카탈로그 주기 동기화(M4, opt-in) — 5분 점검 tick 이 호출 시점에 읽는다(실시간). 간격은 양의 정수 ms
