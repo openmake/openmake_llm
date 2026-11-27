@@ -39,6 +39,9 @@ export interface ExtensionInventoryRow {
     permission_state: string;
     /** addon_installations 의 `ext:<id>` 상태 — 기록이 없으면 null */
     install_state: string | null;
+    /** 조직 소유 행(212)의 소유 조직 id·이름 — 사람 소유 행은 null */
+    owner_org_id?: string | null;
+    owner_org_name?: string | null;
     created_at: Date;
     updated_at: Date;
 }
@@ -104,9 +107,11 @@ export class ExtensionInventoryRepository extends BaseRepository {
         const r = await this.query<ExtensionInventoryRow>(
             `SELECT e.id, e.user_id, u.username, u.email, e.name, e.version, e.source_url, e.source_ref, e.source_path,
                     e.source_hash, e.tracking_ref, e.status, e.visibility, e.org_id, e.permission_state,
-                    a.state AS install_state, e.created_at, e.updated_at
+                    a.state AS install_state, e.created_at, e.updated_at,
+                    e.owner_org_id, o.name AS owner_org_name
                FROM user_extensions e
                LEFT JOIN users u ON u.id = e.user_id
+               LEFT JOIN organizations o ON o.id = e.owner_org_id
                LEFT JOIN addon_installations a ON a.addon_id = 'ext:' || e.id
               WHERE ${cursorSql} AND ${where.sql}
               ORDER BY e.created_at DESC, e.id DESC

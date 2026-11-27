@@ -171,3 +171,49 @@ describe('previewExtensionSourcePolicy — 강제 ON 실제 차단 결과와 같
         expect(result.blocked[0]).toMatchObject({ extensionId: 'ok', verdict: { reason: 'POLICY_UNAVAILABLE' } });
     });
 });
+
+describe('조직 소유 행(212)의 소유자 칸 — EXTENSION_ORG_OWNED_INSTALL_ENABLED', () => {
+    const FLAG = 'EXTENSION_ORG_OWNED_INSTALL_ENABLED';
+    const original = process.env[FLAG];
+    afterEach(() => { if (original === undefined) delete process.env[FLAG]; else process.env[FLAG] = original; resetConfig(); });
+    const orgRow = row({ id: 'eo', user_id: null as unknown as string, username: null, email: null, visibility: 'organization', org_id: 'org-a', owner_org_id: 'org-a', owner_org_name: 'Acme' });
+    const personal = row({ id: 'ep' });
+
+    async function owners(): Promise<unknown[]> {
+        listPage.mockResolvedValue([orgRow, personal]);
+        mcpListLinkedDetails.mockResolvedValue([]);
+        skillsListLinked.mockResolvedValue([]);
+        listAgentsByExtensions.mockResolvedValue([]);
+        summarizeSources.mockResolvedValue([]);
+        const page = await listExtensionInventory(pool, {}, { limit: 10, cursor: null });
+        return page.items.map((i) => i.owner);
+    }
+
+    it('OFF — 종전과 같다(조직 행도 빈 소유자, org 필드 없음)', async () => {
+        delete process.env[FLAG];
+        resetConfig();
+        const out = await owners();
+        expect(JSON.stringify(out)).toBe(JSON.stringify([
+            { id: null, username: null, email: null },
+            { id: 'u1', username: 'alice', email: 'a@x' },
+        ]));
+    });
+
+    it('ON — 조직 소유 행은 조직 이름을 소유자로, org 를 붙인다(사람 소유 행은 그대로)', async () => {
+        process.env[FLAG] = 'true';
+        resetConfig();
+        expect(await owners()).toEqual([
+            { id: null, username: 'Acme', email: null, org: { id: 'org-a', name: 'Acme' } },
+            { id: 'u1', username: 'alice', email: 'a@x' },
+        ]);
+    });
+
+    it('ON — 정책 미리보기의 차단 항목도 조직 이름(email 없음)', async () => {
+        process.env[FLAG] = 'true';
+        process.env.EXTENSION_SOURCE_POLICY = JSON.stringify({ deny: [{ type: 'github', repo: 'openmake/*' }] });
+        resetConfig();
+        listActiveForPreview.mockResolvedValue([orgRow]);
+        const result = await previewExtensionSourcePolicy(pool, { loadOrgLayer: async () => undefined, loadCatalogs: async () => [], audit: async () => undefined });
+        expect(result.blocked[0].owner).toEqual({ id: null, username: 'Acme', org: { id: 'org-a', name: 'Acme' } });
+    });
+});
