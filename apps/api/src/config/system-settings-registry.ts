@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import { browserSitePolicyProblems } from '@openmake/config';
 import { contributedSettings, type AddonSettingValidator } from '../addon-host/contributions';
+import { EXTENSION_ADMIN_INVENTORY_KEY } from './extension-admin-inventory';
 import { ARBITRARY_URL_INSTALL_MODES, EXTENSION_SOURCE_POLICY_KEYS, extensionSourcePolicyProblems } from './extension-source-policy';
 import { EXTENSION_CATALOG_SYNC_KEYS } from './extension-catalog-sync';
 import { EXTENSION_INSTALL_PREVIEW_FLAG } from './extension-install-preview';
@@ -138,6 +139,8 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     { key: EXTENSION_SOURCE_POLICY_KEYS.ENFORCED, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     { key: EXTENSION_SOURCE_POLICY_KEYS.ARBITRARY_URL_INSTALL, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(ARBITRARY_URL_INSTALL_MODES) },
     { key: EXTENSION_SOURCE_POLICY_KEYS.POLICY, group: 'agent', secret: false, requiresRestart: false, validate: extensionSourcePolicy },
+    // 관리자 확장 현황·정책 미리보기(M3, opt-in) — 라우트가 요청마다 읽는다(실시간)
+    { key: EXTENSION_ADMIN_INVENTORY_KEY, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     // 확장 카탈로그 주기 동기화(M4, opt-in) — 5분 점검 tick 이 호출 시점에 읽는다(실시간). 간격은 양의 정수 ms
     { key: EXTENSION_CATALOG_SYNC_KEYS.AUTO_SYNC_ENABLED, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     { key: EXTENSION_CATALOG_SYNC_KEYS.SYNC_INTERVAL_MS, group: 'agent', secret: false, requiresRestart: false, validate: positiveIntString },

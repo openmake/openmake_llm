@@ -48,6 +48,7 @@ import {
     adminModelAssignmentsRouter,
     adminSystemSettingsRouter,
     adminAddonsRouter,
+    adminExtensionsRouter,
     adminOrganizationsRouter,
     organizationPoliciesRouter,
     adminOrganizationPoliciesRouter,
@@ -234,6 +235,7 @@ export function setupApiRoutes(
     app.use('/api/admin', adminModelAssignmentsRouter);   // 통합 모델 배정(슬롯) 전역 (2026-09-24)
     app.use('/api/admin', adminSystemSettingsRouter);
     app.use('/api/admin', adminAddonsRouter);   // add-on 목록·상태 토글 (S3)
+    app.use('/api/admin', adminExtensionsRouter);   // 확장 현황·원본 정책 미리보기 (M3, opt-in)
     app.use('/api/admin', adminOrganizationsRouter);
     app.use('/api/admin', adminOrganizationPoliciesRouter);
     app.use('/api/organizations', organizationPoliciesRouter);

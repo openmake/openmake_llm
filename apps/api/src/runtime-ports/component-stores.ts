@@ -130,7 +130,27 @@ export interface CatalogTemplateInstall {
     defaultEnabled: boolean;
 }
 
+/** 관리자 확장 현황(M3)이 보는 MCP 서버 구성요소 — 연결 설정 값(명령·env·URL)은 싣지 않는다 */
+export interface McpLinkedServerDetail {
+    id: string;
+    extensionId: string;
+    name: string;
+    status: string;
+    enabled: boolean;
+    transport: string;
+    /** 마지막 협상 관측 — 관측 기록이 없거나(플래그 OFF·미연결) 기록 표가 없으면 null */
+    negotiation: {
+        authMethod: string;
+        protocolEra: string | null;
+        protocolVersion: string | null;
+        sdkGeneration: string;
+        observedAt: string;
+    } | null;
+}
+
 export interface McpServerComponentStore extends ExtensionLinkedStore {
+    /** 여러 확장의 MCP 서버 구성요소 + 협상 관측(있으면) — 관리자 현황용 읽기. 없으면 현황이 listLinked 로 대신한다 */
+    listLinkedDetails?(extensionIds: readonly string[]): Promise<McpLinkedServerDetail[]>;
     insertDraft(input: McpServerDraftInput): Promise<{ id: string }>;
     /** (user_id, name) 이 이미 쓰였으면 그 id */
     findIdByUserAndName(userId: string, name: string): Promise<string | null>;
