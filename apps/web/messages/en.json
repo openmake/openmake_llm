@@ -3140,6 +3140,7 @@
     }
   },
   "adminExtensions": {
+    "orgOwner": "Organization-owned",
     "title": "Extensions",
     "description": "Installed extensions per user with source, commit, components, approval state, and how each MCP server negotiated. Preview what a source policy would block before enforcing it.",
     "loadError": "Failed to load.",
