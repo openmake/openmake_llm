@@ -1481,6 +1481,24 @@
       "replacement": "New address: {url}",
       "replacementCandidate": "Likely Streamable HTTP address: {url} (confirm with the server docs)",
       "reauth": "Register the server again at the new address and sign in again (the old OAuth connection will not work)."
+    },
+    "declaredExtensions": {
+      "label": {
+        "skills": "Skill provider",
+        "apps": "MCP Apps (UI) not supported",
+        "tasks": "Tasks not supported",
+        "events": "Events not supported",
+        "auth": "Auth extension not supported",
+        "unknown": "Unknown extension"
+      },
+      "hint": {
+        "skills": "This server provides skills via Skills over MCP. OpenMake doesn't load skills this way yet — the server's tools still work.",
+        "apps": "This server declares MCP Apps (interactive UI). OpenMake doesn't render the UI — it only receives tool results.",
+        "tasks": "This server declares MCP Tasks (long-running work). OpenMake doesn't use Tasks and calls its tools normally.",
+        "events": "This server declares MCP Events. OpenMake doesn't subscribe to events.",
+        "auth": "This server declares an auth extension. OpenMake doesn't use it and signs in with its existing OAuth flow.",
+        "unknown": "This server declares an MCP extension OpenMake doesn't recognize. The server's basic tools still work."
+      }
     }
   },
   "mcpCatalog": {

@@ -1481,6 +1481,24 @@
       "replacement": "新地址：{url}",
       "replacementCandidate": "可能的 Streamable HTTP 地址：{url}（请以服务器说明为准）",
       "reauth": "请在新地址重新注册并重新登录（旧的 OAuth 连接将无法使用）。"
+    },
+    "declaredExtensions": {
+      "label": {
+        "skills": "技能提供服务器",
+        "apps": "不支持 MCP Apps(UI)",
+        "tasks": "不支持 Tasks",
+        "events": "不支持 Events",
+        "auth": "不支持认证扩展",
+        "unknown": "未知扩展"
+      },
+      "hint": {
+        "skills": "此服务器通过 Skills over MCP 提供技能。OpenMake 暂不通过此方式加载技能 — 服务器的工具仍可正常使用。",
+        "apps": "此服务器声明了 MCP Apps(交互式 UI)。OpenMake 不渲染 UI，只接收工具结果。",
+        "tasks": "此服务器声明了 MCP Tasks(长时任务)。OpenMake 不使用 Tasks，按普通工具调用。",
+        "events": "此服务器声明了 MCP Events。OpenMake 不订阅事件。",
+        "auth": "此服务器声明了认证扩展。OpenMake 不使用该扩展，沿用现有 OAuth 登录。",
+        "unknown": "此服务器声明了 OpenMake 无法识别的 MCP 扩展。服务器的基本工具仍可正常使用。"
+      }
     }
   },
   "mcpCatalog": {

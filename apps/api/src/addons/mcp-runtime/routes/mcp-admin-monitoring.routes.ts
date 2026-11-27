@@ -19,6 +19,7 @@ import { getUnifiedDatabase } from '../../../data/models/unified-database';
 import { mcpAdminServersRouter } from './mcp-admin-servers.routes';
 import { McpNegotiationRepository } from '../data/mcp-negotiation-repository';
 import { isNegotiationObserveEnabled } from '../negotiation-observer';
+import { declaredExtensionFields, extensionAwarenessEnabled } from '../extension-awareness';
 
 export const mcpAdminMonitoringRouter = Router();
 mcpAdminMonitoringRouter.use(requireAuth, requireAdmin);
@@ -54,5 +55,8 @@ mcpAdminMonitoringRouter.get('/negotiation', asyncHandler(async (req: Request, r
         protocolEra: str(req.query.protocolEra),
         limit: Number.isFinite(limitRaw) ? limitRaw : undefined,
     });
-    res.json(success({ items, observeEnabled: isNegotiationObserveEnabled() }));
+    // MCP-5 — 플래그가 켜져 있으면 선언 확장 분류(declaredExtensions)를 덧붙인다(꺼져 있으면 종전 그대로)
+    const aware = extensionAwarenessEnabled();
+    const out = aware ? items.map(i => ({ ...i, ...declaredExtensionFields(i.extensions) })) : items;
+    res.json(success({ items: out, observeEnabled: isNegotiationObserveEnabled() }));
 }));

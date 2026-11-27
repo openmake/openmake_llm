@@ -51,6 +51,8 @@ import { validateOutboundUrl } from '../../../security/ssrf-guard';
 import { auditMcpServerCreated, auditMcpServerDeleted, auditMcpDeleteDenied, auditMcpRegisterDenied, auditMcpUrlBlocked } from './mcp-server-audit';
 import { McpCatalogInputError } from '../data/mcp-catalog-input';
 import { transportNoticeFields } from '../transport-notices';
+import { serverExtensionLookup } from '../extension-awareness';
+import { McpNegotiationRepository } from '../data/mcp-negotiation-repository';
 
 const logger = createLogger('McpRoutes');
 
@@ -144,6 +146,7 @@ export const mcpRouter = Router();
           .listConnectedServerIds(userId, filtered.map(s => s.id))
           .catch(() => new Set<string>());
 
+      const extFields = await serverExtensionLookup(new McpNegotiationRepository(getUnifiedDatabase().getPool()), filtered.map(s => s.id)); // MCP-5
       const serversWithStatus = filtered.map(server => {
           const regStatus = statuses.find(s => s.serverId === server.id);
           let userStatus: MCPConnectionStatus | undefined;
@@ -174,6 +177,7 @@ export const mcpRouter = Router();
               oauthConnected: oauthConnected.has(server.id),
               modelExposure: exposureOfServer(server, effective), // 연결과 별개 — 모델이 도구를 받는 조건
               ...transportNoticeFields(server.transport_type, server.url), // MCP-3 퇴역 안내(플래그 OFF 면 없음)
+              ...extFields(server.id), // MCP-5 선언 확장(플래그 OFF·미선언이면 없음)
           };
       });
 
@@ -569,7 +573,9 @@ export const mcpRouter = Router();
       }
 
       const effective = userStatus || regStatus;
+      const extFields = await serverExtensionLookup(new McpNegotiationRepository(getUnifiedDatabase().getPool()), [id]); // MCP-5
       res.json(success({
+          ...extFields(id),
           status: effective ?? {
               serverId: id,
               serverName: server.name,
