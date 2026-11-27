@@ -4,7 +4,8 @@
     "displayName": "Atlassian (Jira·Confluence)",
     "description": "Atlassian 공식 원격 MCP — Jira 이슈·Confluence 페이지 조회·작성. 설치 후 커넥터 카드의 로그인으로 Atlassian 계정을 연결(OAuth). API 키 입력 없음.",
     "transportType": "streamable-http",
-    "urlTemplate": "https://mcp.atlassian.com/v1/mcp",
+    "urlTemplate": "https://mcp.atlassian.com/v2/mcp",
+    "supersedes": [{ "transportType": "streamable-http", "urlTemplate": "https://mcp.atlassian.com/v1/mcp" }],
     "argsSchema": {},
     "envSchema": {},
     "defaultEnabled": false

@@ -65,3 +65,29 @@ describe('GET /api/mcp/servers — 노출·확장 정보', () => {
         expect(res.body.data.servers[0].modelExposure).toMatchObject({ state: 'on_demand' });
     });
 });
+
+describe('GET /api/mcp/servers — 전송·엔드포인트 퇴역 안내 (MCP-3)', () => {
+    const FLAG = 'MCP_TRANSPORT_DEPRECATION_NOTICES';
+    afterEach(() => { delete process.env[FLAG]; });
+
+    it('플래그 OFF 면 transportNotice 필드가 없다(응답 모양 불변)', async () => {
+        rows.push(row({ id: 'mcp_sse', transport_type: 'sse', url: 'https://mcp.notion.com/sse' }));
+        const res = await request(app).get('/api/mcp/servers');
+        expect(res.body.data.servers[0]).not.toHaveProperty('transportNotice');
+    });
+
+    it('플래그 ON 이면 SSE·옮겨 가는 주소에만 안내를 싣고, SSE 연결 상태는 그대로다', async () => {
+        process.env[FLAG] = 'true';
+        rows.push(
+            row({ id: 'mcp_sse', transport_type: 'sse', url: 'https://mcp.notion.com/sse' }),
+            row({ id: 'mcp_atl', transport_type: 'streamable-http', url: 'https://mcp.atlassian.com/v1/mcp' }),
+            row({ id: 'mcp_plain' }),
+        );
+        userClients.set('mcp_sse', { getStatus: () => ({ status: 'connected', toolCount: 3 }) });
+        const res = await request(app).get('/api/mcp/servers');
+        const byId = Object.fromEntries((res.body.data.servers as Array<{ id: string }>).map((s) => [s.id, s]));
+        expect(byId.mcp_sse).toMatchObject({ connectionStatus: 'connected', toolCount: 3, transportNotice: { code: 'endpoint-sunset', sunsetDate: '2027-02-23' } });
+        expect(byId.mcp_atl).toMatchObject({ transportNotice: { code: 'endpoint-moved', reauthRequired: true } });
+        expect(byId.mcp_plain).not.toHaveProperty('transportNotice');
+    });
+});

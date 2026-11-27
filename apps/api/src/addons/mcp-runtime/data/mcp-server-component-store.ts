@@ -128,5 +128,24 @@ export function mcpServerComponentStore(db: StoreDb): McpServerComponentStore {
                 ],
             );
         },
+
+        async upgradeSupersededCatalogTemplate(template) {
+            for (const prior of template.supersedes ?? []) {
+                const r = await db.query(
+                    `UPDATE mcp_server_catalog
+                        SET transport_type = $2, command_template = $3, url_template = $4
+                      WHERE id = $1
+                        AND transport_type = $5
+                        AND command_template IS NOT DISTINCT FROM $6
+                        AND url_template IS NOT DISTINCT FROM $7`,
+                    [
+                        template.id, template.transportType, template.commandTemplate ?? null, template.urlTemplate ?? null,
+                        prior.transportType, prior.commandTemplate ?? null, prior.urlTemplate ?? null,
+                    ],
+                );
+                if ((r.rowCount ?? 0) > 0) return true;
+            }
+            return false;
+        },
     };
 }

@@ -23,6 +23,7 @@ import { connectGlobalServer } from './mcp-global-connect';
 import { createLogger } from '../../../utils/logger';
 import { McpCatalogInputError } from '../../../security/spawn-env-policy';
 import { auditMcpServerCreated, auditMcpRegisterDenied } from './mcp-server-audit';
+import { transportNoticeFields } from '../transport-notices';
 
 const logger = createLogger('McpCatalogRoutes');
 
@@ -31,7 +32,8 @@ export const mcpCatalogRouter = Router();
 // GET /api/mcp/catalog — 전체 카탈로그 (제한 없음)
 mcpCatalogRouter.get('/catalog', requireAuth, asyncHandler(async (_req: Request, res: Response) => {
     const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
-    const templates = await repo.listCatalog();
+    // MCP-3 — 옮겨 가거나 꺼지는 엔드포인트의 템플릿에 안내를 붙인다(플래그 OFF 면 종전 그대로)
+    const templates = (await repo.listCatalog()).map(t => ({ ...t, ...transportNoticeFields(t.transport_type, t.url_template) }));
     res.json(success({ templates, total: templates.length }));
 }));
 
@@ -94,7 +96,7 @@ mcpCatalogRouter.post(
                 }
             }
         }
-        res.status(201).json(success({ server: created }));
+        res.status(201).json(success({ server: { ...created, ...transportNoticeFields(created.transport_type, created.url) } }));
     }),
 );
 

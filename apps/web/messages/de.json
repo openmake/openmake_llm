@@ -1465,6 +1465,22 @@
         "no_tools": "Verbunden, aber ohne Tools – das Modell kann ihn nicht nutzen.",
         "meta_tools_off": "Globale Server sind nur über mcp_call erreichbar, und das ist ausgeschaltet."
       }
+    },
+    "transportNotice": {
+      "label": {
+        "deprecated-transport": "SSE-Transport veraltet",
+        "endpoint-sunset": "Endpunkt wird abgeschaltet",
+        "endpoint-moved": "Umzug auf neue Adresse nötig"
+      },
+      "hint": {
+        "deprecated-transport": "Der SSE-Transport ist in der MCP-Spezifikation veraltet. Die Verbindung funktioniert vorerst weiter.",
+        "endpoint-sunset": "Diese Serveradresse wird abgeschaltet.",
+        "endpoint-moved": "Dieser Server zieht auf eine neue Adresse um."
+      },
+      "sunsetOn": "Datum: {date}.",
+      "replacement": "Neue Adresse: {url}",
+      "replacementCandidate": "Wahrscheinliche Streamable-HTTP-Adresse: {url} (bitte in der Serverdokumentation prüfen)",
+      "reauth": "Registrieren Sie den Server unter der neuen Adresse erneut und melden Sie sich erneut an (die alte OAuth-Verbindung funktioniert nicht mehr)."
     }
   },
   "mcpCatalog": {
