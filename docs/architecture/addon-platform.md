@@ -20,7 +20,7 @@ Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트
 ① 매니페스트 발견·strict 검증 → ② 앱 버전 호환 → ③ env(`ADDON_BUILTIN_DISABLED`) ∧ DB 의도(`addon_installations.desired_state`)로 대상 확정 → ④ 허용된 add-on 의 migration → ⑤ 성공한 add-on 만 `entry.runtime` 호출 → ⑥ 팩 설치(스킬·카탈로그, 백그라운드·fail-open) → ⑦ 대상 밖 add-on 의 시스템 스킬 보관.
 실패한 add-on 의 후속 단계는 차단하고 `last_failure_code` 로 남긴다. 다른 add-on 과 서버 기동은 계속된다.
 
-**기본 꺼짐(매니페스트 `defaultState`, 2026-11-27)**: `defaultState: "disabled"` 를 선언한 add-on 은 첫 발견 때 설치 표에 `disabled` 로 들어가고(`upsertDiscovered` 의 `initialState` — 첫 insert 에만, 이미 있는 행은 그대로) 관리자가 `/admin/addons` 에서 켠다. 행이 없거나 의도를 읽지 못한 동안은 부팅(③)·켜짐 판정(`addon-state`)·클라이언트 목록(`GET /api/addons`) 모두 꺼짐으로 본다(fail-closed). 선언이 없는 add-on 은 종전 그대로다 — 행이 없으면 enabled, `GET /api/addons` 는 env 판정만. env `ADDON_BUILTIN_DISABLED` 가 이 값보다 우선한다.
+**기본 꺼짐(매니페스트 `defaultState`, 2026-11-27)**: `defaultState: "disabled"` 를 선언한 add-on 은 첫 발견 때 설치 표에 `disabled` 로 들어가고(`upsertDiscovered` 의 `initialState` — 첫 insert 에만, 이미 있는 행은 그대로) 관리자가 `/admin/addons` 에서 켠다. 행이 없거나 의도를 읽지 못한 동안은 부팅(③)·켜짐 판정(`addon-state`)·클라이언트 목록(`GET /api/addons`) 모두 꺼짐으로 본다(fail-closed). 선언이 없는 add-on 은 종전 그대로다 — 행이 없으면 enabled, `GET /api/addons` 는 env 판정만. env `ADDON_BUILTIN_DISABLED` 가 이 값보다 우선한다. opt-in `ADDON_LIST_REFLECT_DB_STATE=true`(§8-4, 기본 끔)면 `GET /api/addons` 는 선언 없는 add-on 에도 라우트 게이트와 같은 판정(`readAddonEnabledStrict` — env × DB 상태 × 이 프로세스의 준비 상태)을 써서, 관리자가 끈 add-on(게이트 404)·준비되지 않은 add-on(게이트 503 `ADDON_FAILED`)을 `enabled:false` 로 답한다 — 웹이 진입점을 숨긴다. 상태 확인 불가(게이트 503 `ADDON_STATE_UNKNOWN`, 재시도 가능)에는 꺼짐을 주장하지 않고 env 판정을 둔다(웹의 종전 add-on 은 fail-open).
 
 ## 7.2 활성 축 (`addon-host/activation.ts`)
 

@@ -92,12 +92,20 @@ export interface EnvConfig {
     extensionInstallPreviewEnabled: boolean;
     /** 확장 Custom Agent 출처 표시·제거 시 승인 전 에이전트 이름 정리(P8) — config/extension-agent-provenance (기본 OFF) */
     extensionAgentBundleProvenance: boolean;
+    /** 조직 확장 배포 모드(§8-1) — 항목별 default_off/default_on/required + 그룹 덮어쓰기 + 자동 설치 조정(기본 OFF) */
+    extensionOrgDeploymentModesEnabled: boolean;
     /** 관리자 확장 현황(M3) — 현황·정책 미리보기 라우트와 /admin/extensions 화면(기본 OFF) */
     extensionAdminInventoryEnabled: boolean;
+    /** `GET /api/addons` 가 모든 add-on 의 켜짐을 라우트 게이트와 같은 판정(env × DB 상태 × 프로세스 준비)으로 답한다(opt-in, config/addon-list-state) */
+    addonListReflectDbState: boolean;
     /** 'allow'(기본) · 'catalog-only' — 강제 ON 일 때만 의미 */
     extensionArbitraryUrlInstall: 'allow' | 'catalog-only';
     /** 전역 확장 원본 규칙 원문(JSON {allow?,deny?}) — 빈 값 = 전역 층 없음 */
     extensionSourcePolicy: string;
+    /** 확장 MCP 서버 정책(§8-3) 강제 — 기본 false(검사 없음). config/extension-mcp-server-policy 가 읽는다 */
+    extensionMcpServerPolicyEnforced: boolean;
+    /** 전역 MCP 서버 매처 원문(JSON {allow?,deny?}) — 빈 값 = 전역 층 없음 */
+    extensionMcpServerPolicy: string;
     /** 확장 카탈로그 주기 동기화(M4) — 기본 false(수동 동기화만). config/extension-catalog-sync 가 읽는다 */
     extensionCatalogAutoSyncEnabled: boolean;
     /** 주기 동기화 간격(ms) — 기본 6시간 */
@@ -284,9 +292,13 @@ export function loadConfig(): EnvConfig {
         EXTENSION_SOURCE_POLICY_ENFORCED: env('EXTENSION_SOURCE_POLICY_ENFORCED'),
         EXTENSION_INSTALL_PREVIEW_ENABLED: env('EXTENSION_INSTALL_PREVIEW_ENABLED'),
         EXTENSION_AGENT_BUNDLE_PROVENANCE: env('EXTENSION_AGENT_BUNDLE_PROVENANCE'),
+        EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED: env('EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED'),
         EXTENSION_ADMIN_INVENTORY_ENABLED: env('EXTENSION_ADMIN_INVENTORY_ENABLED'),
+        ADDON_LIST_REFLECT_DB_STATE: env('ADDON_LIST_REFLECT_DB_STATE'),
         EXTENSION_ARBITRARY_URL_INSTALL: env('EXTENSION_ARBITRARY_URL_INSTALL'),
         EXTENSION_SOURCE_POLICY: env('EXTENSION_SOURCE_POLICY'),
+        EXTENSION_MCP_SERVER_POLICY_ENFORCED: env('EXTENSION_MCP_SERVER_POLICY_ENFORCED'),
+        EXTENSION_MCP_SERVER_POLICY: env('EXTENSION_MCP_SERVER_POLICY'),
         EXTENSION_CATALOG_AUTO_SYNC_ENABLED: env('EXTENSION_CATALOG_AUTO_SYNC_ENABLED'),
         EXTENSION_CATALOG_SYNC_INTERVAL_MS: env('EXTENSION_CATALOG_SYNC_INTERVAL_MS'),
         EXTENSION_CATALOG_INDEX_ENABLED: env('EXTENSION_CATALOG_INDEX_ENABLED'),
@@ -420,9 +432,14 @@ export function loadConfig(): EnvConfig {
         extensionSourcePolicyEnforced: parsed.EXTENSION_SOURCE_POLICY_ENFORCED === undefined ? DEFAULT_CONFIG.extensionSourcePolicyEnforced : parsed.EXTENSION_SOURCE_POLICY_ENFORCED === 'true',
         extensionInstallPreviewEnabled: parsed.EXTENSION_INSTALL_PREVIEW_ENABLED === undefined ? DEFAULT_CONFIG.extensionInstallPreviewEnabled : parsed.EXTENSION_INSTALL_PREVIEW_ENABLED === 'true',
         extensionAgentBundleProvenance: parsed.EXTENSION_AGENT_BUNDLE_PROVENANCE === undefined ? DEFAULT_CONFIG.extensionAgentBundleProvenance : parsed.EXTENSION_AGENT_BUNDLE_PROVENANCE === 'true',
+        extensionOrgDeploymentModesEnabled: parsed.EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED === 'true',
         extensionAdminInventoryEnabled: parsed.EXTENSION_ADMIN_INVENTORY_ENABLED === undefined ? DEFAULT_CONFIG.extensionAdminInventoryEnabled : parsed.EXTENSION_ADMIN_INVENTORY_ENABLED === 'true',
+        addonListReflectDbState: parsed.ADDON_LIST_REFLECT_DB_STATE === undefined ? DEFAULT_CONFIG.addonListReflectDbState : parsed.ADDON_LIST_REFLECT_DB_STATE === 'true',
         extensionArbitraryUrlInstall: parsed.EXTENSION_ARBITRARY_URL_INSTALL === 'catalog-only' ? 'catalog-only' : DEFAULT_CONFIG.extensionArbitraryUrlInstall,
         extensionSourcePolicy: parsed.EXTENSION_SOURCE_POLICY ?? DEFAULT_CONFIG.extensionSourcePolicy,
+        // 확장 MCP 서버 정책(§8-3) — 'true' 만 켠다(그 외 기본값 = 검사 없음)
+        extensionMcpServerPolicyEnforced: parsed.EXTENSION_MCP_SERVER_POLICY_ENFORCED === undefined ? DEFAULT_CONFIG.extensionMcpServerPolicyEnforced : parsed.EXTENSION_MCP_SERVER_POLICY_ENFORCED === 'true',
+        extensionMcpServerPolicy: parsed.EXTENSION_MCP_SERVER_POLICY ?? DEFAULT_CONFIG.extensionMcpServerPolicy,
         // 확장 카탈로그 주기 동기화(M4) — 'true' 만 켠다, 간격은 양의 정수만(그 외 기본값)
         extensionCatalogAutoSyncEnabled: parsed.EXTENSION_CATALOG_AUTO_SYNC_ENABLED === 'true',
         // 확장 카탈로그 정적 색인 우선 동기화(M6) — 'true' 만 켠다

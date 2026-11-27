@@ -45,12 +45,21 @@ export interface PolicyPreviewBlocked {
   source: { url: string; trackingRef: string | null };
   verdict: { reason: string; scope?: "global" | "organization"; rule?: unknown; source: string };
 }
+export interface PolicyPreviewMcpBlocked {
+  extensionId: string;
+  name: string;
+  owner: { id: string; username: string | null };
+  server: { id: string; name: string; transport: string };
+  verdict: { reason: string; scope?: "global" | "organization"; rule?: unknown; server: string };
+}
 export interface PolicyPreview {
   enforced: boolean;
   arbitraryUrlInstall: string;
   checked: number;
   blocked: PolicyPreviewBlocked[];
   truncated: boolean;
+  /** 확장 MCP 서버 정책(§8-3) 미리보기 — 구 서버 응답에는 없다 */
+  mcpServers?: { enforced: boolean; checked: number; blocked: PolicyPreviewMcpBlocked[]; unavailable?: true };
 }
 
 export interface InventoryFilter { q: string; userId: string; source: string; status: "" | "active" | "removed" }

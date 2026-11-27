@@ -20,6 +20,7 @@ export { adminModelAssignmentsRouter } from './admin-model-assignments.routes';
 export { adminSystemSettingsRouter } from './admin-system-settings.routes';
 export { adminOrganizationsRouter } from './admin-organizations.routes';
 export { organizationPoliciesRouter, adminOrganizationPoliciesRouter } from './organization-policies.routes';
+export { organizationExtensionDeploymentsRouter } from './organization-extension-deployments.routes';
 export { adminConfigExportRouter } from './admin-config-export.routes';
 export { adminCostRatesRouter } from './admin-cost-rates.routes';
 export { adminLocalBridgeRouter } from './admin-local-bridge.routes';
