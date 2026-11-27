@@ -30,7 +30,13 @@ export async function startToolRuntime(): Promise<void> {
     const [{ setNegotiationSink }, { McpNegotiationRepository }] = await Promise.all([
         import('./negotiation-observer'), import('./data/mcp-negotiation-repository'),
     ]);
-    setNegotiationSink(new McpNegotiationRepository(getPool()));
+    const negotiationRepo = new McpNegotiationRepository(getPool());
+    setNegotiationSink(negotiationRepo);
+    // 같은 관측을 구성요소 관측 포트로 내준다(갤러리 판정 등 다른 add-on 이 읽는다 — 관측이 없으면 빈 결과)
+    const [{ registerComponentInsightProvider }, { mcpServerInsightProvider }] = await Promise.all([
+        import('../../runtime-ports/component-insights'), import('./component-insights'),
+    ]);
+    registerComponentInsightProvider('mcpServers', mcpServerInsightProvider(negotiationRepo));
     await getUnifiedMCPClient().initializeExternalServers(new McpServerRepository(getPool()));
     logger.info('외부 MCP 서버 초기화 완료');
     // 샌드박스 자세 관측(1회) — OFF+docker 가용(격리 권장) / ON+docker 부재(fail-closed 조기 경보)

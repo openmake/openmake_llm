@@ -3434,5 +3434,45 @@
     "login": "Sign in",
     "snapshotNote": "Conversation as of {date} — this page does not change when the original conversation continues.",
     "scope": "Visibility: {scope}"
+  },
+  "marketVerdicts": {
+    "verdict": {
+      "supported": "Supported",
+      "partial": "Partial",
+      "unsupported": "Unsupported"
+    },
+    "reason": {
+      "NOT_INSTALLABLE": "No installable skills or MCP servers",
+      "INSTALLABILITY_UNKNOWN": "Installability unknown (cross-repo entry)",
+      "SKILL_MCP_TOOL_IDIOM": "Skills use Claude Code MCP tool names (mcp__server__tool)",
+      "SKILL_ASSET_OUTSIDE_DIR": "Skills reference files outside their folder (not bundled)",
+      "SKILL_COMMAND_ASSETS_SKIPPED": "Converted commands reference files that are not bundled",
+      "SKILL_CLAUDE_DIR_PATH": "Skills point to .claude/ paths",
+      "SKILL_CLAUDE_INSTALL_GUIDE": "Skills include Claude Code setup instructions",
+      "SKILL_TOOL_UNSUPPORTED": "Some tools named by skills have no equivalent here",
+      "SKILL_REQUIRED_TOOL_MISSING": "A tool required by a skill is missing",
+      "SKILL_EXECUTION_BLOCKED": "A skill is blocked from running",
+      "COMPONENTS_UNSUPPORTED": "Some components are not supported",
+      "MCP_ENTRIES_SKIPPED": "Some MCP entries were skipped",
+      "MCP_BLOCKED_BY_CONVENTION": "An MCP server was blocked by the convention check",
+      "ASSETS_SKIPPED": "Some bundled files were skipped",
+      "COMPONENTS_TRUNCATED": "Some components were cut at the size limit",
+      "MCP_TRANSPORT_SSE_DEPRECATED": "MCP server uses the deprecated SSE transport",
+      "MCP_EXT_APPS_UNSUPPORTED": "MCP Apps extension is not supported",
+      "MCP_EXT_TASKS_UNSUPPORTED": "MCP Tasks extension is not supported",
+      "MCP_EXT_UNRECOGNIZED": "MCP server declares an unrecognized extension",
+      "MCP_SKILLS_PROVIDER": "MCP server provides skills (Skills over MCP)",
+      "MCP_AUTH_DYNAMIC_REGISTRATION": "MCP server signs in with dynamic client registration",
+      "MCP_PROTOCOL_MODERN": "MCP server speaks the modern protocol",
+      "MCP_PROTOCOL_LEGACY": "MCP server speaks a legacy protocol",
+      "CROSS_REPO_SOURCE": "Hosted in a different repository",
+      "CONTENT_NOT_EVALUATED": "Contents not evaluated yet"
+    },
+    "provenance": {
+      "publisher": "Publisher: {value}",
+      "commit": "Commit: {value}",
+      "license": "License: {value}"
+    },
+    "snapshotOnly": "Judged from the catalog snapshot only — install to check contents"
   }
 }
