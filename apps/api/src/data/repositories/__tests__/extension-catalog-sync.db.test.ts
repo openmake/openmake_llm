@@ -55,4 +55,17 @@ describeOrSkip('extension_catalog_sources 동기화 컬럼 (실 DB)', () => {
         await expect(pool.query('UPDATE extension_catalog_sources SET alias=$1 WHERE id=$2', [alias, b.id])).rejects.toThrow();
         await expect(pool.query("UPDATE extension_catalog_sources SET sync_status='bogus' WHERE id=$1", [b.id])).rejects.toThrow();
     });
+
+    it('setAlias(M5): 충돌은 conflict, onlyIfUnset 은 비었을 때만', async () => {
+        const repo = new ExtensionCatalogRepository(pool);
+        const a = (await repo.findByUrl(urls[0]))!;
+        const b = (await repo.findByUrl(urls[1]))!;
+        const taken = `al-${tag}`;   // 앞 테스트에서 a 가 차지
+        expect(await repo.setAlias(b.id, taken)).toEqual({ row: null, conflict: true });
+        const own = await repo.setAlias(b.id, `bb-${tag}`);
+        expect(own.row?.alias).toBe(`bb-${tag}`);
+        expect((await repo.setAlias(b.id, `cc-${tag}`, { onlyIfUnset: true })).row).toBeNull();   // 이미 있음 → 그대로
+        expect((await repo.getById(b.id))!.alias).toBe(`bb-${tag}`);
+        expect((await repo.setAlias(a.id, null)).row?.alias).toBeNull();
+    });
 });

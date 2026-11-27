@@ -18,11 +18,16 @@ import { MarketplaceBundleRepository } from '../data/repositories/marketplace-bu
 import type { UserContext } from '../tool-contract/user-sandbox';
 import { createLogger } from '../utils/logger';
 import { isAdminRole } from '../data/user-manager';
+import { ExtensionCatalogRepository } from '../data/repositories/extension-catalog-repository';
+import { parseNamedInstallRef } from '../config/extension-named-install';
+import { resolveNamedInstall } from '../services/extensions/named-install';
 
 const logger = createLogger('ExtensionIngestTool');
 
 interface ImportExtensionFromGitArgs extends Record<string, unknown> {
-    gitUrl: string;
+    gitUrl?: string;
+    /** 이름 설치(M5) `플러그인@마켓플레이스` — 등록 카탈로그에서 해석 */
+    ref?: string;
     gitRef?: string;
     gitPath?: string;
     accessToken?: string;
@@ -32,13 +37,17 @@ interface ImportExtensionFromGitArgs extends Record<string, unknown> {
 export const importExtensionFromGitTool: MCPToolDefinition<ImportExtensionFromGitArgs> = {
     tool: {
         name: 'import_extension_from_git',
-        description: 'GitHub URL 또는 .zip 아카이브 URL 의 plugin.json (Agent Plugins v1) 확장 번들을 설치합니다 — skills/*/SKILL.md 와 MCP 서버 정의를 한 번에 draft 로 가져옵니다. 마켓플레이스 저장소(.claude-plugin/marketplace.json)면 먼저 플러그인 목록을 반환하고, plugin 인자로 이름을 지정해 재호출하면 해당 플러그인을 설치합니다 (엔트리의 고정 ref 추적). 같은 소스의 이미 설치된 확장을 다시 요청하면 최신 버전으로 업데이트합니다 (구 구성요소는 archive). 사용자가 명시적으로 "이 확장/플러그인 설치해줘", "이 확장 업데이트해줘" 같은 요청을 했을 때만 호출하세요. plugin.json 이 여러 개면 후보 목록만 반환 (재호출에서 gitPath 명시 필요). 단일 스킬/에이전트/MCP 서버만 가져올 때는 import_skill_from_git / import_agent_from_git / import_mcp_server_from_git 를 대신 사용하세요.',
+        description: 'GitHub URL 또는 .zip 아카이브 URL 의 plugin.json (Agent Plugins v1) 확장 번들을 설치합니다 — skills/*/SKILL.md 와 MCP 서버 정의를 한 번에 draft 로 가져옵니다. 마켓플레이스 저장소(.claude-plugin/marketplace.json)면 먼저 플러그인 목록을 반환하고, plugin 인자로 이름을 지정해 재호출하면 해당 플러그인을 설치합니다 (엔트리의 고정 ref 추적). 등록된 카탈로그의 플러그인은 ref 인자에 "플러그인@마켓플레이스" 이름만 주면 바로 설치합니다(gitUrl 불필요). 같은 소스의 이미 설치된 확장을 다시 요청하면 최신 버전으로 업데이트합니다 (구 구성요소는 archive). 사용자가 명시적으로 "이 확장/플러그인 설치해줘", "이 확장 업데이트해줘" 같은 요청을 했을 때만 호출하세요. plugin.json 이 여러 개면 후보 목록만 반환 (재호출에서 gitPath 명시 필요). 단일 스킬/에이전트/MCP 서버만 가져올 때는 import_skill_from_git / import_agent_from_git / import_mcp_server_from_git 를 대신 사용하세요.',
         inputSchema: {
             type: 'object',
             properties: {
                 gitUrl: {
                     type: 'string',
-                    description: 'GitHub 저장소 URL("https://github.com/owner/repo" 또는 단축 "owner/repo") 또는 .zip 아카이브 URL("https://.../ext.zip"). 다른 git 호스팅 (GitLab/Bitbucket) 미지원.',
+                    description: 'GitHub 저장소 URL("https://github.com/owner/repo" 또는 단축 "owner/repo") 또는 .zip 아카이브 URL("https://.../ext.zip"). 다른 git 호스팅 (GitLab/Bitbucket) 미지원. ref 를 주면 생략.',
+                },
+                ref: {
+                    type: 'string',
+                    description: '이름 설치 "플러그인@마켓플레이스" (예: "code-review@openmake-marketplace"). 관리자가 등록한 카탈로그에서 찾는다 — 모르는 이름이면 후보만 돌려준다.',
                 },
                 gitRef: {
                     type: 'string',
@@ -57,7 +66,8 @@ export const importExtensionFromGitTool: MCPToolDefinition<ImportExtensionFromGi
                     description: '마켓플레이스 저장소(.claude-plugin/marketplace.json 보유)에서 설치할 플러그인 이름 (선택). 미지정 시 마켓플레이스 목록만 반환 — 목록에서 이름을 골라 이 인자로 재호출.',
                 },
             },
-            required: ['gitUrl'],
+            // gitUrl 또는 ref 중 하나 — 핸들러가 검사한다
+            required: [],
         },
     },
     handler: async (args, context?: UserContext): Promise<MCPToolResult> => {
@@ -95,10 +105,24 @@ export const importExtensionFromGitTool: MCPToolDefinition<ImportExtensionFromGi
                 },
             });
 
-            const result = await service.import({
+            // 이름 설치(M5) — ref 또는 gitUrl 자리에 온 "플러그인@마켓플레이스". 등록 카탈로그(DB)에서만 해석, 왕복 없음
+            const namedRef = args.ref || (parseNamedInstallRef(args.gitUrl) ? args.gitUrl : undefined);
+            if (!namedRef && !args.gitUrl) {
+                return { content: [{ type: 'text', text: '확장 설치 실패: gitUrl 또는 ref("플러그인@마켓플레이스") 중 하나가 필요합니다.' }], isError: true };
+            }
+            const named = namedRef ? await resolveNamedInstall(namedRef, new ExtensionCatalogRepository(getPool())) : null;
+            const result = await service.import(named ? {
                 userId,
                 isAdmin,
-                gitUrl: args.gitUrl,
+                gitUrl: named.gitUrl,
+                plugin: named.plugin,
+                accessToken: args.accessToken,
+                catalogSubpath: named.catalogSubpath,
+                pinEntrySha: true,
+            } : {
+                userId,
+                isAdmin,
+                gitUrl: args.gitUrl as string,
                 gitRef: args.gitRef,
                 gitPath: args.gitPath,
                 accessToken: args.accessToken,

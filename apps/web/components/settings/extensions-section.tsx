@@ -10,6 +10,7 @@ import { GalleryItemBadges } from "./gallery-item-badges";
 import { MarketplacePublishSection } from "@/components/settings/marketplace-publish-section";
 import { ExtensionPermissionBadge, ExtensionPermissionPanel } from "@/components/settings/extension-permission-panel";
 import { CatalogSourceAdmin } from "@/components/settings/catalog-source-admin";
+import { NamedInstallForm } from "@/components/settings/named-install-form";
 import { useAppStore } from "@/lib/store";
 
 interface UserExtension {
@@ -611,6 +612,8 @@ export function ExtensionsSection() {
             <Store className="h-4 w-4 text-accent" /> {t("catalog.title")}
           </p>
           <p className="mb-3 text-xs text-muted">{t("catalog.description")}</p>
+
+          {catalog.length > 0 && <NamedInstallForm onInstalled={() => void load()} />}
 
           {isAdmin && (
             <div className="mb-3 flex items-center gap-2">

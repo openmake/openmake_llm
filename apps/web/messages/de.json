@@ -2617,7 +2617,19 @@
         "saveSubpath": "Pfad speichern",
         "saveFailed": "Speichern fehlgeschlagen",
         "saved": "Gespeichert",
-        "syncHint": "Änderungen an Unterpfad und Token gelten ab der nächsten Synchronisierung."
+        "syncHint": "Änderungen an Unterpfad und Token gelten ab der nächsten Synchronisierung.",
+        "aliasLabel": "Alias für Installation nach Name",
+        "aliasPlaceholder": "Alias (leer = {name})",
+        "saveAlias": "Alias speichern",
+        "aliasConflict": "Dieser Alias wird bereits von einem anderen Katalog verwendet"
+      },
+      "named": {
+        "placeholder": "plugin@marktplatz (z. B. code-review@openmake-marketplace)",
+        "install": "Nach Name installieren",
+        "formatHint": "Format: plugin@marktplatz — Buchstaben, Ziffern, . _ -, beginnt mit Buchstabe oder Ziffer",
+        "installed": "Installiert: {name} (Komponenten werden nach Freigabe aktiv)",
+        "failed": "Installation nach Name fehlgeschlagen",
+        "candidates": "Meinten Sie:"
       }
     }
   },

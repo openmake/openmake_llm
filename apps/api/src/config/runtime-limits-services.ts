@@ -105,6 +105,8 @@ export const EXTENSION_IMPORT_INTENT_PATTERNS: readonly RegExp[] = [
     /(확장|플러그인|extension|plugin)[^\n]{0,40}?(설치|추가|가져와|업데이트|install|import|update)/i,
     /(설치|추가|install)[^\n]{0,20}?(확장|플러그인|extension|plugin)/i,
     /(마켓플레이스|marketplace)[^\n]{0,30}?(설치|목록|보여|열어|install|list)/i,
+    // 이름 설치(M5) "플러그인@마켓플레이스 설치해줘" — 이름 문자 규칙 토큰 + 설치 동사
+    /(?:^|[\s`'"(])[A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9._-]*[`'")]?[^\n]{0,15}?(설치|추가|install)/i,
     /import_extension_from_git/i,
 ];
 
