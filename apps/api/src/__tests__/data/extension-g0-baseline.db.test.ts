@@ -157,7 +157,7 @@ describeOrSkip('확장 설치 기준선 G0 (보안 플래그 4조합)', () => {
             [userId],
         );
         const agents = await pool.query<{ name: string; is_active: boolean; approval_status: string; linked: boolean }>(
-            `SELECT CASE WHEN name LIKE '%-archived-%' THEN regexp_replace(name, '-archived-[0-9a-f]{6}$', '-archived') ELSE name END AS name,
+            `SELECT regexp_replace(name, '-(archived|removed)-[0-9a-f]{6}$', '-\\1') AS name,
                     is_active, approval_status, extension_id IS NOT NULL AS linked
                FROM user_agents WHERE user_id=$1 ORDER BY 1, is_active`,
             [userId],

@@ -1154,16 +1154,16 @@
           ],
           "agents": [
             {
-              "name": "g0-pack-reviewer",
-              "is_active": false,
-              "approval_status": "pending",
-              "linked": true
-            },
-            {
               "name": "g0-pack-reviewer-archived",
               "is_active": false,
               "approval_status": "approved",
               "linked": false
+            },
+            {
+              "name": "g0-pack-reviewer-removed",
+              "is_active": false,
+              "approval_status": "pending",
+              "linked": true
             }
           ],
           "mcp": [
