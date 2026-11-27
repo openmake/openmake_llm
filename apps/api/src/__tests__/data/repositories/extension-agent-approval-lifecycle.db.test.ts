@@ -1,5 +1,5 @@
 /**
- * 확장 번들 Custom Agent 승인 수명주기 — 실제 Postgres SQL 의미 검증(opt-in EXTENSION_AGENT_APPROVAL_REQUIRED, 206).
+ * 확장 번들 Custom Agent 승인 수명주기 — 실제 Postgres SQL 의미 검증(승인 대기 EXTENSION_AGENT_APPROVAL_REQUIRED, 206 · 출처·정리 opt-in EXTENSION_AGENT_BUNDLE_PROVENANCE).
  * 한 연결 안의 TEMP 표(pg_temp 가 검색 경로 맨 앞이라 실제 표를 가린다). TEST_DATABASE_URL 이 없으면 skip.
  *
  *  ① pending 은 실행 경로(loadUserAgent 가 쓰는 getByIdVisibleToUser)·목록·공유 전환에 안 보이고 승인함에만 보인다
@@ -16,10 +16,18 @@ jest.mock('../../../addon-host/addon-data', () => ({
 
 import { UserAgentRepository } from '../../../data/repositories/user-agent-repository';
 import { UserExtensionRepository } from '../../../data/repositories/user-extension-repository';
+import { resetConfig } from '../../../config/env';
 
 const CONN = process.env.TEST_DATABASE_URL;
 const describeOrSkip = CONN ? describe : describe.skip;
-const ORIGINAL = process.env.EXTENSION_AGENT_APPROVAL_REQUIRED;
+const ORIGINAL = process.env.EXTENSION_AGENT_BUNDLE_PROVENANCE;
+/** 플래그는 getConfig 캐시를 거친다 — 바꿀 때마다 캐시를 비운다 */
+function setProvenance(on: boolean | undefined): void {
+    if (on === undefined) delete process.env.EXTENSION_AGENT_BUNDLE_PROVENANCE;
+    else process.env.EXTENSION_AGENT_BUNDLE_PROVENANCE = on ? 'true' : 'false';
+    resetConfig();
+}
+
 
 describeOrSkip('확장 Custom Agent 승인 수명주기 (TEMP 표)', () => {
     let pool: Pool;
@@ -45,8 +53,7 @@ describeOrSkip('확장 Custom Agent 승인 수명주기 (TEMP 표)', () => {
         exts = new UserExtensionRepository(client as unknown as Pool);
     });
     afterAll(async () => {
-        if (ORIGINAL === undefined) delete process.env.EXTENSION_AGENT_APPROVAL_REQUIRED;
-        else process.env.EXTENSION_AGENT_APPROVAL_REQUIRED = ORIGINAL;
+        setProvenance(ORIGINAL === undefined ? undefined : ORIGINAL === 'true');
         client?.release(true);
         await pool?.end();
     });
@@ -119,7 +126,7 @@ describeOrSkip('확장 Custom Agent 승인 수명주기 (TEMP 표)', () => {
     });
 
     it('④ 제거 — opt-in 이면 승인 전 에이전트의 이름을 비키고, 승인된 것은 이름을 유지한다', async () => {
-        process.env.EXTENSION_AGENT_APPROVAL_REQUIRED = 'true';
+        setProvenance(true);
         await installPending('a1', 'review-pack-approved', '승인된 에이전트의 시스템 프롬프트.');
         await installPending('a2', 'review-pack-waiting', '승인 대기 에이전트의 시스템 프롬프트.');
         await agents.approve('a1', 'u1');
@@ -135,7 +142,7 @@ describeOrSkip('확장 Custom Agent 승인 수명주기 (TEMP 표)', () => {
     });
 
     it('④ 제거 — 옵션이 꺼져 있으면 종전대로 soft-delete 만(이름 유지)', async () => {
-        delete process.env.EXTENSION_AGENT_APPROVAL_REQUIRED;
+        setProvenance(false);
         await installPending('a2', 'review-pack-waiting', '승인 대기 에이전트의 시스템 프롬프트.');
         expect(await exts.remove('e1', 'u1', false)).not.toBeNull();
         const row = (await client.query<{ name: string; is_active: boolean }>('SELECT name, is_active FROM user_agents')).rows[0];

@@ -18,6 +18,7 @@ import { contributedSettings, type AddonSettingValidator } from '../addon-host/c
 import { EXTENSION_ADMIN_INVENTORY_KEY } from './extension-admin-inventory';
 import { ARBITRARY_URL_INSTALL_MODES, EXTENSION_SOURCE_POLICY_KEYS, extensionSourcePolicyProblems } from './extension-source-policy';
 import { EXTENSION_CATALOG_SYNC_KEYS } from './extension-catalog-sync';
+import { EXTENSION_AGENT_PROVENANCE_FLAG } from './extension-agent-provenance';
 import { EXTENSION_INSTALL_PREVIEW_FLAG } from './extension-install-preview';
 
 /** Base 그룹 또는 add-on 이 기여한 그룹 이름 */
@@ -147,6 +148,8 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     { key: EXTENSION_CATALOG_SYNC_KEYS.INDEX_ENABLED, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     // 확장 설치 미리보기(M1b, opt-in) — 미리보기 라우트·갤러리 응답이 요청 시점에 읽는다(실시간). config/extension-install-preview
     { key: EXTENSION_INSTALL_PREVIEW_FLAG, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
+    // 확장 Custom Agent 출처 표시·제거 시 승인 전 에이전트 이름 정리(P8, opt-in) — 승인함 조회·확장 제거 시점에 읽는다(실시간)
+    { key: EXTENSION_AGENT_PROVENANCE_FLAG, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
 
     // ── SLO 목표(F24.8, 145) — 5분 평가 tick 이 호출 시점에 읽는다(실시간) ──
     { key: 'SLO_CHAT_AVAILABILITY_TARGET', group: 'slo', secret: false, requiresRestart: false, validate: percentTarget },

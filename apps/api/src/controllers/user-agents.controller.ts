@@ -31,7 +31,7 @@ import { validateModelAssignment } from '../services/model-assignment-validation
 import { createLogger } from '../utils/logger';
 import { success, internalError, unauthorized, notFound, badRequest } from '../utils/api-response';
 import { activeOrgFor } from '../services/org/membership-cache';
-import { EXTENSION_SECURITY } from '../config/extension-security';
+import { extensionAgentBundleProvenanceEnabled } from '../config/extension-agent-provenance';
 
 const log = createLogger('UserAgentsController');
 
@@ -93,7 +93,7 @@ export function createUserAgentsController(): Router {
         const userId = getUserId(req);
         if (!userId) { res.status(401).json(unauthorized()); return; }
         try {
-            const rows = await new UserAgentRepository(getPool()).listPendingForUser(userId, { withOrigin: EXTENSION_SECURITY.AGENT_APPROVAL_REQUIRED });
+            const rows = await new UserAgentRepository(getPool()).listPendingForUser(userId, { withOrigin: extensionAgentBundleProvenanceEnabled() });
             const agents = rows.map(({ user_id: _user_id, ...rest }) => rest);
             res.json(success({ agents, total: agents.length }));
         } catch (err) {

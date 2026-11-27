@@ -87,6 +87,8 @@ describe('system-settings-registry', () => {
             else if (def.key === 'EXTENSION_CATALOG_INDEX_ENABLED') sample[def.key] = 'true';
             // 확장 설치 미리보기(M1b) — 불리언
             else if (def.key === 'EXTENSION_INSTALL_PREVIEW_ENABLED') sample[def.key] = 'true';
+            // 확장 Custom Agent 출처·정리(P8) — 불리언
+            else if (def.key === 'EXTENSION_AGENT_BUNDLE_PROVENANCE') sample[def.key] = 'true';
             // 관리자 확장 현황(M3) — 불리언
             else if (def.key === 'EXTENSION_ADMIN_INVENTORY_ENABLED') sample[def.key] = 'true';
             // SLO 목표(F24.8) — 백분율·정수
