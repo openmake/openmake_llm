@@ -80,6 +80,10 @@ const BASE_AUDIT_ACTION_SEVERITY = {
     'extension.permissions_revoked': null,
     // 확장 원본 정책(M2)이 설치·업데이트·동기화를 거절 — 감사 기록만(차단 빈도가 높을 수 있어 알림 없음)
     'extension.source_blocked': null,
+    // 조직 소유 확장 설치·업데이트·제거(212, opt-in) — 감사 기록만
+    'extension.org_owned_installed': null,
+    'extension.org_owned_updated': null,
+    'extension.org_owned_removed': null,
     'alert.acknowledged': null,
     'tool_circuit_reset': null,
 

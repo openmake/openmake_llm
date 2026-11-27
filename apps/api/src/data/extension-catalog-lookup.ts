@@ -38,13 +38,17 @@ export async function getCatalogSourceRow(id: string): Promise<CatalogSourceLook
     return r.rows[0] ?? null;
 }
 
-/** 원본 URL 들의 active 설치본 — (원본, 이름) 마다 가장 최근 것 하나 */
+/**
+ * 원본 URL 들의 active 설치본 — (원본, 이름) 마다 가장 최근 것 하나.
+ * 사람 소유 설치본만 근거로 쓴다 — 조직 소유 행(212, owner_org_id)은 구성요소 없는 갤러리 항목이라 근거가 아니다
+ * (플래그 OFF 면 그런 행이 없어 결과는 종전과 같다).
+ */
 export async function listInstalledExtensionsBySources(sourceUrls: readonly string[]): Promise<InstalledExtensionLookupRow[]> {
     if (sourceUrls.length === 0) return [];
     const r = await getPool().query<InstalledExtensionLookupRow>(
         `SELECT DISTINCT ON (source_url, name) name, version, source_url, source_ref, source_path, manifest, updated_at
            FROM user_extensions
-          WHERE status = 'active' AND source_url = ANY($1::text[])
+          WHERE status = 'active' AND owner_org_id IS NULL AND source_url = ANY($1::text[])
           ORDER BY source_url, name, updated_at DESC
           LIMIT $2`,
         [[...new Set(sourceUrls)], INSTALLED_EVIDENCE_ROW_LIMIT],
