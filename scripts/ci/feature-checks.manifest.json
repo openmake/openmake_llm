@@ -50,6 +50,10 @@
   "fixedTests": {
     "packages/plugin-contracts/src/contributions.ts": [
       "apps/api/src/__tests__/plugin-contracts-compat.test.ts"
+    ],
+    "packages/plugin-contracts/src/manifest.ts": [
+      "apps/api/src/__tests__/plugin-contracts-compat.test.ts",
+      "apps/api/src/addon-host/__tests__/default-state.test.ts"
     ]
   },
   "exactFiles": {
