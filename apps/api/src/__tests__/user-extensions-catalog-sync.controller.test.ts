@@ -25,6 +25,7 @@ const mockRepo = {
     setSubpath: jest.fn(),
     updateSnapshot: jest.fn(),
     recordSyncResult: jest.fn(async () => undefined),
+    setAlias: jest.fn(),
 };
 jest.mock('../data/repositories/extension-catalog-repository', () => {
     const actual = jest.requireActual('../data/repositories/extension-catalog-repository');
@@ -119,7 +120,24 @@ it('POST sync 실패: 400 종전대로 + 상태 기록, 사유에 토큰 없음'
     expect(mockRepo.recordSyncResult).toHaveBeenCalledWith('c1', 'error', expect.not.stringContaining(SECRET));
 });
 
+it('PATCH 별칭(M5): 저장 · 예약어·규칙 위반 400 · 충돌 409', async () => {
+    mockRepo.getById.mockResolvedValue(baseRow());
+    mockRepo.setAlias.mockResolvedValueOnce({ row: baseRow({ alias: 'team' }), conflict: false });
+    const ok = await request(app()).patch('/api/users/me/extensions/catalog/c1').send({ alias: 'team' });
+    expect(ok.status).toBe(200);
+    expect(mockRepo.setAlias).toHaveBeenCalledWith('c1', 'team');
+    expect(ok.body.data.source.alias).toBe('team');
+
+    expect((await request(app()).patch('/api/users/me/extensions/catalog/c1').send({ alias: 'internal' })).status).toBe(400);
+    expect((await request(app()).patch('/api/users/me/extensions/catalog/c1').send({ alias: 'a..b' })).status).toBe(400);
+
+    mockRepo.setAlias.mockResolvedValueOnce({ row: null, conflict: true });
+    expect((await request(app()).patch('/api/users/me/extensions/catalog/c1').send({ alias: 'taken' })).status).toBe(409);
+    expect((await request(app()).patch('/api/users/me/extensions/catalog/c1').send({})).status).toBe(400);
+});
+
 it('PATCH 하위 경로: 정규화 저장 · .. 는 400', async () => {
+    mockRepo.getById.mockResolvedValue(baseRow());
     mockRepo.setSubpath.mockResolvedValue(baseRow({ source_subpath: 'plugins/team' }));
     const ok = await request(app()).patch('/api/users/me/extensions/catalog/c1').send({ sourceSubpath: './plugins/team/' });
     expect(ok.status).toBe(200);

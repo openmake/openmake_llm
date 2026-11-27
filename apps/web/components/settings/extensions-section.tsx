@@ -6,9 +6,11 @@ import { Package, Trash2, Loader2, ChevronDown, ChevronLeft, ChevronRight, Puzzl
 import { Button, Card, CardHeader, CardTitle, CardContent, Input } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient, ApiError } from "@/lib/api-client";
+import { GalleryItemBadges } from "./gallery-item-badges";
 import { MarketplacePublishSection } from "@/components/settings/marketplace-publish-section";
 import { ExtensionPermissionBadge, ExtensionPermissionPanel } from "@/components/settings/extension-permission-panel";
 import { CatalogSourceAdmin } from "@/components/settings/catalog-source-admin";
+import { NamedInstallForm } from "@/components/settings/named-install-form";
 import { useAppStore } from "@/lib/store";
 import { ExtensionInstallPreviewDialog } from "@/components/settings/extension-install-preview-dialog";
 import { catalogInstallMode } from "@/lib/extension-install-preview";
@@ -623,6 +625,8 @@ export function ExtensionsSection() {
           </p>
           <p className="mb-3 text-xs text-muted">{t("catalog.description")}</p>
 
+          {catalog.length > 0 && <NamedInstallForm onInstalled={() => void load()} />}
+
           {isAdmin && (
             <div className="mb-3 flex items-center gap-2">
               <Input
@@ -747,6 +751,7 @@ export function ExtensionsSection() {
                           <p className="truncate text-sm text-fg">
                             {p.name}
                             {p.version && <span className="ml-1.5 font-mono text-xs text-muted">v{p.version}</span>}
+                            <GalleryItemBadges catalogId={e.srcId} pluginName={p.name} />
                             {!catalogSource && (
                               <span className="ml-1.5 rounded bg-surface px-1.5 py-0.5 text-xs text-muted">
                                 {e.srcName}
