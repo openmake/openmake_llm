@@ -1481,6 +1481,24 @@
       "replacement": "새 주소: {url}",
       "replacementCandidate": "Streamable HTTP 주소 후보: {url} (서버 안내로 확인하세요)",
       "reauth": "새 주소로 다시 등록한 뒤 다시 로그인해야 합니다(이전 OAuth 연결은 쓸 수 없습니다)."
+    },
+    "declaredExtensions": {
+      "label": {
+        "skills": "스킬 제공 서버",
+        "apps": "MCP Apps(UI) 미지원",
+        "tasks": "Tasks 미지원",
+        "events": "Events 미지원",
+        "auth": "인증 확장 미지원",
+        "unknown": "알 수 없는 확장"
+      },
+      "hint": {
+        "skills": "이 서버는 Skills over MCP 로 스킬을 제공합니다. OpenMake 는 아직 이 경로로 스킬을 받지 않습니다 — 서버의 도구는 그대로 쓸 수 있습니다.",
+        "apps": "이 서버는 MCP Apps(대화형 UI)를 선언했습니다. OpenMake 는 UI 를 그리지 않고 도구 결과만 받습니다.",
+        "tasks": "이 서버는 MCP Tasks(장기 작업)를 선언했습니다. OpenMake 는 Tasks 를 쓰지 않고 일반 도구 호출로만 부릅니다.",
+        "events": "이 서버는 MCP Events 를 선언했습니다. OpenMake 는 이벤트를 구독하지 않습니다.",
+        "auth": "이 서버는 인증 확장을 선언했습니다. OpenMake 는 이 확장을 쓰지 않고 기존 OAuth 로 로그인합니다.",
+        "unknown": "이 서버가 OpenMake 가 모르는 MCP 확장을 선언했습니다. 서버의 기본 도구는 그대로 쓸 수 있습니다."
+      }
     }
   },
   "mcpCatalog": {
