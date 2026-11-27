@@ -21,8 +21,9 @@
  *   POST   /api/users/me/extensions/catalog             — 소스 등록 + 스냅샷 동기화
  *   POST   /api/users/me/extensions/catalog/:id/sync    — 스냅샷 재동기화 (응답에 sync_status·last_sync_error, M4)
  *   PUT    /api/users/me/extensions/catalog/:id/credential — 원본 접근 토큰 저장·삭제 (write-only, 암호화 — M4)
- *   PATCH  /api/users/me/extensions/catalog/:id         — 하위 경로(source_subpath)·이름 설치 별칭(alias) 지정 (M4·M5)
- *   POST   /api/users/me/extensions/install-by-name    — `플러그인@마켓플레이스` 이름 설치 (M5)
+ *   PATCH  /api/users/me/extensions/catalog/:id         — 하위 경로(source_subpath)·이름 설치 별칭(alias)·정적 색인 주소(index_url) 지정 (M4·M5·M6)
+ *   POST   /api/users/me/extensions/install-by-name    — `플러그인@마켓플레이스` 이름 설치 (M5, user-extensions-named.routes)
+ *   POST   /api/users/me/extensions/preview-by-name    — 이름 설치 미리보기 (M1b 연장, EXTENSION_INSTALL_PREVIEW_ENABLED)
  *   DELETE /api/users/me/extensions/catalog/:id         — 소스 삭제
  *
  * ⚠️ 라우트 등록 순서: '/gallery*'·'/catalog*' 가 '/:id' 보다 먼저여야 한다 (Express 순차 매칭).
@@ -42,9 +43,10 @@ import { ExtensionCatalogRepository, toPublicCatalogSource } from '../data/repos
 import { buildExtensionIngestService } from '../services/extensions/ingest-service-factory';
 import { syncCatalogSource } from '../services/extensions/catalog-sync';
 import { EXTENSION_CATALOG_SYNC_LIMITS, normalizeCatalogSubpath } from '../config/extension-catalog-sync';
+import { CATALOG_INDEX_LIMITS, normalizeCatalogIndexUrl } from '../config/extension-catalog-index';
 import { encryptToken } from '../utils/token-crypto';
 import { NAMED_INSTALL_LIMITS, isValidMarketplaceAlias } from '../config/extension-named-install';
-import { NamedInstallError, resolveNamedInstall } from '../services/extensions/named-install';
+import { registerNamedInstallRoutes } from './user-extensions-named.routes';
 import { applyDefaultCatalogAlias } from '../services/extensions/catalog-alias';
 import { createLogger } from '../utils/logger';
 import { removeExtensionInstallation } from '../services/addon/addon-state';
@@ -79,16 +81,14 @@ const catalogCredentialSchema = z.object({
     token: z.string().min(1).max(EXTENSION_CATALOG_SYNC_LIMITS.CREDENTIAL_MAX_CHARS).nullable(),
 });
 
+/** 원본 설정 — 보낸 필드만 바꾼다(하위 경로 M4 · 정적 색인 주소 M6). null = 지움 */
 const catalogPatchSchema = z.object({
     sourceSubpath: z.string().max(EXTENSION_CATALOG_SYNC_LIMITS.SUBPATH_MAX_CHARS).nullable().optional(),
     // 이름 설치 별칭(M5) — null 이면 지워 스냅샷 name 을 쓴다
     alias: z.string().max(NAMED_INSTALL_LIMITS.NAME_MAX_CHARS).nullable().optional(),
-}).refine((b) => b.sourceSubpath !== undefined || b.alias !== undefined, '변경할 항목이 없습니다');
-
-const namedInstallSchema = z.object({
-    ref: z.string().min(3).max(NAMED_INSTALL_LIMITS.NAME_MAX_CHARS * 2 + 1),
-    accessToken: z.string().max(200).optional(),
-});
+    // 정적 색인 주소(M6) — null 이면 색인 미사용(종전 동기화)
+    indexUrl: z.string().max(CATALOG_INDEX_LIMITS.URL_MAX_CHARS).nullable().optional(),
+}).refine((b) => b.sourceSubpath !== undefined || b.alias !== undefined || b.indexUrl !== undefined, '변경할 항목이 없습니다');
 
 const catalogInstallSchema = z.object({
     // marketplace 소스면 플러그인 이름 필수, 단일 plugin.json 소스면 생략 가능
@@ -329,10 +329,17 @@ export function createUserExtensionsController(): Router {
         }
     });
 
-    // 하위 경로 지정 (M4) — 다음 동기화부터 반영된다
+    // 하위 경로(M4)·정적 색인 주소(M6) 지정 — 다음 동기화부터 반영된다
     router.patch('/catalog/:id', requireAuth, requireAdmin, validate(catalogPatchSchema), async (req, res) => {
         try {
             const body = req.body as z.infer<typeof catalogPatchSchema>;
+            // 형식 검사는 쓰기 전에 모두 — 하나라도 틀리면 아무것도 바꾸지 않는다
+            let indexUrl: string | null | undefined;
+            try {
+                if (body.indexUrl !== undefined) indexUrl = normalizeCatalogIndexUrl(body.indexUrl);
+            } catch (e) {
+                res.status(400).json(badRequest(e instanceof Error ? e.message : String(e))); return;
+            }
             const repo = new ExtensionCatalogRepository(getPool());
             let row = await repo.getById(req.params.id);
             if (!row) { res.status(404).json(notFound('카탈로그 소스 없음')); return; }
@@ -355,6 +362,10 @@ export function createUserExtensionsController(): Router {
                 row = r.row ?? row;
                 log.info(`카탈로그 별칭: ${row.id} → ${alias ?? '(스냅샷 name)'}`);
             }
+            if (indexUrl !== undefined) {
+                row = (await repo.setIndexUrl(row.id, indexUrl)) ?? row;
+                log.info(`카탈로그 정적 색인: ${row.id} → ${indexUrl ? 'set' : '(미사용)'}`);
+            }
             res.json(success({ source: toPublicCatalogSource(row) }));
         } catch (err) {
             log.error('catalog patch 실패:', err);
@@ -375,39 +386,8 @@ export function createUserExtensionsController(): Router {
         }
     });
 
-    // 이름 설치(M5) — 등록 카탈로그(DB)에서 해석해 그 원본으로 설치. 모르는 이름은 후보만 400 으로(자동 치환 없음)
-    router.post('/install-by-name', requireAuth, validate(namedInstallSchema), async (req, res) => {
-        const userId = getUserId(req);
-        if (!userId) { res.status(401).json(unauthorized()); return; }
-        const body = req.body as z.infer<typeof namedInstallSchema>;
-        try {
-            const target = await resolveNamedInstall(body.ref, new ExtensionCatalogRepository(getPool()));
-            const service = await buildIngestService();
-            // 설치자 본인 계정 — 카탈로그 설치와 같은 시맨틱(권한 상승 없음). 원본 정책(M2)은 설치 엔진이 해석된 원본 URL 로 검사
-            const result = await service.import({
-                userId,
-                isAdmin: false,
-                gitUrl: target.gitUrl,
-                plugin: target.plugin,
-                accessToken: body.accessToken,
-                catalogSubpath: target.catalogSubpath,
-                pinEntrySha: true,
-            });
-            if ('selectionRequired' in result && result.selectionRequired) {
-                res.status(400).json(badRequest(`플러그인을 특정하지 못했습니다: ${body.ref}`));
-                return;
-            }
-            log.info(`named install: ${body.ref} → ${result.extensionId} (user=${userId})`);
-            res.json(success({ ...installSummary(result), source: { id: target.sourceId, marketplace: target.marketplace, plugin: target.plugin } }));
-        } catch (err) {
-            rethrowPolicyError(err);
-            const msg = err instanceof Error ? err.message : String(err);
-            log.warn(`named install 실패: ${msg}`);
-            res.status(400).json(err instanceof NamedInstallError
-                ? badRequest(msg, { code: err.code, candidates: err.candidates })
-                : badRequest(`이름 설치 실패: ${msg}`));
-        }
-    });
+    // 이름 설치(M5)·그 미리보기 — user-extensions-named.routes (같은 설치 입력 namedInstallInput)
+    registerNamedInstallRoutes(router, { getUserId, rethrowPolicyError, installSummary });
 
     // 설치 미리보기(M1b, opt-in) — 쓰기·LLM 없이 설치될 구성요소·권한·원본·커밋·경고. 플래그 OFF 면 404(라우트가 없는 것과 같다)
     router.post('/catalog/:id/preview', requireAuth, validate(catalogInstallSchema), async (req, res) => {

@@ -16,6 +16,7 @@ import {
     parseNamedInstallRef,
 } from '../../config/extension-named-install';
 import type { ExtensionCatalogRow } from '../../data/repositories/extension-catalog-repository';
+import type { ImportInput } from '../../agents/git-ingest/extension-ingest-types';
 
 /** 해석 결과 — ImportInput 에 그대로 넣는다 */
 export interface NamedInstallTarget {
@@ -117,4 +118,24 @@ export async function resolveNamedInstall(
 ): Promise<NamedInstallTarget> {
     if (!parseNamedInstallRef(ref)) return resolveNamedInstallFrom(ref, []);   // 형식 오류는 DB 조회 없이
     return resolveNamedInstallFrom(ref, await repo.listEnabled());
+}
+
+/**
+ * PURE: 이름 설치 해석 결과 → 설치 엔진 입력. 이름 설치(`/install-by-name`)와 그 미리보기(`/preview-by-name`)가
+ * **같은 입력**을 쓰게 하는 한 곳 — 미리보기 구성요소 = 실제 설치 Draft 구성요소의 전제다.
+ * 설치자 본인 계정(isAdmin=false — 권한 상승 없음), 항목 고정 커밋 우선(pinEntrySha).
+ */
+export function namedInstallInput(
+    target: NamedInstallTarget,
+    who: { userId: string; accessToken?: string },
+): ImportInput {
+    return {
+        userId: who.userId,
+        isAdmin: false,
+        gitUrl: target.gitUrl,
+        plugin: target.plugin,
+        accessToken: who.accessToken,
+        catalogSubpath: target.catalogSubpath,
+        pinEntrySha: true,
+    };
 }

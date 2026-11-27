@@ -83,3 +83,22 @@ export function installableCounts(p: ExtensionInstallPreview): { skills: number;
     agents: p.components.agents.filter((a) => !a.error).length,
   };
 }
+
+/** 미리볼 대상 — 카탈로그 항목(설치 버튼) 또는 이름 설치(`플러그인@마켓플레이스` 입력) */
+export type InstallPreviewTarget =
+  | { kind?: "catalog"; sourceId: string; plugin?: string; label: string }
+  | { kind: "named"; ref: string; label: string };
+
+/** 대상 → 미리보기 요청. 이름 설치는 설치(`/install-by-name`)와 같은 해석·입력을 쓰는 `/preview-by-name` */
+export function previewRequest(target: InstallPreviewTarget): { path: string; body: Record<string, string> } {
+  if (target.kind === "named") return { path: "/api/users/me/extensions/preview-by-name", body: { ref: target.ref } };
+  return {
+    path: `/api/users/me/extensions/catalog/${target.sourceId}/preview`,
+    body: target.plugin ? { plugin: target.plugin } : {},
+  };
+}
+
+/** 이름 설치 입력의 동작 — 갤러리가 미리보기 모드면 미리보기 대상, 아니면 바로 설치(null) */
+export function namedInstallPreviewTarget(mode: "preview" | "direct", ref: string): InstallPreviewTarget | null {
+  return mode === "preview" ? { kind: "named", ref, label: ref } : null;
+}

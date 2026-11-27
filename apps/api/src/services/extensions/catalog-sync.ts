@@ -5,6 +5,9 @@
  *   1. 토큰 = 요청 한정 토큰 > 저장된 원본 토큰(암호문 복호화) > 없음. 저장 토큰은 이 함수 밖으로 나가지 않는다.
  *   2. 스냅샷 = ExtensionIngestService.fetchCatalogSnapshot(원본 정책 M2 검사 포함, 하위 경로 적용) → 전체 교체.
  *   3. 결과 기록 = sync_status(ok·error·rate_limited)·last_sync_error(자격증명 마스킹)·last_sync_attempt_at.
+ *   (M6) `EXTENSION_CATALOG_INDEX_ENABLED` + 원본 index_url 이면 2 대신 정적 색인 하나로 스냅샷을 만든다(요청 1회).
+ *   색인을 쓸 수 없으면(받기 실패·형식·해시·저장소 불일치) 종전 방식으로 동기화하고, 성공(ok)이어도 last_sync_error 에
+ *   폴백 경고를 남긴다. 원본 정책 거절(EXTENSION_SOURCE_BLOCKED)은 폴백하지 않고 그대로 실패다.
  *   실패는 기록한 뒤 다시 던진다(수동 라우트가 종전처럼 400 으로 알린다).
  *
  * 주기 동기화(opt-in `EXTENSION_CATALOG_AUTO_SYNC_ENABLED`): 5분 tick 이 켜짐·간격을 매번 다시 읽고(재시작 불필요),
@@ -24,6 +27,7 @@ import {
 } from '../../config/extension-catalog-sync';
 import type { ExtensionCatalogRow } from '../../data/repositories/extension-catalog-repository';
 import type { CatalogSnapshot } from '../../agents/git-ingest/catalog-snapshot';
+import { CatalogIndexFallbackError } from '../../agents/git-ingest/catalog-index';
 import { applyDefaultCatalogAlias, type CatalogAliasRepo } from './catalog-alias';
 
 const logger = createLogger('ExtensionCatalogSync');
@@ -32,7 +36,8 @@ const logger = createLogger('ExtensionCatalogSync');
 export interface CatalogSyncRepo {
     listEnabled(): Promise<ExtensionCatalogRow[]>;
     updateSnapshot(id: string, input: CatalogSnapshot): Promise<ExtensionCatalogRow | null>;
-    recordSyncResult(id: string, status: CatalogSyncStatus, error: string | null): Promise<void>;
+    /** warning — status 가 ok 일 때만 남는 경고(M6 색인 폴백). 없으면 지운다 */
+    recordSyncResult(id: string, status: CatalogSyncStatus, error: string | null, warning?: string | null): Promise<void>;
     /** 이름 설치 별칭 기본값(M5) — 없으면 건너뛴다 */
     setAlias?: CatalogAliasRepo['setAlias'];
 }
@@ -46,6 +51,12 @@ export interface CatalogSyncService {
         subpath?: string | null,
     ): Promise<CatalogSnapshot>;
     translateCatalogSnapshot(snapshot: CatalogSnapshot, previous?: CatalogSnapshot['plugins']): Promise<void>;
+    /** M6 정적 색인 스냅샷 — 없으면(구 구현) 색인을 쓰지 않는다 */
+    fetchCatalogSnapshotFromIndex?(
+        indexUrl: string,
+        catalogUrl: string,
+        policy: { userId?: string; action: 'catalog-sync' },
+    ): Promise<CatalogSnapshot>;
 }
 
 export interface CatalogSyncDeps {
@@ -56,6 +67,34 @@ export interface CatalogSyncDeps {
 export interface CatalogSyncOutcome {
     row: ExtensionCatalogRow | null;
     snapshot: CatalogSnapshot;
+    /** 스냅샷을 만든 방식 — index = 정적 색인(M6), legacy = 종전 */
+    via: 'index' | 'legacy';
+}
+
+/**
+ * 스냅샷 받기 — 색인(M6)을 쓸 수 있으면 색인, 아니면 종전 방식. 색인 폴백 사유는 warning 으로 돌려준다.
+ * 색인 경로가 정책 거절 등 폴백 대상이 아닌 오류를 던지면 그대로 던진다.
+ */
+async function fetchSnapshotPreferIndex(
+    deps: CatalogSyncDeps,
+    row: ExtensionCatalogRow,
+    token: string | undefined,
+    userId: string | undefined,
+): Promise<{ snapshot: CatalogSnapshot; via: 'index' | 'legacy'; warning: string | null }> {
+    const policy = { userId, action: 'catalog-sync' as const };
+    let warning: string | null = null;
+    if (EXTENSION_CATALOG_SYNC_SETTINGS.indexEnabled && row.index_url && deps.service.fetchCatalogSnapshotFromIndex) {
+        try {
+            const snapshot = await deps.service.fetchCatalogSnapshotFromIndex(row.index_url, row.url, policy);
+            return { snapshot, via: 'index', warning: null };
+        } catch (err) {
+            if (!(err instanceof CatalogIndexFallbackError)) throw err;
+            warning = sanitizeSyncError(`${err.message} — 종전 방식으로 동기화했습니다`);
+            logger.warn(`카탈로그 색인 폴백 (${row.id}): ${warning}`);
+        }
+    }
+    const snapshot = await deps.service.fetchCatalogSnapshot(row.url, token, policy, row.source_subpath ?? null);
+    return { snapshot, via: 'legacy', warning };
 }
 
 /** PURE: 실패 사유 분류 — GitHub rate limit·HTTP 429 는 rate_limited */
@@ -101,14 +140,13 @@ export async function syncCatalogSource(
 ): Promise<CatalogSyncOutcome> {
     const token = opts.accessToken || storedCredential(row);
     try {
-        const snapshot = await deps.service.fetchCatalogSnapshot(
-            row.url, token, { userId: opts.userId, action: 'catalog-sync' }, row.source_subpath ?? null,
-        );
+        const { snapshot, via, warning } = await fetchSnapshotPreferIndex(deps, row, token, opts.userId);
         let updated = await deps.repo.updateSnapshot(row.id, snapshot);
         // 별칭이 비어 있으면 새 스냅샷 name 으로(M5 — 207 이전 원본도 첫 동기화에서 채워진다)
         if (updated && deps.repo.setAlias) updated = await applyDefaultCatalogAlias({ setAlias: deps.repo.setAlias.bind(deps.repo) }, updated);
-        await deps.repo.recordSyncResult(row.id, 'ok', null).catch((e) => logger.warn(`동기화 상태 기록 실패 (${row.id}):`, e));
-        return { row: updated, snapshot };
+        // 경고가 없으면 종전과 같은 인자로 기록한다(색인 미사용 = 종전 동작)
+        await (warning ? deps.repo.recordSyncResult(row.id, 'ok', null, warning) : deps.repo.recordSyncResult(row.id, 'ok', null)).catch((e) => logger.warn(`동기화 상태 기록 실패 (${row.id}):`, e));
+        return { row: updated, snapshot, via };
     } catch (err) {
         const raw = err instanceof Error ? err.message : String(err);
         const reason = sanitizeSyncError(raw, token);
