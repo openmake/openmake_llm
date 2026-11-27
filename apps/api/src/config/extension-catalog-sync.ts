@@ -8,12 +8,14 @@
  *
  * - `EXTENSION_CATALOG_AUTO_SYNC_ENABLED`  주기 동기화 마스터 스위치. OFF 면 tick 이 아무것도 하지 않는다(DB 조회 0).
  * - `EXTENSION_CATALOG_SYNC_INTERVAL_MS`   원본별 동기화 간격(기본 6시간).
+ * - `EXTENSION_CATALOG_INDEX_ENABLED`      (M6) 원본에 index_url 이 있으면 정적 색인 하나로 동기화. OFF·미설정이면 종전 방식.
  */
 import { getConfig } from './env';
 
 export const EXTENSION_CATALOG_SYNC_KEYS = {
     AUTO_SYNC_ENABLED: 'EXTENSION_CATALOG_AUTO_SYNC_ENABLED',
     SYNC_INTERVAL_MS: 'EXTENSION_CATALOG_SYNC_INTERVAL_MS',
+    INDEX_ENABLED: 'EXTENSION_CATALOG_INDEX_ENABLED',
 } as const;
 
 /** 명명 상수 — 주기 점검·백오프·저장 한도 */
@@ -45,6 +47,10 @@ export const EXTENSION_CATALOG_SYNC_SETTINGS = {
     },
     get intervalMs(): number {
         return getConfig().extensionCatalogSyncIntervalMs;
+    },
+    /** M6 — 원본에 index_url 이 있을 때 index.json 하나로 동기화한다(실패·불일치면 종전 방식 폴백) */
+    get indexEnabled(): boolean {
+        return getConfig().extensionCatalogIndexEnabled;
     },
 } as const;
 

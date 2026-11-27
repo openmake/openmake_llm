@@ -98,6 +98,8 @@ export interface EnvConfig {
     extensionCatalogAutoSyncEnabled: boolean;
     /** 주기 동기화 간격(ms) — 기본 6시간 */
     extensionCatalogSyncIntervalMs: number;
+    /** 확장 카탈로그 정적 색인(index.json) 우선 동기화(M6) — 기본 false(종전 방식) */
+    extensionCatalogIndexEnabled: boolean;
     /** vLLM `--reasoning-parser` 미설정 환경 등에서 extra_body.reasoning_effort 거절 방지 토글. */
     llmEnableReasoningEffort: boolean;
     /** 사용자별 역할→모델 매핑(model_assignments scope=userId) 사용 토글 (기본 false=전역 env/default 만). */
@@ -281,6 +283,7 @@ export function loadConfig(): EnvConfig {
         EXTENSION_SOURCE_POLICY: env('EXTENSION_SOURCE_POLICY'),
         EXTENSION_CATALOG_AUTO_SYNC_ENABLED: env('EXTENSION_CATALOG_AUTO_SYNC_ENABLED'),
         EXTENSION_CATALOG_SYNC_INTERVAL_MS: env('EXTENSION_CATALOG_SYNC_INTERVAL_MS'),
+        EXTENSION_CATALOG_INDEX_ENABLED: env('EXTENSION_CATALOG_INDEX_ENABLED'),
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
         USER_MODEL_ROLES_ENABLED: env('USER_MODEL_ROLES_ENABLED'),
         THINKING_SUMMARY_ENABLED: env('THINKING_SUMMARY_ENABLED'),
@@ -414,6 +417,8 @@ export function loadConfig(): EnvConfig {
         extensionSourcePolicy: parsed.EXTENSION_SOURCE_POLICY ?? DEFAULT_CONFIG.extensionSourcePolicy,
         // 확장 카탈로그 주기 동기화(M4) — 'true' 만 켠다, 간격은 양의 정수만(그 외 기본값)
         extensionCatalogAutoSyncEnabled: parsed.EXTENSION_CATALOG_AUTO_SYNC_ENABLED === 'true',
+        // 확장 카탈로그 정적 색인 우선 동기화(M6) — 'true' 만 켠다
+        extensionCatalogIndexEnabled: parsed.EXTENSION_CATALOG_INDEX_ENABLED === 'true',
         extensionCatalogSyncIntervalMs: /^\d+$/.test(parsed.EXTENSION_CATALOG_SYNC_INTERVAL_MS ?? '') && Number(parsed.EXTENSION_CATALOG_SYNC_INTERVAL_MS) > 0
             ? Number(parsed.EXTENSION_CATALOG_SYNC_INTERVAL_MS)
             : DEFAULT_CONFIG.extensionCatalogSyncIntervalMs,

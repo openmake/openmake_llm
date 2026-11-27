@@ -18,8 +18,9 @@ import {
     type CatalogSyncDeps,
 } from '../catalog-sync';
 import type { ExtensionCatalogRow } from '../../../data/repositories/extension-catalog-repository';
+import { CatalogIndexFallbackError } from '../../../agents/git-ingest/catalog-index';
 
-const KEYS = ['EXTENSION_CATALOG_AUTO_SYNC_ENABLED', 'EXTENSION_CATALOG_SYNC_INTERVAL_MS', 'TOKEN_ENCRYPTION_KEY'] as const;
+const KEYS = ['EXTENSION_CATALOG_AUTO_SYNC_ENABLED', 'EXTENSION_CATALOG_INDEX_ENABLED', 'EXTENSION_CATALOG_SYNC_INTERVAL_MS', 'TOKEN_ENCRYPTION_KEY'] as const;
 const ORIGINAL = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 const HOUR = 60 * 60 * 1000;
 const SNAPSHOT = { name: 'm', description: null, plugins: [{ name: 'p' }] };
@@ -51,6 +52,7 @@ beforeEach(() => {
     process.env.TOKEN_ENCRYPTION_KEY = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
     delete process.env.EXTENSION_CATALOG_AUTO_SYNC_ENABLED;
     delete process.env.EXTENSION_CATALOG_SYNC_INTERVAL_MS;
+    delete process.env.EXTENSION_CATALOG_INDEX_ENABLED;
     resetConfig();
     resetCatalogAutoSyncState();
 });
@@ -199,5 +201,72 @@ describe('타이머 수명', () => {
         startCatalogAutoSync(factory);
         jest.advanceTimersByTime(60 * 60 * 1000);
         expect(factory).not.toHaveBeenCalled();
+    });
+});
+
+describe('정적 색인 우선 동기화 (M6, opt-in)', () => {
+    const INDEX_URL = 'https://github.com/acme/market/releases/download/catalog-index/index.json';
+    const INDEX_SNAPSHOT = { name: 'm', description: null, plugins: [{ name: 'from-index' }] };
+
+    function indexDeps(impl: (...a: unknown[]) => Promise<unknown>) {
+        const d = deps();
+        (d.service as unknown as Record<string, unknown>).fetchCatalogSnapshotFromIndex = jest.fn(impl);
+        return d as typeof d & { service: { fetchCatalogSnapshotFromIndex: jest.Mock } };
+    }
+
+    it('플래그 ON + index_url → 색인 하나로 동기화(종전 경로 미호출) · 경고 없음', async () => {
+        process.env.EXTENSION_CATALOG_INDEX_ENABLED = 'true'; resetConfig();
+        const d = indexDeps(async () => INDEX_SNAPSHOT);
+        const out = await syncCatalogSource(d, row({ index_url: INDEX_URL }), { userId: 'u1' });
+        expect(out.via).toBe('index');
+        expect(d.service.fetchCatalogSnapshotFromIndex).toHaveBeenCalledTimes(1);
+        expect(d.service.fetchCatalogSnapshotFromIndex).toHaveBeenCalledWith(INDEX_URL, 'https://github.com/acme/market', { userId: 'u1', action: 'catalog-sync' });
+        expect(d.service.fetchCatalogSnapshot).not.toHaveBeenCalled();
+        expect(d.repo.updateSnapshot).toHaveBeenCalledWith('c1', INDEX_SNAPSHOT);
+        expect(d.repo.recordSyncResult).toHaveBeenCalledWith('c1', 'ok', null);
+    });
+
+    it('색인 해시 불일치 → 종전 방식 폴백 + ok 와 함께 경고 기록', async () => {
+        process.env.EXTENSION_CATALOG_INDEX_ENABLED = 'true'; resetConfig();
+        const d = indexDeps(async () => { throw new CatalogIndexFallbackError('INDEX_HASH_MISMATCH', '항목 해시 불일치 (x)'); });
+        const out = await syncCatalogSource(d, row({ index_url: INDEX_URL }));
+        expect(out.via).toBe('legacy');
+        expect(d.service.fetchCatalogSnapshot).toHaveBeenCalledTimes(1);
+        expect(d.repo.updateSnapshot).toHaveBeenCalledWith('c1', SNAPSHOT);
+        const call = (d.repo.recordSyncResult.mock.calls as unknown[][])[0];
+        expect(call.slice(0, 3)).toEqual(['c1', 'ok', null]);
+        expect(String(call[3])).toContain('INDEX_HASH_MISMATCH');
+    });
+
+    it('모르는 형식 버전도 폴백 + 경고', async () => {
+        process.env.EXTENSION_CATALOG_INDEX_ENABLED = 'true'; resetConfig();
+        const d = indexDeps(async () => { throw new CatalogIndexFallbackError('INDEX_SCHEMA_UNSUPPORTED', 'v2'); });
+        await syncCatalogSource(d, row({ index_url: INDEX_URL }));
+        expect(d.service.fetchCatalogSnapshot).toHaveBeenCalledTimes(1);
+        expect(String((d.repo.recordSyncResult.mock.calls as unknown[][])[0][3])).toContain('INDEX_SCHEMA_UNSUPPORTED');
+    });
+
+    it('원본 정책 거절은 폴백하지 않고 실패로 기록', async () => {
+        process.env.EXTENSION_CATALOG_INDEX_ENABLED = 'true'; resetConfig();
+        const d = indexDeps(async () => { throw new Error('EXTENSION_SOURCE_BLOCKED: 허용 목록 밖'); });
+        await expect(syncCatalogSource(d, row({ index_url: INDEX_URL }))).rejects.toThrow('EXTENSION_SOURCE_BLOCKED');
+        expect(d.service.fetchCatalogSnapshot).not.toHaveBeenCalled();
+        expect((d.repo.recordSyncResult.mock.calls as unknown[][])[0][1]).toBe('error');
+    });
+
+    it('플래그 OFF(기본) 면 index_url 이 있어도 종전 방식', async () => {
+        const d = indexDeps(async () => INDEX_SNAPSHOT);
+        const out = await syncCatalogSource(d, row({ index_url: INDEX_URL }));
+        expect(out.via).toBe('legacy');
+        expect(d.service.fetchCatalogSnapshotFromIndex).not.toHaveBeenCalled();
+        expect(d.repo.recordSyncResult).toHaveBeenCalledWith('c1', 'ok', null);
+    });
+
+    it('플래그 ON 이어도 index_url 이 없으면 종전 방식', async () => {
+        process.env.EXTENSION_CATALOG_INDEX_ENABLED = 'true'; resetConfig();
+        const d = indexDeps(async () => INDEX_SNAPSHOT);
+        await syncCatalogSource(d, row({ index_url: null }));
+        expect(d.service.fetchCatalogSnapshotFromIndex).not.toHaveBeenCalled();
+        expect(d.service.fetchCatalogSnapshot).toHaveBeenCalledTimes(1);
     });
 });
