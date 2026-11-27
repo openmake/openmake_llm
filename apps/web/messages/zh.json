@@ -1307,7 +1307,8 @@
     "visibilityOrganization": "组织共享",
     "orgBadge": "组织",
     "visibilityAria": "智能体可见范围",
-    "viewSystemPrompt": "查看系统提示词"
+    "viewSystemPrompt": "查看系统提示词",
+    "agentOrigin": "来源：{source}"
   },
   "research": {
     "pageTitle": "深度研究历史",
