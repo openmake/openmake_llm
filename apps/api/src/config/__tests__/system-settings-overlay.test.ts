@@ -85,6 +85,8 @@ describe('system-settings-registry', () => {
             else if (def.key === 'EXTENSION_CATALOG_SYNC_INTERVAL_MS') sample[def.key] = '784';
             // 확장 카탈로그 정적 색인(M6) — 불리언
             else if (def.key === 'EXTENSION_CATALOG_INDEX_ENABLED') sample[def.key] = 'true';
+            // 확장 설치 미리보기(M1b) — 불리언
+            else if (def.key === 'EXTENSION_INSTALL_PREVIEW_ENABLED') sample[def.key] = 'true';
             // SLO 목표(F24.8) — 백분율·정수
             else if (def.key === 'SLO_CHAT_AVAILABILITY_TARGET') sample[def.key] = '97.51';
             else if (def.key === 'SLO_AGENT_TASK_SUCCESS_TARGET') sample[def.key] = '97.52';

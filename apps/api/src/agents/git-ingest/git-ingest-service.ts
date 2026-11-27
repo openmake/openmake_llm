@@ -27,8 +27,8 @@ import { GitFetcher } from './git-fetcher';
 import { isNonGitSourceUrl, nonGitPseudoRepo } from './internal-bundle-fetcher';
 import { scanForSkillManifests, type ManifestCandidate } from './repo-scanner';
 import { ConventionChecker, type ConventionFinding } from './convention-checker';
-import { parseSkillFile, validateManifest } from '../manifest-validator';
-import { adaptSkillContent } from './skill-compat';
+import { parseSkillFile, validateManifest, type ValidateResult } from '../manifest-validator';
+import { adaptSkillContent, type SkillCompatResult } from './skill-compat';
 import { SKILL_CREATOR } from '../../config/constants';
 import { assertExtensionSourceAllowed } from '../../services/extensions/source-policy';
 
@@ -99,6 +99,37 @@ export function deriveSkillNameFromPath(path: string, fallback: string): string 
     return normalized || undefined;
 }
 
+/**
+ * SKILL.md 원문 → 검증된 매니페스트 + 설치 시 적응본. DB·LLM 을 쓰지 않는다 — 설치와 설치 미리보기(M1b)가 공유한다.
+ * name 이 없으면 경로에서 유도하고 `warnings` 에 남긴다. 검증 실패는 `MANIFEST_INVALID` 예외.
+ */
+export async function prepareSkillContent(
+    content: string, path: string, repo: string, warnings: string[],
+): Promise<{ validation: Extract<ValidateResult, { ok: true }>; adapted: SkillCompatResult }> {
+    const parsedFile = parseSkillFile(content);
+    // name 누락 시 디렉토리명 폴백 — Claude Code 는 SKILL.md 의 name 을 디렉토리에서 유도한다
+    // (vanta·logrocket·windsor-ai 실사례, 2026-08-29). 루트 SKILL.md 는 repo 이름.
+    if (!parsedFile.frontmatter.name) {
+        const derived = deriveSkillNameFromPath(path, repo);
+        if (derived) {
+            parsedFile.frontmatter.name = derived;
+            warnings.push(`SKILL_NAME_DERIVED: frontmatter name 누락 → "${derived}" (경로에서 유도)`);
+        }
+    }
+    const validation = await validateManifest(parsedFile, { availableToolNames: new Set() });
+    if (!validation.ok) {
+        throw new Error(`MANIFEST_INVALID: ${validation.errors.join('; ')}`);
+    }
+    // (5-b) 설치 시 적응 — 외부 생태계(Claude Code 등) 표현을 이 환경 기준으로 안내.
+    // 본문 재작성이 아니라 앞단 호환 노트 주입 + 버려지던 frontmatter 보존이라
+    // 적응할 것이 없으면 원문 그대로다(기존 스킬 무영향).
+    const adapted = adaptSkillContent({
+        frontmatter: validation.raw_frontmatter,
+        promptMd: validation.prompt_md,
+    });
+    return { validation, adapted };
+}
+
 export class GitIngestService {
     constructor(private opts: GitIngestOptions) {}
 
@@ -148,28 +179,8 @@ export class GitIngestService {
         const maxFileSize = SKILL_CREATOR.gitMaxFileSize ?? 256 * 1024;
         const content = input.contentOverride
             ?? await fetcher.fetchFile(owner, repo, sha, candidate.path, maxFileSize);
-        const parsedFile = parseSkillFile(content);
-        // name 누락 시 디렉토리명 폴백 — Claude Code 는 SKILL.md 의 name 을 디렉토리에서 유도한다
-        // (vanta·logrocket·windsor-ai 실사례, 2026-08-29). 루트 SKILL.md 는 repo 이름.
-        if (!parsedFile.frontmatter.name) {
-            const derived = deriveSkillNameFromPath(candidate.path, repo);
-            if (derived) {
-                parsedFile.frontmatter.name = derived;
-                warnings.push(`SKILL_NAME_DERIVED: frontmatter name 누락 → "${derived}" (경로에서 유도)`);
-            }
-        }
-        const validation = await validateManifest(parsedFile, { availableToolNames: new Set() });
-        if (!validation.ok) {
-            throw new Error(`MANIFEST_INVALID: ${validation.errors.join('; ')}`);
-        }
-
-        // (5-b) 설치 시 적응 — 외부 생태계(Claude Code 등) 표현을 이 환경 기준으로 안내.
-        // 본문 재작성이 아니라 앞단 호환 노트 주입 + 버려지던 frontmatter 보존이라
-        // 적응할 것이 없으면 원문 그대로다(기존 스킬 무영향).
-        const adapted = adaptSkillContent({
-            frontmatter: validation.raw_frontmatter,
-            promptMd: validation.prompt_md,
-        });
+        // (5)·(5-b) 검증 + 설치 시 적응 — 설치 미리보기(M1b)와 같은 함수
+        const { validation, adapted } = await prepareSkillContent(content, candidate.path, repo, warnings);
         const skillContent = adapted.content;
         // checksum 은 실제 저장 본문 기준 — 적응본과 skill_manifests.prompt_md 가 일치해야 한다
         const skillChecksum = adapted.adapted

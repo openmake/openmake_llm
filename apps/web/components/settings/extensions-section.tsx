@@ -12,6 +12,8 @@ import { ExtensionPermissionBadge, ExtensionPermissionPanel } from "@/components
 import { CatalogSourceAdmin } from "@/components/settings/catalog-source-admin";
 import { NamedInstallForm } from "@/components/settings/named-install-form";
 import { useAppStore } from "@/lib/store";
+import { ExtensionInstallPreviewDialog } from "@/components/settings/extension-install-preview-dialog";
+import { catalogInstallMode } from "@/lib/extension-install-preview";
 
 interface UserExtension {
   id: string;
@@ -104,6 +106,9 @@ export function ExtensionsSection() {
   const [sharing, setSharing] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<CatalogSource[]>([]);
   const [catalogInstalls, setCatalogInstalls] = useState<Record<string, GalleryInstallState>>({});
+  // 설치 미리보기(M1b) — 갤러리 응답에 installPreview 가 있을 때만. 없으면 종전처럼 바로 설치
+  const [catalogMode, setCatalogMode] = useState<"preview" | "direct">("direct");
+  const [previewTarget, setPreviewTarget] = useState<{ sourceId: string; plugin?: string; label: string } | null>(null);
   const [catalogUrl, setCatalogUrl] = useState("");
   const [catalogBusy, setCatalogBusy] = useState<string | null>(null);
   // 카탈로그 단일 브라우저 — 소스/카테고리 셀렉트 + 키워드 검색 + 페이지 (16개 소스 스택 대신 한 리스트)
@@ -162,11 +167,12 @@ export function ExtensionsSection() {
 
   const loadGallery = useCallback(async () => {
     try {
-      const res = await ApiClient.get<ApiSuccess<{ extensions: GalleryExtension[]; catalog?: CatalogSource[] }>>(
+      const res = await ApiClient.get<ApiSuccess<{ extensions: GalleryExtension[]; catalog?: CatalogSource[]; installPreview?: boolean }>>(
         "/api/users/me/extensions/gallery",
       );
       setGallery(res?.data?.extensions ?? []);
       setCatalog(res?.data?.catalog ?? []);
+      setCatalogMode(catalogInstallMode(res?.data));
     } catch {
       /* 실패 — 빈 갤러리 유지 */
     }
@@ -268,6 +274,12 @@ export function ExtensionsSection() {
     } catch (e) {
       setCatalogInstalls((prev) => ({ ...prev, [key]: { state: "failed", message: installFailureMessage(e) } }));
     }
+  }
+
+  /** 카탈로그 설치 버튼 — 미리보기가 켜져 있으면 대화상자 확인 뒤 설치 */
+  function onCatalogInstallClick(sourceId: string, plugin: string | undefined, label: string) {
+    if (catalogMode === "preview") setPreviewTarget({ sourceId, plugin, label });
+    else void installFromCatalog(sourceId, plugin);
   }
 
   async function registerCatalogSource() {
@@ -770,7 +782,7 @@ export function ExtensionsSection() {
                           variant="outline"
                           size="sm"
                           disabled={st?.state === "installing"}
-                          onClick={() => void installFromCatalog(e.srcId, e.multiPlugin ? p.name : undefined)}
+                          onClick={() => onCatalogInstallClick(e.srcId, e.multiPlugin ? p.name : undefined, p.name)}
                         >
                           {st?.state === "installing" ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -814,6 +826,11 @@ export function ExtensionsSection() {
         </div>
       </CardContent>
       <MarketplacePublishSection onPublishedAction={() => { void load(); void loadGallery(); }} />
+      <ExtensionInstallPreviewDialog
+        target={previewTarget}
+        onClose={() => setPreviewTarget(null)}
+        onConfirm={(sourceId, plugin) => void installFromCatalog(sourceId, plugin)}
+      />
     </Card>
   );
 }

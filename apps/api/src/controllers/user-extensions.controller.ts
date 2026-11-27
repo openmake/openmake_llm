@@ -9,6 +9,7 @@
  *   GET    /api/users/me/extensions                     — 본인 active 설치 목록
  *   GET    /api/users/me/extensions/gallery             — 워크스페이스 갤러리 (shared 확장 + admin 큐레이션 카탈로그)
  *   POST   /api/users/me/extensions/gallery/:id/install — 갤러리 확장을 본인 계정으로 설치 (ingest 재실행)
+ *   POST   /api/users/me/extensions/catalog/:id/preview — 설치 미리보기(M1b, EXTENSION_INSTALL_PREVIEW_ENABLED — 쓰기·LLM 없음)
  *   POST   /api/users/me/extensions/catalog/:id/install — 카탈로그 소스의 플러그인을 본인 계정으로 설치
  *   GET    /api/users/me/extensions/:id                 — 상세 (구성요소 현재 상태 포함, 본인 소유)
  *   PATCH  /api/users/me/extensions/:id/visibility      — 공유 토글 (소유자 한정, Phase 3)
@@ -51,6 +52,7 @@ import { removeExtensionInstallation } from '../services/addon/addon-state';
 import { activeOrgFor, membershipsFor } from '../services/org/membership-cache';
 import { success, internalError, unauthorized, notFound, badRequest, conflict } from '../utils/api-response';
 import { ExtensionSourceBlockedError } from '../errors/extension-source-blocked.error';
+import { extensionInstallPreviewEnabled } from '../config/extension-install-preview';
 
 const updateCheckSchema = z.object({
     // private repo 접근/rate limit 우회용 (요청 한정 — DB 미저장)
@@ -183,7 +185,8 @@ export function createUserExtensionsController(): Router {
             } catch (err) {
                 log.warn('catalog 조회 실패 (갤러리는 계속):', err);
             }
-            res.json(success({ extensions, catalog }));
+            // 설치 미리보기(M1b) — 켜져 있을 때만 필드를 싣는다(꺼져 있으면 응답 모양이 종전과 같다)
+            res.json(success({ extensions, catalog, ...(extensionInstallPreviewEnabled() ? { installPreview: true } : {}) }));
         } catch (err) {
             log.error('gallery 실패:', err);
             res.status(500).json(internalError('갤러리 조회 실패'));
@@ -418,6 +421,32 @@ export function createUserExtensionsController(): Router {
             res.status(400).json(err instanceof NamedInstallError
                 ? badRequest(msg, { code: err.code, candidates: err.candidates })
                 : badRequest(`이름 설치 실패: ${msg}`));
+        }
+    });
+
+    // 설치 미리보기(M1b, opt-in) — 쓰기·LLM 없이 설치될 구성요소·권한·원본·커밋·경고. 플래그 OFF 면 404(라우트가 없는 것과 같다)
+    router.post('/catalog/:id/preview', requireAuth, validate(catalogInstallSchema), async (req, res) => {
+        if (!extensionInstallPreviewEnabled()) { res.status(404).json(notFound('설치 미리보기가 꺼져 있습니다')); return; }
+        const userId = getUserId(req);
+        if (!userId) { res.status(401).json(unauthorized()); return; }
+        try {
+            const source = await new ExtensionCatalogRepository(getPool()).getById(req.params.id);
+            if (!source || !source.enabled) { res.status(404).json(notFound('카탈로그 소스 없음')); return; }
+            const body = req.body as z.infer<typeof catalogInstallSchema>;
+            const service = await buildIngestService();
+            // 설치(아래)와 같은 입력 — 설치자 본인 계정·isAdmin=false
+            const result = await service.preview({ userId, isAdmin: false, gitUrl: source.url, plugin: body.plugin, accessToken: body.accessToken, catalogSubpath: source.source_subpath ?? null });
+            if ('selectionRequired' in result && result.selectionRequired) {
+                const names = result.marketplace?.plugins.map(p => p.name).join(', ');
+                res.status(400).json(badRequest(`플러그인 이름을 지정하세요${names ? ` — 가능: ${names}` : ''}`));
+                return;
+            }
+            res.json(success(result));
+        } catch (err) {
+            rethrowPolicyError(err);
+            const msg = err instanceof Error ? err.message : String(err);
+            log.warn(`catalog preview 실패: ${msg}`);
+            res.status(400).json(badRequest(`설치 미리보기 실패: ${msg}`));
         }
     });
 
