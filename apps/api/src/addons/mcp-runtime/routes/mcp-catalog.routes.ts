@@ -24,6 +24,8 @@ import { createLogger } from '../../../utils/logger';
 import { McpCatalogInputError } from '../../../security/spawn-env-policy';
 import { auditMcpServerCreated, auditMcpRegisterDenied } from './mcp-server-audit';
 import { transportNoticeFields } from '../transport-notices';
+import { catalogExtensionLookup } from '../extension-awareness';
+import { McpNegotiationRepository } from '../data/mcp-negotiation-repository';
 
 const logger = createLogger('McpCatalogRoutes');
 
@@ -33,7 +35,10 @@ export const mcpCatalogRouter = Router();
 mcpCatalogRouter.get('/catalog', requireAuth, asyncHandler(async (_req: Request, res: Response) => {
     const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
     // MCP-3 — 옮겨 가거나 꺼지는 엔드포인트의 템플릿에 안내를 붙인다(플래그 OFF 면 종전 그대로)
-    const templates = (await repo.listCatalog()).map(t => ({ ...t, ...transportNoticeFields(t.transport_type, t.url_template) }));
+    const rows = await repo.listCatalog();
+    // MCP-5 — 그 템플릿으로 설치된 서버가 선언한 확장(플래그 OFF·미선언이면 없음)
+    const extFields = await catalogExtensionLookup(new McpNegotiationRepository(getUnifiedDatabase().getPool()), rows.map(t => t.id));
+    const templates = rows.map(t => ({ ...t, ...transportNoticeFields(t.transport_type, t.url_template), ...extFields(t.id) }));
     res.json(success({ templates, total: templates.length }));
 }));
 

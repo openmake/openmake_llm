@@ -20,6 +20,7 @@
       "metrics": "Metriken",
       "alerts": "Warnungen",
       "mcpCatalogAdmin": "MCP-Katalog-Admin",
+      "mcpRegistry": "MCP-Registry",
       "modelRolesAdmin": "Modellzuweisungs-Admin",
       "systemSettingsAdmin": "Systemeinstellungen",
       "developer": "Entwickler",
@@ -1482,6 +1483,24 @@
       "replacement": "Neue Adresse: {url}",
       "replacementCandidate": "Wahrscheinliche Streamable-HTTP-Adresse: {url} (bitte in der Serverdokumentation prüfen)",
       "reauth": "Registrieren Sie den Server unter der neuen Adresse erneut und melden Sie sich erneut an (die alte OAuth-Verbindung funktioniert nicht mehr)."
+    },
+    "declaredExtensions": {
+      "label": {
+        "skills": "Skill-Anbieter",
+        "apps": "MCP Apps (UI) nicht unterstützt",
+        "tasks": "Tasks nicht unterstützt",
+        "events": "Events nicht unterstützt",
+        "auth": "Auth-Erweiterung nicht unterstützt",
+        "unknown": "Unbekannte Erweiterung"
+      },
+      "hint": {
+        "skills": "Dieser Server stellt Skills über Skills over MCP bereit. OpenMake lädt Skills noch nicht auf diesem Weg — die Tools des Servers funktionieren weiterhin.",
+        "apps": "Dieser Server deklariert MCP Apps (interaktive UI). OpenMake zeigt die UI nicht an und erhält nur Tool-Ergebnisse.",
+        "tasks": "Dieser Server deklariert MCP Tasks (lang laufende Arbeit). OpenMake nutzt Tasks nicht und ruft die Tools normal auf.",
+        "events": "Dieser Server deklariert MCP Events. OpenMake abonniert keine Events.",
+        "auth": "Dieser Server deklariert eine Auth-Erweiterung. OpenMake nutzt sie nicht und meldet sich mit dem bestehenden OAuth an.",
+        "unknown": "Dieser Server deklariert eine MCP-Erweiterung, die OpenMake nicht kennt. Die Basis-Tools des Servers funktionieren weiterhin."
+      }
     }
   },
   "mcpCatalog": {
@@ -2583,7 +2602,74 @@
       "sourceAria": "Quellfilter",
       "sourceAll": "Alle Quellen ({count})",
       "searchAria": "Stichwortsuche",
-      "searchPlaceholder": "Name/Beschreibung durchsuchen"
+      "searchPlaceholder": "Name/Beschreibung durchsuchen",
+      "admin": {
+        "statusOk": "Letzte Synchronisierung erfolgreich",
+        "statusError": "Letzte Synchronisierung fehlgeschlagen",
+        "statusRateLimited": "Letzte Synchronisierung: Ratenlimit (automatische Wiederholungen warten länger)",
+        "statusNever": "Noch nie synchronisiert",
+        "lastAttempt": "Letzter Versuch: {time}",
+        "credentialSaved": "Quell-Token gespeichert",
+        "credentialNone": "Kein Quell-Token (ohne Authentifizierung)",
+        "tokenPlaceholder": "Quell-Zugriffstoken (wird nach dem Speichern nicht mehr angezeigt)",
+        "saveToken": "Token speichern",
+        "clearToken": "Token entfernen",
+        "clearTokenConfirm": "Gespeichertes Quell-Token entfernen?",
+        "subpathPlaceholder": "Unterpfad (z. B. plugins/market; leer = Repository-Wurzel)",
+        "saveSubpath": "Pfad speichern",
+        "indexUrlPlaceholder": "Statische Index-URL (index.json, https)",
+        "saveIndexUrl": "Index speichern",
+        "indexFallbackWarning": "Index-Fallback:",
+        "saveFailed": "Speichern fehlgeschlagen",
+        "saved": "Gespeichert",
+        "syncHint": "Änderungen an Unterpfad und Token gelten ab der nächsten Synchronisierung.",
+        "aliasLabel": "Alias für Installation nach Name",
+        "aliasPlaceholder": "Alias (leer = {name})",
+        "saveAlias": "Alias speichern",
+        "aliasConflict": "Dieser Alias wird bereits von einem anderen Katalog verwendet"
+      },
+      "named": {
+        "placeholder": "plugin@marktplatz (z. B. code-review@openmake-marketplace)",
+        "install": "Nach Name installieren",
+        "formatHint": "Format: plugin@marktplatz — Buchstaben, Ziffern, . _ -, beginnt mit Buchstabe oder Ziffer",
+        "installed": "Installiert: {name} (Komponenten werden nach Freigabe aktiv)",
+        "failed": "Installation nach Name fehlgeschlagen",
+        "candidates": "Meinten Sie:"
+      }
+    },
+    "preview": {
+      "title": "Installationsvorschau — {name}",
+      "loading": "Prüfe, was installiert wird…",
+      "failed": "Vorschau konnte nicht geladen werden.",
+      "source": "Quelle",
+      "commit": "Commit",
+      "existingUpdate": "Bereits installiert (v{version}) — beim Bestätigen wird auf diese Version aktualisiert.",
+      "existingUpToDate": "Die neueste Version ist bereits installiert.",
+      "existingOtherSource": "Eine Erweiterung mit demselben Namen ist aus einer anderen Quelle installiert. Bitte zuerst entfernen.",
+      "components": "Komponenten — Skills {skills} · MCP-Server {mcpServers} · Agenten {agents}",
+      "skill": "Skill",
+      "command": "Befehl",
+      "mcp": "MCP",
+      "agent": "Agent",
+      "assets": "{count} gebündelte Dateien",
+      "mcpBlocked": "wegen riskantem Befehlsmuster als blockiert markiert",
+      "networkRestricted": "Sandbox ohne Netzwerk",
+      "requiredEnv": "bei Freigabe eingeben: {keys}",
+      "agentApproval": "nach Freigabe nutzbar",
+      "draftNote": "Komponenten werden als Entwürfe angelegt und nach Freigabe unter Freigaben aktiv.",
+      "permissions": "Berechtigungen",
+      "permissionsLegacy": "Keine Berechtigungen deklariert (bisheriges Verhalten — Netzwerk erlaubt)",
+      "permissionsNone": "Keine Berechtigungen angefordert",
+      "permissionsBlocked": "Bis zur erneuten Freigabe blockiert: {list}",
+      "warnings": "Warnungen",
+      "cancel": "Abbrechen",
+      "confirm": "Installieren",
+      "hint": {
+        "deprecatedTransport": "Der SSE-Transport wird eingestellt (Streamable-HTTP-Kandidat: {url}).",
+        "endpointSunset": "Diese Adresse wird am {date} abgeschaltet — neue Adresse: {url}",
+        "endpointMoved": "Dieser Server zieht am {date} nach {url} um — an der neuen Adresse ist eine erneute Anmeldung nötig.",
+        "remoteAuth": "Remote-Server — nach der Freigabe kann eine Anmeldung (OAuth) nötig sein."
+      }
     }
   },
   "mcpInstances": {
@@ -3444,5 +3530,94 @@
     "login": "Anmelden",
     "snapshotNote": "Unterhaltung mit Stand {date} – diese Seite ändert sich nicht, wenn die ursprüngliche Unterhaltung weitergeht.",
     "scope": "Sichtbarkeit: {scope}"
+  },
+  "marketVerdicts": {
+    "verdict": {
+      "supported": "Unterstützt",
+      "partial": "Teilweise",
+      "unsupported": "Nicht unterstützt"
+    },
+    "reason": {
+      "NOT_INSTALLABLE": "Keine installierbaren Skills oder MCP-Server",
+      "INSTALLABILITY_UNKNOWN": "Installierbarkeit unbekannt (Eintrag aus anderem Repository)",
+      "SKILL_MCP_TOOL_IDIOM": "Skills verwenden Claude-Code-MCP-Toolnamen (mcp__server__tool)",
+      "SKILL_ASSET_OUTSIDE_DIR": "Skills verweisen auf Dateien außerhalb ihres Ordners (nicht mitinstalliert)",
+      "SKILL_COMMAND_ASSETS_SKIPPED": "Umgewandelte Befehle verweisen auf nicht mitgelieferte Dateien",
+      "SKILL_CLAUDE_DIR_PATH": "Skills verweisen auf .claude/-Pfade",
+      "SKILL_CLAUDE_INSTALL_GUIDE": "Skills enthalten Claude-Code-Einrichtungsanleitungen",
+      "SKILL_TOOL_UNSUPPORTED": "Einige von Skills genannte Tools gibt es hier nicht",
+      "SKILL_REQUIRED_TOOL_MISSING": "Ein von einem Skill benötigtes Tool fehlt",
+      "SKILL_EXECUTION_BLOCKED": "Ein Skill ist für die Ausführung gesperrt",
+      "COMPONENTS_UNSUPPORTED": "Einige Komponenten werden nicht unterstützt",
+      "MCP_ENTRIES_SKIPPED": "Einige MCP-Einträge wurden übersprungen",
+      "MCP_BLOCKED_BY_CONVENTION": "Ein MCP-Server wurde von der Konventionsprüfung blockiert",
+      "ASSETS_SKIPPED": "Einige mitgelieferte Dateien wurden übersprungen",
+      "COMPONENTS_TRUNCATED": "Einige Komponenten wurden an der Größengrenze abgeschnitten",
+      "MCP_TRANSPORT_SSE_DEPRECATED": "MCP-Server nutzt den veralteten SSE-Transport",
+      "MCP_EXT_APPS_UNSUPPORTED": "MCP-Apps-Erweiterung wird nicht unterstützt",
+      "MCP_EXT_TASKS_UNSUPPORTED": "MCP-Tasks-Erweiterung wird nicht unterstützt",
+      "MCP_EXT_UNRECOGNIZED": "MCP-Server deklariert eine unbekannte Erweiterung",
+      "MCP_SKILLS_PROVIDER": "MCP-Server stellt Skills bereit (Skills over MCP)",
+      "MCP_AUTH_DYNAMIC_REGISTRATION": "MCP-Server meldet sich per dynamischer Client-Registrierung an",
+      "MCP_PROTOCOL_MODERN": "MCP-Server spricht das aktuelle Protokoll",
+      "MCP_PROTOCOL_LEGACY": "MCP-Server spricht ein älteres Protokoll",
+      "CROSS_REPO_SOURCE": "Liegt in einem anderen Repository",
+      "CONTENT_NOT_EVALUATED": "Inhalt noch nicht bewertet"
+    },
+    "provenance": {
+      "publisher": "Herausgeber: {value}",
+      "commit": "Commit: {value}",
+      "license": "Lizenz: {value}"
+    },
+    "snapshotOnly": "Nur anhand des Katalog-Snapshots bewertet — nach der Installation wird auch der Inhalt geprüft"
+  },
+  "marketRegistry": {
+    "pageTitle": "MCP-Registry",
+    "pageDescription": "Kopie der offiziellen MCP Registry prüfen, Einträge freigeben oder ausblenden und freigegebene als deaktivierte MCP-Katalogentwürfe übernehmen.",
+    "never": "nie",
+    "syncOn": "Synchronisierung an",
+    "syncOff": "Synchronisierung aus",
+    "syncOffHint": "Zum Synchronisieren die Einstellung {key} einschalten",
+    "lastSuccess": "Letzte Synchronisierung",
+    "inProgress": "Wird fortgesetzt",
+    "backoffUntil": "Wartet bis {at}",
+    "lastError": "Letzter Fehler",
+    "counts": "Offen {pending} · Freigegeben {approved} · Ausgeblendet {hidden} · In der Registry gelöscht {tombstoned}",
+    "syncNow": "Jetzt synchronisieren",
+    "syncResult": "Ergebnis: {status}",
+    "actionError": "Anfrage fehlgeschlagen",
+    "curated": "Gespeichert",
+    "promoted": "Als deaktivierter Entwurf in den MCP-Katalog übernommen: {id}",
+    "promoteExists": "Bereits im Katalog: {id}",
+    "publisherVerified": "Herausgeber bestätigt",
+    "publisherVerifiedHint": "Die Registry hat den Besitz des Namensraums bestätigt. Das ist keine Code- oder Sicherheitsprüfung.",
+    "noInstall": "Keine Installationsangaben",
+    "curation": {
+      "pending": "Offen",
+      "approved": "Freigegeben",
+      "hidden": "Ausgeblendet"
+    },
+    "registryStatus": {
+      "active": "Aktiv",
+      "deprecated": "Veraltet",
+      "deleted": "Gelöscht"
+    },
+    "tombstoned": "In der Registry gelöscht",
+    "approve": "Freigeben",
+    "hide": "Ausblenden",
+    "reset": "Zurück auf offen",
+    "promote": "In Katalog übernehmen",
+    "filterAll": "Alle",
+    "searchPlaceholder": "Name oder Beschreibung suchen (Enter)",
+    "showTombstoned": "Gelöschte einbeziehen",
+    "colServer": "Server",
+    "colInstall": "Installation",
+    "colState": "Status",
+    "colActions": "Aktionen",
+    "loading": "Wird geladen...",
+    "empty": "Keine Einträge",
+    "pageInfo": "{from}–{to} von {total}",
+    "prev": "Zurück",
+    "next": "Weiter"
   }
 }

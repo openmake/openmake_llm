@@ -9,6 +9,7 @@
  *   GET    /api/users/me/extensions                     — 본인 active 설치 목록
  *   GET    /api/users/me/extensions/gallery             — 워크스페이스 갤러리 (shared 확장 + admin 큐레이션 카탈로그)
  *   POST   /api/users/me/extensions/gallery/:id/install — 갤러리 확장을 본인 계정으로 설치 (ingest 재실행)
+ *   POST   /api/users/me/extensions/catalog/:id/preview — 설치 미리보기(M1b, EXTENSION_INSTALL_PREVIEW_ENABLED — 쓰기·LLM 없음)
  *   POST   /api/users/me/extensions/catalog/:id/install — 카탈로그 소스의 플러그인을 본인 계정으로 설치
  *   GET    /api/users/me/extensions/:id                 — 상세 (구성요소 현재 상태 포함, 본인 소유)
  *   PATCH  /api/users/me/extensions/:id/visibility      — 공유 토글 (소유자 한정, Phase 3)
@@ -18,7 +19,11 @@
  * Admin (requireAdmin — 큐레이션 카탈로그 관리):
  *   GET    /api/users/me/extensions/catalog/admin       — 전체 소스 목록 (disabled 포함)
  *   POST   /api/users/me/extensions/catalog             — 소스 등록 + 스냅샷 동기화
- *   POST   /api/users/me/extensions/catalog/:id/sync    — 스냅샷 재동기화
+ *   POST   /api/users/me/extensions/catalog/:id/sync    — 스냅샷 재동기화 (응답에 sync_status·last_sync_error, M4)
+ *   PUT    /api/users/me/extensions/catalog/:id/credential — 원본 접근 토큰 저장·삭제 (write-only, 암호화 — M4)
+ *   PATCH  /api/users/me/extensions/catalog/:id         — 하위 경로(source_subpath)·이름 설치 별칭(alias)·정적 색인 주소(index_url) 지정 (M4·M5·M6)
+ *   POST   /api/users/me/extensions/install-by-name    — `플러그인@마켓플레이스` 이름 설치 (M5, user-extensions-named.routes)
+ *   POST   /api/users/me/extensions/preview-by-name    — 이름 설치 미리보기 (M1b 연장, EXTENSION_INSTALL_PREVIEW_ENABLED)
  *   DELETE /api/users/me/extensions/catalog/:id         — 소스 삭제
  *
  * ⚠️ 라우트 등록 순서: '/gallery*'·'/catalog*' 가 '/:id' 보다 먼저여야 한다 (Express 순차 매칭).
@@ -34,12 +39,21 @@ import { validate } from '../middlewares/validation';
 import { getPool } from '../data/models/unified-database';
 import { releaseLinkedMcpServers } from '../services/extensions/release-linked-mcp';
 import { UserExtensionRepository, type UserExtensionRow } from '../data/repositories/user-extension-repository';
-import { ExtensionCatalogRepository } from '../data/repositories/extension-catalog-repository';
+import { ExtensionCatalogRepository, toPublicCatalogSource } from '../data/repositories/extension-catalog-repository';
+import { buildExtensionIngestService } from '../services/extensions/ingest-service-factory';
+import { syncCatalogSource } from '../services/extensions/catalog-sync';
+import { EXTENSION_CATALOG_SYNC_LIMITS, normalizeCatalogSubpath } from '../config/extension-catalog-sync';
+import { CATALOG_INDEX_LIMITS, normalizeCatalogIndexUrl } from '../config/extension-catalog-index';
+import { encryptToken } from '../utils/token-crypto';
+import { NAMED_INSTALL_LIMITS, isValidMarketplaceAlias } from '../config/extension-named-install';
+import { registerNamedInstallRoutes } from './user-extensions-named.routes';
+import { applyDefaultCatalogAlias } from '../services/extensions/catalog-alias';
 import { createLogger } from '../utils/logger';
 import { removeExtensionInstallation } from '../services/addon/addon-state';
 import { activeOrgFor, membershipsFor } from '../services/org/membership-cache';
-import { success, internalError, unauthorized, notFound, badRequest } from '../utils/api-response';
+import { success, internalError, unauthorized, notFound, badRequest, conflict } from '../utils/api-response';
 import { ExtensionSourceBlockedError } from '../errors/extension-source-blocked.error';
+import { extensionInstallPreviewEnabled } from '../config/extension-install-preview';
 
 const updateCheckSchema = z.object({
     // private repo 접근/rate limit 우회용 (요청 한정 — DB 미저장)
@@ -58,7 +72,23 @@ const galleryInstallSchema = z.object({
 const catalogRegisterSchema = z.object({
     url: z.string().min(3).max(500),
     accessToken: z.string().max(200).optional(),
+    // 저장소 안 카탈로그 루트(M4) — 생략 = 저장소 루트(종전)
+    sourceSubpath: z.string().max(EXTENSION_CATALOG_SYNC_LIMITS.SUBPATH_MAX_CHARS).nullable().optional(),
 });
+
+/** 원본 접근 토큰 — null 이면 삭제. 응답에 값을 돌려주지 않는다(write-only) */
+const catalogCredentialSchema = z.object({
+    token: z.string().min(1).max(EXTENSION_CATALOG_SYNC_LIMITS.CREDENTIAL_MAX_CHARS).nullable(),
+});
+
+/** 원본 설정 — 보낸 필드만 바꾼다(하위 경로 M4 · 정적 색인 주소 M6). null = 지움 */
+const catalogPatchSchema = z.object({
+    sourceSubpath: z.string().max(EXTENSION_CATALOG_SYNC_LIMITS.SUBPATH_MAX_CHARS).nullable().optional(),
+    // 이름 설치 별칭(M5) — null 이면 지워 스냅샷 name 을 쓴다
+    alias: z.string().max(NAMED_INSTALL_LIMITS.NAME_MAX_CHARS).nullable().optional(),
+    // 정적 색인 주소(M6) — null 이면 색인 미사용(종전 동기화)
+    indexUrl: z.string().max(CATALOG_INDEX_LIMITS.URL_MAX_CHARS).nullable().optional(),
+}).refine((b) => b.sourceSubpath !== undefined || b.alias !== undefined || b.indexUrl !== undefined, '변경할 항목이 없습니다');
 
 const catalogInstallSchema = z.object({
     // marketplace 소스면 플러그인 이름 필수, 단일 plugin.json 소스면 생략 가능
@@ -97,24 +127,22 @@ async function memberOrgIds(userId: string): Promise<string[]> {
     }
 }
 
-/** ExtensionIngestService 조립 (동적 import — update-check/gallery install 공용). */
-async function buildIngestService(scope?: { userId: string; isAdmin: boolean }) {
-    const { ExtensionIngestService } = await import('../agents/git-ingest/extension-ingest-service');
-    const { GitFetcher } = await import('../agents/git-ingest/git-fetcher');
-    const { LLMClient } = await import('../llm/client');
-    const { SKILL_CREATOR } = await import('../config/constants');
-    const { MarketplaceBundleRepository } = await import('../data/repositories/marketplace-bundle-repository');
-    return new ExtensionIngestService({
-        pool: getPool(),
-        llmClientFactory: (model: string) => new LLMClient(model ? { model } : {}),
-        fetcherFactory: (opts) => new GitFetcher({ accessToken: opts.accessToken, timeoutMs: SKILL_CREATOR.gitFetchTimeout }),
-        // 갤러리에 게시된 내부 번들(internal://bundle/<id>) 설치 — DB 에서 파일을 읽는다.
-        // scope 가 있으면 요청자 스코프(본인 소유 또는 shared 게시분)로만 읽는다 (B9-01 심층방어)
-        internalBundleLoader: (id) => {
-            const repo = new MarketplaceBundleRepository(getPool());
-            return scope && !scope.isAdmin ? repo.loadForUser(id, scope.userId) : repo.load(id);
-        },
-    });
+/** ExtensionIngestService 조립 — services/extensions/ingest-service-factory (카탈로그 주기 동기화와 공용) */
+const buildIngestService = buildExtensionIngestService;
+
+/** 설치 결과 응답 — 카탈로그 설치·이름 설치 공용 */
+function installSummary(result: Extract<Awaited<ReturnType<Awaited<ReturnType<typeof buildIngestService>>['import']>>, { extensionId: string }>) {
+    return {
+        extensionId: result.extensionId,
+        name: result.name,
+        version: result.version,
+        updated: result.updated ?? false,
+        upToDate: (result.upToDate ?? false) || result.deduped,
+        skills: result.skills,
+        mcpServers: result.mcpServers,
+        agents: result.agents,
+        validationWarnings: result.validationWarnings,
+    };
 }
 
 export function createUserExtensionsController(): Router {
@@ -153,7 +181,8 @@ export function createUserExtensionsController(): Router {
             } catch (err) {
                 log.warn('catalog 조회 실패 (갤러리는 계속):', err);
             }
-            res.json(success({ extensions, catalog }));
+            // 설치 미리보기(M1b) — 켜져 있을 때만 필드를 싣는다(꺼져 있으면 응답 모양이 종전과 같다)
+            res.json(success({ extensions, catalog, ...(extensionInstallPreviewEnabled() ? { installPreview: true } : {}) }));
         } catch (err) {
             log.error('gallery 실패:', err);
             res.status(500).json(internalError('갤러리 조회 실패'));
@@ -212,7 +241,8 @@ export function createUserExtensionsController(): Router {
     router.get('/catalog/admin', requireAuth, requireAdmin, async (_req, res) => {
         try {
             const repo = new ExtensionCatalogRepository(getPool());
-            res.json(success({ sources: await repo.listAll() }));
+            // 원본 토큰 암호문은 싣지 않는다 — 저장 여부(has_credential)만 (write-only)
+            res.json(success({ sources: (await repo.listAll()).map(toPublicCatalogSource) }));
         } catch (err) {
             log.error('catalog admin list 실패:', err);
             res.status(500).json(internalError('카탈로그 목록 조회 실패'));
@@ -228,17 +258,24 @@ export function createUserExtensionsController(): Router {
             const dup = await repo.findByUrl(body.url.trim());
             if (dup) { res.status(400).json(badRequest(`이미 등록된 소스입니다 (${dup.id})`)); return; }
 
+            let subpath: string | null;
+            try { subpath = normalizeCatalogSubpath(body.sourceSubpath); } catch (e) {
+                res.status(400).json(badRequest(e instanceof Error ? e.message : String(e))); return;
+            }
             const service = await buildIngestService();
-            const snapshot = await service.fetchCatalogSnapshot(body.url.trim(), body.accessToken, { userId, action: 'catalog-register' });
-            const row = await repo.insert({
+            const snapshot = await service.fetchCatalogSnapshot(body.url.trim(), body.accessToken, { userId, action: 'catalog-register' }, subpath);
+            const inserted = await repo.insert({
                 url: body.url.trim(),
                 name: snapshot.name,
                 description: snapshot.description,
                 plugins: snapshot.plugins,
                 addedBy: userId,
             });
+            const withSubpath = subpath ? (await repo.setSubpath(inserted.id, subpath)) ?? inserted : inserted;
+            // 이름 설치 별칭 기본값 = 스냅샷 name (규칙에 맞고 다른 원본이 안 쓸 때만 — 충돌이면 비워 두고 관리자가 지정)
+            const row = await applyDefaultCatalogAlias(repo, withSubpath);
             log.info(`카탈로그 소스 등록: ${row.id} "${row.name}" (${row.plugins.length} plugins, by=${userId})`);
-            res.json(success({ source: row }));
+            res.json(success({ source: toPublicCatalogSource(row) }));
             // 설명 한국어 번역 — 응답 후 백그라운드 (LLM 배치가 CF 100s 상한을 넘을 수 있어 동기 금지, fail-open)
             void service.translateCatalogSnapshot(snapshot)
                 .then(() => repo.updateSnapshot(row.id, snapshot))
@@ -257,13 +294,14 @@ export function createUserExtensionsController(): Router {
             const row = await repo.getById(req.params.id);
             if (!row) { res.status(404).json(notFound('카탈로그 소스 없음')); return; }
             const service = await buildIngestService();
-            // accessToken(요청 한정): GitHub API 무인증 rate limit(60/hr) 회피 (2026-08-16 실측)
+            // accessToken(요청 한정) > 저장된 원본 토큰(M4) — GitHub API 무인증 rate limit(60/hr) 회피 (2026-08-16 실측)
             const body = req.body as z.infer<typeof galleryInstallSchema>;
-            const snapshot = await service.fetchCatalogSnapshot(row.url, body.accessToken, { userId: getUserId(req) ?? undefined, action: 'catalog-sync' });
-            // 기존 번역 재사용 (name+description 일치) — 재동기화 시 신규/변경분만 LLM 대상
-            const updated = await repo.updateSnapshot(row.id, snapshot);
+            // 결과(sync_status·last_sync_error·last_sync_attempt_at)는 syncCatalogSource 가 기록한다 — 실패도 기록 후 다시 던진다
+            const { row: updated, snapshot } = await syncCatalogSource({ repo, service }, row, {
+                accessToken: body.accessToken, userId: getUserId(req) ?? undefined,
+            });
             log.info(`카탈로그 동기화: ${row.id} (${snapshot.plugins.length} plugins)`);
-            res.json(success({ source: updated }));
+            res.json(success({ source: updated ? toPublicCatalogSource(updated) : null }));
             // 설명 한국어 번역 — 응답 후 백그라운드 (CF 100s 상한 회피, fail-open)
             void service.translateCatalogSnapshot(snapshot, row.plugins)
                 .then(() => repo.updateSnapshot(row.id, snapshot))
@@ -273,6 +311,65 @@ export function createUserExtensionsController(): Router {
             const msg = err instanceof Error ? err.message : String(err);
             log.warn(`catalog 동기화 실패: ${msg}`);
             res.status(400).json(badRequest(`카탈로그 동기화 실패: ${msg}`));
+        }
+    });
+
+    // 원본 접근 토큰 — 암호화 저장(write-only). 응답·로그에 값을 남기지 않는다 (M4)
+    router.put('/catalog/:id/credential', requireAuth, requireAdmin, validate(catalogCredentialSchema), async (req, res) => {
+        try {
+            const body = req.body as z.infer<typeof catalogCredentialSchema>;
+            const repo = new ExtensionCatalogRepository(getPool());
+            const ok = await repo.setCredential(req.params.id, body.token ? encryptToken(body.token) : null);
+            if (!ok) { res.status(404).json(notFound('카탈로그 소스 없음')); return; }
+            log.info(`카탈로그 원본 토큰 ${body.token ? '저장' : '삭제'}: ${req.params.id} (by=${getUserId(req)})`);
+            res.json(success({ id: req.params.id, has_credential: !!body.token }));
+        } catch (err) {
+            log.error('catalog credential 실패:', err instanceof Error ? err.message : 'unknown');
+            res.status(500).json(internalError('원본 토큰 저장 실패'));
+        }
+    });
+
+    // 하위 경로(M4)·정적 색인 주소(M6) 지정 — 다음 동기화부터 반영된다
+    router.patch('/catalog/:id', requireAuth, requireAdmin, validate(catalogPatchSchema), async (req, res) => {
+        try {
+            const body = req.body as z.infer<typeof catalogPatchSchema>;
+            // 형식 검사는 쓰기 전에 모두 — 하나라도 틀리면 아무것도 바꾸지 않는다
+            let indexUrl: string | null | undefined;
+            try {
+                if (body.indexUrl !== undefined) indexUrl = normalizeCatalogIndexUrl(body.indexUrl);
+            } catch (e) {
+                res.status(400).json(badRequest(e instanceof Error ? e.message : String(e))); return;
+            }
+            const repo = new ExtensionCatalogRepository(getPool());
+            let row = await repo.getById(req.params.id);
+            if (!row) { res.status(404).json(notFound('카탈로그 소스 없음')); return; }
+            if (body.sourceSubpath !== undefined) {
+                let subpath: string | null;
+                try { subpath = normalizeCatalogSubpath(body.sourceSubpath); } catch (e) {
+                    res.status(400).json(badRequest(e instanceof Error ? e.message : String(e))); return;
+                }
+                row = (await repo.setSubpath(row.id, subpath)) ?? row;
+                log.info(`카탈로그 하위 경로: ${row.id} → ${subpath ?? '(루트)'}`);
+            }
+            if (body.alias !== undefined) {
+                const alias = body.alias?.trim() || null;
+                if (alias && !isValidMarketplaceAlias(alias)) {
+                    res.status(400).json(badRequest(`INVALID_CATALOG_ALIAS: "${alias}" — 영문·숫자·. _ -, 영문·숫자로 시작, .. 금지, 예약어(internal·builtin·local) 불가`));
+                    return;
+                }
+                const r = await repo.setAlias(row.id, alias);
+                if (r.conflict) { res.status(409).json(conflict(`별칭 "${alias}" 는 다른 카탈로그가 쓰고 있습니다`)); return; }
+                row = r.row ?? row;
+                log.info(`카탈로그 별칭: ${row.id} → ${alias ?? '(스냅샷 name)'}`);
+            }
+            if (indexUrl !== undefined) {
+                row = (await repo.setIndexUrl(row.id, indexUrl)) ?? row;
+                log.info(`카탈로그 정적 색인: ${row.id} → ${indexUrl ? 'set' : '(미사용)'}`);
+            }
+            res.json(success({ source: toPublicCatalogSource(row) }));
+        } catch (err) {
+            log.error('catalog patch 실패:', err);
+            res.status(500).json(internalError('카탈로그 설정 변경 실패'));
         }
     });
 
@@ -286,6 +383,35 @@ export function createUserExtensionsController(): Router {
         } catch (err) {
             log.error('catalog 삭제 실패:', err);
             res.status(500).json(internalError('카탈로그 삭제 실패'));
+        }
+    });
+
+    // 이름 설치(M5)·그 미리보기 — user-extensions-named.routes (같은 설치 입력 namedInstallInput)
+    registerNamedInstallRoutes(router, { getUserId, rethrowPolicyError, installSummary });
+
+    // 설치 미리보기(M1b, opt-in) — 쓰기·LLM 없이 설치될 구성요소·권한·원본·커밋·경고. 플래그 OFF 면 404(라우트가 없는 것과 같다)
+    router.post('/catalog/:id/preview', requireAuth, validate(catalogInstallSchema), async (req, res) => {
+        if (!extensionInstallPreviewEnabled()) { res.status(404).json(notFound('설치 미리보기가 꺼져 있습니다')); return; }
+        const userId = getUserId(req);
+        if (!userId) { res.status(401).json(unauthorized()); return; }
+        try {
+            const source = await new ExtensionCatalogRepository(getPool()).getById(req.params.id);
+            if (!source || !source.enabled) { res.status(404).json(notFound('카탈로그 소스 없음')); return; }
+            const body = req.body as z.infer<typeof catalogInstallSchema>;
+            const service = await buildIngestService();
+            // 설치(아래)와 같은 입력 — 설치자 본인 계정·isAdmin=false
+            const result = await service.preview({ userId, isAdmin: false, gitUrl: source.url, plugin: body.plugin, accessToken: body.accessToken, catalogSubpath: source.source_subpath ?? null });
+            if ('selectionRequired' in result && result.selectionRequired) {
+                const names = result.marketplace?.plugins.map(p => p.name).join(', ');
+                res.status(400).json(badRequest(`플러그인 이름을 지정하세요${names ? ` — 가능: ${names}` : ''}`));
+                return;
+            }
+            res.json(success(result));
+        } catch (err) {
+            rethrowPolicyError(err);
+            const msg = err instanceof Error ? err.message : String(err);
+            log.warn(`catalog preview 실패: ${msg}`);
+            res.status(400).json(badRequest(`설치 미리보기 실패: ${msg}`));
         }
     });
 
@@ -306,6 +432,7 @@ export function createUserExtensionsController(): Router {
                 gitUrl: source.url,
                 plugin: body.plugin,
                 accessToken: body.accessToken,
+                catalogSubpath: source.source_subpath ?? null,
             });
             if ('selectionRequired' in result && result.selectionRequired) {
                 const names = result.marketplace?.plugins.map(p => p.name).join(', ');
@@ -313,17 +440,7 @@ export function createUserExtensionsController(): Router {
                 return;
             }
             log.info(`catalog install: ${source.id}/${body.plugin ?? '(single)'} → ${result.extensionId} (user=${userId})`);
-            res.json(success({
-                extensionId: result.extensionId,
-                name: result.name,
-                version: result.version,
-                updated: result.updated ?? false,
-                upToDate: (result.upToDate ?? false) || result.deduped,
-                skills: result.skills,
-                mcpServers: result.mcpServers,
-                agents: result.agents,
-                validationWarnings: result.validationWarnings,
-            }));
+            res.json(success(installSummary(result)));
         } catch (err) {
             rethrowPolicyError(err);
             const msg = err instanceof Error ? err.message : String(err);

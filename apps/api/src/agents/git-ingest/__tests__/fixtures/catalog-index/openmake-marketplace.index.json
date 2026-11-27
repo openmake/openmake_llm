@@ -1,0 +1,188 @@
+{
+  "schema": "openmake.catalog-index",
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-27T00:00:00.000Z",
+  "repository": "openmake/openmake-marketplace",
+  "commit": "22d265f8d0f146f19fdb23d51a942385b1244eaf",
+  "marketplace": {
+    "name": "openmake-marketplace",
+    "description": "OpenMake curated marketplace — plugins verified to install and run on openmake_llm (skills · custom agents · MCP). Each entry pins the upstream commit that was verified."
+  },
+  "plugins": [
+    {
+      "name": "claude-security",
+      "description": "Deep vulnerability scanning of your own code, run entirely inside your Claude Code session at a chosen effort tier, with every finding challenged before it is reported and the verification tally computed in code. Turns s",
+      "category": "security",
+      "source": {
+        "type": "git-subdir",
+        "url": "https://github.com/anthropics/claude-plugins-official.git",
+        "path": "plugins/claude-security"
+      },
+      "commit": "3deb821cb71ccfaaf2ffa9935e977df314ce5cd5",
+      "installable": true,
+      "sha256": "4ecaadfd0fe7cffbef4980f1248426ea0952ee2b69faeec049bbe3c1ea07ae2a"
+    },
+    {
+      "name": "plugin-dev",
+      "description": "Comprehensive toolkit for developing Claude Code plugins. Includes 7 expert skills covering hooks, MCP integration, commands, agents, and best practices. AI-assisted plugin creation and validation.",
+      "category": "development",
+      "source": {
+        "type": "git-subdir",
+        "url": "https://github.com/anthropics/claude-plugins-official.git",
+        "path": "plugins/plugin-dev"
+      },
+      "commit": "3deb821cb71ccfaaf2ffa9935e977df314ce5cd5",
+      "installable": true,
+      "sha256": "c6e67da89c728adca1c0501c774bb59dc08f2ca05ec66a30b1dc1cfd1e05069a"
+    },
+    {
+      "name": "hookify",
+      "description": "Easily create custom hooks to prevent unwanted behaviors by analyzing conversation patterns or from explicit instructions. Define rules via simple markdown files.",
+      "category": "productivity",
+      "source": {
+        "type": "git-subdir",
+        "url": "https://github.com/anthropics/claude-plugins-official.git",
+        "path": "plugins/hookify"
+      },
+      "commit": "3deb821cb71ccfaaf2ffa9935e977df314ce5cd5",
+      "installable": true,
+      "sha256": "8803d10201daceb772e645e4c216aebef08ac532982688f1000a733e9430f666"
+    },
+    {
+      "name": "math-olympiad",
+      "description": "Solve competition math (IMO, Putnam, USAMO) with adversarial verification that catches what self-verification misses. Fresh-context verifiers attack proofs with specific failure patterns. Calibrated abstention over bluff",
+      "category": "math",
+      "source": {
+        "type": "git-subdir",
+        "url": "https://github.com/anthropics/claude-plugins-official.git",
+        "path": "plugins/math-olympiad"
+      },
+      "commit": "3deb821cb71ccfaaf2ffa9935e977df314ce5cd5",
+      "installable": true,
+      "sha256": "21c9bb558d5d0108fab418aa133064ce48a9c49b89b81e3706b608513e19d6a3"
+    },
+    {
+      "name": "design",
+      "description": "Accelerate design workflows — critique, design system management, UX writing, accessibility audits, research synthesis, and dev handoff. From exploration to pixel-perfect specs.",
+      "category": "design",
+      "source": {
+        "type": "git-subdir",
+        "url": "https://github.com/anthropics/knowledge-work-plugins.git",
+        "path": "design"
+      },
+      "commit": "a6d8653261a4cf3353c145648fece23bad949278",
+      "installable": true,
+      "sha256": "e53b4269bd227c241d523af0f34385b66d3d32a23a329a8cfaf03ec920467f99"
+    },
+    {
+      "name": "browser-use",
+      "description": "Give Claude a real browser — your Chrome or a Browser Use Cloud browser. Use it whenever a task involves a website or web app: browsing, scraping and data extraction, filling forms, testing sites, taking screenshots, aut",
+      "category": "automation",
+      "source": {
+        "type": "git-subdir",
+        "url": "https://github.com/browser-use/plugins.git",
+        "path": "browser-use"
+      },
+      "commit": "4749bcbfe456e5384b98281a8a66119352197f59",
+      "installable": true,
+      "sha256": "a936c9ff0f14998ccd5e3e14c701be3131ec243211ce948d7f356f43219e498d"
+    },
+    {
+      "name": "cli-power-skills",
+      "description": "Agentic CLI tool skills — 7 domain-grouped skills covering 26 CLI tools",
+      "category": "productivity",
+      "source": {
+        "type": "git-subdir",
+        "url": "https://github.com/jeremylongshore/claude-code-plugins-plus-skills.git",
+        "path": "plugins/productivity/cli-power-skills"
+      },
+      "commit": "70319dd06c76bca3b4da97633fec02c1452473e2",
+      "installable": true,
+      "sha256": "e3dec409cf78279c13b986ac4ff2296fc7dbc4492f9222166008f07893255a5a"
+    },
+    {
+      "name": "ai-ml-engineering-pack",
+      "description": "Professional AI/ML Engineering toolkit: Prompt engineering, LLM integration, RAG systems, AI safety with 12 expert plugins",
+      "category": "ai-ml",
+      "source": {
+        "type": "git-subdir",
+        "url": "https://github.com/jeremylongshore/claude-code-plugins-plus-skills.git",
+        "path": "plugins/packages/ai-ml-engineering-pack"
+      },
+      "commit": "70319dd06c76bca3b4da97633fec02c1452473e2",
+      "installable": true,
+      "sha256": "92e271c34c1d7e7ed2b7d83925fb933a03134974a450931936cd3e6eddd498cb"
+    },
+    {
+      "name": "ai-sdk-agents",
+      "description": "Multi-agent orchestration with AI SDK v5 - handoffs, routing, and coordination for any AI provider (OpenAI, Anthropic, Google)",
+      "category": "ai-ml",
+      "source": {
+        "type": "git-subdir",
+        "url": "https://github.com/jeremylongshore/claude-code-plugins-plus-skills.git",
+        "path": "plugins/ai-ml/ai-sdk-agents"
+      },
+      "commit": "70319dd06c76bca3b4da97633fec02c1452473e2",
+      "installable": true,
+      "sha256": "cbf2b771b97416efea7511ce63870cf7daeb938c39a11c0274ea357419dfccc1"
+    },
+    {
+      "name": "anomaly-detection-system",
+      "description": "Detect anomalies and outliers in data",
+      "category": "ai-ml",
+      "source": {
+        "type": "git-subdir",
+        "url": "https://github.com/jeremylongshore/claude-code-plugins-plus-skills.git",
+        "path": "plugins/ai-ml/anomaly-detection-system"
+      },
+      "commit": "70319dd06c76bca3b4da97633fec02c1452473e2",
+      "installable": true,
+      "sha256": "fc6d237e4fc9a2115a1f9f8314faf97bb0adf0d6ca9913acc9feb2dcc0ffaa96"
+    },
+    {
+      "name": "qwen-mm-plugins-core",
+      "description": "Read and visualize any file (images, video, docs, 3D, and more), plus image tools — crop, annotate, extract frames — as MCP tools.",
+      "category": "multimodal",
+      "source": {
+        "type": "git-subdir",
+        "url": "https://github.com/QwenLM/Qwen-MM-Plugins.git",
+        "path": "src/capabilities/core"
+      },
+      "commit": "ad8139d58ebca5740df2be3a6871a2e9c1d31e36",
+      "installable": true,
+      "sha256": "7e2e0dffb76e6bdb3d66d5cb6ee7216fcc8e4e3473b4bfcbca1c683e8bb6707c"
+    },
+    {
+      "name": "code-review",
+      "description": "Gemini CLI code-review extension — structured review of diffs and PRs (gemini-extension.json layout, installed as a skill bundle).",
+      "category": "development",
+      "source": {
+        "type": "url",
+        "url": "https://github.com/gemini-cli-extensions/code-review.git"
+      },
+      "commit": "dd1a10d2c9d07b2ebade866590fdfa59cd8f9d04",
+      "installable": true,
+      "sha256": "1abe5622d20101b77cfd49b4d6428215835c1ea5242b258efa92798535ddf9a6"
+    },
+    {
+      "name": "openmake-log-analysis",
+      "description": "openmake_llm 에서 만든 로그 분석 스킬 묶음 (Nginx·CSV) + DuckDuckGo MCP",
+      "category": "data-analysis",
+      "source": {
+        "type": "relative",
+        "path": "plugins/openmake-log-analysis"
+      },
+      "commit": "22d265f8d0f146f19fdb23d51a942385b1244eaf",
+      "installable": true,
+      "compat": {
+        "layout": "claude-plugin",
+        "components": [
+          "skills",
+          "mcp"
+        ]
+      },
+      "sha256": "04a0d7efe67f7e77acc1dfff97d613e16709c8c1859e36acaa7bfe18e2baaeec"
+    }
+  ],
+  "pluginsSha256": "71d39c699e0a190ea6d37812961af21c5a41ddde08d965dbcf8ee3dd0fc4e3e5"
+}

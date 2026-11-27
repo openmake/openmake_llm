@@ -8,8 +8,10 @@
  * 여기 실린 리비전은 전부 **legacy era**(평범한 `initialize` 핸드셰이크)이며
  * `tools/list`·`tools/call` 의 와이어 형태가 동일하다 — 우리 서버가 구현한 범위가
  * 그 셋뿐이라 리비전 간 차이가 없다. 2026-07-28(modern era)은 `server/discover`·
- * tasks·`_meta` 봉투를 요구하므로 **의도적으로 제외**한다(구현하지 않은 것을
- * 광고하지 않는다).
+ * tasks·`_meta` 봉투를 요구하므로 이 initialize 목록에서는 **의도적으로 제외**한다
+ * (구현하지 않은 것을 광고하지 않는다). modern era 수용은 `mcp-protocol-modern.ts`
+ * (opt-in `MCP_SERVER_MODERN_PROTOCOL`) 가 `server/discover` 로 따로 광고한다 —
+ * 2026-07-28 은 initialize 로 협상하지 않는다.
  *
  * 목록·기본값은 `@modelcontextprotocol/client` 의 `SUPPORTED_PROTOCOL_VERSIONS` /
  * `LATEST_PROTOCOL_VERSION`(2.0.0 기준) 과 같다.

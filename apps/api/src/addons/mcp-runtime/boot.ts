@@ -15,11 +15,19 @@ import { createLogger } from '../../utils/logger';
 import { mcpToolRuntime } from './runtime';
 import { mcpMetaTools } from './mcp-meta-tools';
 import { importMcpServerFromGitTool } from './mcp-server-ingest-tool';
+import { registerMcpInstallHints } from '../../runtime-ports/mcp-install-hints';
+import { mcpInstallHints } from './install-hints';
+import { registerMcpCatalogDraftWriter } from '../../runtime-ports/mcp-catalog-templates';
+import { writeMcpCatalogDraft } from './catalog-draft-writer';
 
 const logger = createLogger('McpRuntimeAddon');
 
 export async function startMcpRuntime(): Promise<AddonRuntimeHandle> {
     registerToolRuntime(mcpToolRuntime);
+    // 설치 미리보기의 MCP 전송·인증 경고 — Base 는 포트만 안다
+    registerMcpInstallHints(mcpInstallHints);
+    // 다른 add-on 의 "카탈로그로 올리기"(꺼진 초안) — 카탈로그 표는 이 add-on 만 쓴다
+    registerMcpCatalogDraftWriter((input) => writeMcpCatalogDraft(input));
     contributeBuiltInTools('mcp-runtime', [
         ...mcpMetaTools,
         importMcpServerFromGitTool as MCPToolDefinition,

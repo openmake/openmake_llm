@@ -11,6 +11,7 @@ import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/primitives";
 import { extensionPermissionView, permissionBadgeKey, type ExtensionPermissionKind } from "@/lib/extension-permission-state";
 import { transportNoticeHint, type TransportNoticeView } from "../transport-notice";
+import { declaredExtensionKinds, declaredExtensionTitle, type DeclaredExtensionView } from "../declared-extensions";
 
 export interface ModelExposureView {
   state: "auto" | "on_mention" | "on_demand" | "none";
@@ -75,5 +76,20 @@ export function TransportNoticeBadge({ notice }: { notice: TransportNoticeView |
     <span data-testid="mcp-transport-notice" data-code={notice.code} title={transportNoticeHint(notice, t)}>
       <Badge tone={notice.code === "deprecated-transport" ? "warn" : "danger"}>{t(`label.${notice.code}`)}</Badge>
     </span>
+  );
+}
+
+/** 서버가 선언한 MCP 확장 배지 (MCP-5) — 인식만 하고 실행하지 않는다. 선언이 없으면 그리지 않는다 */
+export function DeclaredExtensionBadges({ extensions }: { extensions: readonly DeclaredExtensionView[] }) {
+  const t = useTranslations("mcpServers.declaredExtensions");
+  if (extensions.length === 0) return null;
+  return (
+    <>
+      {declaredExtensionKinds(extensions).map(kind => (
+        <span key={kind} data-testid="mcp-declared-extension" data-kind={kind} title={declaredExtensionTitle(extensions, kind, t(`hint.${kind}`))}>
+          <Badge tone={kind === "skills" ? "accent" : "neutral"}>{t(`label.${kind}`)}</Badge>
+        </span>
+      ))}
+    </>
   );
 }

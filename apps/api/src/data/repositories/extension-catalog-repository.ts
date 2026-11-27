@@ -23,7 +23,7 @@ interface CatalogPluginEntry {
     source?: string;
 }
 
-interface ExtensionCatalogRow {
+export interface ExtensionCatalogRow {
     id: string;
     url: string;
     name: string;
@@ -34,6 +34,26 @@ interface ExtensionCatalogRow {
     last_synced_at: Date;
     created_at: Date;
     updated_at: Date;
+    /** M5 이름 설치 별칭 (207). null = 스냅샷 name */
+    alias?: string | null;
+    /** 원본 접근 토큰 암호문 (207, write-only) — ⚠️ 응답에 싣지 말 것(toPublicCatalogSource) */
+    credential_encrypted?: string | null;
+    /** 저장소 안 카탈로그 루트 (207). null = 저장소 루트 */
+    source_subpath?: string | null;
+    /** M6 정적 색인 주소 (207). null = 색인 미사용(종전 동기화) */
+    index_url?: string | null;
+    /** 마지막 동기화 결과 (207). null = 기록 없음 */
+    sync_status?: 'ok' | 'error' | 'rate_limited' | null;
+    last_sync_error?: string | null;
+    last_sync_attempt_at?: Date | null;
+}
+
+/** 응답용 — 암호문을 빼고 저장 여부만 알린다 (write-only 자격증명) */
+export type PublicCatalogSource = Omit<ExtensionCatalogRow, 'credential_encrypted'> & { has_credential: boolean };
+
+export function toPublicCatalogSource(row: ExtensionCatalogRow): PublicCatalogSource {
+    const { credential_encrypted: cred, ...rest } = row;
+    return { ...rest, has_credential: typeof cred === 'string' && cred.length > 0 };
 }
 
 export class ExtensionCatalogRepository extends BaseRepository {
@@ -98,6 +118,64 @@ export class ExtensionCatalogRepository extends BaseRepository {
               WHERE id=$4
               RETURNING *`,
             [input.name, input.description ?? null, JSON.stringify(input.plugins), id]
+        );
+        return r.rows[0] ?? null;
+    }
+
+    /** 원본 접근 토큰 저장·삭제 (암호문 — 암호화는 호출측 token-crypto). null = 삭제 */
+    async setCredential(id: string, encrypted: string | null): Promise<boolean> {
+        const r = await this.query(
+            `UPDATE extension_catalog_sources SET credential_encrypted=$1, updated_at=NOW() WHERE id=$2`,
+            [encrypted, id]
+        );
+        return (r.rowCount ?? 0) > 0;
+    }
+
+    /** 하위 경로 지정 (null = 저장소 루트) */
+    async setSubpath(id: string, subpath: string | null): Promise<ExtensionCatalogRow | null> {
+        const r = await this.query<ExtensionCatalogRow>(
+            `UPDATE extension_catalog_sources SET source_subpath=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
+            [subpath, id]
+        );
+        return r.rows[0] ?? null;
+    }
+
+    /**
+     * 이름 설치 별칭 지정 (M5). 다른 원본이 이미 쓰는 별칭이면 null 을 돌려준다(UNIQUE 위반 — 호출측이 409).
+     * `onlyIfUnset` 이면 별칭이 비어 있을 때만 채운다(등록·동기화 시 스냅샷 name 기본값).
+     */
+    async setAlias(id: string, alias: string | null, opts: { onlyIfUnset?: boolean } = {}): Promise<{ row: ExtensionCatalogRow | null; conflict: boolean }> {
+        try {
+            const r = await this.query<ExtensionCatalogRow>(
+                `UPDATE extension_catalog_sources SET alias=$1, updated_at=NOW()
+                 WHERE id=$2 ${opts.onlyIfUnset ? 'AND alias IS NULL' : ''} RETURNING *`,
+                [alias, id]
+            );
+            return { row: r.rows[0] ?? null, conflict: false };
+        } catch (err) {
+            if ((err as { code?: string })?.code === '23505') return { row: null, conflict: true };
+            throw err;
+        }
+    }
+
+    /**
+     * 동기화 시도 결과 기록 — 성공이면 사유를 지운다(경고가 있으면 경고를 남긴다 — M6 색인 폴백).
+     * 스냅샷(last_synced_at)은 updateSnapshot 이 따로 갱신
+     */
+    async recordSyncResult(id: string, status: 'ok' | 'error' | 'rate_limited', error: string | null, warning?: string | null): Promise<void> {
+        await this.query(
+            `UPDATE extension_catalog_sources
+                SET sync_status=$1, last_sync_error=$2, last_sync_attempt_at=NOW()
+              WHERE id=$3`,
+            [status, status === 'ok' ? (warning ?? null) : error, id]
+        );
+    }
+
+    /** 정적 색인 주소 지정 (M6, null = 색인 미사용 — 종전 동기화) */
+    async setIndexUrl(id: string, indexUrl: string | null): Promise<ExtensionCatalogRow | null> {
+        const r = await this.query<ExtensionCatalogRow>(
+            `UPDATE extension_catalog_sources SET index_url=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
+            [indexUrl, id]
         );
         return r.rows[0] ?? null;
     }

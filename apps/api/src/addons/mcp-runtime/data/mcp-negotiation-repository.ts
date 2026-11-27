@@ -9,6 +9,7 @@
  */
 import type { Pool } from 'pg';
 import type { McpExtensionRef, McpNegotiationObservation, NegotiationSink } from '../negotiation-observer';
+import type { DeclaredExtensionSource } from '../extension-awareness';
 
 export interface McpNegotiationRecord extends McpNegotiationObservation {
     /** 서버 설정 이름(mcp_servers.name) — 서버가 스스로 밝힌 serverName 과 별개 */
@@ -54,7 +55,7 @@ function iso(v: Date | string): string {
     return v instanceof Date ? v.toISOString() : String(v);
 }
 
-export class McpNegotiationRepository implements NegotiationSink {
+export class McpNegotiationRepository implements NegotiationSink, DeclaredExtensionSource {
     constructor(private readonly pool: Pool) {}
 
     async upsert(o: McpNegotiationObservation): Promise<void> {
@@ -113,5 +114,63 @@ export class McpNegotiationRepository implements NegotiationSink {
             observedAt: iso(row.observed_at),
             observationCount: row.observation_count,
         }));
+    }
+    /** 서버별 관측 요약(M1 판정용 구성요소 관측 포트) — 관측이 없는 서버는 맵에 없다. 주소·명령은 읽지 않는다 */
+    async summariesByServerIds(serverIds: readonly string[]): Promise<Map<string, Pick<McpNegotiationObservation,
+        'serverId' | 'transport' | 'authMethod' | 'protocolEra' | 'protocolVersion' | 'extensions'>>> {
+        const out = new Map<string, Pick<McpNegotiationObservation,
+            'serverId' | 'transport' | 'authMethod' | 'protocolEra' | 'protocolVersion' | 'extensions'>>();
+        if (serverIds.length === 0) return out;
+        const r = await this.pool.query<Pick<Row, 'server_id' | 'transport' | 'auth_method' | 'protocol_era' | 'protocol_version' | 'extensions'>>(
+            `SELECT server_id, transport, auth_method, protocol_era, protocol_version, extensions
+               FROM mcp_negotiation_observations WHERE server_id = ANY($1::text[])`,
+            [[...serverIds]],
+        );
+        for (const row of r.rows) {
+            out.set(row.server_id, {
+                serverId: row.server_id,
+                transport: row.transport as McpNegotiationObservation['transport'],
+                authMethod: row.auth_method as McpNegotiationObservation['authMethod'],
+                protocolEra: row.protocol_era as McpNegotiationObservation['protocolEra'],
+                protocolVersion: row.protocol_version,
+                extensions: row.extensions ?? [],
+            });
+        }
+        return out;
+    }
+
+    /** 서버별 선언 확장(MCP-5) — 관측이 없는 서버는 맵에 없다 */
+    async extensionsByServerIds(serverIds: readonly string[]): Promise<Map<string, McpExtensionRef[]>> {
+        const out = new Map<string, McpExtensionRef[]>();
+        if (serverIds.length === 0) return out;
+        const r = await this.pool.query<{ server_id: string; extensions: McpExtensionRef[] | null }>(
+            `SELECT server_id, extensions FROM mcp_negotiation_observations
+              WHERE server_id = ANY($1::text[]) AND jsonb_array_length(extensions) > 0`,
+            [[...serverIds]],
+        );
+        for (const row of r.rows) out.set(row.server_id, row.extensions ?? []);
+        return out;
+    }
+
+    /** 카탈로그 템플릿별 선언 확장(MCP-5) — 그 템플릿으로 설치된 서버들의 관측 합집합(id 기준, 최근 관측 우선) */
+    async extensionsByCatalogTemplateIds(templateIds: readonly string[]): Promise<Map<string, McpExtensionRef[]>> {
+        const out = new Map<string, McpExtensionRef[]>();
+        if (templateIds.length === 0) return out;
+        const r = await this.pool.query<{ catalog_template_id: string; extensions: McpExtensionRef[] | null }>(
+            `SELECT s.catalog_template_id, o.extensions
+               FROM mcp_negotiation_observations o
+               JOIN mcp_servers s ON s.id = o.server_id
+              WHERE s.catalog_template_id = ANY($1::text[]) AND jsonb_array_length(o.extensions) > 0
+              ORDER BY o.observed_at DESC`,
+            [[...templateIds]],
+        );
+        for (const row of r.rows) {
+            const merged = out.get(row.catalog_template_id) ?? [];
+            for (const ext of row.extensions ?? []) {
+                if (ext && typeof ext.id === 'string' && !merged.some(m => m.id === ext.id)) merged.push(ext);
+            }
+            out.set(row.catalog_template_id, merged);
+        }
+        return out;
     }
 }

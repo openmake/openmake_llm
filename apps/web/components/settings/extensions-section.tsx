@@ -6,9 +6,14 @@ import { Package, Trash2, Loader2, ChevronDown, ChevronLeft, ChevronRight, Puzzl
 import { Button, Card, CardHeader, CardTitle, CardContent, Input } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient, ApiError } from "@/lib/api-client";
+import { GalleryItemBadges } from "./gallery-item-badges";
 import { MarketplacePublishSection } from "@/components/settings/marketplace-publish-section";
 import { ExtensionPermissionBadge, ExtensionPermissionPanel } from "@/components/settings/extension-permission-panel";
+import { CatalogSourceAdmin } from "@/components/settings/catalog-source-admin";
+import { NamedInstallForm } from "@/components/settings/named-install-form";
 import { useAppStore } from "@/lib/store";
+import { ExtensionInstallPreviewDialog } from "@/components/settings/extension-install-preview-dialog";
+import { catalogInstallMode, type InstallPreviewTarget } from "@/lib/extension-install-preview";
 
 interface UserExtension {
   id: string;
@@ -101,10 +106,15 @@ export function ExtensionsSection() {
   const [sharing, setSharing] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<CatalogSource[]>([]);
   const [catalogInstalls, setCatalogInstalls] = useState<Record<string, GalleryInstallState>>({});
+  // 설치 미리보기(M1b) — 갤러리 응답에 installPreview 가 있을 때만. 없으면 종전처럼 바로 설치
+  const [catalogMode, setCatalogMode] = useState<"preview" | "direct">("direct");
+  const [previewTarget, setPreviewTarget] = useState<InstallPreviewTarget | null>(null);
   const [catalogUrl, setCatalogUrl] = useState("");
   const [catalogBusy, setCatalogBusy] = useState<string | null>(null);
   // 카탈로그 단일 브라우저 — 소스/카테고리 셀렉트 + 키워드 검색 + 페이지 (16개 소스 스택 대신 한 리스트)
   const [catalogSource, setCatalogSource] = useState("");
+  /** 동기화 후 관리 패널(상태 표시) 재조회 신호 */
+  const [catalogAdminTick, setCatalogAdminTick] = useState(0);
   const [catalogCategory, setCatalogCategory] = useState("");
   const [catalogSearch, setCatalogSearch] = useState("");
   const [catalogPage, setCatalogPage] = useState(0);
@@ -157,11 +167,12 @@ export function ExtensionsSection() {
 
   const loadGallery = useCallback(async () => {
     try {
-      const res = await ApiClient.get<ApiSuccess<{ extensions: GalleryExtension[]; catalog?: CatalogSource[] }>>(
+      const res = await ApiClient.get<ApiSuccess<{ extensions: GalleryExtension[]; catalog?: CatalogSource[]; installPreview?: boolean }>>(
         "/api/users/me/extensions/gallery",
       );
       setGallery(res?.data?.extensions ?? []);
       setCatalog(res?.data?.catalog ?? []);
+      setCatalogMode(catalogInstallMode(res?.data));
     } catch {
       /* 실패 — 빈 갤러리 유지 */
     }
@@ -265,6 +276,12 @@ export function ExtensionsSection() {
     }
   }
 
+  /** 카탈로그 설치 버튼 — 미리보기가 켜져 있으면 대화상자 확인 뒤 설치 */
+  function onCatalogInstallClick(sourceId: string, plugin: string | undefined, label: string) {
+    if (catalogMode === "preview") setPreviewTarget({ sourceId, plugin, label });
+    else void installFromCatalog(sourceId, plugin);
+  }
+
   async function registerCatalogSource() {
     const url = catalogUrl.trim();
     if (!url || catalogBusy) return;
@@ -287,9 +304,10 @@ export function ExtensionsSection() {
       await ApiClient.post(`/api/users/me/extensions/catalog/${id}/sync`, {});
       void loadGallery();
     } catch {
-      /* 실패 */
+      /* 실패 — 사유는 관리 패널의 동기화 상태로 보인다 */
     } finally {
       setCatalogBusy(null);
+      setCatalogAdminTick((n) => n + 1);
     }
   }
 
@@ -607,6 +625,8 @@ export function ExtensionsSection() {
           </p>
           <p className="mb-3 text-xs text-muted">{t("catalog.description")}</p>
 
+          {catalog.length > 0 && <NamedInstallForm mode={catalogMode} onInstalled={() => void load()} />}
+
           {isAdmin && (
             <div className="mb-3 flex items-center gap-2">
               <Input
@@ -714,6 +734,9 @@ export function ExtensionsSection() {
                   </span>
                 </p>
               )}
+              {isAdmin && selectedSource && (
+                <CatalogSourceAdmin sourceId={selectedSource.id} refreshKey={catalogAdminTick} />
+              )}
               {catalogFiltered.length === 0 ? (
                 <p className="px-3.5 py-2.5 text-xs text-muted">{t("catalog.noneInstallable")}</p>
               ) : (
@@ -728,6 +751,7 @@ export function ExtensionsSection() {
                           <p className="truncate text-sm text-fg">
                             {p.name}
                             {p.version && <span className="ml-1.5 font-mono text-xs text-muted">v{p.version}</span>}
+                            <GalleryItemBadges catalogId={e.srcId} pluginName={p.name} />
                             {!catalogSource && (
                               <span className="ml-1.5 rounded bg-surface px-1.5 py-0.5 text-xs text-muted">
                                 {e.srcName}
@@ -758,7 +782,7 @@ export function ExtensionsSection() {
                           variant="outline"
                           size="sm"
                           disabled={st?.state === "installing"}
-                          onClick={() => void installFromCatalog(e.srcId, e.multiPlugin ? p.name : undefined)}
+                          onClick={() => onCatalogInstallClick(e.srcId, e.multiPlugin ? p.name : undefined, p.name)}
                         >
                           {st?.state === "installing" ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -802,6 +826,11 @@ export function ExtensionsSection() {
         </div>
       </CardContent>
       <MarketplacePublishSection onPublishedAction={() => { void load(); void loadGallery(); }} />
+      <ExtensionInstallPreviewDialog
+        target={previewTarget}
+        onClose={() => setPreviewTarget(null)}
+        onConfirm={(tg) => { if (tg.kind !== "named") void installFromCatalog(tg.sourceId, tg.plugin); }}
+      />
     </Card>
   );
 }

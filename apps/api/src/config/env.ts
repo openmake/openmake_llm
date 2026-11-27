@@ -88,10 +88,18 @@ export interface EnvConfig {
     browserSitePolicy: string;
     /** 확장 원본 정책(M2) 강제 — 기본 false(검사 없음). config/extension-source-policy 가 읽는다 */
     extensionSourcePolicyEnforced: boolean;
+    /** 확장 설치 미리보기(M1b) — config/extension-install-preview */
+    extensionInstallPreviewEnabled: boolean;
     /** 'allow'(기본) · 'catalog-only' — 강제 ON 일 때만 의미 */
     extensionArbitraryUrlInstall: 'allow' | 'catalog-only';
     /** 전역 확장 원본 규칙 원문(JSON {allow?,deny?}) — 빈 값 = 전역 층 없음 */
     extensionSourcePolicy: string;
+    /** 확장 카탈로그 주기 동기화(M4) — 기본 false(수동 동기화만). config/extension-catalog-sync 가 읽는다 */
+    extensionCatalogAutoSyncEnabled: boolean;
+    /** 주기 동기화 간격(ms) — 기본 6시간 */
+    extensionCatalogSyncIntervalMs: number;
+    /** 확장 카탈로그 정적 색인(index.json) 우선 동기화(M6) — 기본 false(종전 방식) */
+    extensionCatalogIndexEnabled: boolean;
     /** vLLM `--reasoning-parser` 미설정 환경 등에서 extra_body.reasoning_effort 거절 방지 토글. */
     llmEnableReasoningEffort: boolean;
     /** 사용자별 역할→모델 매핑(model_assignments scope=userId) 사용 토글 (기본 false=전역 env/default 만). */
@@ -270,8 +278,12 @@ export function loadConfig(): EnvConfig {
         EXTERNAL_MODEL_POLICY: env('EXTERNAL_MODEL_POLICY'),
         BROWSER_SITE_POLICY: env('BROWSER_SITE_POLICY'),
         EXTENSION_SOURCE_POLICY_ENFORCED: env('EXTENSION_SOURCE_POLICY_ENFORCED'),
+        EXTENSION_INSTALL_PREVIEW_ENABLED: env('EXTENSION_INSTALL_PREVIEW_ENABLED'),
         EXTENSION_ARBITRARY_URL_INSTALL: env('EXTENSION_ARBITRARY_URL_INSTALL'),
         EXTENSION_SOURCE_POLICY: env('EXTENSION_SOURCE_POLICY'),
+        EXTENSION_CATALOG_AUTO_SYNC_ENABLED: env('EXTENSION_CATALOG_AUTO_SYNC_ENABLED'),
+        EXTENSION_CATALOG_SYNC_INTERVAL_MS: env('EXTENSION_CATALOG_SYNC_INTERVAL_MS'),
+        EXTENSION_CATALOG_INDEX_ENABLED: env('EXTENSION_CATALOG_INDEX_ENABLED'),
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
         USER_MODEL_ROLES_ENABLED: env('USER_MODEL_ROLES_ENABLED'),
         THINKING_SUMMARY_ENABLED: env('THINKING_SUMMARY_ENABLED'),
@@ -400,8 +412,16 @@ export function loadConfig(): EnvConfig {
         browserSitePolicy: parsed.BROWSER_SITE_POLICY ?? DEFAULT_CONFIG.browserSitePolicy,
         // 확장 원본 정책(M2) — 알 수 없는 값은 기본값(종전 동작). 부팅을 막지 않게 스키마는 문자열로 받는다
         extensionSourcePolicyEnforced: parsed.EXTENSION_SOURCE_POLICY_ENFORCED === undefined ? DEFAULT_CONFIG.extensionSourcePolicyEnforced : parsed.EXTENSION_SOURCE_POLICY_ENFORCED === 'true',
+        extensionInstallPreviewEnabled: parsed.EXTENSION_INSTALL_PREVIEW_ENABLED === undefined ? DEFAULT_CONFIG.extensionInstallPreviewEnabled : parsed.EXTENSION_INSTALL_PREVIEW_ENABLED === 'true',
         extensionArbitraryUrlInstall: parsed.EXTENSION_ARBITRARY_URL_INSTALL === 'catalog-only' ? 'catalog-only' : DEFAULT_CONFIG.extensionArbitraryUrlInstall,
         extensionSourcePolicy: parsed.EXTENSION_SOURCE_POLICY ?? DEFAULT_CONFIG.extensionSourcePolicy,
+        // 확장 카탈로그 주기 동기화(M4) — 'true' 만 켠다, 간격은 양의 정수만(그 외 기본값)
+        extensionCatalogAutoSyncEnabled: parsed.EXTENSION_CATALOG_AUTO_SYNC_ENABLED === 'true',
+        // 확장 카탈로그 정적 색인 우선 동기화(M6) — 'true' 만 켠다
+        extensionCatalogIndexEnabled: parsed.EXTENSION_CATALOG_INDEX_ENABLED === 'true',
+        extensionCatalogSyncIntervalMs: /^\d+$/.test(parsed.EXTENSION_CATALOG_SYNC_INTERVAL_MS ?? '') && Number(parsed.EXTENSION_CATALOG_SYNC_INTERVAL_MS) > 0
+            ? Number(parsed.EXTENSION_CATALOG_SYNC_INTERVAL_MS)
+            : DEFAULT_CONFIG.extensionCatalogSyncIntervalMs,
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',
         userModelRolesEnabled: (parsed.USER_MODEL_ROLES_ENABLED ?? 'false').toLowerCase() === 'true',
         thinkingSummaryEnabled: (parsed.THINKING_SUMMARY_ENABLED ?? 'true').toLowerCase() === 'true',

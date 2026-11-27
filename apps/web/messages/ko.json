@@ -20,6 +20,7 @@
       "metrics": "메트릭",
       "alerts": "알림",
       "mcpCatalogAdmin": "MCP 카탈로그 관리",
+      "mcpRegistry": "MCP 레지스트리",
       "modelRolesAdmin": "모델 배정 관리",
       "systemSettingsAdmin": "시스템 설정",
       "developer": "개발자",
@@ -1482,6 +1483,24 @@
       "replacement": "새 주소: {url}",
       "replacementCandidate": "Streamable HTTP 주소 후보: {url} (서버 안내로 확인하세요)",
       "reauth": "새 주소로 다시 등록한 뒤 다시 로그인해야 합니다(이전 OAuth 연결은 쓸 수 없습니다)."
+    },
+    "declaredExtensions": {
+      "label": {
+        "skills": "스킬 제공 서버",
+        "apps": "MCP Apps(UI) 미지원",
+        "tasks": "Tasks 미지원",
+        "events": "Events 미지원",
+        "auth": "인증 확장 미지원",
+        "unknown": "알 수 없는 확장"
+      },
+      "hint": {
+        "skills": "이 서버는 Skills over MCP 로 스킬을 제공합니다. OpenMake 는 아직 이 경로로 스킬을 받지 않습니다 — 서버의 도구는 그대로 쓸 수 있습니다.",
+        "apps": "이 서버는 MCP Apps(대화형 UI)를 선언했습니다. OpenMake 는 UI 를 그리지 않고 도구 결과만 받습니다.",
+        "tasks": "이 서버는 MCP Tasks(장기 작업)를 선언했습니다. OpenMake 는 Tasks 를 쓰지 않고 일반 도구 호출로만 부릅니다.",
+        "events": "이 서버는 MCP Events 를 선언했습니다. OpenMake 는 이벤트를 구독하지 않습니다.",
+        "auth": "이 서버는 인증 확장을 선언했습니다. OpenMake 는 이 확장을 쓰지 않고 기존 OAuth 로 로그인합니다.",
+        "unknown": "이 서버가 OpenMake 가 모르는 MCP 확장을 선언했습니다. 서버의 기본 도구는 그대로 쓸 수 있습니다."
+      }
     }
   },
   "mcpCatalog": {
@@ -2583,7 +2602,74 @@
       "sourceAria": "소스 필터",
       "sourceAll": "전체 소스 ({count})",
       "searchAria": "키워드 검색",
-      "searchPlaceholder": "이름·설명 검색"
+      "searchPlaceholder": "이름·설명 검색",
+      "admin": {
+        "statusOk": "마지막 동기화 성공",
+        "statusError": "마지막 동기화 실패",
+        "statusRateLimited": "마지막 동기화: 요청 한도 초과(자동 재시도는 간격을 늘려 물러남)",
+        "statusNever": "동기화 기록 없음",
+        "lastAttempt": "마지막 시도: {time}",
+        "credentialSaved": "원본 토큰 저장됨",
+        "credentialNone": "원본 토큰 없음(무인증)",
+        "tokenPlaceholder": "원본 접근 토큰(저장 후 다시 표시되지 않음)",
+        "saveToken": "토큰 저장",
+        "clearToken": "토큰 삭제",
+        "clearTokenConfirm": "저장된 원본 토큰을 삭제할까요?",
+        "subpathPlaceholder": "하위 경로(예: plugins/market, 비우면 저장소 루트)",
+        "saveSubpath": "경로 저장",
+        "indexUrlPlaceholder": "정적 색인 주소 (index.json, https)",
+        "saveIndexUrl": "색인 저장",
+        "indexFallbackWarning": "색인 폴백:",
+        "saveFailed": "저장 실패",
+        "saved": "저장됨",
+        "syncHint": "하위 경로·토큰 변경은 다음 동기화부터 반영됩니다.",
+        "aliasLabel": "이름 설치 별칭",
+        "aliasPlaceholder": "별칭 (비우면 {name})",
+        "saveAlias": "별칭 저장",
+        "aliasConflict": "다른 카탈로그가 쓰는 별칭입니다"
+      },
+      "named": {
+        "placeholder": "플러그인@마켓플레이스 (예: code-review@openmake-marketplace)",
+        "install": "이름으로 설치",
+        "formatHint": "형식: 플러그인@마켓플레이스 — 영문·숫자·. _ -, 영문·숫자로 시작",
+        "installed": "설치했습니다: {name} (구성요소는 승인 후 활성화)",
+        "failed": "이름 설치 실패",
+        "candidates": "후보:"
+      }
+    },
+    "preview": {
+      "title": "설치 미리보기 — {name}",
+      "loading": "설치될 구성요소를 확인하는 중…",
+      "failed": "미리보기를 불러오지 못했습니다.",
+      "source": "원본",
+      "commit": "커밋",
+      "existingUpdate": "이미 설치됨(v{version}) — 확인하면 이 버전으로 업데이트합니다.",
+      "existingUpToDate": "이미 최신 버전이 설치돼 있습니다.",
+      "existingOtherSource": "같은 이름의 확장이 다른 원본으로 설치돼 있어 설치할 수 없습니다. 먼저 제거하세요.",
+      "components": "구성요소 — 스킬 {skills} · MCP 서버 {mcpServers} · 에이전트 {agents}",
+      "skill": "스킬",
+      "command": "명령",
+      "mcp": "MCP",
+      "agent": "에이전트",
+      "assets": "번들 파일 {count}개",
+      "mcpBlocked": "위험 명령 패턴으로 차단 표시됨",
+      "networkRestricted": "네트워크 차단 샌드박스",
+      "requiredEnv": "승인 때 입력: {keys}",
+      "agentApproval": "승인 후 사용",
+      "draftNote": "구성요소는 draft 로 만들어지고 승인함에서 승인해야 활성화됩니다.",
+      "permissions": "권한",
+      "permissionsLegacy": "권한 선언 없음(종전 동작 — 네트워크 허용)",
+      "permissionsNone": "요청한 권한 없음",
+      "permissionsBlocked": "재승인 전까지 막히는 권한: {list}",
+      "warnings": "경고",
+      "cancel": "취소",
+      "confirm": "설치",
+      "hint": {
+        "deprecatedTransport": "SSE 전송은 퇴역 예정입니다(Streamable HTTP 후보: {url}).",
+        "endpointSunset": "이 주소는 {date} 에 종료됩니다 — 새 주소: {url}",
+        "endpointMoved": "이 서버는 {date} 에 {url} 로 이동합니다 — 새 주소에서 다시 로그인해야 합니다.",
+        "remoteAuth": "원격 서버 — 승인 뒤 로그인(OAuth)이 필요할 수 있습니다."
+      }
     }
   },
   "mcpInstances": {
@@ -3444,5 +3530,94 @@
     "login": "로그인",
     "snapshotNote": "{date} 시점의 대화입니다 — 원본 대화가 이어져도 이 화면은 바뀌지 않습니다.",
     "scope": "공개 범위: {scope}"
+  },
+  "marketVerdicts": {
+    "verdict": {
+      "supported": "지원",
+      "partial": "부분 지원",
+      "unsupported": "지원 안 됨"
+    },
+    "reason": {
+      "NOT_INSTALLABLE": "설치할 스킬·MCP 서버가 없음",
+      "INSTALLABILITY_UNKNOWN": "설치 가능 여부 미상(다른 저장소 항목)",
+      "SKILL_MCP_TOOL_IDIOM": "스킬이 Claude Code MCP 도구 표기(mcp__server__tool)를 씀",
+      "SKILL_ASSET_OUTSIDE_DIR": "스킬이 자기 폴더 밖 파일을 참조함(함께 설치되지 않음)",
+      "SKILL_COMMAND_ASSETS_SKIPPED": "명령에서 바꾼 스킬이 함께 설치되지 않는 파일을 참조함",
+      "SKILL_CLAUDE_DIR_PATH": "스킬이 .claude/ 경로를 가리킴",
+      "SKILL_CLAUDE_INSTALL_GUIDE": "스킬에 Claude Code 설치 안내가 들어 있음",
+      "SKILL_TOOL_UNSUPPORTED": "스킬이 언급한 도구 일부가 이 환경에 없음",
+      "SKILL_REQUIRED_TOOL_MISSING": "스킬에 필요한 도구가 없음",
+      "SKILL_EXECUTION_BLOCKED": "실행이 막힌 스킬이 있음",
+      "COMPONENTS_UNSUPPORTED": "지원하지 않는 구성요소가 있음",
+      "MCP_ENTRIES_SKIPPED": "건너뛴 MCP 항목이 있음",
+      "MCP_BLOCKED_BY_CONVENTION": "규약 검사에서 막힌 MCP 서버가 있음",
+      "ASSETS_SKIPPED": "건너뛴 번들 파일이 있음",
+      "COMPONENTS_TRUNCATED": "크기 상한에서 잘린 구성요소가 있음",
+      "MCP_TRANSPORT_SSE_DEPRECATED": "MCP 서버가 폐기 예정인 SSE 전송을 씀",
+      "MCP_EXT_APPS_UNSUPPORTED": "MCP Apps 확장은 지원하지 않음",
+      "MCP_EXT_TASKS_UNSUPPORTED": "MCP Tasks 확장은 지원하지 않음",
+      "MCP_EXT_UNRECOGNIZED": "MCP 서버가 알 수 없는 확장을 선언함",
+      "MCP_SKILLS_PROVIDER": "MCP 서버가 스킬을 제공함(Skills over MCP)",
+      "MCP_AUTH_DYNAMIC_REGISTRATION": "MCP 서버가 동적 클라이언트 등록으로 로그인함",
+      "MCP_PROTOCOL_MODERN": "MCP 서버가 최신 프로토콜을 씀",
+      "MCP_PROTOCOL_LEGACY": "MCP 서버가 이전 프로토콜을 씀",
+      "CROSS_REPO_SOURCE": "다른 저장소에 있는 항목",
+      "CONTENT_NOT_EVALUATED": "아직 내용을 평가하지 않음"
+    },
+    "provenance": {
+      "publisher": "게시자: {value}",
+      "commit": "커밋: {value}",
+      "license": "라이선스: {value}"
+    },
+    "snapshotOnly": "카탈로그 스냅샷만으로 판정 — 설치하면 내용까지 확인합니다"
+  },
+  "marketRegistry": {
+    "pageTitle": "MCP 레지스트리",
+    "pageDescription": "공식 MCP Registry 사본을 검토해 승인·숨김하고, 승인한 항목을 꺼진 MCP 카탈로그 초안으로 올립니다.",
+    "never": "없음",
+    "syncOn": "동기화 켜짐",
+    "syncOff": "동기화 꺼짐",
+    "syncOffHint": "운영 설정 {key} 를 켜야 동기화합니다",
+    "lastSuccess": "마지막 동기화",
+    "inProgress": "이어받는 중",
+    "backoffUntil": "{at} 까지 대기",
+    "lastError": "마지막 오류",
+    "counts": "검토 대기 {pending} · 승인 {approved} · 숨김 {hidden} · 레지스트리에서 삭제 {tombstoned}",
+    "syncNow": "지금 동기화",
+    "syncResult": "동기화 결과: {status}",
+    "actionError": "요청에 실패했습니다",
+    "curated": "저장했습니다",
+    "promoted": "MCP 카탈로그에 꺼진 초안으로 올렸습니다: {id}",
+    "promoteExists": "이미 카탈로그에 있습니다: {id}",
+    "publisherVerified": "게시자 확인",
+    "publisherVerifiedHint": "레지스트리가 네임스페이스 소유를 확인했다는 뜻입니다. 코드·보안 검토가 아닙니다.",
+    "noInstall": "설치 정보 없음",
+    "curation": {
+      "pending": "검토 대기",
+      "approved": "승인",
+      "hidden": "숨김"
+    },
+    "registryStatus": {
+      "active": "활성",
+      "deprecated": "지원 중단",
+      "deleted": "삭제됨"
+    },
+    "tombstoned": "레지스트리에서 삭제",
+    "approve": "승인",
+    "hide": "숨김",
+    "reset": "보류로",
+    "promote": "카탈로그로 올리기",
+    "filterAll": "전체",
+    "searchPlaceholder": "이름·설명 검색 (Enter)",
+    "showTombstoned": "삭제된 항목 포함",
+    "colServer": "서버",
+    "colInstall": "설치 방식",
+    "colState": "상태",
+    "colActions": "작업",
+    "loading": "불러오는 중...",
+    "empty": "항목이 없습니다",
+    "pageInfo": "{from}–{to} / {total}",
+    "prev": "이전",
+    "next": "다음"
   }
 }
