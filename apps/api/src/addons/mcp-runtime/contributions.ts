@@ -14,5 +14,7 @@ export const mcpRuntimeContributions: AddonContribution = {
     settings: [
         // MCP-1 협상 관측(기본 OFF) — 연결 뒤 서버별 전송·인증·리비전·선언 확장을 기록한다. 연결 동작은 바꾸지 않는다.
         { key: 'MCP_NEGOTIATION_OBSERVE_ENABLED', group: 'agent', secret: false, requiresRestart: false, validate: 'boolean' },
+        // MCP-4 CIMD(기본 OFF) — 공개 HTTPS origin 이 있을 때만, CIMD 를 광고하는 인가 서버에 동적 등록 없이 로그인한다.
+        { key: 'MCP_OAUTH_CIMD_ENABLED', group: 'agent', secret: false, requiresRestart: false, validate: 'boolean' },
     ],
 };
