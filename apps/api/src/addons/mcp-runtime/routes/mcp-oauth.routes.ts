@@ -4,6 +4,7 @@
  *   POST   /servers/:id/oauth/start   → { authorizationUrl }  (프론트가 브라우저를 이동)
  *   GET    /oauth/callback?code&state → 토큰 교환 → 서버 재연결 → 커넥터 탭으로 리디렉트
  *   DELETE /servers/:id/oauth         → 토큰·등록 삭제(로그아웃) + 연결 정리
+ *   GET    /oauth/client-metadata.json → CIMD 문서(MCP-4, 인증 없음 — 인가 서버가 가져간다. 꺼져 있으면 404)
  *
  * SDK `auth()` 를 그대로 쓴다 — 리소스 메타데이터 발견(RFC 9728) → AS 메타데이터(RFC 8414) →
  * 동적 등록(RFC 7591) → PKCE 인가 URL 생성까지 SDK 가 하고, 이 라우트는 provider 가 붙잡은
@@ -28,6 +29,7 @@ import { getLifecycleSupervisor } from '../lifecycle-supervisor';
 import { createPinnedFetch } from '../../../security/ssrf-guard';
 import { canStartStopServer } from './mcp-visibility';
 import { MCP_OAUTH_RETURN_PATH } from '../../../config/mcp-oauth';
+import { buildCimdDocument, MCP_OAUTH_CIMD_CACHE_MAX_AGE_SEC, MCP_OAUTH_CIMD_ROUTE } from '../oauth-cimd';
 import { classifyConnectError } from '../connect-error';
 import { createLogger } from '../../../utils/logger';
 
@@ -39,6 +41,17 @@ function returnTo(result: 'ok' | 'error', extra: Record<string, string> = {}): s
     const q = new URLSearchParams({ mcpOauth: result, ...extra });
     return `${MCP_OAUTH_RETURN_PATH}&${q.toString()}`;
 }
+
+/**
+ * CIMD 문서 — 인가 서버가 client_id URL 로 직접 가져가므로 인증이 없다. 공개 정보(이름·콜백 주소)만 싣고
+ * 시크릿은 없다. 플래그 OFF·공개 HTTPS origin 없음이면 404(존재를 드러내지 않는다).
+ */
+mcpOAuthRouter.get(MCP_OAUTH_CIMD_ROUTE, (_req: Request, res: Response) => {
+    const doc = buildCimdDocument();
+    if (!doc) { res.status(404).json(notFound('리소스')); return; }
+    res.set('Cache-Control', `public, max-age=${MCP_OAUTH_CIMD_CACHE_MAX_AGE_SEC}`);
+    res.type('application/json').send(JSON.stringify(doc));
+});
 
 /** 원격 transport 인 사용자 소유 서버만 OAuth 대상이다 */
 async function loadOAuthTarget(req: Request, res: Response) {
