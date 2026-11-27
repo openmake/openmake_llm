@@ -1307,7 +1307,8 @@
     "visibilityOrganization": "組織共有",
     "orgBadge": "組織",
     "visibilityAria": "エージェントの公開範囲",
-    "viewSystemPrompt": "システムプロンプトを表示"
+    "viewSystemPrompt": "システムプロンプトを表示",
+    "agentOrigin": "出典: {source}"
   },
   "research": {
     "pageTitle": "ディープリサーチ履歴",

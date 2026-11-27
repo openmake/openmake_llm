@@ -1307,7 +1307,8 @@
     "visibilityOrganization": "조직 공유",
     "orgBadge": "조직",
     "visibilityAria": "에이전트 공개 범위",
-    "viewSystemPrompt": "시스템 프롬프트 보기"
+    "viewSystemPrompt": "시스템 프롬프트 보기",
+    "agentOrigin": "출처: {source}"
   },
   "research": {
     "pageTitle": "딥 리서치 히스토리",
