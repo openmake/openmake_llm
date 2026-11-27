@@ -67,7 +67,10 @@ export interface Invocation {
     /** 경로를 뗀 이름 */
     base: string;
     family?: McpRunnerFamily;
+    /** 대표 패키지(표시용) = pkgs[0] */
     pkg?: PackageId;
+    /** 실행기가 설치·실행할 패키지 전부 — `-p` 여러 개·`--with` 추가 의존성까지. allow 는 전부 맞아야 한다 */
+    pkgs: PackageId[];
     /** 실행기 하위 명령 뒤의 인자(소문자 아님, 원문) */
     tokens: string[];
 }
@@ -210,27 +213,36 @@ export function parsePackageSpec(rawSpec: string, family: McpRunnerFamily | unde
     return out;
 }
 
-/** 실행기 인자에서 패키지 — `-p`/`--from` 우선, 아니면 플래그 뒤 첫 위치 인자 */
-function extractPackage(family: McpRunnerFamily, args: string[]): PackageId | undefined {
-    const { valueFlags, packageFlags } = MCP_RUNNER_FLAGS[family];
+/**
+ * 실행기 인자에서 패키지 — 패키지 플래그(`-p`·`--from`·`--spec`)가 있으면 그 값들(여러 개면 전부), 없으면 플래그 뒤 첫 위치 인자.
+ * 추가 설치 플래그(`--with`)의 값도 덧붙인다(실행 전 설치되는 코드라 allow 대상).
+ */
+function extractPackages(family: McpRunnerFamily, args: string[]): PackageId[] {
+    const { valueFlags, packageFlags, extraPackageFlags } = MCP_RUNNER_FLAGS[family];
+    const fromFlags: PackageId[] = [];
+    const extras: PackageId[] = [];
     let positional: string | undefined;
     for (let i = 0; i < args.length; i++) {
         const tok = args[i];
-        if (tok === '--') { positional = positional ?? args[i + 1]; break; }
+        if (tok === '--') { positional = args[i + 1]; break; }
         if (tok.startsWith('-')) {
             const eq = tok.indexOf('=');
             const flag = (eq > 0 ? tok.slice(0, eq) : tok).toLowerCase();
             const value = eq > 0 ? tok.slice(eq + 1) : (valueFlags.includes(flag) ? args[++i] : undefined);
-            if (packageFlags.includes(flag) && value) {
-                const pkg = parsePackageSpec(value, family);
-                if (pkg) return pkg;
+            if (value && (packageFlags.includes(flag) || extraPackageFlags.includes(flag))) {
+                // 쉼표로 여러 개를 받는 플래그(--with a,b) 대비
+                for (const part of value.split(',')) {
+                    const pkg = parsePackageSpec(part, family);
+                    if (pkg) (packageFlags.includes(flag) ? fromFlags : extras).push(pkg);
+                }
             }
             continue;
         }
         positional = tok;
         break;
     }
-    return positional ? (parsePackageSpec(positional, family) ?? undefined) : undefined;
+    const main = fromFlags.length > 0 ? fromFlags : (positional ? [parsePackageSpec(positional, family)].filter((x): x is PackageId => !!x) : []);
+    return [...main, ...extras];
 }
 
 /** `env` 앞머리 걷기 — 남는 명령이 없으면 null */
@@ -283,11 +295,14 @@ function splitShellCommands(script: string): string[][] {
 function buildInvocation(rawCommand: string, rawArgs: string[]): { inv: Invocation; shellScripts: string[] } {
     let { command, base } = normalizeCommand(rawCommand);
     let args = rawArgs;
+    const shellScripts: string[] = [];
     if (base === 'env') {
+        // env -S "명령 문자열" — 셸 문자열처럼 다시 쪼개 본다(deny)
+        const split = args.findIndex((a) => a === '-S' || a === '--split-string' || a.startsWith('--split-string='));
+        if (split >= 0) shellScripts.push(args[split].includes('=') ? args[split].slice(args[split].indexOf('=') + 1) : (args[split + 1] ?? ''));
         const rest = unwrapEnv(args);
         if (rest) { ({ command, base } = normalizeCommand(rest[0])); args = rest.slice(1); }
     }
-    const shellScripts: string[] = [];
     const shellFlags = MCP_SHELL_WRAPPERS[base];
     if (shellFlags) {
         for (let i = 0; i < args.length; i++) {
@@ -302,8 +317,8 @@ function buildInvocation(rawCommand: string, rawArgs: string[]): { inv: Invocati
     }
     const rest = runnerArgs(base, args);
     const family = rest ? familyOfBase(base) : undefined;
-    const pkg = family && rest ? extractPackage(family, rest) : undefined;
-    return { inv: { command, base, ...(family ? { family } : {}), ...(pkg ? { pkg } : {}), tokens: rest ?? args }, shellScripts };
+    const pkgs = family && rest ? extractPackages(family, rest) : [];
+    return { inv: { command, base, ...(family ? { family } : {}), ...(pkgs[0] ? { pkg: pkgs[0] } : {}), pkgs, tokens: rest ?? args }, shellScripts };
 }
 
 function formatPkg(p: PackageId): string {
@@ -325,13 +340,27 @@ export function describeMcpServer(spec: McpServerSpec): McpServerDescriptor {
     const { inv: primary, shellScripts } = buildInvocation(command, args);
     const nested: Invocation[] = [];
     const queue = shellScripts.map((s) => ({ s, depth: 1 }));
+    const addEmbedded = (words: string[], depth: number) => {
+        // deny 용 — 인자 중간에 실행기·셸이 다시 나오면(`exec npx x`·`nohup npx x`·`timeout 9 npx x`·`docker run img npx x`) 그 자리부터도 본다
+        for (let j = 1; j < words.length; j++) {
+            const b = normalizeCommand(words[j]).base;
+            if (!MCP_RUNNER_COMMANDS[b] && !MCP_SHELL_WRAPPERS[b] && b !== 'env') continue;
+            const { inv, shellScripts: inner } = buildInvocation(words[j], words.slice(j + 1));
+            nested.push(inv);
+            if (depth < MCP_SHELL_UNWRAP_MAX_DEPTH) for (const x of inner) queue.push({ s: x, depth: depth + 1 });
+        }
+    };
+    addEmbedded([command, ...args], 1);
     while (queue.length > 0) {
         const { s, depth } = queue.shift()!;
         for (const words of splitShellCommands(s)) {
             if (words.length === 0) continue;
             const { inv, shellScripts: inner } = buildInvocation(words[0], words.slice(1));
             nested.push(inv);
-            if (depth < MCP_SHELL_UNWRAP_MAX_DEPTH) for (const x of inner) queue.push({ s: x, depth: depth + 1 });
+            if (depth < MCP_SHELL_UNWRAP_MAX_DEPTH) {
+                for (const x of inner) queue.push({ s: x, depth: depth + 1 });
+                addEmbedded(words, depth + 1);
+            }
         }
     }
     return { kind: 'stdio', primary, nested, display: `${primary.command}${primary.pkg ? ` ${formatPkg(primary.pkg)}` : ''}` };
@@ -345,33 +374,49 @@ function packageMatches(rule: PackageId, cand: PackageId, mode: 'allow' | 'deny'
     return cand.version === undefined || cand.version === rule.version;
 }
 
-function commandRuleMatches(rule: Extract<ExtensionMcpServerRule, { type: 'command' }>, inv: Invocation, mode: 'allow' | 'deny'): boolean {
+function ruleCommand(rule: Extract<ExtensionMcpServerRule, { type: 'command' }>) {
     const rc = normalizeCommand(rule.command);
-    const ruleFamily = familyOfBase(rc.base);
-    if (mode === 'allow') {
-        if (rc.command !== inv.command) return false;
-        if (rule.package === undefined) return true;
-        const rp = parsePackageSpec(rule.package, inv.family ?? ruleFamily);
-        return !!rp && !!inv.pkg && packageMatches(rp, inv.pkg, 'allow');
-    }
-    const sameCommand = rc.base === inv.base || (!!ruleFamily && ruleFamily === inv.family);
+    return { ...rc, family: familyOfBase(rc.base) };
+}
+
+/** allow — 실행 파일이 그대로 같고, 패키지 규칙이면 그 패키지에 맞는지 */
+function commandRuleAllowsPackage(rule: Extract<ExtensionMcpServerRule, { type: 'command' }>, inv: Invocation, pkg: PackageId | undefined): boolean {
+    const rc = ruleCommand(rule);
+    if (rc.command !== inv.command) return false;
+    if (rule.package === undefined) return true;
+    const rp = parsePackageSpec(rule.package, inv.family ?? rc.family);
+    return !!rp && !!pkg && packageMatches(rp, pkg, 'allow');
+}
+
+/** allow(층 하나의 규칙 목록) — 실행기가 받는 패키지가 **전부** 허용 규칙에 맞아야 한다(`-p 허용 -p 악성` 우회 차단) */
+function stdioAllowedBy(rules: readonly ExtensionMcpServerRule[], inv: Invocation): boolean {
+    const cmdRules = rules.filter((r): r is Extract<ExtensionMcpServerRule, { type: 'command' }> => r.type === 'command');
+    if (inv.pkgs.length === 0) return cmdRules.some((r) => r.package === undefined && commandRuleAllowsPackage(r, inv, undefined));
+    return inv.pkgs.every((p) => cmdRules.some((r) => commandRuleAllowsPackage(r, inv, p)));
+}
+
+function commandRuleDenies(rule: Extract<ExtensionMcpServerRule, { type: 'command' }>, inv: Invocation): boolean {
+    const rc = ruleCommand(rule);
+    const sameCommand = rc.base === inv.base || (!!rc.family && rc.family === inv.family);
     if (!sameCommand) return false;
     if (rule.package === undefined) return true;
-    const fam = inv.family ?? ruleFamily;
+    const fam = inv.family ?? rc.family;
     const rp = parsePackageSpec(rule.package, fam);
     if (!rp) return false;
-    if (inv.pkg && packageMatches(rp, inv.pkg, 'deny')) return true;
-    // 값 플래그 오인·여러 패키지(--with) 대비 — 모든 인자 토큰에서 같은 이름을 찾는다
+    if (inv.pkgs.some((p) => packageMatches(rp, p, 'deny'))) return true;
+    // 값 플래그 오인 대비 — 모든 인자 토큰(플래그 값·쉼표 목록 포함)에서 같은 이름을 찾는다
     for (const tok of inv.tokens) {
         const value = tok.startsWith('-') ? (tok.includes('=') ? tok.slice(tok.indexOf('=') + 1) : '') : tok;
-        if (!value) continue;
-        const cp = parsePackageSpec(value, fam);
-        if (cp && packageMatches(rp, cp, 'deny')) return true;
+        for (const part of value.split(',')) {
+            if (!part) continue;
+            const cp = parsePackageSpec(part, fam);
+            if (cp && packageMatches(rp, cp, 'deny')) return true;
+        }
     }
     return false;
 }
 
-/** PURE: 규칙 하나 ↔ 서버. mode deny = 넓게, allow = 정확. */
+/** PURE: 규칙 하나 ↔ 서버. mode deny = 넓게, allow = 정확(stdio allow 는 층 단위 `stdioAllowedBy` 가 판정). */
 export function mcpServerRuleMatches(rule: ExtensionMcpServerRule, d: McpServerDescriptor, mode: 'allow' | 'deny'): boolean {
     if (d.kind === 'unidentified') return false;
     if (rule.type === 'url') {
@@ -382,8 +427,14 @@ export function mcpServerRuleMatches(rule: ExtensionMcpServerRule, d: McpServerD
         return (r.port === '' || r.port === d.port) && pathPrefix(broadPath(r.path), broadPath(d.path));
     }
     if (d.kind !== 'stdio') return false;
-    if (mode === 'allow') return commandRuleMatches(rule, d.primary, 'allow');
-    return [d.primary, ...d.nested].some((inv) => commandRuleMatches(rule, inv, 'deny'));
+    if (mode === 'allow') return stdioAllowedBy([rule], d.primary);
+    return [d.primary, ...d.nested].some((inv) => commandRuleDenies(rule, inv));
+}
+
+/** 층 하나의 allow 목록이 서버를 허용하는가 */
+function layerAllows(rules: readonly ExtensionMcpServerRule[], d: McpServerDescriptor): boolean {
+    if (d.kind === 'stdio') return stdioAllowedBy(rules, d.primary);
+    return rules.some((r) => mcpServerRuleMatches(r, d, 'allow'));
 }
 
 /** PURE: 판정. deny(모든 층) → allow(층마다). 식별 불가는 층이 있으면 거절. */
@@ -401,7 +452,7 @@ export function evaluateMcpServer(input: { server: McpServerDescriptor; layers: 
     }
     for (const layer of layers) {
         if (layer.allow === undefined) continue;
-        if (!layer.allow.some((r) => mcpServerRuleMatches(r, server, 'allow'))) {
+        if (!layerAllows(layer.allow, server)) {
             return { allowed: false, reason: layer.broken ? 'POLICY_INVALID' : 'NOT_ALLOWED', scope: layer.scope, ...base };
         }
     }

@@ -160,6 +160,14 @@ describe('command 규칙 — allow 정확', () => {
     ])('%s → %s', (line, ok) => {
         expect(allowed(stdio(line), rules)).toBe(ok);
     });
+    it('실행기가 받는 패키지는 전부 허용돼야 한다(-p 여러 개·--with 우회 차단)', () => {
+        expect(allowed(stdio('npx -p @modelcontextprotocol/server-memory -p evil-pkg run'), rules)).toBe(false);
+        expect(allowed(stdio('npx --package=@modelcontextprotocol/a --package=@modelcontextprotocol/b run'), rules)).toBe(true);
+        const py = allowOnly([{ type: 'command', command: 'uvx', package: 'mcp-server-fetch' }]);
+        expect(allowed(stdio('uvx mcp-server-fetch'), py)).toBe(true);
+        expect(allowed(stdio('uvx --with evil mcp-server-fetch'), py)).toBe(false);
+        expect(allowed(stdio('uvx --with=mcp-server-fetch,evil mcp-server-fetch'), py)).toBe(false);
+    });
     it('버전을 적은 규칙은 같은 고정 버전만', () => {
         const pinned = allowOnly([{ type: 'command', command: 'npx', package: '@a/b@1.2.3' }]);
         expect(allowed(stdio('npx @a/b@1.2.3'), pinned)).toBe(true);
@@ -199,6 +207,11 @@ describe('command 규칙 — deny 넓게(우회 차단)', () => {
         ['sh', ['-c', 'echo "$(npx evil-pkg)"']],
         ['cmd', ['/c', 'npx', 'evil-pkg']],
         ['bash', ['-c', "sh -c 'npx evil-pkg'"]],
+        ['env', ['-S', 'npx evil-pkg']],
+        ['nohup', ['npx', 'evil-pkg']],
+        ['timeout', ['30', 'npx', 'evil-pkg']],
+        ['sh', ['-c', 'exec npx evil-pkg']],
+        ['docker', ['run', 'node:22', 'npx', 'evil-pkg']],
     ])('셸 감싸기 차단: %s %j', (command, args) => {
         expect(allowed(stdioArgs(command, args), rules)).toBe(false);
     });

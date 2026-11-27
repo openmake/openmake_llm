@@ -128,16 +128,21 @@ export const MCP_RUNNER_COMMANDS: Readonly<Record<string, { family: McpRunnerFam
     nerdctl: { family: 'container', subcommands: [['run'], ['container', 'run']] },
 };
 
-/** 계열별 플래그 — `valueFlags` 는 다음 토큰을 값으로 먹는다, `packageFlags` 의 값이 곧 실행할 패키지다 */
-export const MCP_RUNNER_FLAGS: Readonly<Record<McpRunnerFamily, { valueFlags: readonly string[]; packageFlags: readonly string[] }>> = {
+/**
+ * 계열별 플래그 — `valueFlags` 는 다음 토큰을 값으로 먹는다, `packageFlags` 의 값이 곧 실행할 패키지다,
+ * `extraPackageFlags` 의 값은 실행 전에 함께 설치되는 추가 패키지다(allow 는 이것까지 전부 맞아야 한다).
+ */
+export const MCP_RUNNER_FLAGS: Readonly<Record<McpRunnerFamily, { valueFlags: readonly string[]; packageFlags: readonly string[]; extraPackageFlags: readonly string[] }>> = {
     npm: {
         valueFlags: ['-p', '--package', '-c', '--call', '--registry', '--cache', '--userconfig', '-w', '--workspace'],
         packageFlags: ['-p', '--package'],
+        extraPackageFlags: [],
     },
     python: {
         valueFlags: ['--from', '--with', '--with-requirements', '--with-editable', '-p', '--python', '--index', '--index-url',
             '--extra-index-url', '--default-index', '--spec', '--pip-args', '-c', '--constraints', '--overrides'],
         packageFlags: ['--from', '--spec'],
+        extraPackageFlags: ['--with'],
     },
     container: {
         valueFlags: ['-e', '--env', '--env-file', '-v', '--volume', '-p', '--publish', '--name', '--network', '--net', '--mount',
@@ -147,6 +152,7 @@ export const MCP_RUNNER_FLAGS: Readonly<Record<McpRunnerFamily, { valueFlags: re
             '--stop-signal', '--stop-timeout', '--dns', '--group-add', '--cidfile', '--expose', '--label-file', '--userns', '--uts',
             '--gpus', '--health-cmd', '--isolation', '--link', '--mac-address', '--ip', '--ip6', '--cgroupns', '--cgroup-parent'],
         packageFlags: [],
+        extraPackageFlags: [],
     },
 };
 
