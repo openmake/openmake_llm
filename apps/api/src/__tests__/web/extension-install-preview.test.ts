@@ -56,3 +56,34 @@ describe('splitWarning · installableCounts', () => {
         })).toEqual({ skills: 1, mcpServers: 1, agents: 1 });
     });
 });
+
+describe('이름 설치 미리보기 — 플래그 OFF 면 이름 입력도 바로 설치한다', () => {
+    const named = lib as unknown as {
+        previewRequest: (t: unknown) => { path: string; body: Record<string, string> };
+        namedInstallPreviewTarget: (mode: 'preview' | 'direct', ref: string) => unknown;
+    };
+    it('direct 모드는 미리보기 대상이 없다(null → 종전 install-by-name)', () => {
+        expect(named.namedInstallPreviewTarget('direct', 'a@b')).toBeNull();
+        expect(named.namedInstallPreviewTarget('preview', 'a@b')).toEqual({ kind: 'named', ref: 'a@b', label: 'a@b' });
+    });
+    it('이름 대상은 /preview-by-name, 카탈로그 대상은 종전 /catalog/:id/preview', () => {
+        expect(named.previewRequest({ kind: 'named', ref: 'a@b', label: 'a@b' }))
+            .toEqual({ path: '/api/users/me/extensions/preview-by-name', body: { ref: 'a@b' } });
+        expect(named.previewRequest({ sourceId: 'c1', plugin: 'p', label: 'p' }))
+            .toEqual({ path: '/api/users/me/extensions/catalog/c1/preview', body: { plugin: 'p' } });
+        expect(named.previewRequest({ sourceId: 'c1', label: 'x' }))
+            .toEqual({ path: '/api/users/me/extensions/catalog/c1/preview', body: {} });
+    });
+    const read = (rel: string): string => (require('fs') as typeof import('fs')).readFileSync(
+        (require('path') as typeof import('path')).join(__dirname, '../../../../web', rel), 'utf8');
+    it('이름 입력 폼: 기본 mode 는 direct, 미리보기 대상이 없으면 바로 install', () => {
+        const src = read('components/settings/named-install-form.tsx');
+        expect(src).toContain('mode = "direct"');
+        expect(src).toMatch(/if \(target\) setPreviewTarget\(target\);\s*else void install\(value\);/);
+        expect(src).toContain('onConfirm={(tg) => { if (tg.kind === "named") void install(tg.ref); }}');
+        expect(src).not.toMatch(/onClick=\{\(\) => void install\(trimmed\)\}/);
+    });
+    it('갤러리는 카탈로그 모드를 이름 입력 폼에 그대로 넘긴다', () => {
+        expect(read('components/settings/extensions-section.tsx')).toContain('<NamedInstallForm mode={catalogMode}');
+    });
+});

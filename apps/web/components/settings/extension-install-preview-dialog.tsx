@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * 확장 설치 미리보기 대화상자(M1b) — 갤러리 카탈로그 설치 전에 설치될 구성요소·권한·원본·커밋·경고를 보인다.
- * 조회는 쓰기·LLM 이 없는 `POST /api/users/me/extensions/catalog/:id/preview`, 확인하면 종전 설치를 부른다(onConfirm).
+ * 확장 설치 미리보기 대화상자(M1b) — 갤러리 카탈로그 설치·이름 설치 전에 설치될 구성요소·권한·원본·커밋·경고를 보인다.
+ * 조회는 쓰기·LLM 이 없는 미리보기 API(`previewRequest` — 카탈로그 `/catalog/:id/preview`, 이름 `/preview-by-name`),
+ * 확인하면 종전 설치를 부른다(onConfirm 에 대상을 그대로 돌려준다).
  */
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -13,8 +14,10 @@ import { ApiClient, ApiError } from "@/lib/api-client";
 import {
   installableCounts,
   previewHintKey,
+  previewRequest,
   splitWarning,
   type ExtensionInstallPreview,
+  type InstallPreviewTarget,
 } from "@/lib/extension-install-preview";
 
 export function ExtensionInstallPreviewDialog({
@@ -22,10 +25,10 @@ export function ExtensionInstallPreviewDialog({
   onClose,
   onConfirm,
 }: {
-  /** 미리볼 카탈로그 항목 — null 이면 닫힘 */
-  target: { sourceId: string; plugin?: string; label: string } | null;
+  /** 미리볼 대상(카탈로그 항목·이름 설치) — null 이면 닫힘 */
+  target: InstallPreviewTarget | null;
   onClose: () => void;
-  onConfirm: (sourceId: string, plugin?: string) => void;
+  onConfirm: (target: InstallPreviewTarget) => void;
 }) {
   const t = useTranslations("extensions.preview");
   const [preview, setPreview] = useState<ExtensionInstallPreview | null>(null);
@@ -38,10 +41,8 @@ export function ExtensionInstallPreviewDialog({
     setPreview(null);
     setError(null);
     setLoading(true);
-    ApiClient.post<ApiSuccess<ExtensionInstallPreview>>(
-      `/api/users/me/extensions/catalog/${target.sourceId}/preview`,
-      target.plugin ? { plugin: target.plugin } : {},
-    )
+    const req = previewRequest(target);
+    ApiClient.post<ApiSuccess<ExtensionInstallPreview>>(req.path, req.body)
       .then((res) => { if (!cancelled) setPreview(res?.data ?? null); })
       .catch((e: unknown) => { if (!cancelled) setError(e instanceof ApiError && e.message ? e.message : t("failed")); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -139,7 +140,7 @@ export function ExtensionInstallPreviewDialog({
         <Button variant="ghost" onClick={onClose}>{t("cancel")}</Button>
         <Button
           disabled={!preview || blocked}
-          onClick={() => { if (target) onConfirm(target.sourceId, target.plugin); onClose(); }}
+          onClick={() => { if (target) onConfirm(target); onClose(); }}
         >
           {t("confirm")}
         </Button>
