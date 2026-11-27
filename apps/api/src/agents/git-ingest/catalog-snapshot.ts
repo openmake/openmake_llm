@@ -29,13 +29,15 @@ export { buildSkillDiscoveryPattern } from './extension-discovery';
 export interface CatalogSnapshot {
     name: string;
     description: string | null;
-    plugins: Array<{ name: string; description?: string; version?: string; installable?: boolean; category?: string; description_ko?: string }>;
+    plugins: Array<{ name: string; description?: string; version?: string; installable?: boolean; category?: string; description_ko?: string; source?: string }>;
 }
 
 interface CatalogSnapshotDeps {
     fetcherFactory: (opts: { accessToken?: string }) => GitFetcher;
     /** .zip 아카이브 소스용 fetcher (ExtensionIngestService.makeArchiveFetcher 위임) */
     archiveFetcherFor: (url: string) => GitFetcher;
+    /** 원본 정책(M2) 강제 시 — 교차 저장소 항목 원본 판정. false 면 프로브(네트워크)하지 않는다 */
+    isEntrySourceAllowed?: (url: string) => boolean;
 }
 
 type ExternalRepoCache = Map<string, { sha: string; treeEntries: TreeEntry[] | null } | 'notfound' | 'error'>;
@@ -86,7 +88,7 @@ export async function fetchCatalogSnapshot(
             }
         }
         const entries = marketplace.marketplace.plugins;
-        const enriched: Array<{ name: string; description?: string; installable?: boolean; category?: string }> = [];
+        const enriched: CatalogSnapshot['plugins'] = [];
         // 교차 저장소 repo 별 resolveRef/listTree 재사용 캐시 (한 sync 실행 한정)
         const externalCache: ExternalRepoCache = new Map();
         // 소규모 동시성 배치 — raw fetch 위주라 rate limit 부담 낮음
@@ -98,11 +100,12 @@ export async function fetchCatalogSnapshot(
                 if (p.url) {
                     const p2 = parseGitUrl(p.url);
                     if (p2 && (p2.owner !== parsed.owner || p2.repo !== parsed.repo)) {
-                        if (!accessToken) return { name: p.name, description: p.description, category: p.category };
+                        // source = 항목의 실제 원본 — 원본 정책 catalog-only 의 '등록 원본' 판정(스냅샷이 원본을 알아야 업데이트가 통과한다)
+                        const base = { name: p.name, description: p.description, category: p.category, source: p.url };
+                        if (!accessToken) return base;
+                        if (deps.isEntrySourceAllowed && !deps.isEntrySourceAllowed(p.url)) return base;   // 정책상 막힌 원본엔 요청하지 않는다
                         const installable = await probeExternalEntry(fetcher, p2.owner, p2.repo, p.ref, p.path, externalCache);
-                        return installable === undefined
-                            ? { name: p.name, description: p.description, category: p.category }
-                            : { name: p.name, description: p.description, installable, category: p.category };
+                        return installable === undefined ? base : { ...base, installable };
                     }
                 }
                 const prefix = p.path ? `${p.path}/` : '';

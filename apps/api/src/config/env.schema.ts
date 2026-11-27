@@ -154,6 +154,10 @@ export const envSchema = z
         EXTERNAL_MODEL_POLICY: z.string().optional(),
         /** 로컬 브라우저 사이트 허용 목록 JSON(Companion P2) — 승인 없이 입력을 허용할 사이트. 형식 검증은 registry */
         BROWSER_SITE_POLICY: z.string().optional(),
+        /** 확장 원본 정책(M2, opt-in) — 해석·검증은 config/extension-source-policy · system-settings-registry */
+        EXTENSION_SOURCE_POLICY_ENFORCED: z.string().optional(),
+        EXTENSION_ARBITRARY_URL_INSTALL: z.string().optional(),
+        EXTENSION_SOURCE_POLICY: z.string().optional(),
         /**
          * vLLM `extra_body.reasoning_effort` 전송 활성화 (opt-in 기본).
          *

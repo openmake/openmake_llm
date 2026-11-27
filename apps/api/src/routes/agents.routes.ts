@@ -24,6 +24,7 @@ import {
 } from '../schemas/agents.schema';
 import { importAgentFromGitSchema } from '../schemas/agent-ingest.schema';
 import { AgentIngestService } from '../agents/git-ingest/agent-ingest-service';
+import { EXTENSION_SOURCE_BLOCKED_CODE } from '../errors/extension-source-blocked.error';
 import { GitFetcher } from '../agents/git-ingest/git-fetcher';
 import { CustomAgentRepository } from '../data/repositories/custom-agent-repository';
 import { AGENT_CREATOR } from '../config/constants';
@@ -235,6 +236,7 @@ router.get('/:id', optionalAuth, asyncHandler(async (req: Request, res: Response
 // ================================================
 
 function mapAgentIngestErrorToStatus(code: string): number {
+    if (code === EXTENSION_SOURCE_BLOCKED_CODE) return 403;   // 확장 원본 정책(M2)
     switch (code) {
         case 'INVALID_GIT_URL': case 'INVALID_REF': case 'INVALID_AGENT_MANIFEST': case 'INVALID_AGENT_TYPE': return 400;
         case 'REPO_NOT_FOUND': return 404;

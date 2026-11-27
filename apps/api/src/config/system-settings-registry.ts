@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import { browserSitePolicyProblems } from '@openmake/config';
 import { contributedSettings, type AddonSettingValidator } from '../addon-host/contributions';
+import { ARBITRARY_URL_INSTALL_MODES, EXTENSION_SOURCE_POLICY_KEYS, extensionSourcePolicyProblems } from './extension-source-policy';
 
 /** Base 그룹 또는 add-on 이 기여한 그룹 이름 */
 export type SettingGroup = 'oauth' | 'search' | 'alerts' | 'push' | 'llm' | 'agent' | 'slo' | (string & {});
@@ -51,6 +52,13 @@ const browserSitePolicy = nonEmpty.superRefine((v, ctx) => {
     const problems = browserSitePolicyProblems(v);
     if (problems.length > 0) {
         ctx.addIssue({ code: 'custom', message: `사이트 정책이 올바르지 않습니다 (예: {"allow":["groupware.example.co.kr","*.intra.example.co.kr"],"deny":[]}): ${problems.join(', ')}` });
+    }
+});
+/** 확장 원본 정책 — 조직 정책과 같은 스키마(config/extension-source-policy) */
+const extensionSourcePolicy = nonEmpty.superRefine((v, ctx) => {
+    const problems = extensionSourcePolicyProblems(v);
+    if (problems.length > 0) {
+        ctx.addIssue({ code: 'custom', message: `확장 원본 정책이 올바르지 않습니다 (예: {"allow":[{"type":"github","repo":"openmake/*"}],"deny":[]}): ${problems.join(', ')}` });
     }
 });
 /** 백분율 목표 — 0 초과 100 미만 소수(예: 99.5) */
@@ -120,6 +128,10 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     { key: 'AGENT_TASK_QUEUE_PRIORITY_MAX', group: 'agent', secret: false, requiresRestart: false, validate: nonNegativeIntString },
     // 로컬 브라우저 사이트 허용 목록(Companion P2) — {"allow":["groupware.example.co.kr"],"deny":[]}. 작업이 도구를 부를 때마다 읽는다(실시간)
     { key: 'BROWSER_SITE_POLICY', group: 'agent', secret: false, requiresRestart: false, validate: browserSitePolicy },
+    // 확장 원본 정책(M2, opt-in) — 설치·업데이트·카탈로그 동기화가 호출 시점에 읽는다(실시간). 규칙은 config/extension-source-policy
+    { key: EXTENSION_SOURCE_POLICY_KEYS.ENFORCED, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
+    { key: EXTENSION_SOURCE_POLICY_KEYS.ARBITRARY_URL_INSTALL, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(ARBITRARY_URL_INSTALL_MODES) },
+    { key: EXTENSION_SOURCE_POLICY_KEYS.POLICY, group: 'agent', secret: false, requiresRestart: false, validate: extensionSourcePolicy },
 
     // ── SLO 목표(F24.8, 145) — 5분 평가 tick 이 호출 시점에 읽는다(실시간) ──
     { key: 'SLO_CHAT_AVAILABILITY_TARGET', group: 'slo', secret: false, requiresRestart: false, validate: percentTarget },

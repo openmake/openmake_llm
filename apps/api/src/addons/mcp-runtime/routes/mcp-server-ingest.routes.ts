@@ -17,6 +17,7 @@
  *
  * @module routes/mcp-server-ingest.routes
  */
+import { EXTENSION_SOURCE_BLOCKED_CODE } from '../../../runtime-ports/extension-source-policy';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { isBlockedByConvention, type ConventionFinding } from '../../../agents/git-ingest/convention-checker';
 import type { Pool } from 'pg';
@@ -140,6 +141,9 @@ export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             logger.warn(`import-from-git fail: ${msg}`);
+            if (msg.startsWith(EXTENSION_SOURCE_BLOCKED_CODE)) {   // 확장 원본 정책(M2, Base)
+                res.status(403).json({ success: false, error: EXTENSION_SOURCE_BLOCKED_CODE, message: msg }); return;
+            }
             if (msg.startsWith('INVALID_GIT_URL')) {
                 res.status(400).json({ success: false, error: 'INVALID_GIT_URL' }); return;
             }

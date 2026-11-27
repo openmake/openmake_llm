@@ -27,6 +27,7 @@ import { parseMcpServerFile, validateMcpServerManifest } from './mcp-server-mani
 import { ConventionChecker, isBlockedByConvention, type ConventionFinding } from '../../../agents/git-ingest/convention-checker';
 import { McpServerDraftRepository } from '../data/mcp-server-draft-repository';
 import { MCP_INGEST, SKILL_CREATOR } from '../../../config/constants';
+import { assertInstallSourceAllowed } from '../../../runtime-ports/extension-source-policy';
 
 const logger = createLogger('McpServerIngestService');
 
@@ -85,6 +86,8 @@ export class McpServerIngestService {
         const parsed = parseGitUrl(input.gitUrl);
         if (!parsed) throw new Error(`INVALID_GIT_URL: ${input.gitUrl}`);
         const { owner, repo } = parsed;
+        // 확장 원본 정책(M2, opt-in, Base) — fetch 전
+        await assertInstallSourceAllowed({ url: input.gitUrl, ref: input.gitRef, userId: input.userId });
 
         const fetcher = this.opts.fetcherFactory({ accessToken: input.accessToken });
         const sha = await fetcher.resolveRef(owner, repo, input.gitRef ?? 'HEAD');
