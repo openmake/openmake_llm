@@ -30,6 +30,7 @@ import { ConventionChecker, type ConventionFinding } from './convention-checker'
 import { parseSkillFile, validateManifest } from '../manifest-validator';
 import { adaptSkillContent } from './skill-compat';
 import { SKILL_CREATOR } from '../../config/constants';
+import { assertExtensionSourceAllowed } from '../../services/extensions/source-policy';
 
 const logger = createLogger('GitIngestService');
 
@@ -83,6 +84,11 @@ interface GitIngestOptions {
     fetcherFactory: (opts: { accessToken?: string }) => GitFetcher;
     /** tree 상한 override — 확장 번들 체인이 거대 마켓플레이스 repo 용으로 상향 주입 (기본: 스킬 ingest 상한) */
     maxTreeEntries?: number;
+    /**
+     * 원본 정책(M2) 판정을 상위 서비스가 같은 원본으로 이미 했다 — 확장 번들이 스킬마다 이 서비스를 부를 때만(생성자 옵션이라
+     * 도구 인자로는 켤 수 없다). 에이전트 매니페스트의 `git-url:` 스킬 참조는 **다른 원본**이라 켜지 않는다.
+     */
+    sourcePolicyPrechecked?: boolean;
 }
 
 /** `skills/<dir>/SKILL.md` → `<dir>`, 루트 `SKILL.md` → fallback (repo 이름). 유도 불가면 undefined. */
@@ -103,6 +109,10 @@ export class GitIngestService {
             ?? (isNonGitSourceUrl(input.gitUrl) ? nonGitPseudoRepo(input.gitUrl) : null);
         if (!parsed) throw new Error(`INVALID_GIT_URL: ${input.gitUrl}`);
         const { owner, repo } = parsed;
+        // 확장 원본 정책(M2, opt-in) — fetch 전. 확장·에이전트 번들의 하위 호출은 상위가 이미 판정(sourcePolicyPrechecked)
+        if (!this.opts.sourcePolicyPrechecked) {
+            await assertExtensionSourceAllowed({ url: input.gitUrl, ref: input.gitRef, userId: input.userId, action: 'install', gitFirst: true });
+        }
 
         // (2) target=system soft-fail
         let effectiveTarget: 'user' | 'system' = input.target ?? 'user';

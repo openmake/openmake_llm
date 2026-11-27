@@ -22,7 +22,14 @@ interface AdminUser { id: string; email: string; username?: string }
 
 const inputCls = "h-9 w-full rounded-md border border-border bg-surface-2 px-2 text-sm text-fg focus:border-accent focus:outline-none";
 const selectCls = "h-9 rounded-md border border-border bg-surface-2 px-2 text-sm text-fg focus:border-accent focus:outline-none";
-const POLICY_KEYS = ["EXTERNAL_MODEL_POLICY", "TOOL_APPROVAL_POLICY_MIN", "MCP_ALLOWED_SERVERS"] as const;
+const POLICY_KEYS = ["EXTERNAL_MODEL_POLICY", "TOOL_APPROVAL_POLICY_MIN", "MCP_ALLOWED_SERVERS", "EXTENSION_SOURCE_POLICY"] as const;
+/** 값이 JSON 객체인 정책 키 */
+const JSON_POLICY_KEYS: ReadonlySet<string> = new Set(["EXTERNAL_MODEL_POLICY", "EXTENSION_SOURCE_POLICY"]);
+const POLICY_PLACEHOLDERS: Record<string, string> = {
+  EXTERNAL_MODEL_POLICY: '{"deny":["openrouter:*"]}',
+  EXTENSION_SOURCE_POLICY: '{"allow":[{"type":"github","repo":"openmake/*"}],"deny":[]}',
+  MCP_ALLOWED_SERVERS: "mcp-github, mcp-notion",
+};
 const ROLES: OrgRole[] = ["owner", "admin", "member"];
 
 function fmt(v: unknown): string {
@@ -41,7 +48,7 @@ function PolicyEditor({ orgId, policies, onChanged }: { orgId: string; policies:
     const next: Record<string, string> = {};
     for (const key of POLICY_KEYS) {
       const v = current(key);
-      if (key === "EXTERNAL_MODEL_POLICY") next[key] = v ? JSON.stringify(v) : "";
+      if (JSON_POLICY_KEYS.has(key)) next[key] = v ? JSON.stringify(v) : "";
       else if (key === "MCP_ALLOWED_SERVERS") next[key] = Array.isArray(v) ? v.join(", ") : "";
       else next[key] = typeof v === "string" ? v : "";
     }
@@ -54,7 +61,7 @@ function PolicyEditor({ orgId, policies, onChanged }: { orgId: string; policies:
     try {
       const raw = drafts[key] ?? "";
       let value: unknown;
-      if (key === "EXTERNAL_MODEL_POLICY") value = JSON.parse(raw || "{}");
+      if (JSON_POLICY_KEYS.has(key)) value = JSON.parse(raw || "{}");
       else if (key === "MCP_ALLOWED_SERVERS") value = raw.split(",").map((s) => s.trim()).filter(Boolean);
       else value = raw;
       await ApiClient.put(`/api/admin/organizations/${orgId}/policies/${key}`, { value });
@@ -102,7 +109,7 @@ function PolicyEditor({ orgId, policies, onChanged }: { orgId: string; policies:
             </select>
           ) : (
             <input className={inputCls} value={drafts[key] ?? ""} onChange={(e) => setDrafts({ ...drafts, [key]: e.target.value })} aria-label={key}
-              placeholder={key === "EXTERNAL_MODEL_POLICY" ? '{"deny":["openrouter:*"]}' : "mcp-github, mcp-notion"} />
+              placeholder={POLICY_PLACEHOLDERS[key]} />
           )}
           <div className="mt-2 flex gap-2">
             <Button size="sm" disabled={busy === key || !(drafts[key] ?? "").trim()} onClick={() => void save(key)}>{t("policySave")}</Button>
