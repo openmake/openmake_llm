@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.152.0](https://github.com/openmake/openmake_llm/compare/v1.151.1...v1.152.0) (2026-11-27)
+
+
+### ✨ 기능
+
+* **extensions:** org deployment modes (default_off/default_on/required) + group overrides ([c92cd7f](https://github.com/openmake/openmake_llm/commit/c92cd7fc35767957129beaf981f95bf60dfaa696))
+* **extensions:** 조직 소유 확장 설치 (212, opt-in EXTENSION_ORG_OWNED_INSTALL_ENABLED) ([1aed19f](https://github.com/openmake/openmake_llm/commit/1aed19f381d02b6910f8d99b2b1383ed8b40da5f))
+* **extensions:** 조직 확장 배포 모드(Default Off·On·Required) + 그룹별 덮어쓰기 (§8-1, opt-in) ([ec3ff13](https://github.com/openmake/openmake_llm/commit/ec3ff135dfbea87497bc9397eccb39ae905b5592))
+* **extensions:** 확장 Custom Agent 승인함 출처 표시·제거 시 승인 전 에이전트 정리 (EXTENSION_AGENT_BUNDLE_PROVENANCE, opt-in) ([e99e86b](https://github.com/openmake/openmake_llm/commit/e99e86b32732b2895bc384c086121b111f904ed7))
+* **extensions:** 확장 Custom Agent 승인함에 출처 표시·제거 시 승인 전 에이전트 이름 정리 (opt-in) ([2813212](https://github.com/openmake/openmake_llm/commit/2813212100c340f009d4cb942808454dfc98b123))
+* **extensions:** 확장 Custom Agent 출처·제거 정리를 새 opt-in 플래그 EXTENSION_AGENT_BUNDLE_PROVENANCE 로 분리 ([3d680ce](https://github.com/openmake/openmake_llm/commit/3d680cef7af85d6c82c1ea5e9ac4e1e6741cdc83))
+* **extensions:** 확장 MCP 서버 URL·명령 매처 정책 (§8-3, opt-in) ([753d080](https://github.com/openmake/openmake_llm/commit/753d08031d99b8fd7b96ff9715333a6dcdb74841))
+* **extensions:** 확장 번들 원격 MCP 관리 등록 (EXTENSION_REMOTE_MCP_ENABLED, opt-in) ([4f3c1b7](https://github.com/openmake/openmake_llm/commit/4f3c1b7fe61ab01d7cd0e4bf6a9fc2d52f40a218))
+
+
+### 🐛 버그 수정
+
+* **addons:** GET /api/addons 가 DB 상태를 반영하는 opt-in ([1e7ab64](https://github.com/openmake/openmake_llm/commit/1e7ab645d1e98f592e28dffcd441be2ddb7e9161))
+* **addons:** GET /api/addons 가 DB 상태를 반영하는 opt-in ([2c0e9d4](https://github.com/openmake/openmake_llm/commit/2c0e9d4d11e2a55f8451b58edf6e6c8f5dc3fe59))
+
 ## [1.151.1](https://github.com/openmake/openmake_llm/compare/v1.151.0...v1.151.1) (2026-11-27)
 
 
