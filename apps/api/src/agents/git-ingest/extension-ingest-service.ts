@@ -168,12 +168,13 @@ export class ExtensionIngestService {
                             effectiveGitUrl = entry.url;
                         }
                     }
-                    // 고정 ref (릴리스 태그) 또는 저장소 변경 시 tree 재조회
-                    if (entry.ref || effectiveGitUrl !== input.gitUrl) {
-                        sha = await fetcher.resolveRef(owner, repo, entry.ref ?? 'HEAD');
+                    // 고정 ref (릴리스 태그) 또는 저장소 변경 시 tree 재조회. 이름 설치(M5)는 고정 커밋 sha 가 ref 보다 우선
+                    const pinnedRef = (input.pinEntrySha && entry.sha) || entry.ref;
+                    if (pinnedRef || effectiveGitUrl !== input.gitUrl) {
+                        sha = await fetcher.resolveRef(owner, repo, pinnedRef ?? 'HEAD');
                         tree = await fetcher.listTree(owner, repo, sha, EXTENSION_INGEST.maxTreeEntries);
                     }
-                    if (entry.ref) effectiveTrackingRef = entry.ref;
+                    if (pinnedRef) effectiveTrackingRef = pinnedRef;
                     // 같은 저장소 항목은 카탈로그 루트 기준, 다른 저장소 항목은 그 저장소 루트 기준
                     const entryRoot = effectiveGitUrl === input.gitUrl ? catalogRoot : '';
                     const prefix = `${entryRoot}${entry.path ? `${entry.path}/` : ''}`;

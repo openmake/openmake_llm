@@ -11,10 +11,13 @@ import { useLocale, useTranslations } from "next-intl";
 import { KeyRound, Loader2 } from "lucide-react";
 import { Button, Input } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
-import { ApiClient } from "@/lib/api-client";
+import { ApiClient, ApiError } from "@/lib/api-client";
 
 interface AdminCatalogSource {
   id: string;
+  name?: string;
+  /** 이름 설치 별칭(M5) — null 이면 스냅샷 name */
+  alias?: string | null;
   has_credential?: boolean;
   source_subpath?: string | null;
   index_url?: string | null;
@@ -40,8 +43,9 @@ export function CatalogSourceAdmin({ sourceId, refreshKey }: { sourceId: string;
   const [source, setSource] = useState<AdminCatalogSource | null>(null);
   const [token, setToken] = useState("");
   const [subpath, setSubpath] = useState("");
+  const [alias, setAlias] = useState("");
   const [indexUrl, setIndexUrl] = useState("");
-  const [busy, setBusy] = useState<"token" | "clear" | "subpath" | "index" | null>(null);
+  const [busy, setBusy] = useState<"token" | "clear" | "subpath" | "alias" | "index" | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -52,6 +56,7 @@ export function CatalogSourceAdmin({ sourceId, refreshKey }: { sourceId: string;
       const found = res?.data?.sources?.find((s) => s.id === sourceId) ?? null;
       setSource(found);
       setSubpath(found?.source_subpath ?? "");
+      setAlias(found?.alias ?? "");
       setIndexUrl(found?.index_url ?? "");
     } catch {
       setSource(null);
@@ -86,6 +91,20 @@ export function CatalogSourceAdmin({ sourceId, refreshKey }: { sourceId: string;
       void load();
     } catch {
       setNote(t("saveFailed"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveAlias() {
+    setBusy("alias");
+    setNote(null);
+    try {
+      await ApiClient.patch(`/api/users/me/extensions/catalog/${sourceId}`, { alias: alias.trim() || null });
+      setNote(t("saved"));
+      void load();
+    } catch (e) {
+      setNote(e instanceof ApiError && e.status === 409 ? t("aliasConflict") : t("saveFailed"));
     } finally {
       setBusy(null);
     }
@@ -136,6 +155,24 @@ export function CatalogSourceAdmin({ sourceId, refreshKey }: { sourceId: string;
             {busy === "clear" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("clearToken")}
           </Button>
         )}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-mono text-muted">@</span>
+        <Input
+          value={alias}
+          onChange={(e) => setAlias(e.target.value)}
+          placeholder={t("aliasPlaceholder", { name: source.name ?? "" })}
+          aria-label={t("aliasLabel")}
+          className="h-8 min-w-0 flex-1 font-mono text-xs sm:max-w-[240px]"
+        />
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={busy !== null || (alias.trim() || null) === (source.alias ?? null)}
+          onClick={() => void saveAlias()}
+        >
+          {busy === "alias" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t("saveAlias")}
+        </Button>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Input

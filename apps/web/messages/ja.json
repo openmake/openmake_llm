@@ -2620,7 +2620,19 @@
         "indexFallbackWarning": "インデックスのフォールバック:",
         "saveFailed": "保存に失敗しました",
         "saved": "保存しました",
-        "syncHint": "サブパスとトークンの変更は次回の同期から反映されます。"
+        "syncHint": "サブパスとトークンの変更は次回の同期から反映されます。",
+        "aliasLabel": "名前インストール用エイリアス",
+        "aliasPlaceholder": "エイリアス(空欄で {name})",
+        "saveAlias": "エイリアスを保存",
+        "aliasConflict": "他のカタログが使用中のエイリアスです"
+      },
+      "named": {
+        "placeholder": "プラグイン@マーケットプレイス (例: code-review@openmake-marketplace)",
+        "install": "名前でインストール",
+        "formatHint": "形式: プラグイン@マーケットプレイス — 英数字・. _ -、英数字で始まる",
+        "installed": "インストールしました: {name}(構成要素は承認後に有効化)",
+        "failed": "名前でのインストールに失敗しました",
+        "candidates": "候補:"
       }
     }
   },

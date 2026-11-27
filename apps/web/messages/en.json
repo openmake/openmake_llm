@@ -2620,7 +2620,19 @@
         "indexFallbackWarning": "Index fallback:",
         "saveFailed": "Save failed",
         "saved": "Saved",
-        "syncHint": "Subpath and token changes apply from the next sync."
+        "syncHint": "Subpath and token changes apply from the next sync.",
+        "aliasLabel": "Install-by-name alias",
+        "aliasPlaceholder": "Alias (empty = {name})",
+        "saveAlias": "Save alias",
+        "aliasConflict": "Another catalog already uses this alias"
+      },
+      "named": {
+        "placeholder": "plugin@marketplace (e.g. code-review@openmake-marketplace)",
+        "install": "Install by name",
+        "formatHint": "Format: plugin@marketplace — letters, digits, . _ -, starting with a letter or digit",
+        "installed": "Installed: {name} (components activate after approval)",
+        "failed": "Install by name failed",
+        "candidates": "Did you mean:"
       }
     }
   },

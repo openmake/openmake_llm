@@ -28,6 +28,7 @@ import {
 import type { ExtensionCatalogRow } from '../../data/repositories/extension-catalog-repository';
 import type { CatalogSnapshot } from '../../agents/git-ingest/catalog-snapshot';
 import { CatalogIndexFallbackError } from '../../agents/git-ingest/catalog-index';
+import { applyDefaultCatalogAlias, type CatalogAliasRepo } from './catalog-alias';
 
 const logger = createLogger('ExtensionCatalogSync');
 
@@ -37,6 +38,8 @@ export interface CatalogSyncRepo {
     updateSnapshot(id: string, input: CatalogSnapshot): Promise<ExtensionCatalogRow | null>;
     /** warning — status 가 ok 일 때만 남는 경고(M6 색인 폴백). 없으면 지운다 */
     recordSyncResult(id: string, status: CatalogSyncStatus, error: string | null, warning?: string | null): Promise<void>;
+    /** 이름 설치 별칭 기본값(M5) — 없으면 건너뛴다 */
+    setAlias?: CatalogAliasRepo['setAlias'];
 }
 
 /** 이 모듈이 쓰는 설치 엔진 연산 (ExtensionIngestService 부분) */
@@ -138,7 +141,9 @@ export async function syncCatalogSource(
     const token = opts.accessToken || storedCredential(row);
     try {
         const { snapshot, via, warning } = await fetchSnapshotPreferIndex(deps, row, token, opts.userId);
-        const updated = await deps.repo.updateSnapshot(row.id, snapshot);
+        let updated = await deps.repo.updateSnapshot(row.id, snapshot);
+        // 별칭이 비어 있으면 새 스냅샷 name 으로(M5 — 207 이전 원본도 첫 동기화에서 채워진다)
+        if (updated && deps.repo.setAlias) updated = await applyDefaultCatalogAlias({ setAlias: deps.repo.setAlias.bind(deps.repo) }, updated);
         // 경고가 없으면 종전과 같은 인자로 기록한다(색인 미사용 = 종전 동작)
         await (warning ? deps.repo.recordSyncResult(row.id, 'ok', null, warning) : deps.repo.recordSyncResult(row.id, 'ok', null)).catch((e) => logger.warn(`동기화 상태 기록 실패 (${row.id}):`, e));
         return { row: updated, snapshot, via };

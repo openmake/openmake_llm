@@ -2620,7 +2620,19 @@
         "indexFallbackWarning": "索引回退：",
         "saveFailed": "保存失败",
         "saved": "已保存",
-        "syncHint": "子路径和令牌的更改将在下次同步时生效。"
+        "syncHint": "子路径和令牌的更改将在下次同步时生效。",
+        "aliasLabel": "按名称安装的别名",
+        "aliasPlaceholder": "别名(留空为 {name})",
+        "saveAlias": "保存别名",
+        "aliasConflict": "该别名已被其他目录使用"
+      },
+      "named": {
+        "placeholder": "插件@市场 (如 code-review@openmake-marketplace)",
+        "install": "按名称安装",
+        "formatHint": "格式:插件@市场 — 字母、数字、. _ -,以字母或数字开头",
+        "installed": "已安装:{name}(组件需审批后启用)",
+        "failed": "按名称安装失败",
+        "candidates": "候选:"
       }
     }
   },

@@ -2620,7 +2620,19 @@
         "indexFallbackWarning": "색인 폴백:",
         "saveFailed": "저장 실패",
         "saved": "저장됨",
-        "syncHint": "하위 경로·토큰 변경은 다음 동기화부터 반영됩니다."
+        "syncHint": "하위 경로·토큰 변경은 다음 동기화부터 반영됩니다.",
+        "aliasLabel": "이름 설치 별칭",
+        "aliasPlaceholder": "별칭 (비우면 {name})",
+        "saveAlias": "별칭 저장",
+        "aliasConflict": "다른 카탈로그가 쓰는 별칭입니다"
+      },
+      "named": {
+        "placeholder": "플러그인@마켓플레이스 (예: code-review@openmake-marketplace)",
+        "install": "이름으로 설치",
+        "formatHint": "형식: 플러그인@마켓플레이스 — 영문·숫자·. _ -, 영문·숫자로 시작",
+        "installed": "설치했습니다: {name} (구성요소는 승인 후 활성화)",
+        "failed": "이름 설치 실패",
+        "candidates": "후보:"
       }
     }
   },
