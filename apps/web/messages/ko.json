@@ -2600,7 +2600,25 @@
       "sourceAria": "소스 필터",
       "sourceAll": "전체 소스 ({count})",
       "searchAria": "키워드 검색",
-      "searchPlaceholder": "이름·설명 검색"
+      "searchPlaceholder": "이름·설명 검색",
+      "admin": {
+        "statusOk": "마지막 동기화 성공",
+        "statusError": "마지막 동기화 실패",
+        "statusRateLimited": "마지막 동기화: 요청 한도 초과(자동 재시도는 간격을 늘려 물러남)",
+        "statusNever": "동기화 기록 없음",
+        "lastAttempt": "마지막 시도: {time}",
+        "credentialSaved": "원본 토큰 저장됨",
+        "credentialNone": "원본 토큰 없음(무인증)",
+        "tokenPlaceholder": "원본 접근 토큰(저장 후 다시 표시되지 않음)",
+        "saveToken": "토큰 저장",
+        "clearToken": "토큰 삭제",
+        "clearTokenConfirm": "저장된 원본 토큰을 삭제할까요?",
+        "subpathPlaceholder": "하위 경로(예: plugins/market, 비우면 저장소 루트)",
+        "saveSubpath": "경로 저장",
+        "saveFailed": "저장 실패",
+        "saved": "저장됨",
+        "syncHint": "하위 경로·토큰 변경은 다음 동기화부터 반영됩니다."
+      }
     },
     "preview": {
       "title": "설치 미리보기 — {name}",

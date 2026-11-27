@@ -1,7 +1,7 @@
 /**
  * MCP 협상 관측(MCP-1, 2026-11-27) — 연결이 끝난 뒤 서버별 협상 결과를 기록한다.
  *
- * 연결 동작은 바꾸지 않는다(협상은 지금처럼 legacy). 기록은 연결 성공 뒤 **기다리지 않고** 돌며,
+ * 연결 동작은 바꾸지 않는다(협상 방식은 MCP-2 `MCP_PROTOCOL_NEGOTIATION` 이 정한다 — 기본 legacy). 기록은 연결 성공 뒤 **기다리지 않고** 돌며,
  * 무엇이 실패해도 연결·도구 호출에 영향이 없다(fail-open). 플래그 `MCP_NEGOTIATION_OBSERVE_ENABLED`
  * (기본 OFF, system_settings 로 실시간)가 꺼져 있으면 기록 경로를 아예 타지 않는다.
  *
@@ -16,6 +16,7 @@
  */
 import { readSettingValue } from '../../config/env';
 import { createLogger } from '../../utils/logger';
+import { resolveNegotiationMode, type McpNegotiationMode } from './protocol-negotiation';
 
 const logger = createLogger('McpNegotiation');
 
@@ -52,9 +53,11 @@ export type McpAuthMethod =
 
 /**
  * 서버 SDK 세대 추정 — 연결 결과만으로 확정할 수 있는 범위로 한정한다.
- * legacy(2025 initialize) 연결은 v1 SDK 와 v2 SDK 의 하위 호환 응답을 구별할 수 없어 `v1-compatible` 로 둔다.
+ * - `v2`: 새 방식(2026-07-28)으로 협상됨.
+ * - `v1`: 협상 방식 `auto`(MCP-2)에서 탐지했는데 구 방식으로 폴백됨 — 새 방식을 말하지 않는 서버.
+ * - `v1-compatible`: `legacy` 협상(탐지 안 함)으로 연결됨 — v1 SDK 와 v2 SDK 의 하위 호환 응답을 구별할 수 없다.
  */
-export type McpSdkGenerationHint = 'v2' | 'v1-compatible' | 'unknown';
+export type McpSdkGenerationHint = 'v2' | 'v1' | 'v1-compatible' | 'unknown';
 
 export interface McpExtensionRef {
     id: string;
@@ -143,9 +146,9 @@ function extensionRefs(caps: unknown): McpExtensionRef[] {
     return [...out.values()].sort((a, b) => a.id.localeCompare(b.id)).slice(0, NEGOTIATION_LIST_MAX_ITEMS);
 }
 
-function sdkGenerationOf(era: 'legacy' | 'modern' | null): McpSdkGenerationHint {
+function sdkGenerationOf(era: 'legacy' | 'modern' | null, mode: McpNegotiationMode): McpSdkGenerationHint {
     if (era === 'modern') return 'v2';
-    if (era === 'legacy') return 'v1-compatible';
+    if (era === 'legacy') return mode === 'auto' ? 'v1' : 'v1-compatible';
     return 'unknown';
 }
 
@@ -159,6 +162,7 @@ export function extractNegotiationObservation(
     config: Pick<NegotiationServerRef, 'id' | 'transport_type'>,
     source: NegotiationSource,
     authMethod: McpAuthMethod,
+    negotiationMode: McpNegotiationMode = 'legacy',
 ): McpNegotiationObservation {
     const caps = safeCall(source.getServerCapabilities?.bind(source));
     const info = safeCall(source.getServerVersion?.bind(source));
@@ -169,7 +173,7 @@ export function extractNegotiationObservation(
         authMethod,
         protocolEra: era === 'legacy' || era === 'modern' ? era : null,
         protocolVersion: clip(safeCall(source.getNegotiatedProtocolVersion?.bind(source))),
-        sdkGeneration: sdkGenerationOf(era === 'legacy' || era === 'modern' ? era : null),
+        sdkGeneration: sdkGenerationOf(era === 'legacy' || era === 'modern' ? era : null, negotiationMode),
         capabilities: capabilityKeys(caps),
         extensions: extensionRefs(caps),
         serverName: clip(info?.name),
@@ -209,7 +213,7 @@ export async function observeNegotiation(
     if (!target) return;
     try {
         const authMethod = await resolveAuthMethod(config.transport_type, auth);
-        const observation = extractNegotiationObservation(config, source, authMethod);
+        const observation = extractNegotiationObservation(config, source, authMethod, resolveNegotiationMode());
         await target.upsert(observation);
     } catch (err) {
         logger.debug(`"${config.name}" 협상 관측 기록 실패(무시): ${err instanceof Error ? err.message : String(err)}`);

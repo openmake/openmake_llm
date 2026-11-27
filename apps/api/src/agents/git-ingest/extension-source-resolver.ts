@@ -21,6 +21,7 @@ import {
     rootOfSynthesizedPath,
 } from './extension-discovery';
 import { loadBundledAddonManifest } from './extension-ingest-helpers';
+import { catalogRootPrefix, underPrefix } from './catalog-snapshot';
 import { EXTENSION_INGEST } from '../../config/constants';
 import { assertExtensionSourceAllowed } from '../../services/extensions/source-policy';
 import type { ImportInput, CandidateListResult } from './extension-ingest-types';
@@ -93,8 +94,10 @@ export async function resolveExtensionSource(
     let synthesized: { name: string; description?: string } | undefined;
 
     // (3-a) marketplace.json 인덱스 (gitPath 미지정 시) — Claude Code 마켓플레이스 저장소
+    // 카탈로그 하위 경로(M4) — 그 디렉터리를 카탈로그 루트로 본다(스냅샷과 같은 규칙). 없으면 저장소 루트
+    const catalogRoot = catalogRootPrefix(input.catalogSubpath);
     if (!input.gitPath) {
-        const mkCandidates = scanForMarketplaceManifests(tree.entries);
+        const mkCandidates = scanForMarketplaceManifests(underPrefix(tree.entries, catalogRoot));
         if (mkCandidates.length > 0) {
             const mkRaw = await fetcher.fetchFile(owner, repo, sha, mkCandidates[0].path, EXTENSION_INGEST.marketplaceMaxBytes);
             const mk = parseMarketplaceFile(mkRaw);
@@ -134,7 +137,9 @@ export async function resolveExtensionSource(
                     tree = await fetcher.listTree(owner, repo, sha, EXTENSION_INGEST.maxTreeEntries);
                 }
                 if (entry.ref) effectiveTrackingRef = entry.ref;
-                const prefix = entry.path ? `${entry.path}/` : '';
+                // 같은 저장소 항목은 카탈로그 루트 기준, 다른 저장소 항목은 그 저장소 루트 기준
+                const entryRoot = effectiveGitUrl === input.gitUrl ? catalogRoot : '';
+                const prefix = `${entryRoot}${entry.path ? `${entry.path}/` : ''}`;
                 // plugin.json > gemini-extension.json (단일 소스 경로·카탈로그 판정과 같은 우선순위)
                 const manifestPath = findExtensionManifestPath(tree.entries, prefix);
                 const pj = manifestPath ? tree.entries.find(e => e.path === manifestPath) : undefined;

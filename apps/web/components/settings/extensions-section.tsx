@@ -8,6 +8,7 @@ import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { MarketplacePublishSection } from "@/components/settings/marketplace-publish-section";
 import { ExtensionPermissionBadge, ExtensionPermissionPanel } from "@/components/settings/extension-permission-panel";
+import { CatalogSourceAdmin } from "@/components/settings/catalog-source-admin";
 import { useAppStore } from "@/lib/store";
 import { ExtensionInstallPreviewDialog } from "@/components/settings/extension-install-preview-dialog";
 import { catalogInstallMode } from "@/lib/extension-install-preview";
@@ -110,6 +111,8 @@ export function ExtensionsSection() {
   const [catalogBusy, setCatalogBusy] = useState<string | null>(null);
   // 카탈로그 단일 브라우저 — 소스/카테고리 셀렉트 + 키워드 검색 + 페이지 (16개 소스 스택 대신 한 리스트)
   const [catalogSource, setCatalogSource] = useState("");
+  /** 동기화 후 관리 패널(상태 표시) 재조회 신호 */
+  const [catalogAdminTick, setCatalogAdminTick] = useState(0);
   const [catalogCategory, setCatalogCategory] = useState("");
   const [catalogSearch, setCatalogSearch] = useState("");
   const [catalogPage, setCatalogPage] = useState(0);
@@ -299,9 +302,10 @@ export function ExtensionsSection() {
       await ApiClient.post(`/api/users/me/extensions/catalog/${id}/sync`, {});
       void loadGallery();
     } catch {
-      /* 실패 */
+      /* 실패 — 사유는 관리 패널의 동기화 상태로 보인다 */
     } finally {
       setCatalogBusy(null);
+      setCatalogAdminTick((n) => n + 1);
     }
   }
 
@@ -725,6 +729,9 @@ export function ExtensionsSection() {
                     })}
                   </span>
                 </p>
+              )}
+              {isAdmin && selectedSource && (
+                <CatalogSourceAdmin sourceId={selectedSource.id} refreshKey={catalogAdminTick} />
               )}
               {catalogFiltered.length === 0 ? (
                 <p className="px-3.5 py-2.5 text-xs text-muted">{t("catalog.noneInstallable")}</p>

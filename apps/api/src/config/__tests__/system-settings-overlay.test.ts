@@ -80,6 +80,9 @@ describe('system-settings-registry', () => {
             // 확장 원본 정책(M2) — 불리언·모드
             else if (def.key === 'EXTENSION_SOURCE_POLICY_ENFORCED') sample[def.key] = 'true';
             else if (def.key === 'EXTENSION_ARBITRARY_URL_INSTALL') sample[def.key] = 'catalog-only';
+            // 확장 카탈로그 주기 동기화(M4) — 불리언·정수
+            else if (def.key === 'EXTENSION_CATALOG_AUTO_SYNC_ENABLED') sample[def.key] = 'true';
+            else if (def.key === 'EXTENSION_CATALOG_SYNC_INTERVAL_MS') sample[def.key] = '784';
             // 확장 설치 미리보기(M1b) — 불리언
             else if (def.key === 'EXTENSION_INSTALL_PREVIEW_ENABLED') sample[def.key] = 'true';
             // SLO 목표(F24.8) — 백분율·정수

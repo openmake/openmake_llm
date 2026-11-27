@@ -2600,7 +2600,25 @@
       "sourceAria": "ソースフィルター",
       "sourceAll": "すべてのソース ({count})",
       "searchAria": "キーワード検索",
-      "searchPlaceholder": "名前・説明を検索"
+      "searchPlaceholder": "名前・説明を検索",
+      "admin": {
+        "statusOk": "前回の同期に成功",
+        "statusError": "前回の同期に失敗",
+        "statusRateLimited": "前回の同期: レート制限(自動再試行は間隔を延ばします)",
+        "statusNever": "同期履歴なし",
+        "lastAttempt": "最終試行: {time}",
+        "credentialSaved": "ソーストークン保存済み",
+        "credentialNone": "ソーストークンなし(認証なし)",
+        "tokenPlaceholder": "ソースアクセストークン(保存後は再表示されません)",
+        "saveToken": "トークンを保存",
+        "clearToken": "トークンを削除",
+        "clearTokenConfirm": "保存済みのソーストークンを削除しますか?",
+        "subpathPlaceholder": "サブパス(例: plugins/market、空欄でリポジトリルート)",
+        "saveSubpath": "パスを保存",
+        "saveFailed": "保存に失敗しました",
+        "saved": "保存しました",
+        "syncHint": "サブパスとトークンの変更は次回の同期から反映されます。"
+      }
     },
     "preview": {
       "title": "インストールのプレビュー — {name}",

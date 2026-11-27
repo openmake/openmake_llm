@@ -382,14 +382,14 @@ export class ExtensionIngestService {
      * 카탈로그 스냅샷 (admin 큐레이션 갤러리) — catalog-snapshot.ts 위임.
      * 판정 규칙·형식은 그 모듈 doc 참고 (600줄 파일 가드 분할).
      */
-    async fetchCatalogSnapshot(url: string, accessToken?: string, policy: CatalogSourcePolicyInput = { action: 'catalog-sync' }): Promise<CatalogSnapshot> {
+    async fetchCatalogSnapshot(url: string, accessToken?: string, policy: CatalogSourcePolicyInput = { action: 'catalog-sync' }, subpath?: string | null): Promise<CatalogSnapshot> {
         // 원본 정책(M2) — 카탈로그 원본은 받기 전에 판정, 교차 저장소 항목은 프로브(네트워크) 전에 같은 해석본으로 판정
         const isEntrySourceAllowed = await checkCatalogSource(url, policy);
         return fetchCatalogSnapshotImpl({
             fetcherFactory: this.opts.fetcherFactory,
             archiveFetcherFor: (u) => this.makeArchiveFetcher(u),
             isEntrySourceAllowed,
-        }, url, accessToken);
+        }, url, accessToken, subpath);
     }
 
     /**

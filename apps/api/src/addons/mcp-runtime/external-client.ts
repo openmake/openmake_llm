@@ -22,7 +22,7 @@
  * 5. disconnect() → 클라이언트 및 전송 정리
  */
 
-import { Client, StreamableHTTPClientTransport, SSEClientTransport } from '@modelcontextprotocol/client';
+import { Client, StreamableHTTPClientTransport, SSEClientTransport, type PriorDiscovery } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { StringDecoder } from 'string_decoder';
 import type { MCPServerConfig, MCPConnectionStatus, MCPTool, MCPToolResult } from '../../tool-contract/types';
@@ -41,6 +41,7 @@ import { offloadMediaBlocks } from './media-content';
 import { ElicitationCallTracker } from './elicitation-bridge';
 import { getConfig } from '../../config/env';
 import { observeNegotiation } from './negotiation-observer';
+import { forgetVerdict, priorFor, rememberVerdict, resolveNegotiationMode, versionNegotiationOption } from './protocol-negotiation';
 
 const logger = createLogger('ExternalMCP');
 
@@ -156,9 +157,14 @@ export class ExternalMCPClient extends EventEmitter {
             this.stderrTail = '';
             this.captureStderr(this.transport);
 
+            // MCP-2 협상 방식 — legacy(기본)면 옵션·prior 를 넘기지 않아 종전과 같고, auto 면 탐지 후 폴백한다.
+            const negotiationMode = resolveNegotiationMode();
+            const negotiation = versionNegotiationOption(negotiationMode);
+            const prior = priorFor(this.config.id, negotiationMode);
             this.client = new Client(
                 { name: 'openmake-llm', version: '1.0.0' },
                 {
+                    ...(negotiation ? { versionNegotiation: negotiation } : {}),
                     capabilities: this.elicitation ? { elicitation: { form: {} } } : {},
                     // 서버가 tools listChanged 를 광고하면 SDK 가 알림을 구독해 갱신 목록을 넘긴다(F13.12).
                     // 미광고 서버는 조용히 건너뛰므로 stale 폴링(refreshToolsIfStale)이 안전망.
@@ -178,7 +184,8 @@ export class ExternalMCPClient extends EventEmitter {
             this.client.onclose = () => this.handleUnexpectedClose();
             this.elicitation?.attach(this.client);
 
-            await this.client.connect(this.transport);
+            await (prior ? this.client.connect(this.transport, { prior: prior as PriorDiscovery }) : this.client.connect(this.transport));
+            rememberVerdict(this.config.id, negotiationMode, this.client, prior);
             this.serverCapabilities = this.client.getServerCapabilities?.();
 
             // 도구 목록 검색
@@ -196,6 +203,7 @@ export class ExternalMCPClient extends EventEmitter {
             this.status = 'error';
             this.lastError = error instanceof Error ? error.message : String(error);
             this.discoveredTools = [];
+            forgetVerdict(this.config.id);
             logger.error(`Failed to connect to "${this.config.name}":`, this.lastError);
             throw error;
         }
