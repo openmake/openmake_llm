@@ -14,11 +14,20 @@
  *
  * @module addons/mcp-runtime/negotiation-observer
  */
-import type { MCPServerConfig, MCPTransportType } from '../../tool-contract/types';
 import { readSettingValue } from '../../config/env';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('McpNegotiation');
+
+/** 전송 종류 — Base 계약(`MCPServerConfig.transport_type`)과 같은 값. add-on 경계 때문에 여기서 좁게 다시 적는다 */
+export type MCPTransportType = 'stdio' | 'sse' | 'streamable-http';
+
+/** 관측에 쓰는 서버 설정 필드(구조적으로 `MCPServerConfig` 가 그대로 들어온다) */
+export interface NegotiationServerRef {
+    id: string;
+    name: string;
+    transport_type: MCPTransportType;
+}
 
 /** 플래그 키 — 기여 설정(contributions)과 ops-features.env 가 같은 이름을 쓴다 */
 export const MCP_NEGOTIATION_OBSERVE_FLAG = 'MCP_NEGOTIATION_OBSERVE_ENABLED';
@@ -147,7 +156,7 @@ function safeCall<T>(fn: (() => T) | undefined): T | undefined {
 
 /** PURE: 연결된 SDK Client 와 서버 설정에서 기록값을 뽑는다 */
 export function extractNegotiationObservation(
-    config: Pick<MCPServerConfig, 'id' | 'transport_type'>,
+    config: Pick<NegotiationServerRef, 'id' | 'transport_type'>,
     source: NegotiationSource,
     authMethod: McpAuthMethod,
 ): McpNegotiationObservation {
@@ -179,31 +188,29 @@ export async function resolveAuthMethod(
     return (await auth.clientInformation()) ? 'oauth-dynamic' : 'oauth-unknown';
 }
 
-let defaultSink: NegotiationSink | null = null;
+let registeredSink: NegotiationSink | null = null;
 
-async function getDefaultSink(): Promise<NegotiationSink> {
-    if (!defaultSink) {
-        const { getUnifiedDatabase } = await import('../../data/models/unified-database');
-        const { McpNegotiationRepository } = await import('./data/mcp-negotiation-repository');
-        defaultSink = new McpNegotiationRepository(getUnifiedDatabase().getPool());
-    }
-    return defaultSink;
+/** 저장소 등록 — 런타임 부팅(`runtime-boot.startToolRuntime`)이 DB 저장소를 넣는다. 없으면 기록하지 않는다 */
+export function setNegotiationSink(sink: NegotiationSink | null): void {
+    registeredSink = sink;
 }
 
 /**
  * 연결 직후 호출 — 기다리지 않아도 되고(반환 promise 는 절대 reject 하지 않는다) 플래그가 꺼져 있으면 즉시 끝난다.
  */
 export async function observeNegotiation(
-    config: Pick<MCPServerConfig, 'id' | 'name' | 'transport_type'>,
+    config: NegotiationServerRef,
     source: NegotiationSource,
     auth: NegotiationAuthSource | undefined,
     sink?: NegotiationSink,
 ): Promise<void> {
     if (!isNegotiationObserveEnabled()) return;
+    const target = sink ?? registeredSink;
+    if (!target) return;
     try {
         const authMethod = await resolveAuthMethod(config.transport_type, auth);
         const observation = extractNegotiationObservation(config, source, authMethod);
-        await (sink ?? await getDefaultSink()).upsert(observation);
+        await target.upsert(observation);
     } catch (err) {
         logger.debug(`"${config.name}" 협상 관측 기록 실패(무시): ${err instanceof Error ? err.message : String(err)}`);
     }

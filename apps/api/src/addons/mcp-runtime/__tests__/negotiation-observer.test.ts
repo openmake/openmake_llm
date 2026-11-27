@@ -5,7 +5,7 @@ const settings: Record<string, string | undefined> = {};
 jest.mock('../../../config/env', () => ({ ...jest.requireActual('../../../config/env'), readSettingValue: (k: string) => settings[k] }));
 
 import {
-    extractNegotiationObservation, resolveAuthMethod, observeNegotiation, isNegotiationObserveEnabled,
+    extractNegotiationObservation, resolveAuthMethod, observeNegotiation, isNegotiationObserveEnabled, setNegotiationSink,
     MCP_NEGOTIATION_OBSERVE_FLAG, NEGOTIATION_TEXT_MAX_CHARS, NEGOTIATION_LIST_MAX_ITEMS,
     type McpNegotiationObservation, type NegotiationSource,
 } from '../negotiation-observer';
@@ -117,6 +117,18 @@ describe('observeNegotiation', () => {
         await expect(observeNegotiation(cfg, legacySource, undefined, { upsert: async () => { throw new Error('db down'); } })).resolves.toBeUndefined();
         const badAuth = { staticClient: async () => { throw new Error('kv'); }, tokens: async () => undefined, clientInformation: async () => undefined };
         await expect(observeNegotiation(cfg, legacySource, badAuth, { upsert: jest.fn() })).resolves.toBeUndefined();
+    });
+});
+
+describe('저장소 등록', () => {
+    afterEach(() => setNegotiationSink(null));
+    it('인자로 주지 않으면 부팅이 등록한 저장소를 쓰고, 등록이 없으면 기록하지 않는다', async () => {
+        settings[MCP_NEGOTIATION_OBSERVE_FLAG] = 'true';
+        await expect(observeNegotiation(cfg, legacySource, undefined)).resolves.toBeUndefined();
+        const sink = { upsert: jest.fn(async () => undefined) };
+        setNegotiationSink(sink);
+        await observeNegotiation(cfg, legacySource, undefined);
+        expect(sink.upsert).toHaveBeenCalledTimes(1);
     });
 });
 
