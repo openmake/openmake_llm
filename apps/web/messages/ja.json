@@ -2615,6 +2615,9 @@
         "clearTokenConfirm": "保存済みのソーストークンを削除しますか?",
         "subpathPlaceholder": "サブパス(例: plugins/market、空欄でリポジトリルート)",
         "saveSubpath": "パスを保存",
+        "indexUrlPlaceholder": "静的インデックス URL（index.json、https）",
+        "saveIndexUrl": "インデックスを保存",
+        "indexFallbackWarning": "インデックスのフォールバック:",
         "saveFailed": "保存に失敗しました",
         "saved": "保存しました",
         "syncHint": "サブパスとトークンの変更は次回の同期から反映されます。"

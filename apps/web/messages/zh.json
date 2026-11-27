@@ -2615,6 +2615,9 @@
         "clearTokenConfirm": "删除已保存的源令牌?",
         "subpathPlaceholder": "子路径(如 plugins/market,留空为仓库根目录)",
         "saveSubpath": "保存路径",
+        "indexUrlPlaceholder": "静态索引地址（index.json，https）",
+        "saveIndexUrl": "保存索引",
+        "indexFallbackWarning": "索引回退：",
         "saveFailed": "保存失败",
         "saved": "已保存",
         "syncHint": "子路径和令牌的更改将在下次同步时生效。"

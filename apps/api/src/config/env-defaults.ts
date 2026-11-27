@@ -64,6 +64,7 @@ export const DEFAULT_CONFIG: EnvConfig = {
     extensionSourcePolicy: '',
     extensionCatalogAutoSyncEnabled: false,
     extensionCatalogSyncIntervalMs: 6 * 60 * 60 * 1000,
+    extensionCatalogIndexEnabled: false,
     llmEnableReasoningEffort: false,
     userModelRolesEnabled: false,
     thinkingSummaryEnabled: true,

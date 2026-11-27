@@ -40,7 +40,7 @@ export interface ExtensionCatalogRow {
     credential_encrypted?: string | null;
     /** 저장소 안 카탈로그 루트 (207). null = 저장소 루트 */
     source_subpath?: string | null;
-    /** M6 정적 색인 주소 (207, 예약) */
+    /** M6 정적 색인 주소 (207). null = 색인 미사용(종전 동기화) */
     index_url?: string | null;
     /** 마지막 동기화 결과 (207). null = 기록 없음 */
     sync_status?: 'ok' | 'error' | 'rate_limited' | null;
@@ -140,14 +140,26 @@ export class ExtensionCatalogRepository extends BaseRepository {
         return r.rows[0] ?? null;
     }
 
-    /** 동기화 시도 결과 기록 — 성공이면 사유를 지운다. 스냅샷(last_synced_at)은 updateSnapshot 이 따로 갱신 */
-    async recordSyncResult(id: string, status: 'ok' | 'error' | 'rate_limited', error: string | null): Promise<void> {
+    /**
+     * 동기화 시도 결과 기록 — 성공이면 사유를 지운다(경고가 있으면 경고를 남긴다 — M6 색인 폴백).
+     * 스냅샷(last_synced_at)은 updateSnapshot 이 따로 갱신
+     */
+    async recordSyncResult(id: string, status: 'ok' | 'error' | 'rate_limited', error: string | null, warning?: string | null): Promise<void> {
         await this.query(
             `UPDATE extension_catalog_sources
                 SET sync_status=$1, last_sync_error=$2, last_sync_attempt_at=NOW()
               WHERE id=$3`,
-            [status, status === 'ok' ? null : error, id]
+            [status, status === 'ok' ? (warning ?? null) : error, id]
         );
+    }
+
+    /** 정적 색인 주소 지정 (M6, null = 색인 미사용 — 종전 동기화) */
+    async setIndexUrl(id: string, indexUrl: string | null): Promise<ExtensionCatalogRow | null> {
+        const r = await this.query<ExtensionCatalogRow>(
+            `UPDATE extension_catalog_sources SET index_url=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
+            [indexUrl, id]
+        );
+        return r.rows[0] ?? null;
     }
 
     async remove(id: string): Promise<boolean> {

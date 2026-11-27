@@ -29,6 +29,7 @@ import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import { GitFetcher } from './git-fetcher';
 import { isNonGitSourceUrl, nonGitPseudoRepo, type LoadedBundle } from './internal-bundle-fetcher';
 import { fetchCatalogSnapshot as fetchCatalogSnapshotImpl, catalogRootPrefix, underPrefix, type CatalogSnapshot } from './catalog-snapshot';
+import { fetchCatalogSnapshotFromIndex as fetchCatalogIndexImpl, type CatalogIndexFetch } from './catalog-index';
 import { translateCatalogDescriptions } from './catalog-translator';
 // 기존 import 경로 호환 재노출 (테스트 등이 이 모듈에서 import)
 export { buildSkillDiscoveryPattern } from './catalog-snapshot';
@@ -82,6 +83,8 @@ interface ExtensionIngestOptions {
     archiveFetcherFactory?: (url: string) => GitFetcher;
     /** 내부 번들(internal://bundle/<id>) 로더 — 갤러리 게시분 설치용. 미주입 시 내부 소스는 실패한다 */
     internalBundleLoader?: (id: string) => Promise<LoadedBundle | null>;
+    /** 정적 색인(M6) 요청 함수 (테스트 주입용 — 기본은 SSRF 가드 safeFetch) */
+    catalogIndexFetch?: CatalogIndexFetch;
 }
 
 export class ExtensionIngestService {
@@ -523,6 +526,16 @@ export class ExtensionIngestService {
             archiveFetcherFor: (u) => this.makeArchiveFetcher(u),
             isEntrySourceAllowed,
         }, url, accessToken, subpath);
+    }
+
+    /**
+     * 정적 색인(index.json, M6) 스냅샷 — catalog-index.ts 위임. 요청 1회, GitHub API 미호출.
+     * 원본 정책(M2)은 색인을 받기 **전에** 카탈로그 원본으로 판정하고, 교차 저장소 항목은 같은 해석본으로 판정한다.
+     * 쓸 수 없는 색인은 CatalogIndexFallbackError — 호출측(catalog-sync)이 종전 방식으로 폴백한다.
+     */
+    async fetchCatalogSnapshotFromIndex(indexUrl: string, catalogUrl: string, policy: CatalogSourcePolicyInput = { action: 'catalog-sync' }): Promise<CatalogSnapshot> {
+        const isEntrySourceAllowed = await checkCatalogSource(catalogUrl, policy);
+        return fetchCatalogIndexImpl(indexUrl, catalogUrl, isEntrySourceAllowed, this.opts.catalogIndexFetch);
     }
 
     /**

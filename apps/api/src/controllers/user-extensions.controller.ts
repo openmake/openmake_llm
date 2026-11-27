@@ -20,7 +20,7 @@
  *   POST   /api/users/me/extensions/catalog             — 소스 등록 + 스냅샷 동기화
  *   POST   /api/users/me/extensions/catalog/:id/sync    — 스냅샷 재동기화 (응답에 sync_status·last_sync_error, M4)
  *   PUT    /api/users/me/extensions/catalog/:id/credential — 원본 접근 토큰 저장·삭제 (write-only, 암호화 — M4)
- *   PATCH  /api/users/me/extensions/catalog/:id         — 하위 경로(source_subpath) 지정 (M4)
+ *   PATCH  /api/users/me/extensions/catalog/:id         — 하위 경로(source_subpath, M4)·정적 색인 주소(index_url, M6) 지정
  *   DELETE /api/users/me/extensions/catalog/:id         — 소스 삭제
  *
  * ⚠️ 라우트 등록 순서: '/gallery*'·'/catalog*' 가 '/:id' 보다 먼저여야 한다 (Express 순차 매칭).
@@ -40,6 +40,7 @@ import { ExtensionCatalogRepository, toPublicCatalogSource } from '../data/repos
 import { buildExtensionIngestService } from '../services/extensions/ingest-service-factory';
 import { syncCatalogSource } from '../services/extensions/catalog-sync';
 import { EXTENSION_CATALOG_SYNC_LIMITS, normalizeCatalogSubpath } from '../config/extension-catalog-sync';
+import { CATALOG_INDEX_LIMITS, normalizeCatalogIndexUrl } from '../config/extension-catalog-index';
 import { encryptToken } from '../utils/token-crypto';
 import { createLogger } from '../utils/logger';
 import { removeExtensionInstallation } from '../services/addon/addon-state';
@@ -73,9 +74,11 @@ const catalogCredentialSchema = z.object({
     token: z.string().min(1).max(EXTENSION_CATALOG_SYNC_LIMITS.CREDENTIAL_MAX_CHARS).nullable(),
 });
 
+/** 원본 설정 — 보낸 필드만 바꾼다(하위 경로 M4 · 정적 색인 주소 M6). null = 지움 */
 const catalogPatchSchema = z.object({
-    sourceSubpath: z.string().max(EXTENSION_CATALOG_SYNC_LIMITS.SUBPATH_MAX_CHARS).nullable(),
-});
+    sourceSubpath: z.string().max(EXTENSION_CATALOG_SYNC_LIMITS.SUBPATH_MAX_CHARS).nullable().optional(),
+    indexUrl: z.string().max(CATALOG_INDEX_LIMITS.URL_MAX_CHARS).nullable().optional(),
+}).refine((b) => b.sourceSubpath !== undefined || b.indexUrl !== undefined, { message: 'sourceSubpath 또는 indexUrl 중 하나는 필요합니다' });
 
 const catalogInstallSchema = z.object({
     // marketplace 소스면 플러그인 이름 필수, 단일 plugin.json 소스면 생략 가능
@@ -298,18 +301,24 @@ export function createUserExtensionsController(): Router {
         }
     });
 
-    // 하위 경로 지정 (M4) — 다음 동기화부터 반영된다
+    // 하위 경로(M4)·정적 색인 주소(M6) 지정 — 다음 동기화부터 반영된다
     router.patch('/catalog/:id', requireAuth, requireAdmin, validate(catalogPatchSchema), async (req, res) => {
         try {
             const body = req.body as z.infer<typeof catalogPatchSchema>;
-            let subpath: string | null;
-            try { subpath = normalizeCatalogSubpath(body.sourceSubpath); } catch (e) {
+            let subpath: string | null | undefined;
+            let indexUrl: string | null | undefined;
+            try {
+                if (body.sourceSubpath !== undefined) subpath = normalizeCatalogSubpath(body.sourceSubpath);
+                if (body.indexUrl !== undefined) indexUrl = normalizeCatalogIndexUrl(body.indexUrl);
+            } catch (e) {
                 res.status(400).json(badRequest(e instanceof Error ? e.message : String(e))); return;
             }
             const repo = new ExtensionCatalogRepository(getPool());
-            const row = await repo.setSubpath(req.params.id, subpath);
+            let row = subpath !== undefined ? await repo.setSubpath(req.params.id, subpath) : await repo.getById(req.params.id);
+            if (row && indexUrl !== undefined) row = await repo.setIndexUrl(req.params.id, indexUrl);
             if (!row) { res.status(404).json(notFound('카탈로그 소스 없음')); return; }
-            log.info(`카탈로그 하위 경로: ${row.id} → ${subpath ?? '(루트)'}`);
+            if (subpath !== undefined) log.info(`카탈로그 하위 경로: ${row.id} → ${subpath ?? '(루트)'}`);
+            if (indexUrl !== undefined) log.info(`카탈로그 정적 색인: ${row.id} → ${indexUrl ? 'set' : '(미사용)'}`);
             res.json(success({ source: toPublicCatalogSource(row) }));
         } catch (err) {
             log.error('catalog patch 실패:', err);

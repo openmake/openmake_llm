@@ -140,6 +140,7 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     // 확장 카탈로그 주기 동기화(M4, opt-in) — 5분 점검 tick 이 호출 시점에 읽는다(실시간). 간격은 양의 정수 ms
     { key: EXTENSION_CATALOG_SYNC_KEYS.AUTO_SYNC_ENABLED, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     { key: EXTENSION_CATALOG_SYNC_KEYS.SYNC_INTERVAL_MS, group: 'agent', secret: false, requiresRestart: false, validate: positiveIntString },
+    { key: EXTENSION_CATALOG_SYNC_KEYS.INDEX_ENABLED, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
 
     // ── SLO 목표(F24.8, 145) — 5분 평가 tick 이 호출 시점에 읽는다(실시간) ──
     { key: 'SLO_CHAT_AVAILABILITY_TARGET', group: 'slo', secret: false, requiresRestart: false, validate: percentTarget },
