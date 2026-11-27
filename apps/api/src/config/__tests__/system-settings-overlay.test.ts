@@ -91,6 +91,8 @@ describe('system-settings-registry', () => {
             else if (def.key === 'EXTENSION_INSTALL_PREVIEW_ENABLED') sample[def.key] = 'true';
             // 관리자 확장 현황(M3) — 불리언
             else if (def.key === 'EXTENSION_ADMIN_INVENTORY_ENABLED') sample[def.key] = 'true';
+            // add-on 목록 DB 상태 반영(§8-4) — 불리언
+            else if (def.key === 'ADDON_LIST_REFLECT_DB_STATE') sample[def.key] = 'true';
             // SLO 목표(F24.8) — 백분율·정수
             else if (def.key === 'SLO_CHAT_AVAILABILITY_TARGET') sample[def.key] = '97.51';
             else if (def.key === 'SLO_AGENT_TASK_SUCCESS_TARGET') sample[def.key] = '97.52';
