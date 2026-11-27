@@ -2582,7 +2582,25 @@
       "sourceAria": "来源筛选",
       "sourceAll": "全部来源 ({count})",
       "searchAria": "关键词搜索",
-      "searchPlaceholder": "搜索名称/描述"
+      "searchPlaceholder": "搜索名称/描述",
+      "admin": {
+        "statusOk": "上次同步成功",
+        "statusError": "上次同步失败",
+        "statusRateLimited": "上次同步:请求受限(自动重试会延长间隔)",
+        "statusNever": "尚未同步",
+        "lastAttempt": "上次尝试:{time}",
+        "credentialSaved": "已保存源令牌",
+        "credentialNone": "无源令牌(未认证)",
+        "tokenPlaceholder": "源访问令牌(保存后不再显示)",
+        "saveToken": "保存令牌",
+        "clearToken": "删除令牌",
+        "clearTokenConfirm": "删除已保存的源令牌?",
+        "subpathPlaceholder": "子路径(如 plugins/market,留空为仓库根目录)",
+        "saveSubpath": "保存路径",
+        "saveFailed": "保存失败",
+        "saved": "已保存",
+        "syncHint": "子路径和令牌的更改将在下次同步时生效。"
+      }
     }
   },
   "mcpInstances": {

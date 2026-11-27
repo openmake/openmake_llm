@@ -158,6 +158,9 @@ export const envSchema = z
         EXTENSION_SOURCE_POLICY_ENFORCED: z.string().optional(),
         EXTENSION_ARBITRARY_URL_INSTALL: z.string().optional(),
         EXTENSION_SOURCE_POLICY: z.string().optional(),
+        /** 확장 카탈로그 주기 동기화(M4, opt-in) — 해석은 config/env, 검증은 system-settings-registry */
+        EXTENSION_CATALOG_AUTO_SYNC_ENABLED: z.string().optional(),
+        EXTENSION_CATALOG_SYNC_INTERVAL_MS: z.string().optional(),
         /**
          * vLLM `extra_body.reasoning_effort` 전송 활성화 (opt-in 기본).
          *

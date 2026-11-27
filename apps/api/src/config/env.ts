@@ -92,6 +92,10 @@ export interface EnvConfig {
     extensionArbitraryUrlInstall: 'allow' | 'catalog-only';
     /** 전역 확장 원본 규칙 원문(JSON {allow?,deny?}) — 빈 값 = 전역 층 없음 */
     extensionSourcePolicy: string;
+    /** 확장 카탈로그 주기 동기화(M4) — 기본 false(수동 동기화만). config/extension-catalog-sync 가 읽는다 */
+    extensionCatalogAutoSyncEnabled: boolean;
+    /** 주기 동기화 간격(ms) — 기본 6시간 */
+    extensionCatalogSyncIntervalMs: number;
     /** vLLM `--reasoning-parser` 미설정 환경 등에서 extra_body.reasoning_effort 거절 방지 토글. */
     llmEnableReasoningEffort: boolean;
     /** 사용자별 역할→모델 매핑(model_assignments scope=userId) 사용 토글 (기본 false=전역 env/default 만). */
@@ -272,6 +276,8 @@ export function loadConfig(): EnvConfig {
         EXTENSION_SOURCE_POLICY_ENFORCED: env('EXTENSION_SOURCE_POLICY_ENFORCED'),
         EXTENSION_ARBITRARY_URL_INSTALL: env('EXTENSION_ARBITRARY_URL_INSTALL'),
         EXTENSION_SOURCE_POLICY: env('EXTENSION_SOURCE_POLICY'),
+        EXTENSION_CATALOG_AUTO_SYNC_ENABLED: env('EXTENSION_CATALOG_AUTO_SYNC_ENABLED'),
+        EXTENSION_CATALOG_SYNC_INTERVAL_MS: env('EXTENSION_CATALOG_SYNC_INTERVAL_MS'),
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
         USER_MODEL_ROLES_ENABLED: env('USER_MODEL_ROLES_ENABLED'),
         THINKING_SUMMARY_ENABLED: env('THINKING_SUMMARY_ENABLED'),
@@ -402,6 +408,11 @@ export function loadConfig(): EnvConfig {
         extensionSourcePolicyEnforced: parsed.EXTENSION_SOURCE_POLICY_ENFORCED === undefined ? DEFAULT_CONFIG.extensionSourcePolicyEnforced : parsed.EXTENSION_SOURCE_POLICY_ENFORCED === 'true',
         extensionArbitraryUrlInstall: parsed.EXTENSION_ARBITRARY_URL_INSTALL === 'catalog-only' ? 'catalog-only' : DEFAULT_CONFIG.extensionArbitraryUrlInstall,
         extensionSourcePolicy: parsed.EXTENSION_SOURCE_POLICY ?? DEFAULT_CONFIG.extensionSourcePolicy,
+        // 확장 카탈로그 주기 동기화(M4) — 'true' 만 켠다, 간격은 양의 정수만(그 외 기본값)
+        extensionCatalogAutoSyncEnabled: parsed.EXTENSION_CATALOG_AUTO_SYNC_ENABLED === 'true',
+        extensionCatalogSyncIntervalMs: /^\d+$/.test(parsed.EXTENSION_CATALOG_SYNC_INTERVAL_MS ?? '') && Number(parsed.EXTENSION_CATALOG_SYNC_INTERVAL_MS) > 0
+            ? Number(parsed.EXTENSION_CATALOG_SYNC_INTERVAL_MS)
+            : DEFAULT_CONFIG.extensionCatalogSyncIntervalMs,
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',
         userModelRolesEnabled: (parsed.USER_MODEL_ROLES_ENABLED ?? 'false').toLowerCase() === 'true',
         thinkingSummaryEnabled: (parsed.THINKING_SUMMARY_ENABLED ?? 'true').toLowerCase() === 'true',

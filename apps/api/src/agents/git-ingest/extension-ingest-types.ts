@@ -11,6 +11,8 @@ import type { ConventionFinding } from './convention-checker';
 export interface ImportInput extends ImportExtensionFromGitInput {
     userId: string;
     isAdmin: boolean;
+    /** 카탈로그 설치의 하위 경로(M4 — extension_catalog_sources.source_subpath). 채팅 도구 입력이 아니다(서버가 채운다) */
+    catalogSubpath?: string | null;
 }
 
 export interface SkillInstallResult {
