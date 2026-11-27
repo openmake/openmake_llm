@@ -2859,7 +2859,7 @@
       "MCP_ALLOWED_SERVERS": "インストールを許可する MCP カタログテンプレート id（カンマ区切り）。空 = 制限なし。",
       "BROWSER_SITE_POLICY": "この組織のブラウザサイトポリシー。拒否リストはグローバルと和集合になります。グローバルに許可リストがある場合は両方に同じ項目だけが残り、グローバルが空なら組織のリストを使います。解除するとグローバルに従います。",
       "EXTENSION_SOURCE_POLICY": "拡張ソースの許可・拒否ルール JSON(github・git・archive・hostPattern・catalog・internal・local)。拒否はどの層でも一致すればブロックし、許可リストがグローバルと組織の両方にある場合は両方で一致する必要があります。allow を省略すると制限なし、[] はすべてブロック。EXTENSION_SOURCE_POLICY_ENFORCED がオンのときのみ適用されます。",
-      "EXTENSION_MCP_SERVER_POLICY": "拡張 MCP サーバーの許可・拒否マッチャー JSON — リモートは {\"type\":\"url\",\"url\":\"https://mcp.example.com/v1\"}(スキーム・ホスト・ポート・パス接頭辞、ホストは *.example.com 可)、stdio は {\"type\":\"command\",\"command\":\"npx\",\"package\":\"@scope/*\"}(uvx・docker イメージも同じ形、バージョンは @1.2.3・==1.0・:tag)。拒否はどの層でも一致すればブロックし広く(大文字小文字・パスの迂回・同系統の実行器・シェルのラップまで)照合します。許可リストがグローバルと組織の両方にある場合は両方で一致する必要があります。allow を省略すると制限なし、[] はすべてブロック、不正な値もすべてブロック。EXTENSION_MCP_SERVER_POLICY_ENFORCED がオンのときのみ適用されます。"
+      "EXTENSION_MCP_SERVER_POLICY": "拡張 MCP サーバーの許可・拒否マッチャー JSON — ルール type は url(リモート: スキーム・ホスト・ポート・パス接頭辞、ホストは *.example.com 可)と command(stdio: 実行ファイル + 任意の package — npx @scope/pkg@1.2.3・@scope/*、uvx pkg==1.0、docker イメージ ghcr.io/org/img:tag)。拒否はどの層でも一致すればブロックし広く(大文字小文字・パスの迂回・同系統の実行器・シェルのラップまで)照合します。許可リストがグローバルと組織の両方にある場合は両方で一致する必要があります。allow を省略すると制限なし、[] はすべてブロック、不正な値もすべてブロック。EXTENSION_MCP_SERVER_POLICY_ENFORCED がオンのときのみ適用されます。"
     },
     "history": "変更履歴",
     "noHistory": "変更履歴はありません。",
