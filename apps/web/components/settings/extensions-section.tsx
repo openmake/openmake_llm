@@ -13,7 +13,7 @@ import { CatalogSourceAdmin } from "@/components/settings/catalog-source-admin";
 import { NamedInstallForm } from "@/components/settings/named-install-form";
 import { useAppStore } from "@/lib/store";
 import { ExtensionInstallPreviewDialog } from "@/components/settings/extension-install-preview-dialog";
-import { catalogInstallMode } from "@/lib/extension-install-preview";
+import { catalogInstallMode, type InstallPreviewTarget } from "@/lib/extension-install-preview";
 
 interface UserExtension {
   id: string;
@@ -108,7 +108,7 @@ export function ExtensionsSection() {
   const [catalogInstalls, setCatalogInstalls] = useState<Record<string, GalleryInstallState>>({});
   // 설치 미리보기(M1b) — 갤러리 응답에 installPreview 가 있을 때만. 없으면 종전처럼 바로 설치
   const [catalogMode, setCatalogMode] = useState<"preview" | "direct">("direct");
-  const [previewTarget, setPreviewTarget] = useState<{ sourceId: string; plugin?: string; label: string } | null>(null);
+  const [previewTarget, setPreviewTarget] = useState<InstallPreviewTarget | null>(null);
   const [catalogUrl, setCatalogUrl] = useState("");
   const [catalogBusy, setCatalogBusy] = useState<string | null>(null);
   // 카탈로그 단일 브라우저 — 소스/카테고리 셀렉트 + 키워드 검색 + 페이지 (16개 소스 스택 대신 한 리스트)
@@ -625,7 +625,7 @@ export function ExtensionsSection() {
           </p>
           <p className="mb-3 text-xs text-muted">{t("catalog.description")}</p>
 
-          {catalog.length > 0 && <NamedInstallForm onInstalled={() => void load()} />}
+          {catalog.length > 0 && <NamedInstallForm mode={catalogMode} onInstalled={() => void load()} />}
 
           {isAdmin && (
             <div className="mb-3 flex items-center gap-2">
@@ -829,7 +829,7 @@ export function ExtensionsSection() {
       <ExtensionInstallPreviewDialog
         target={previewTarget}
         onClose={() => setPreviewTarget(null)}
-        onConfirm={(sourceId, plugin) => void installFromCatalog(sourceId, plugin)}
+        onConfirm={(tg) => { if (tg.kind !== "named") void installFromCatalog(tg.sourceId, tg.plugin); }}
       />
     </Card>
   );
