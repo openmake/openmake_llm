@@ -18,6 +18,10 @@
  * @module routes/mcp-server-ingest.routes
  */
 import { EXTENSION_SOURCE_BLOCKED_CODE } from '../../../runtime-ports/extension-source-policy';
+import {
+    extensionRemoteMcpEnabled,
+    checkExtensionRemoteMcp, verifyRemoteRegistrationUrl,
+} from '../../../runtime-ports/extension-remote-mcp';
 import { EXTENSION_MCP_SERVER_BLOCKED_CODE } from '../../../runtime-ports/extension-mcp-server-policy';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { isBlockedByConvention, type ConventionFinding } from '../../../agents/git-ingest/convention-checker';
@@ -240,6 +244,26 @@ export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
                 return;
             }
 
+            // 원격 관리 등록(opt-in EXTENSION_REMOTE_MCP_ENABLED) — 선언 URL 고정·SSRF·MCP 서버 정책(§8-3)을 승인 시점에 다시 본다.
+            // 꺼져 있으면 종전 그대로(검사 없이 승인)
+            const meta = (draft.manifest_meta ?? {}) as { source?: string };
+            const remoteManaged = extensionRemoteMcpEnabled() && draft.transport_type !== 'stdio' && meta.source === 'extension';
+            if (remoteManaged) {
+                const integrity = verifyRemoteRegistrationUrl(draft.url, draft.manifest_meta);
+                if (!integrity.allowed) {
+                    res.status(409).json({ success: false, error: integrity.code, message: integrity.reason });
+                    return;
+                }
+                const gate = await checkExtensionRemoteMcp({
+                    phase: 'approve', userId: String(draft.user_id ?? userId), serverKey: draft.name,
+                    transportType: draft.transport_type, url: draft.url, command: draft.command, args: draft.args,
+                });
+                if (!gate.allowed) {
+                    res.status(gate.code === EXTENSION_MCP_SERVER_BLOCKED_CODE ? 403 : 400).json({ success: false, error: gate.code, message: gate.reason });
+                    return;
+                }
+            }
+
             const approved = await repository.approve({
                 id: req.params.id,
                 userId,
@@ -259,6 +283,13 @@ export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
             // 2026-08-26). best-effort: 실패해도 승인은 유지되고 원인은 instance 이력(connectionError)
             // 으로 보이며 다음 ensureUserServers 가 멱등 재시도한다. 풀 소유자는 승인자가 아니라
             // 서버 소유자(user_id) — admin 이 남의 draft 를 승인해도 그 사용자의 풀에 띄운다.
+            // 원격 관리 등록은 연결을 OAuth 로그인 뒤로 미룬다 — 토큰 없이 연결하면 401 로 실패 기록만 남는다.
+            // 클라이언트가 `oauthRequired` 를 보고 OAuth 시작(/api/mcp/servers/:id/oauth/start)으로 잇는다(콜백이 연결한다).
+            if (remoteManaged) {
+                logger.info(`mcp-server approved (원격 관리 등록 — OAuth 로그인 대기): ${approved.id}`);
+                res.json({ success: true, data: approved, spawned: false, oauthRequired: true });
+                return;
+            }
             let spawned = false;
             if (approved.enabled && approved.auto_spawn && approved.user_id) {
                 const supervisor = getLifecycleSupervisor();
