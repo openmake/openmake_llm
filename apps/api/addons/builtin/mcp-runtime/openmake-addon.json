@@ -9,7 +9,12 @@
   "scope": "system",
   "kind": "runtime",
   "order": 2,
-  "components": {},
+  "permissions": [
+    "database:addon"
+  ],
+  "components": {
+    "migrations": "./migrations"
+  },
   "entry": {
     "runtime": "boot#startMcpRuntime",
     "chatIntegration": "chat-integration#mcpRuntimeChatIntegration",
