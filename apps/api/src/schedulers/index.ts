@@ -8,6 +8,7 @@
 import { startSessionCleanupScheduler, stopSessionCleanupScheduler } from '../data/conversation-db';
 import { startQuotaReconcileJob, stopQuotaReconcileJob } from '../services/cost/quota-reconcile-job';
 import { startCatalogAutoSync, stopCatalogAutoSync } from '../services/extensions/catalog-sync';
+import { startOrgDeploymentReconcile, stopOrgDeploymentReconcile } from '../services/extensions/org-deployment';
 import { startDbRetention } from '../data/db-retention';
 import { startPeriodicCleanup, stopPeriodicCleanup } from '../utils/token-cleanup';
 import { createLogger } from '../utils/logger';
@@ -53,6 +54,13 @@ export async function startAllSchedulers(): Promise<void> {
         startCatalogAutoSync();
     } catch (err) {
         logger.error('CatalogAutoSync 시작 실패:', err);
+    }
+
+    // 2-2. 조직 확장 배포 모드 조정(§8-1, opt-in) — 타이머는 걸되 tick 마다 EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED 를 읽는다(꺼짐 = 아무것도 안 함)
+    try {
+        startOrgDeploymentReconcile();
+    } catch (err) {
+        logger.error('OrgDeploymentReconcile 시작 실패:', err);
     }
 
     // 3. 토큰 블랙리스트/레이트리밋 만료 데이터 주기 정리
@@ -475,6 +483,13 @@ export function stopAllSchedulers(): void {
         stopCatalogAutoSync();
     } catch (err) {
         logger.error('CatalogAutoSync 중지 실패:', err);
+    }
+
+    // 2-2. 조직 확장 배포 모드 조정 중지 — 자체 모듈 타이머
+    try {
+        stopOrgDeploymentReconcile();
+    } catch (err) {
+        logger.error('OrgDeploymentReconcile 중지 실패:', err);
     }
 
     // 3. 토큰 정리 주기 중지 — 역시 자체 모듈 타이머

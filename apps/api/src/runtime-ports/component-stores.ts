@@ -130,6 +130,17 @@ export interface CatalogTemplateInstall {
     defaultEnabled: boolean;
 }
 
+/** MCP 서버 정책 미리보기(§8-3)가 판정하는 연결 설정 — env 는 읽지 않는다 */
+export interface McpLinkedServerConnection {
+    id: string;
+    extensionId: string;
+    name: string;
+    transport: string;
+    command: string | null;
+    args: unknown[] | null;
+    url: string | null;
+}
+
 /** 관리자 확장 현황(M3)이 보는 MCP 서버 구성요소 — 연결 설정 값(명령·env·URL)은 싣지 않는다 */
 export interface McpLinkedServerDetail {
     id: string;
@@ -151,6 +162,11 @@ export interface McpLinkedServerDetail {
 export interface McpServerComponentStore extends ExtensionLinkedStore {
     /** 여러 확장의 MCP 서버 구성요소 + 협상 관측(있으면) — 관리자 현황용 읽기. 없으면 현황이 listLinked 로 대신한다 */
     listLinkedDetails?(extensionIds: readonly string[]): Promise<McpLinkedServerDetail[]>;
+    /**
+     * 여러 확장의 보관되지 않은 MCP 서버의 연결 설정(env 제외) — 관리자 MCP 서버 정책 미리보기(§8-3)가 설치 때와 같은 값으로
+     * 판정하는 읽기. 응답에는 싣지 않는다(미리보기는 정규화 식별만 돌려준다). 없으면 미리보기가 MCP 판정을 건너뛴다(unavailable).
+     */
+    listLinkedConnections?(extensionIds: readonly string[]): Promise<McpLinkedServerConnection[]>;
     insertDraft(input: McpServerDraftInput): Promise<{ id: string }>;
     /** (user_id, name) 이 이미 쓰였으면 그 id */
     findIdByUserAndName(userId: string, name: string): Promise<string | null>;

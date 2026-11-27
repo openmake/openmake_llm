@@ -2670,6 +2670,13 @@
         "endpointMoved": "Dieser Server zieht am {date} nach {url} um — an der neuen Adresse ist eine erneute Anmeldung nötig.",
         "remoteAuth": "Remote-Server — nach der Freigabe kann eine Anmeldung (OAuth) nötig sein."
       }
+    },
+    "deployment": {
+      "required": "Erforderlich",
+      "defaultOn": "Automatisch installiert",
+      "requiredHint": "Von deiner Organisation vorgeschrieben — kann nicht entfernt werden",
+      "defaultOnHint": "Von deiner Organisation automatisch installiert — wird nach dem Entfernen nicht erneut installiert",
+      "removeLocked": "Von der Organisation vorgeschriebene Erweiterungen können nicht entfernt werden"
     }
   },
   "mcpInstances": {
@@ -2858,7 +2865,8 @@
       "TOOL_APPROVAL_POLICY_MIN": "Untergrenze der Genehmigungsrichtlinie für Agentenaufgaben. Ist sie strenger als die Anfrage, gilt die Untergrenze.",
       "MCP_ALLOWED_SERVERS": "Kommagetrennte MCP-Katalogvorlagen-IDs, deren Installation erlaubt ist. Leer = keine Einschränkung.",
       "BROWSER_SITE_POLICY": "Browser-Website-Richtlinie dieser Organisation. Die Deny-Liste wird mit global vereinigt. Hat global eine Allow-Liste, bleiben nur Einträge, die in beiden stehen; ist global leer, gilt die Liste der Organisation. Zurücksetzen folgt global.",
-      "EXTENSION_SOURCE_POLICY": "Erlaubnis-/Sperrregeln für Erweiterungsquellen als JSON (github, git, archive, hostPattern, catalog, internal, local, oci). Eine Sperre in einer beliebigen Ebene blockiert; definieren global und Organisation beide allow, muss die Quelle beide erfüllen. Ohne allow keine Einschränkung, [] sperrt alles. Gilt nur, wenn EXTENSION_SOURCE_POLICY_ENFORCED aktiv ist."
+      "EXTENSION_SOURCE_POLICY": "Erlaubnis-/Sperrregeln für Erweiterungsquellen als JSON (github, git, archive, hostPattern, catalog, internal, local, oci). Eine Sperre in einer beliebigen Ebene blockiert; definieren global und Organisation beide allow, muss die Quelle beide erfüllen. Ohne allow keine Einschränkung, [] sperrt alles. Gilt nur, wenn EXTENSION_SOURCE_POLICY_ENFORCED aktiv ist.",
+      "EXTENSION_MCP_SERVER_POLICY": "Erlaubnis-/Sperr-Matcher für MCP-Server von Erweiterungen als JSON — Regeltypen url (remote: Schema, Host, Port und Pfadpräfix; Host auch *.example.com) und command (stdio: ausführbare Datei plus optionales package — npx @scope/pkg@1.2.3 oder @scope/*, uvx pkg==1.0, Docker-Image ghcr.io/org/img:tag). Eine Sperre in einer beliebigen Ebene blockiert und greift breit (Groß-/Kleinschreibung, Pfadtricks, verwandte Runner und Shell-Wrapper); definieren global und Organisation beide allow, muss der Server beide erfüllen. Ohne allow keine Einschränkung, [] sperrt alles, ein ungültiger Wert ebenfalls. Gilt nur, wenn EXTENSION_MCP_SERVER_POLICY_ENFORCED aktiv ist."
     },
     "history": "Änderungsverlauf",
     "noHistory": "Noch keine Änderungen.",
@@ -3174,7 +3182,13 @@
     "reason": "Grund",
     "rule": "Passende Regel",
     "scopeOrg": "Organisationsrichtlinie",
-    "scopeGlobal": "Globale Richtlinie"
+    "scopeGlobal": "Globale Richtlinie",
+    "mcpPreviewTitle": "Vorschau der MCP-Server-Richtlinie",
+    "mcpPreviewHelp": "MCP-Server der obigen Installationen, die bei erzwungener MCP-Server-Richtlinie gesperrt würden (gleiche Prüfung wie beim Installieren). Bei Erzwingung lassen Installation und Update nur diese Server aus und installieren die übrigen Komponenten.",
+    "mcpPreviewSummary": "{blocked} von {checked} MCP-Servern würden gesperrt.",
+    "mcpPreviewUnavailable": "MCP-Server-Komponenten konnten nicht gelesen werden; die MCP-Server-Richtlinie wurde nicht geprüft.",
+    "mcpServer": "MCP-Server",
+    "mcpIdentity": "Kennung (normalisiert)"
   },
   "knowledge": {
     "serverError": "Ein Serverfehler ist aufgetreten",
@@ -3619,5 +3633,33 @@
     "pageInfo": "{from}–{to} von {total}",
     "prev": "Zurück",
     "next": "Weiter"
+  },
+  "orgExtensionDeployments": {
+    "title": "Bereitstellungsmodi für Erweiterungen",
+    "description": "Lege für jede mit der Organisation geteilte Erweiterung fest, wie sie bereitgestellt wird: nur in der Galerie (Standard) · automatisch installieren (Mitglieder können sie entfernen) · erforderlich (normale Mitglieder können sie nicht entfernen). Installationen laufen unter dem Konto des jeweiligen Mitglieds; Skills und MCP-Server genehmigt jedes Mitglied selbst.",
+    "saveFailed": "Speichern fehlgeschlagen: {error}",
+    "groupsTitle": "Gruppen",
+    "groupNamePlaceholder": "Name der neuen Gruppe",
+    "addGroup": "Gruppe hinzufügen",
+    "noGroups": "Noch keine Gruppen.",
+    "memberCount": "{count} Mitglieder",
+    "deleteGroup": "Gruppe löschen",
+    "deleteGroupConfirm": "Gruppe „{name}“ löschen? Ihre Überschreibungen werden ebenfalls gelöscht.",
+    "removeGroupMember": "Aus Gruppe entfernen",
+    "addGroupMember": "Mitglied hinzufügen",
+    "itemsTitle": "Mit der Organisation geteilte Erweiterungen",
+    "noItems": "Mit dieser Organisation sind keine Erweiterungen geteilt.",
+    "item": "Erweiterung",
+    "defaultMode": "Standard",
+    "installed": "Installiert",
+    "defaultModeAria": "Standard-Bereitstellungsmodus für {name}",
+    "groupModeAria": "{name} — Überschreibung für Gruppe {group}",
+    "inherit": "Standard verwenden",
+    "ruleHint": "Gruppenüberschreibungen haben Vorrang vor dem Standard; ein Mitglied in mehreren Gruppen erhält den stärksten Wert (erforderlich > automatisch installieren > nur Galerie).",
+    "modes": {
+      "default_off": "Nur Galerie",
+      "default_on": "Automatisch installieren",
+      "required": "Erforderlich"
+    }
   }
 }

@@ -51,6 +51,7 @@ import {
     adminExtensionsRouter,
     adminOrganizationsRouter,
     organizationPoliciesRouter,
+    organizationExtensionDeploymentsRouter,
     adminOrganizationPoliciesRouter,
     adminConfigExportRouter,
     adminCostRatesRouter,
@@ -239,6 +240,7 @@ export function setupApiRoutes(
     app.use('/api/admin', adminOrganizationsRouter);
     app.use('/api/admin', adminOrganizationPoliciesRouter);
     app.use('/api/organizations', organizationPoliciesRouter);
+    app.use('/api/organizations', organizationExtensionDeploymentsRouter);   // 조직 확장 배포 모드·그룹 (§8-1, opt-in — 꺼짐 404)
     app.use('/api/admin', adminConfigExportRouter);
     app.use('/api/admin', adminCostRatesRouter);
     app.use('/api/admin', adminLocalBridgeRouter);   // 연결 기기 조회·강제 해제 (2026-10-05)

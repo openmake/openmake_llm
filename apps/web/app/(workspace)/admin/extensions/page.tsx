@@ -216,6 +216,36 @@ export default function AdminExtensionsPage() {
                           </tbody>
                         </Table>
                       )}
+                      {preview.mcpServers && (
+                        <div className="space-y-2 border-t border-border pt-3">
+                          <h3 className="text-sm font-medium">{t("mcpPreviewTitle")}</h3>
+                          <p className="text-xs text-muted">{t("mcpPreviewHelp")}</p>
+                          {preview.mcpServers.unavailable ? (
+                            <p className="text-xs text-warn">{t("mcpPreviewUnavailable")}</p>
+                          ) : (
+                            <p className="text-sm">
+                              {t("mcpPreviewSummary", { checked: preview.mcpServers.checked, blocked: preview.mcpServers.blocked.length })}
+                              {" "}<Badge tone={preview.mcpServers.enforced ? "warn" : "neutral"}>{preview.mcpServers.enforced ? t("enforcedOn") : t("enforcedOff")}</Badge>
+                            </p>
+                          )}
+                          {preview.mcpServers.blocked.length > 0 && (
+                            <Table>
+                              <thead><tr><Th>{t("owner")}</Th><Th>{t("extension")}</Th><Th>{t("mcpServer")}</Th><Th>{t("mcpIdentity")}</Th><Th>{t("reason")}</Th><Th>{t("rule")}</Th></tr></thead>
+                              <tbody>
+                                {preview.mcpServers.blocked.map((b) => (
+                                  <tr key={b.server.id}>
+                                    <Td>{b.owner.username ?? b.owner.id}</Td><Td>{b.name}</Td>
+                                    <Td>{b.server.name} <span className="text-[11px] text-muted">{b.server.transport}</span></Td>
+                                    <Td className="break-all font-mono text-xs">{b.verdict.server}</Td>
+                                    <Td><Badge tone="danger">{b.verdict.reason}</Badge>{b.verdict.scope ? <span className="ml-1 text-[11px] text-muted">{b.verdict.scope === "organization" ? t("scopeOrg") : t("scopeGlobal")}</span> : null}</Td>
+                                    <Td className="font-mono text-[11px] text-muted">{b.verdict.rule !== undefined ? JSON.stringify(b.verdict.rule) : "—"}</Td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </Table>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>

@@ -34,6 +34,8 @@ import { SKILL_CREATOR } from '../../config/constants';
 import { PLUGIN_COMPONENT_LIMITS, UNSUPPORTED_AGENT_FIELDS } from '../../config/skill-compat';
 import type { SkillInstallResult, AgentInstallResult, McpServerInstallResult } from './extension-ingest-types';
 import { planCommandPaths, planAgentPaths, planMcpEntries, mcpNetworkDecision } from './extension-component-plan';
+import { loadExtensionMcpServerGate, recordMcpServerBlocked } from '../../services/extensions/mcp-server-policy';
+import { describeMcpServerBlock, EXTENSION_MCP_SERVER_BLOCKED_CODE } from '../../errors/extension-mcp-server-blocked.error';
 // 설치 미리보기(M1b)가 같은 함수를 쓰도록 재노출
 export { planCommandPaths, planAgentPaths, planMcpEntries, mcpNetworkDecision };
 
@@ -390,7 +392,17 @@ export async function collectMcpDrafts(
     // MCP 서버 테이블은 MCP add-on 소유 — 데이터 모듈의 저장 연산으로(같은 풀, SQL 동일)
     const mcpServers = getComponentStore('mcpServers', ctx.pool);
     const { networkAllowed, networkNeedsReview } = mcpNetworkDecision(ctx);
+    // 확장 MCP 서버 정책(§8-3, opt-in) — 강제 OFF 면 null(종전 동작). 서버마다 LLM 검사·저장 **전에** 판정해
+    // 위반 서버만 빼고 나머지 구성요소는 그대로 설치한다(권한·관례 검사의 서버 단위 제외와 같은 단위).
+    const serverPolicy = await loadExtensionMcpServerGate(ctx.userId);
     for (const entry of mcpEntries) {
+        const verdict = serverPolicy?.evaluate({ name: entry.name, transport: entry.transportType, command: entry.command, args: entry.args, url: entry.url });
+        if (verdict && !verdict.allowed) {
+            const detail = await recordMcpServerBlocked(ctx.userId, 'extension-install', verdict);
+            ctx.warnings.push(`MCP_SERVER_POLICY_BLOCKED: MCP 서버 '${entry.name}' 제외 — ${describeMcpServerBlock(detail)}`);
+            results.push({ name: entry.name, error: `${EXTENSION_MCP_SERVER_BLOCKED_CODE}: ${describeMcpServerBlock(detail)}` });
+            continue;
+        }
         if (!networkAllowed && entry.transportType !== 'stdio') {
             if (networkNeedsReview) {
                 ctx.warnings.push(`MCP_PERMISSION_REVIEW_REQUIRED: 원격 MCP 서버 '${entry.name}' 제외 — '${ADDON_PERMISSIONS.NETWORK_INTERNET}' 권한이 이전 승인 범위 밖입니다(설정 → 확장에서 재승인)`);

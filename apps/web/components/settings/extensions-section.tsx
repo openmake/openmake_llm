@@ -7,6 +7,7 @@ import { Button, Card, CardHeader, CardTitle, CardContent, Input } from "@/compo
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { GalleryItemBadges } from "./gallery-item-badges";
+import { DeploymentModeBadge, type ExtensionDeploymentMode, type ExtensionOrgDeployment } from "./extension-deployment-badge";
 import { MarketplacePublishSection } from "@/components/settings/marketplace-publish-section";
 import { ExtensionPermissionBadge, ExtensionPermissionPanel } from "@/components/settings/extension-permission-panel";
 import { CatalogSourceAdmin } from "@/components/settings/catalog-source-admin";
@@ -30,12 +31,16 @@ interface UserExtension {
   permission_state?: string | null;
   permissions_granted?: string[] | null;
   permissions_requested?: string[] | null;
+  /** 조직 배포 모드(§8-1) — 배포로 설치된 행에만 온다(서버 플래그 OFF 면 없음) */
+  org_deployment?: ExtensionOrgDeployment;
 }
 
 type ExtensionVisibility = "private" | "shared" | "organization";
 
 interface GalleryExtension extends UserExtension {
   owned: boolean;
+  /** 조직 배포 모드(§8-1) — 활성 조직 공개 항목에만 온다 */
+  deployment_mode?: ExtensionDeploymentMode;
 }
 
 type GalleryInstallState =
@@ -413,6 +418,7 @@ export function ExtensionsSection() {
                       <span className="shrink-0 whitespace-nowrap text-xs text-accent">{t("share.organization")}</span>
                     )}
                     <ExtensionPermissionBadge ext={ext} />
+                    <DeploymentModeBadge mode={ext.org_deployment?.mode} />
                     {activeOrgId || ext.visibility === "organization" ? (
                       <select
                         aria-label={t("share.visibilityAria")}
@@ -460,6 +466,8 @@ export function ExtensionsSection() {
                       variant="ghost"
                       size="icon"
                       aria-label={t("removeAria")}
+                      disabled={ext.org_deployment?.removable === false}
+                      title={ext.org_deployment?.removable === false ? t("deployment.removeLocked") : undefined}
                       onClick={() => void remove(ext.id)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -578,6 +586,9 @@ export function ExtensionsSection() {
                         <span className="ml-1.5 font-mono text-xs text-muted">v{g.version}</span>
                         {g.owned && <span className="ml-1.5 text-xs text-muted">{t("gallery.owned")}</span>}
                       </p>
+                      {g.deployment_mode && g.deployment_mode !== "default_off" && (
+                        <div className="mt-1"><DeploymentModeBadge mode={g.deployment_mode} /></div>
+                      )}
                       <p className="mt-0.5 truncate text-xs text-muted">
                         {g.description || g.source_url}
                         <span className="ml-1.5 font-mono">@{g.source_ref.slice(0, 7)}</span>
