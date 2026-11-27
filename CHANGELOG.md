@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.150.0](https://github.com/openmake/openmake_llm/compare/v1.149.3...v1.150.0) (2026-11-27)
+
+
+### ✨ 기능
+
+* **addon-host:** 매니페스트 defaultState 로 새 add-on 을 꺼진 채 들인다 + 웹 hideUntilEnabledKnown ([44f38b3](https://github.com/openmake/openmake_llm/commit/44f38b3438ab0ba702c6fba2203745d1fa5112cf))
+* **extension-marketplace:** 갤러리 항목 호환 판정·배지 add-on — 기본 꺼짐 (M1) ([9bf8b69](https://github.com/openmake/openmake_llm/commit/9bf8b69e0abdf3774720f9b880cb72691bd82d20))
+* **extensions:** catalog source credential, sync status, subpath and opt-in periodic sync (M4) ([66604d9](https://github.com/openmake/openmake_llm/commit/66604d9b12ebc6423fc8ba90a8133c456260fa57))
+* **extensions:** install by name plugin@marketplace (M5) ([de50d34](https://github.com/openmake/openmake_llm/commit/de50d3464154cc1a430025c63795cc4712c67c94))
+* **extensions:** sync catalog sources from a static index.json (M6, opt-in) ([79f6b77](https://github.com/openmake/openmake_llm/commit/79f6b77b7f9def9a60f4c4211ee46c714ea655fe))
+* **extensions:** 설치 전 구성요소·권한·원본·커밋을 보여 주는 설치 미리보기 — opt-in (M1b) ([ad05069](https://github.com/openmake/openmake_llm/commit/ad05069f77a73a96b33b453600c0dac8b44b03a9))
+* **extensions:** 확장 원본 정책(M2) — 설치·업데이트·카탈로그 동기화를 네트워크 전에 원본 규칙으로 검사 (opt-in) ([1f71b4c](https://github.com/openmake/openmake_llm/commit/1f71b4cdf52fbaa0eb594d37b28c8e7afc2e17df))
+* **mcp-runtime:** MCP 서버 역할이 2026-07-28 리비전 클라이언트도 받는다 (opt-in, MCP-6) ([3c30e07](https://github.com/openmake/openmake_llm/commit/3c30e07d534914659a89f0c0e7bce9aa5a283aae))
+* **mcp-runtime:** SSE·옮겨 가는 원격 주소에 퇴역 안내를 붙이고 카탈로그 이전 판을 이관한다 — opt-in (MCP-3) ([1608807](https://github.com/openmake/openmake_llm/commit/1608807e289153c25ae64d53b6308a5ea51e660d))
+* **mcp-runtime:** 서버가 선언한 MCP 확장(Apps·Tasks·Skills over MCP)을 분류해 표시한다 — opt-in (MCP-5) ([0633a8b](https://github.com/openmake/openmake_llm/commit/0633a8b15356b7888f04cc5c78858158a60b4916))
+* **mcp-runtime:** 서버별 MCP 협상 결과를 기록한다 — opt-in (MCP-1) ([ebc1d52](https://github.com/openmake/openmake_llm/commit/ebc1d52f2ddfd6ccf6f1124b272f5ed423cfb8cd))
+* **mcp-runtime:** 외부 MCP 협상 방식 MCP_PROTOCOL_NEGOTIATION(legacy·auto) + 서버별 판정 재사용 (MCP-2) ([ef5503a](https://github.com/openmake/openmake_llm/commit/ef5503a43d2f0077d8e6acd0b7207abee3a383b1))
+* **mcp-runtime:** 원격 MCP OAuth 에 CIMD 등록 경로를 더한다 — opt-in (MCP-4) ([4e29cd0](https://github.com/openmake/openmake_llm/commit/4e29cd05d0ae5bbd029f570c5962abf380f62876))
+
+
+### 🐛 버그 수정
+
+* **extensions:** preview gallery name install when install preview is on ([fc32510](https://github.com/openmake/openmake_llm/commit/fc3251051cadee2dd56ca6b2ab11cbecedc3dc16))
+* **mcp-runtime:** 협상 관측기가 Base 내부를 직접 import 하지 않게 한다 (add-on 경계) ([d094208](https://github.com/openmake/openmake_llm/commit/d0942080fea47094b3c4124c62cd824dd75ab4e3))
+
 ## [1.149.3](https://github.com/openmake/openmake_llm/compare/v1.149.2...v1.149.3) (2026-11-25)
 
 
