@@ -41,4 +41,10 @@ export class AddonInstallRepository {
             client.release();
         }
     }
+
+    /** opt-in 이관 — 관리자가 고치지 않은 이전 판 행만 지금 판으로(카탈로그 테이블은 MCP add-on 소유라 저장 연산 경유) */
+    async upgradeSupersededTemplate(template: CatalogTemplateInstall): Promise<boolean> {
+        const store = getComponentStore('mcpServers', this.pool);
+        return store.upgradeSupersededCatalogTemplate ? store.upgradeSupersededCatalogTemplate(template) : false;
+    }
 }
