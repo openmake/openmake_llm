@@ -161,6 +161,7 @@ export const envSchema = z
         /** 조직 확장 배포 모드(§8-1, opt-in) — config/extension-org-deployment */
         EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED: z.string().optional(),
         EXTENSION_ADMIN_INVENTORY_ENABLED: z.string().optional(),
+        EXTENSION_REMOTE_MCP_ENABLED: z.string().optional(),
         /** `GET /api/addons` DB 상태 반영(opt-in) — config/addon-list-state */
         ADDON_LIST_REFLECT_DB_STATE: z.string().optional(),
         EXTENSION_ARBITRARY_URL_INSTALL: z.string().optional(),

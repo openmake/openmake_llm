@@ -34,6 +34,8 @@ import { SKILL_CREATOR } from '../../config/constants';
 import { PLUGIN_COMPONENT_LIMITS, UNSUPPORTED_AGENT_FIELDS } from '../../config/skill-compat';
 import type { SkillInstallResult, AgentInstallResult, McpServerInstallResult } from './extension-ingest-types';
 import { planCommandPaths, planAgentPaths, planMcpEntries, mcpNetworkDecision } from './extension-component-plan';
+import { extensionRemoteMcpEnabled, EXTENSION_REMOTE_MCP_CODES } from '../../config/extension-remote-mcp';
+import { buildRemoteRegistrationMeta, checkRemoteMcpUrl } from '../../services/extensions/remote-mcp-registration';
 import { loadExtensionMcpServerGate, recordMcpServerBlocked } from '../../services/extensions/mcp-server-policy';
 import { describeMcpServerBlock, EXTENSION_MCP_SERVER_BLOCKED_CODE } from '../../errors/extension-mcp-server-blocked.error';
 // 설치 미리보기(M1b)가 같은 함수를 쓰도록 재노출
@@ -413,6 +415,18 @@ export async function collectMcpDrafts(
             }
             continue;
         }
+        // 원격 관리 등록(opt-in EXTENSION_REMOTE_MCP_ENABLED) — 선언 URL 을 https·SSRF 가드로 검사. MCP 서버 정책(§8-3)은
+        // 루프 머리의 게이트가 이미 판정했다(같은 게이트를 두 번 부르지 않는다 — 감사 중복 방지)
+        const remoteManaged = entry.transportType !== 'stdio' && extensionRemoteMcpEnabled();
+        const gate = remoteManaged ? await checkRemoteMcpUrl(entry.url, 'install') : { allowed: true as const };
+        if (!gate.allowed) {
+            ctx.warnings.push(`${gate.code}: MCP 서버 '${entry.name}' 제외 — ${gate.reason}`);
+            results.push({ name: entry.name, error: `${gate.code}: ${gate.reason}` });
+            continue;
+        }
+        if (remoteManaged && 'unresolved' in gate && gate.unresolved) {
+            ctx.warnings.push(`${EXTENSION_REMOTE_MCP_CODES.URL_UNRESOLVED}: 원격 MCP 서버 '${entry.name}' 의 호스트를 지금 확인하지 못했습니다 — 승인할 때 다시 확인합니다`);
+        }
         try {
             const conv = await checker.checkMcpServer(
                 JSON.stringify(entry, null, 2),
@@ -441,6 +455,8 @@ export async function collectMcpDrafts(
                     serverKey: entry.name,
                     // 권한 때문에 네트워크를 막았다는 표시 — 재승인이 이 서버만 골라 되돌린다(user-extension-permission-repository)
                     ...(networkAllowed ? {} : { networkRestrictedByPermission: true }),
+                    // 원격 관리 등록 — 번들 선언 URL 고정·OAuth 전용(승인 라우트가 대조한다)
+                    ...(remoteManaged && entry.url ? buildRemoteRegistrationMeta(entry.url) : {}),
                     conventionFindings: conv.findings,
                     blockedByConvention,
                     tokensUsed: conv.tokensUsed,

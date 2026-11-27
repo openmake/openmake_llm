@@ -22,6 +22,7 @@ import { EXTENSION_MCP_SERVER_POLICY_KEYS, extensionMcpServerPolicyProblems } fr
 import { EXTENSION_CATALOG_SYNC_KEYS } from './extension-catalog-sync';
 import { EXTENSION_AGENT_PROVENANCE_FLAG } from './extension-agent-provenance';
 import { EXTENSION_INSTALL_PREVIEW_FLAG } from './extension-install-preview';
+import { EXTENSION_REMOTE_MCP_FLAG } from './extension-remote-mcp';
 import { EXTENSION_ORG_DEPLOYMENT_FLAG } from './extension-org-deployment';
 
 /** Base 그룹 또는 add-on 이 기여한 그룹 이름 */
@@ -165,6 +166,8 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     { key: EXTENSION_INSTALL_PREVIEW_FLAG, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     // 확장 Custom Agent 출처 표시·제거 시 승인 전 에이전트 이름 정리(P8, opt-in) — 승인함 조회·확장 제거 시점에 읽는다(실시간)
     { key: EXTENSION_AGENT_PROVENANCE_FLAG, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
+    // 확장 번들 원격 MCP 관리 등록(P8, opt-in) — 설치·승인·연결 시점에 읽는다(실시간). config/extension-remote-mcp
+    { key: EXTENSION_REMOTE_MCP_FLAG, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     // 조직 확장 배포 모드(§8-1, opt-in) — 관리 라우트·갤러리 응답·제거 판정·조정 tick 이 호출 시점에 읽는다(실시간). config/extension-org-deployment
     { key: EXTENSION_ORG_DEPLOYMENT_FLAG, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
 
