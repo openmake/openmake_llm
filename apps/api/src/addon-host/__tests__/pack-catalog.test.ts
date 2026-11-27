@@ -42,6 +42,41 @@ describe('installPackCatalog', () => {
     });
 });
 
+describe('installPackCatalog — 이전 판 이관 (MCP-3, opt-in)', () => {
+    const templates = loadPackCatalog('connectors-pack');
+    const superseding = templates.filter(t => t.supersedes?.length);
+
+    it('Atlassian 원격 템플릿은 v2 주소이고 v1 을 이전 판으로 적는다', () => {
+        const t = templates.find(x => x.id === 'mcp-atlassian-remote');
+        expect(t?.urlTemplate).toBe('https://mcp.atlassian.com/v2/mcp');
+        expect(t?.supersedes).toEqual([{ transportType: 'streamable-http', urlTemplate: 'https://mcp.atlassian.com/v1/mcp' }]);
+    });
+
+    it('옵션이 없으면 이관 연산을 부르지 않는다(종전 "항목당 1회 설치" 그대로)', async () => {
+        const upgradeSupersededTemplate = jest.fn(async () => true);
+        const result = await installPackCatalog('connectors-pack', { installCatalogTemplateOnce: async () => false, upgradeSupersededTemplate });
+        expect(upgradeSupersededTemplate).not.toHaveBeenCalled();
+        expect(result.upgraded).toEqual([]);
+    });
+
+    it('옵션을 켜면 이미 설치된, supersedes 가 있는 템플릿만 이관을 시도한다', async () => {
+        const upgradeSupersededTemplate = jest.fn(async (t: { id: string }) => t.id === 'mcp-atlassian-remote');
+        const result = await installPackCatalog(
+            'connectors-pack',
+            { installCatalogTemplateOnce: async () => false, upgradeSupersededTemplate },
+            { upgradeSuperseded: true },
+        );
+        expect(upgradeSupersededTemplate.mock.calls.map(c => c[0].id)).toEqual(superseding.map(t => t.id));
+        expect(result.upgraded).toEqual(['mcp-atlassian-remote']);
+    });
+
+    it('이번에 새로 설치한 항목은 이관하지 않는다', async () => {
+        const upgradeSupersededTemplate = jest.fn(async () => true);
+        await installPackCatalog('connectors-pack', { installCatalogTemplateOnce: async () => true, upgradeSupersededTemplate }, { upgradeSuperseded: true });
+        expect(upgradeSupersededTemplate).not.toHaveBeenCalled();
+    });
+});
+
 describe('disabledCatalogTemplateIds', () => {
     it('꺼진 add-on 의 템플릿 id 만 돌려준다', () => {
         const before = process.env[ENV_KEY];

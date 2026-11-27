@@ -1465,6 +1465,22 @@
         "no_tools": "연결됐지만 도구가 없어 모델이 쓸 수 없습니다.",
         "meta_tools_off": "전역 서버는 mcp_call 로만 쓰는데 그 기능이 꺼져 있습니다."
       }
+    },
+    "transportNotice": {
+      "label": {
+        "deprecated-transport": "SSE 전송 지원 종료 예정",
+        "endpoint-sunset": "엔드포인트 종료 예정",
+        "endpoint-moved": "새 주소로 이전 필요"
+      },
+      "hint": {
+        "deprecated-transport": "SSE 전송은 MCP 사양에서 지원 종료(deprecated)됐습니다. 지금은 그대로 연결됩니다.",
+        "endpoint-sunset": "이 서버 주소는 곧 꺼집니다.",
+        "endpoint-moved": "이 서버는 새 주소로 옮겨 갑니다."
+      },
+      "sunsetOn": "종료일: {date}.",
+      "replacement": "새 주소: {url}",
+      "replacementCandidate": "Streamable HTTP 주소 후보: {url} (서버 안내로 확인하세요)",
+      "reauth": "새 주소로 다시 등록한 뒤 다시 로그인해야 합니다(이전 OAuth 연결은 쓸 수 없습니다)."
     }
   },
   "mcpCatalog": {
