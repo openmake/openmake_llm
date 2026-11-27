@@ -20,6 +20,7 @@
       "metrics": "메트릭",
       "alerts": "알림",
       "mcpCatalogAdmin": "MCP 카탈로그 관리",
+      "mcpRegistry": "MCP 레지스트리",
       "modelRolesAdmin": "모델 배정 관리",
       "systemSettingsAdmin": "시스템 설정",
       "developer": "개발자",
@@ -3520,5 +3521,54 @@
       "license": "라이선스: {value}"
     },
     "snapshotOnly": "카탈로그 스냅샷만으로 판정 — 설치하면 내용까지 확인합니다"
+  },
+  "marketRegistry": {
+    "pageTitle": "MCP 레지스트리",
+    "pageDescription": "공식 MCP Registry 사본을 검토해 승인·숨김하고, 승인한 항목을 꺼진 MCP 카탈로그 초안으로 올립니다.",
+    "never": "없음",
+    "syncOn": "동기화 켜짐",
+    "syncOff": "동기화 꺼짐",
+    "syncOffHint": "운영 설정 {key} 를 켜야 동기화합니다",
+    "lastSuccess": "마지막 동기화",
+    "inProgress": "이어받는 중",
+    "backoffUntil": "{at} 까지 대기",
+    "lastError": "마지막 오류",
+    "counts": "검토 대기 {pending} · 승인 {approved} · 숨김 {hidden} · 레지스트리에서 삭제 {tombstoned}",
+    "syncNow": "지금 동기화",
+    "syncResult": "동기화 결과: {status}",
+    "actionError": "요청에 실패했습니다",
+    "curated": "저장했습니다",
+    "promoted": "MCP 카탈로그에 꺼진 초안으로 올렸습니다: {id}",
+    "promoteExists": "이미 카탈로그에 있습니다: {id}",
+    "publisherVerified": "게시자 확인",
+    "publisherVerifiedHint": "레지스트리가 네임스페이스 소유를 확인했다는 뜻입니다. 코드·보안 검토가 아닙니다.",
+    "noInstall": "설치 정보 없음",
+    "curation": {
+      "pending": "검토 대기",
+      "approved": "승인",
+      "hidden": "숨김"
+    },
+    "registryStatus": {
+      "active": "활성",
+      "deprecated": "지원 중단",
+      "deleted": "삭제됨"
+    },
+    "tombstoned": "레지스트리에서 삭제",
+    "approve": "승인",
+    "hide": "숨김",
+    "reset": "보류로",
+    "promote": "카탈로그로 올리기",
+    "filterAll": "전체",
+    "searchPlaceholder": "이름·설명 검색 (Enter)",
+    "showTombstoned": "삭제된 항목 포함",
+    "colServer": "서버",
+    "colInstall": "설치 방식",
+    "colState": "상태",
+    "colActions": "작업",
+    "loading": "불러오는 중...",
+    "empty": "항목이 없습니다",
+    "pageInfo": "{from}–{to} / {total}",
+    "prev": "이전",
+    "next": "다음"
   }
 }

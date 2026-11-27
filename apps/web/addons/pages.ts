@@ -7,11 +7,14 @@
 import type { ReactNode } from "react";
 import type { WebAddonPage, WebAddonPageProps } from "./types";
 import { deepResearchPages } from "./deep-research/pages";
+import { extensionMarketplacePages } from "./extension-marketplace/pages";
 import { knowledgePages } from "./knowledge/pages";
 import { mcpRuntimePages } from "./mcp-runtime/pages";
 import { skillRuntimePages } from "./skill-runtime/pages";
 
-export const WEB_ADDON_PAGES: readonly WebAddonPage[] = [...deepResearchPages, ...knowledgePages, ...skillRuntimePages, ...mcpRuntimePages];
+export const WEB_ADDON_PAGES: readonly WebAddonPage[] = [
+  ...deepResearchPages, ...knowledgePages, ...skillRuntimePages, ...mcpRuntimePages, ...extensionMarketplacePages,
+];
 
 /**
  * URL 조각으로 add-on 화면을 찾아 렌더한다 — 맞는 화면이 없으면 null(Base 가 404).

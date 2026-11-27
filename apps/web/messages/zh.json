@@ -20,6 +20,7 @@
       "metrics": "指标",
       "alerts": "告警",
       "mcpCatalogAdmin": "MCP目录管理",
+      "mcpRegistry": "MCP 注册表",
       "modelRolesAdmin": "模型分配管理",
       "systemSettingsAdmin": "系统设置",
       "developer": "开发者",
@@ -3520,5 +3521,54 @@
       "license": "许可证: {value}"
     },
     "snapshotOnly": "仅根据目录快照判定 — 安装后会检查内容"
+  },
+  "marketRegistry": {
+    "pageTitle": "MCP 注册表",
+    "pageDescription": "审核官方 MCP Registry 的副本，批准或隐藏条目，并把已批准的条目作为停用状态的 MCP 目录草稿添加。",
+    "never": "无",
+    "syncOn": "同步已开启",
+    "syncOff": "同步已关闭",
+    "syncOffHint": "开启设置 {key} 后才会同步",
+    "lastSuccess": "上次同步",
+    "inProgress": "继续获取中",
+    "backoffUntil": "等待至 {at}",
+    "lastError": "上次错误",
+    "counts": "待审核 {pending} · 已批准 {approved} · 已隐藏 {hidden} · 注册表中已删除 {tombstoned}",
+    "syncNow": "立即同步",
+    "syncResult": "同步结果：{status}",
+    "actionError": "请求失败",
+    "curated": "已保存",
+    "promoted": "已作为停用草稿添加到 MCP 目录：{id}",
+    "promoteExists": "目录中已存在：{id}",
+    "publisherVerified": "发布者已确认",
+    "publisherVerifiedHint": "表示注册表已确认命名空间的所有权，并非代码或安全审查。",
+    "noInstall": "无安装信息",
+    "curation": {
+      "pending": "待审核",
+      "approved": "已批准",
+      "hidden": "已隐藏"
+    },
+    "registryStatus": {
+      "active": "活跃",
+      "deprecated": "已弃用",
+      "deleted": "已删除"
+    },
+    "tombstoned": "注册表中已删除",
+    "approve": "批准",
+    "hide": "隐藏",
+    "reset": "改回待审核",
+    "promote": "添加到目录",
+    "filterAll": "全部",
+    "searchPlaceholder": "搜索名称或描述（Enter）",
+    "showTombstoned": "包含已删除",
+    "colServer": "服务器",
+    "colInstall": "安装方式",
+    "colState": "状态",
+    "colActions": "操作",
+    "loading": "加载中...",
+    "empty": "没有条目",
+    "pageInfo": "{from}–{to} / {total}",
+    "prev": "上一页",
+    "next": "下一页"
   }
 }
