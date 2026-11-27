@@ -1,0 +1,1202 @@
+{
+  "_comment": "확장 설치 기준선 G0 (2026-11-27, origin/dev 24f122b46) — extension-g0-baseline.db.test.ts 가 대조한다. 의도한 동작 변경일 때만 OMK_G0_UPDATE_FIXTURE=1 로 다시 쓰고 PR 에 이유를 적는다.",
+  "combos": {
+    "fp=false,agent=false": {
+      "install": {
+        "result": {
+          "status": "active",
+          "version": "1.0.0",
+          "deduped": false,
+          "upToDate": false,
+          "updated": false,
+          "previousVersion": null,
+          "skills": [
+            "alpha",
+            "beta"
+          ],
+          "mcpServers": 1,
+          "agents": 1,
+          "codes": [
+            "AGENTS_CONVERTED",
+            "SKILLS_ON_DEMAND"
+          ]
+        },
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "draft",
+              "linked": true
+            },
+            {
+              "name": "beta",
+              "status": "draft",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": true,
+              "approval_status": "approved",
+              "linked": true
+            }
+          ],
+          "mcp": [
+            {
+              "status": "draft",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "active",
+              "version": "1.0.0",
+              "permission_state": "reviewed",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "network:internet"
+              ],
+              "installation": true
+            }
+          ]
+        }
+      },
+      "reinstallSameCommit": {
+        "result": {
+          "status": "active",
+          "version": "1.0.0",
+          "deduped": true,
+          "upToDate": false,
+          "updated": false,
+          "previousVersion": null,
+          "skills": [
+            "alpha",
+            "beta"
+          ],
+          "mcpServers": 1,
+          "agents": 1,
+          "codes": []
+        },
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "active",
+              "linked": true
+            },
+            {
+              "name": "beta",
+              "status": "active",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": true,
+              "approval_status": "approved",
+              "linked": true
+            }
+          ],
+          "mcp": [
+            {
+              "status": "draft",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "active",
+              "version": "1.0.0",
+              "permission_state": "reviewed",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "network:internet"
+              ],
+              "installation": true
+            }
+          ]
+        }
+      },
+      "conflictOtherSource": "EXTENSION_ALREADY_INSTALLED",
+      "update": {
+        "result": {
+          "status": "active",
+          "version": "1.1.0",
+          "deduped": false,
+          "upToDate": false,
+          "updated": true,
+          "previousVersion": "1.0.0",
+          "skills": [
+            "alpha",
+            "beta",
+            "gamma"
+          ],
+          "mcpServers": 1,
+          "agents": 1,
+          "codes": [
+            "AGENTS_CONVERTED",
+            "PERMISSION_REVIEW_REQUIRED",
+            "SKILL_APPROVAL_CARRIED"
+          ]
+        },
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "active",
+              "linked": true
+            },
+            {
+              "name": "alpha",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "beta",
+              "status": "active",
+              "linked": true
+            },
+            {
+              "name": "beta",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "gamma",
+              "status": "draft",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": true,
+              "approval_status": "approved",
+              "linked": true
+            },
+            {
+              "name": "g0-pack-reviewer-archived",
+              "is_active": false,
+              "approval_status": "approved",
+              "linked": false
+            }
+          ],
+          "mcp": [
+            {
+              "status": "archived",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": false
+            },
+            {
+              "status": "draft",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "active",
+              "version": "1.1.0",
+              "permission_state": "review_required",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "database:addon",
+                "network:internet"
+              ],
+              "installation": true
+            }
+          ]
+        }
+      },
+      "remove": {
+        "removed": "removed",
+        "otherUserRemove": null,
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "alpha",
+              "status": "archived",
+              "linked": true
+            },
+            {
+              "name": "beta",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "beta",
+              "status": "archived",
+              "linked": true
+            },
+            {
+              "name": "gamma",
+              "status": "archived",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": false,
+              "approval_status": "approved",
+              "linked": true
+            },
+            {
+              "name": "g0-pack-reviewer-archived",
+              "is_active": false,
+              "approval_status": "approved",
+              "linked": false
+            }
+          ],
+          "mcp": [
+            {
+              "status": "archived",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": false
+            },
+            {
+              "status": "archived",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "removed",
+              "version": "1.1.0",
+              "permission_state": "review_required",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "database:addon",
+                "network:internet"
+              ],
+              "installation": false
+            }
+          ]
+        }
+      }
+    },
+    "fp=true,agent=false": {
+      "install": {
+        "result": {
+          "status": "active",
+          "version": "1.0.0",
+          "deduped": false,
+          "upToDate": false,
+          "updated": false,
+          "previousVersion": null,
+          "skills": [
+            "alpha",
+            "beta"
+          ],
+          "mcpServers": 1,
+          "agents": 1,
+          "codes": [
+            "AGENTS_CONVERTED",
+            "SKILLS_ON_DEMAND"
+          ]
+        },
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "draft",
+              "linked": true
+            },
+            {
+              "name": "beta",
+              "status": "draft",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": true,
+              "approval_status": "approved",
+              "linked": true
+            }
+          ],
+          "mcp": [
+            {
+              "status": "draft",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "active",
+              "version": "1.0.0",
+              "permission_state": "reviewed",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "network:internet"
+              ],
+              "installation": true
+            }
+          ]
+        }
+      },
+      "reinstallSameCommit": {
+        "result": {
+          "status": "active",
+          "version": "1.0.0",
+          "deduped": true,
+          "upToDate": false,
+          "updated": false,
+          "previousVersion": null,
+          "skills": [
+            "alpha",
+            "beta"
+          ],
+          "mcpServers": 1,
+          "agents": 1,
+          "codes": []
+        },
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "active",
+              "linked": true
+            },
+            {
+              "name": "beta",
+              "status": "active",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": true,
+              "approval_status": "approved",
+              "linked": true
+            }
+          ],
+          "mcp": [
+            {
+              "status": "draft",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "active",
+              "version": "1.0.0",
+              "permission_state": "reviewed",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "network:internet"
+              ],
+              "installation": true
+            }
+          ]
+        }
+      },
+      "conflictOtherSource": "EXTENSION_ALREADY_INSTALLED",
+      "update": {
+        "result": {
+          "status": "active",
+          "version": "1.1.0",
+          "deduped": false,
+          "upToDate": false,
+          "updated": true,
+          "previousVersion": "1.0.0",
+          "skills": [
+            "alpha",
+            "beta",
+            "gamma"
+          ],
+          "mcpServers": 1,
+          "agents": 1,
+          "codes": [
+            "AGENTS_CONVERTED",
+            "PERMISSION_REVIEW_REQUIRED",
+            "SKILL_APPROVAL_CARRIED",
+            "SKILL_CHANGED_REVIEW"
+          ]
+        },
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "active",
+              "linked": true
+            },
+            {
+              "name": "alpha",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "beta",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "beta",
+              "status": "draft",
+              "linked": true
+            },
+            {
+              "name": "gamma",
+              "status": "draft",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": true,
+              "approval_status": "approved",
+              "linked": true
+            },
+            {
+              "name": "g0-pack-reviewer-archived",
+              "is_active": false,
+              "approval_status": "approved",
+              "linked": false
+            }
+          ],
+          "mcp": [
+            {
+              "status": "archived",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": false
+            },
+            {
+              "status": "draft",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "active",
+              "version": "1.1.0",
+              "permission_state": "review_required",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "database:addon",
+                "network:internet"
+              ],
+              "installation": true
+            }
+          ]
+        }
+      },
+      "remove": {
+        "removed": "removed",
+        "otherUserRemove": null,
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "alpha",
+              "status": "archived",
+              "linked": true
+            },
+            {
+              "name": "beta",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "beta",
+              "status": "archived",
+              "linked": true
+            },
+            {
+              "name": "gamma",
+              "status": "archived",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": false,
+              "approval_status": "approved",
+              "linked": true
+            },
+            {
+              "name": "g0-pack-reviewer-archived",
+              "is_active": false,
+              "approval_status": "approved",
+              "linked": false
+            }
+          ],
+          "mcp": [
+            {
+              "status": "archived",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": false
+            },
+            {
+              "status": "archived",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "removed",
+              "version": "1.1.0",
+              "permission_state": "review_required",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "database:addon",
+                "network:internet"
+              ],
+              "installation": false
+            }
+          ]
+        }
+      }
+    },
+    "fp=false,agent=true": {
+      "install": {
+        "result": {
+          "status": "active",
+          "version": "1.0.0",
+          "deduped": false,
+          "upToDate": false,
+          "updated": false,
+          "previousVersion": null,
+          "skills": [
+            "alpha",
+            "beta"
+          ],
+          "mcpServers": 1,
+          "agents": 1,
+          "codes": [
+            "AGENTS_CONVERTED",
+            "AGENTS_PENDING_APPROVAL",
+            "SKILLS_ON_DEMAND"
+          ]
+        },
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "draft",
+              "linked": true
+            },
+            {
+              "name": "beta",
+              "status": "draft",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": true,
+              "approval_status": "pending",
+              "linked": true
+            }
+          ],
+          "mcp": [
+            {
+              "status": "draft",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "active",
+              "version": "1.0.0",
+              "permission_state": "reviewed",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "network:internet"
+              ],
+              "installation": true
+            }
+          ]
+        }
+      },
+      "reinstallSameCommit": {
+        "result": {
+          "status": "active",
+          "version": "1.0.0",
+          "deduped": true,
+          "upToDate": false,
+          "updated": false,
+          "previousVersion": null,
+          "skills": [
+            "alpha",
+            "beta"
+          ],
+          "mcpServers": 1,
+          "agents": 1,
+          "codes": []
+        },
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "active",
+              "linked": true
+            },
+            {
+              "name": "beta",
+              "status": "active",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": true,
+              "approval_status": "approved",
+              "linked": true
+            }
+          ],
+          "mcp": [
+            {
+              "status": "draft",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "active",
+              "version": "1.0.0",
+              "permission_state": "reviewed",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "network:internet"
+              ],
+              "installation": true
+            }
+          ]
+        }
+      },
+      "conflictOtherSource": "EXTENSION_ALREADY_INSTALLED",
+      "update": {
+        "result": {
+          "status": "active",
+          "version": "1.1.0",
+          "deduped": false,
+          "upToDate": false,
+          "updated": true,
+          "previousVersion": "1.0.0",
+          "skills": [
+            "alpha",
+            "beta",
+            "gamma"
+          ],
+          "mcpServers": 1,
+          "agents": 1,
+          "codes": [
+            "AGENTS_CONVERTED",
+            "PERMISSION_REVIEW_REQUIRED",
+            "SKILL_APPROVAL_CARRIED"
+          ]
+        },
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "active",
+              "linked": true
+            },
+            {
+              "name": "alpha",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "beta",
+              "status": "active",
+              "linked": true
+            },
+            {
+              "name": "beta",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "gamma",
+              "status": "draft",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": true,
+              "approval_status": "approved",
+              "linked": true
+            },
+            {
+              "name": "g0-pack-reviewer-archived",
+              "is_active": false,
+              "approval_status": "approved",
+              "linked": false
+            }
+          ],
+          "mcp": [
+            {
+              "status": "archived",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": false
+            },
+            {
+              "status": "draft",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "active",
+              "version": "1.1.0",
+              "permission_state": "review_required",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "database:addon",
+                "network:internet"
+              ],
+              "installation": true
+            }
+          ]
+        }
+      },
+      "remove": {
+        "removed": "removed",
+        "otherUserRemove": null,
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "alpha",
+              "status": "archived",
+              "linked": true
+            },
+            {
+              "name": "beta",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "beta",
+              "status": "archived",
+              "linked": true
+            },
+            {
+              "name": "gamma",
+              "status": "archived",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": false,
+              "approval_status": "approved",
+              "linked": true
+            },
+            {
+              "name": "g0-pack-reviewer-archived",
+              "is_active": false,
+              "approval_status": "approved",
+              "linked": false
+            }
+          ],
+          "mcp": [
+            {
+              "status": "archived",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": false
+            },
+            {
+              "status": "archived",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "removed",
+              "version": "1.1.0",
+              "permission_state": "review_required",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "database:addon",
+                "network:internet"
+              ],
+              "installation": false
+            }
+          ]
+        }
+      }
+    },
+    "fp=true,agent=true": {
+      "install": {
+        "result": {
+          "status": "active",
+          "version": "1.0.0",
+          "deduped": false,
+          "upToDate": false,
+          "updated": false,
+          "previousVersion": null,
+          "skills": [
+            "alpha",
+            "beta"
+          ],
+          "mcpServers": 1,
+          "agents": 1,
+          "codes": [
+            "AGENTS_CONVERTED",
+            "AGENTS_PENDING_APPROVAL",
+            "SKILLS_ON_DEMAND"
+          ]
+        },
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "draft",
+              "linked": true
+            },
+            {
+              "name": "beta",
+              "status": "draft",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": true,
+              "approval_status": "pending",
+              "linked": true
+            }
+          ],
+          "mcp": [
+            {
+              "status": "draft",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "active",
+              "version": "1.0.0",
+              "permission_state": "reviewed",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "network:internet"
+              ],
+              "installation": true
+            }
+          ]
+        }
+      },
+      "reinstallSameCommit": {
+        "result": {
+          "status": "active",
+          "version": "1.0.0",
+          "deduped": true,
+          "upToDate": false,
+          "updated": false,
+          "previousVersion": null,
+          "skills": [
+            "alpha",
+            "beta"
+          ],
+          "mcpServers": 1,
+          "agents": 1,
+          "codes": []
+        },
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "active",
+              "linked": true
+            },
+            {
+              "name": "beta",
+              "status": "active",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": true,
+              "approval_status": "approved",
+              "linked": true
+            }
+          ],
+          "mcp": [
+            {
+              "status": "draft",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "active",
+              "version": "1.0.0",
+              "permission_state": "reviewed",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "network:internet"
+              ],
+              "installation": true
+            }
+          ]
+        }
+      },
+      "conflictOtherSource": "EXTENSION_ALREADY_INSTALLED",
+      "update": {
+        "result": {
+          "status": "active",
+          "version": "1.1.0",
+          "deduped": false,
+          "upToDate": false,
+          "updated": true,
+          "previousVersion": "1.0.0",
+          "skills": [
+            "alpha",
+            "beta",
+            "gamma"
+          ],
+          "mcpServers": 1,
+          "agents": 1,
+          "codes": [
+            "AGENTS_CONVERTED",
+            "AGENTS_PENDING_APPROVAL",
+            "PERMISSION_REVIEW_REQUIRED",
+            "SKILL_APPROVAL_CARRIED",
+            "SKILL_CHANGED_REVIEW"
+          ]
+        },
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "active",
+              "linked": true
+            },
+            {
+              "name": "alpha",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "beta",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "beta",
+              "status": "draft",
+              "linked": true
+            },
+            {
+              "name": "gamma",
+              "status": "draft",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": true,
+              "approval_status": "pending",
+              "linked": true
+            },
+            {
+              "name": "g0-pack-reviewer-archived",
+              "is_active": false,
+              "approval_status": "approved",
+              "linked": false
+            }
+          ],
+          "mcp": [
+            {
+              "status": "archived",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": false
+            },
+            {
+              "status": "draft",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "active",
+              "version": "1.1.0",
+              "permission_state": "review_required",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "database:addon",
+                "network:internet"
+              ],
+              "installation": true
+            }
+          ]
+        }
+      },
+      "remove": {
+        "removed": "removed",
+        "otherUserRemove": null,
+        "db": {
+          "skills": [
+            {
+              "name": "alpha",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "alpha",
+              "status": "archived",
+              "linked": true
+            },
+            {
+              "name": "beta",
+              "status": "archived",
+              "linked": false
+            },
+            {
+              "name": "beta",
+              "status": "archived",
+              "linked": true
+            },
+            {
+              "name": "gamma",
+              "status": "archived",
+              "linked": true
+            }
+          ],
+          "agents": [
+            {
+              "name": "g0-pack-reviewer",
+              "is_active": false,
+              "approval_status": "pending",
+              "linked": true
+            },
+            {
+              "name": "g0-pack-reviewer-archived",
+              "is_active": false,
+              "approval_status": "approved",
+              "linked": false
+            }
+          ],
+          "mcp": [
+            {
+              "status": "archived",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": false
+            },
+            {
+              "status": "archived",
+              "enabled": false,
+              "sandbox_network": "full",
+              "linked": true
+            }
+          ],
+          "extensions": [
+            {
+              "status": "removed",
+              "version": "1.1.0",
+              "permission_state": "review_required",
+              "permissions_granted": [
+                "network:internet"
+              ],
+              "permissions_requested": [
+                "database:addon",
+                "network:internet"
+              ],
+              "installation": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}
