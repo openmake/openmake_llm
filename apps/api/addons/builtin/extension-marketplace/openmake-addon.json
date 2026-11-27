@@ -2,7 +2,7 @@
   "id": "extension-marketplace",
   "name": "Extension Marketplace",
   "version": "1.0.0",
-  "description": "확장 갤러리 호환 판정 — 카탈로그 항목마다 지원·부분 지원·불가와 사유·출처 배지(LLM·외부 전송 없음)",
+  "description": "확장 갤러리 호환 판정(지원·부분 지원·불가와 사유·출처 배지, LLM·외부 전송 없음) + MCP Registry 사본·큐레이션(동기화는 EXT_MARKET_MCP_REGISTRY_SYNC opt-in)",
   "requires": {
     "openmake": ">=1.0.0 <2.0.0"
   },
@@ -10,11 +10,13 @@
   "kind": "integration",
   "order": 38,
   "defaultState": "disabled",
-  "permissions": ["database:addon"],
+  "permissions": ["database:addon", "network:internet"],
   "components": {
     "migrations": "./migrations"
   },
   "entry": {
+    "runtime": "registry/runtime#startRegistryRuntime",
+    "contributions": "contributions#extensionMarketplaceContributions",
     "routes": [
       {
         "mountPath": "/api/extension-marketplace",

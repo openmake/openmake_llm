@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { success } from '../../utils/api-response';
 import { AppError, asyncHandler, ValidationError } from '../../utils/error-handler';
 import { getCatalogVerdicts } from './service';
+import { registryRouter } from './registry/routes';
 
 const verdictQuerySchema = z.object({ catalogId: z.string().min(1).max(200) });
 
@@ -29,3 +30,6 @@ extensionMarketplaceRouter.get('/verdicts', asyncHandler(async (req, res) => {
     if (!q.success) throw new ValidationError('catalogId 가 필요합니다');
     res.json(success(await getCatalogVerdicts(q.data.catalogId)));
 }));
+
+// M7 MCP Registry 사본·큐레이션 — 읽기는 DB 사본만 본다(레지스트리 장애·동기화 플래그와 무관)
+extensionMarketplaceRouter.use('/registry', registryRouter);

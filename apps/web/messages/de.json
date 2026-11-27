@@ -20,6 +20,7 @@
       "metrics": "Metriken",
       "alerts": "Warnungen",
       "mcpCatalogAdmin": "MCP-Katalog-Admin",
+      "mcpRegistry": "MCP-Registry",
       "modelRolesAdmin": "Modellzuweisungs-Admin",
       "systemSettingsAdmin": "Systemeinstellungen",
       "developer": "Entwickler",
@@ -3520,5 +3521,54 @@
       "license": "Lizenz: {value}"
     },
     "snapshotOnly": "Nur anhand des Katalog-Snapshots bewertet — nach der Installation wird auch der Inhalt geprüft"
+  },
+  "marketRegistry": {
+    "pageTitle": "MCP-Registry",
+    "pageDescription": "Kopie der offiziellen MCP Registry prüfen, Einträge freigeben oder ausblenden und freigegebene als deaktivierte MCP-Katalogentwürfe übernehmen.",
+    "never": "nie",
+    "syncOn": "Synchronisierung an",
+    "syncOff": "Synchronisierung aus",
+    "syncOffHint": "Zum Synchronisieren die Einstellung {key} einschalten",
+    "lastSuccess": "Letzte Synchronisierung",
+    "inProgress": "Wird fortgesetzt",
+    "backoffUntil": "Wartet bis {at}",
+    "lastError": "Letzter Fehler",
+    "counts": "Offen {pending} · Freigegeben {approved} · Ausgeblendet {hidden} · In der Registry gelöscht {tombstoned}",
+    "syncNow": "Jetzt synchronisieren",
+    "syncResult": "Ergebnis: {status}",
+    "actionError": "Anfrage fehlgeschlagen",
+    "curated": "Gespeichert",
+    "promoted": "Als deaktivierter Entwurf in den MCP-Katalog übernommen: {id}",
+    "promoteExists": "Bereits im Katalog: {id}",
+    "publisherVerified": "Herausgeber bestätigt",
+    "publisherVerifiedHint": "Die Registry hat den Besitz des Namensraums bestätigt. Das ist keine Code- oder Sicherheitsprüfung.",
+    "noInstall": "Keine Installationsangaben",
+    "curation": {
+      "pending": "Offen",
+      "approved": "Freigegeben",
+      "hidden": "Ausgeblendet"
+    },
+    "registryStatus": {
+      "active": "Aktiv",
+      "deprecated": "Veraltet",
+      "deleted": "Gelöscht"
+    },
+    "tombstoned": "In der Registry gelöscht",
+    "approve": "Freigeben",
+    "hide": "Ausblenden",
+    "reset": "Zurück auf offen",
+    "promote": "In Katalog übernehmen",
+    "filterAll": "Alle",
+    "searchPlaceholder": "Name oder Beschreibung suchen (Enter)",
+    "showTombstoned": "Gelöschte einbeziehen",
+    "colServer": "Server",
+    "colInstall": "Installation",
+    "colState": "Status",
+    "colActions": "Aktionen",
+    "loading": "Wird geladen...",
+    "empty": "Keine Einträge",
+    "pageInfo": "{from}–{to} von {total}",
+    "prev": "Zurück",
+    "next": "Weiter"
   }
 }
