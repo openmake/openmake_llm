@@ -43,7 +43,7 @@ const field = z.string().trim().min(1).max(EXTENSION_MCP_SERVER_POLICY_LIMITS.MA
 /** url 규칙 — http(s) URL 이어야 하고, 호스트 와일드카드는 맨 앞 `*.` 하나만(정규화는 서비스가 같은 함수로) */
 const urlField = field.refine((v) => {
     const m = /^(https?):\/\/(\*\.)?([^/?#]+)/i.exec(v);
-    if (!m) return false;
+    if (!m || m[3].includes('*')) return false;
     try { new URL(v.replace('://*.', '://wildcard.')); return true; } catch { return false; }
 }, 'http(s) URL 이어야 합니다 (호스트 와일드카드는 https://*.example.com 형식만)');
 
