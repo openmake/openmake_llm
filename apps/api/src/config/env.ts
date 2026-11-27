@@ -100,6 +100,10 @@ export interface EnvConfig {
     extensionArbitraryUrlInstall: 'allow' | 'catalog-only';
     /** 전역 확장 원본 규칙 원문(JSON {allow?,deny?}) — 빈 값 = 전역 층 없음 */
     extensionSourcePolicy: string;
+    /** 확장 MCP 서버 정책(§8-3) 강제 — 기본 false(검사 없음). config/extension-mcp-server-policy 가 읽는다 */
+    extensionMcpServerPolicyEnforced: boolean;
+    /** 전역 MCP 서버 매처 원문(JSON {allow?,deny?}) — 빈 값 = 전역 층 없음 */
+    extensionMcpServerPolicy: string;
     /** 확장 카탈로그 주기 동기화(M4) — 기본 false(수동 동기화만). config/extension-catalog-sync 가 읽는다 */
     extensionCatalogAutoSyncEnabled: boolean;
     /** 주기 동기화 간격(ms) — 기본 6시간 */
@@ -290,6 +294,8 @@ export function loadConfig(): EnvConfig {
         ADDON_LIST_REFLECT_DB_STATE: env('ADDON_LIST_REFLECT_DB_STATE'),
         EXTENSION_ARBITRARY_URL_INSTALL: env('EXTENSION_ARBITRARY_URL_INSTALL'),
         EXTENSION_SOURCE_POLICY: env('EXTENSION_SOURCE_POLICY'),
+        EXTENSION_MCP_SERVER_POLICY_ENFORCED: env('EXTENSION_MCP_SERVER_POLICY_ENFORCED'),
+        EXTENSION_MCP_SERVER_POLICY: env('EXTENSION_MCP_SERVER_POLICY'),
         EXTENSION_CATALOG_AUTO_SYNC_ENABLED: env('EXTENSION_CATALOG_AUTO_SYNC_ENABLED'),
         EXTENSION_CATALOG_SYNC_INTERVAL_MS: env('EXTENSION_CATALOG_SYNC_INTERVAL_MS'),
         EXTENSION_CATALOG_INDEX_ENABLED: env('EXTENSION_CATALOG_INDEX_ENABLED'),
@@ -427,6 +433,9 @@ export function loadConfig(): EnvConfig {
         addonListReflectDbState: parsed.ADDON_LIST_REFLECT_DB_STATE === undefined ? DEFAULT_CONFIG.addonListReflectDbState : parsed.ADDON_LIST_REFLECT_DB_STATE === 'true',
         extensionArbitraryUrlInstall: parsed.EXTENSION_ARBITRARY_URL_INSTALL === 'catalog-only' ? 'catalog-only' : DEFAULT_CONFIG.extensionArbitraryUrlInstall,
         extensionSourcePolicy: parsed.EXTENSION_SOURCE_POLICY ?? DEFAULT_CONFIG.extensionSourcePolicy,
+        // 확장 MCP 서버 정책(§8-3) — 'true' 만 켠다(그 외 기본값 = 검사 없음)
+        extensionMcpServerPolicyEnforced: parsed.EXTENSION_MCP_SERVER_POLICY_ENFORCED === undefined ? DEFAULT_CONFIG.extensionMcpServerPolicyEnforced : parsed.EXTENSION_MCP_SERVER_POLICY_ENFORCED === 'true',
+        extensionMcpServerPolicy: parsed.EXTENSION_MCP_SERVER_POLICY ?? DEFAULT_CONFIG.extensionMcpServerPolicy,
         // 확장 카탈로그 주기 동기화(M4) — 'true' 만 켠다, 간격은 양의 정수만(그 외 기본값)
         extensionCatalogAutoSyncEnabled: parsed.EXTENSION_CATALOG_AUTO_SYNC_ENABLED === 'true',
         // 확장 카탈로그 정적 색인 우선 동기화(M6) — 'true' 만 켠다

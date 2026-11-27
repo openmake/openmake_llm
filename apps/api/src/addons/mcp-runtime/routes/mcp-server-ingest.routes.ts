@@ -19,9 +19,10 @@
  */
 import { EXTENSION_SOURCE_BLOCKED_CODE } from '../../../runtime-ports/extension-source-policy';
 import {
-    extensionRemoteMcpEnabled, EXTENSION_REMOTE_MCP_CODES,
-    checkExtensionRemoteMcp, checkExtensionMcpServerPolicy, verifyRemoteRegistrationUrl,
+    extensionRemoteMcpEnabled,
+    checkExtensionRemoteMcp, verifyRemoteRegistrationUrl,
 } from '../../../runtime-ports/extension-remote-mcp';
+import { EXTENSION_MCP_SERVER_BLOCKED_CODE } from '../../../runtime-ports/extension-mcp-server-policy';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { isBlockedByConvention, type ConventionFinding } from '../../../agents/git-ingest/convention-checker';
 import type { Pool } from 'pg';
@@ -148,6 +149,9 @@ export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
             if (msg.startsWith(EXTENSION_SOURCE_BLOCKED_CODE)) {   // 확장 원본 정책(M2, Base)
                 res.status(403).json({ success: false, error: EXTENSION_SOURCE_BLOCKED_CODE, message: msg }); return;
             }
+            if (msg.startsWith(EXTENSION_MCP_SERVER_BLOCKED_CODE)) {   // 확장 MCP 서버 정책(§8-3, Base)
+                res.status(403).json({ success: false, error: EXTENSION_MCP_SERVER_BLOCKED_CODE, message: msg }); return;
+            }
             if (msg.startsWith('INVALID_GIT_URL')) {
                 res.status(400).json({ success: false, error: 'INVALID_GIT_URL' }); return;
             }
@@ -240,26 +244,24 @@ export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
                 return;
             }
 
-            // MCP 서버 정책 훅(§8-3 자리 — 등록이 없으면 허용) + 원격 관리 등록(opt-in EXTENSION_REMOTE_MCP_ENABLED)
-            const meta = (draft.manifest_meta ?? {}) as { source?: string; gitUrl?: string; extensionName?: string; serverKey?: string };
+            // 원격 관리 등록(opt-in EXTENSION_REMOTE_MCP_ENABLED) — 선언 URL 고정·SSRF·MCP 서버 정책(§8-3)을 승인 시점에 다시 본다.
+            // 꺼져 있으면 종전 그대로(검사 없이 승인)
+            const meta = (draft.manifest_meta ?? {}) as { source?: string };
             const remoteManaged = extensionRemoteMcpEnabled() && draft.transport_type !== 'stdio' && meta.source === 'extension';
-            const policyInput = {
-                phase: 'approve' as const, userId: String(draft.user_id ?? userId), extensionName: meta.extensionName,
-                sourceUrl: meta.gitUrl, serverKey: meta.serverKey, transportType: draft.transport_type,
-                url: draft.url, command: draft.command, args: draft.args,
-            };
             if (remoteManaged) {
                 const integrity = verifyRemoteRegistrationUrl(draft.url, draft.manifest_meta);
                 if (!integrity.allowed) {
                     res.status(409).json({ success: false, error: integrity.code, message: integrity.reason });
                     return;
                 }
-            }
-            const gate = remoteManaged ? await checkExtensionRemoteMcp(policyInput) : await checkExtensionMcpServerPolicy(policyInput);
-            if (!gate.allowed) {
-                const status = gate.code === EXTENSION_REMOTE_MCP_CODES.POLICY_BLOCKED || gate.code === EXTENSION_REMOTE_MCP_CODES.POLICY_UNAVAILABLE ? 403 : 400;
-                res.status(status).json({ success: false, error: gate.code, message: gate.reason });
-                return;
+                const gate = await checkExtensionRemoteMcp({
+                    phase: 'approve', userId: String(draft.user_id ?? userId), serverKey: draft.name,
+                    transportType: draft.transport_type, url: draft.url, command: draft.command, args: draft.args,
+                });
+                if (!gate.allowed) {
+                    res.status(gate.code === EXTENSION_MCP_SERVER_BLOCKED_CODE ? 403 : 400).json({ success: false, error: gate.code, message: gate.reason });
+                    return;
+                }
             }
 
             const approved = await repository.approve({

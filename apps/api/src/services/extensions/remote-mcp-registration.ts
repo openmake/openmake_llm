@@ -4,9 +4,9 @@
  *  ① URL 검사(`checkRemoteMcpUrl`): https 만, SSRF 가드(`security/ssrf-guard` validateOutboundUrl)로 사설·루프백·
  *     링크로컬·메타데이터 주소를 막는다. 호스트 확인(DNS) 실패는 설치 때는 통과(경고 — 오프라인 설치)·승인 때는 거절.
  *     연결 시점의 재검증·주소 고정은 종전대로 런타임의 `createPinnedFetch` 가 한다(DNS rebinding).
- *  ② MCP 서버 정책 훅(`checkExtensionMcpServerPolicy`): §8-3 의 URL·명령 매처 정책이 꽂히는 **일반 자리**다.
- *     등록이 없으면 언제나 허용(동작 변화 0). 훅이 예외를 던지면 거절(fail-closed — 켜진 정책을 확인하지 못한 것).
- *     정책은 원격·stdio 모두 받는다(input.transportType 으로 구분).
+ *  ② MCP 서버 정책: §8-3(`services/extensions/mcp-server-policy`, `EXTENSION_MCP_SERVER_POLICY_ENFORCED`)의 게이트를
+ *     그대로 쓴다 — 설치는 `collectMcpDrafts` 가 모든 서버에 대해 먼저 부르고, 승인은 `checkMcpServerPolicyAtApproval` 이
+ *     같은 게이트로 다시 본다(설치 뒤 정책이 바뀐 경우). 정책 강제 OFF 면 허용(종전 동작).
  *  ③ 등록 기록(`buildRemoteRegistrationMeta` · `readRemoteRegistration`): 번들이 선언한 URL 을 그대로 고정한다.
  *     승인은 저장된 URL 이 이 값과 같은지 본다(`verifyRemoteRegistrationUrl`).
  *
@@ -14,9 +14,8 @@
  */
 import { validateOutboundUrl, type DnsResolver } from '../../security/ssrf-guard';
 import { EXTENSION_REMOTE_MCP_CODES, REMOTE_MCP_REGISTRATION_META_KEY } from '../../config/extension-remote-mcp';
-import { createLogger } from '../../utils/logger';
-
-const logger = createLogger('ExtensionRemoteMcp');
+import { describeMcpServerBlock, EXTENSION_MCP_SERVER_BLOCKED_CODE } from '../../errors/extension-mcp-server-blocked.error';
+import { loadExtensionMcpServerGate, recordMcpServerBlocked, type ExtensionMcpServerPolicyDeps } from './mcp-server-policy';
 
 export type RemoteMcpCheckPhase = 'install' | 'approve';
 
@@ -24,15 +23,11 @@ export type RemoteMcpCheckResult =
     | { allowed: true; /** 설치 때 호스트를 확인하지 못했다(승인에서 다시 본다) */ unresolved?: boolean }
     | { allowed: false; code: string; reason: string };
 
-/** MCP 서버 정책 훅 입력 — 확장 번들이 선언한 서버 하나 */
-export interface ExtensionMcpServerPolicyInput {
+/** 원격 MCP 검사 입력 — 확장 번들이 선언한 서버 하나 */
+export interface ExtensionRemoteMcpInput {
     phase: RemoteMcpCheckPhase;
     userId: string;
-    /** 확장 이름(설치 시점) */
-    extensionName?: string;
-    /** 확장 원본 URL(설치 시점 — 승인 때는 manifest_meta.gitUrl) */
-    sourceUrl?: string;
-    /** 번들 안의 서버 키 */
+    /** 번들 안의 서버 키(정책 판정·감사의 이름) */
     serverKey?: string;
     transportType: string;
     url?: string | null;
@@ -40,26 +35,21 @@ export interface ExtensionMcpServerPolicyInput {
     args?: string[] | null;
 }
 
-export type ExtensionMcpServerPolicyDecision = { allowed: true } | { allowed: false; reason: string };
-export type ExtensionMcpServerPolicyHook = (input: ExtensionMcpServerPolicyInput) => ExtensionMcpServerPolicyDecision | Promise<ExtensionMcpServerPolicyDecision>;
+/** 정책 판정 의존성 — 테스트가 조직 층·감사를 바꿔 끼운다(기본은 §8-3 의 기본 의존성) */
+export type RemoteMcpPolicyDeps = ExtensionMcpServerPolicyDeps;
 
-let policyHook: ExtensionMcpServerPolicyHook | null = null;
-
-/** §8-3 MCP 서버 매처 정책을 꽂는다(null = 해제). 부팅 시 1회. */
-export function setExtensionMcpServerPolicyHook(hook: ExtensionMcpServerPolicyHook | null): void {
-    policyHook = hook;
-}
-
-/** 정책 훅 판정 — 등록이 없으면 허용, 훅 실패는 거절(fail-closed) */
-export async function checkExtensionMcpServerPolicy(input: ExtensionMcpServerPolicyInput): Promise<RemoteMcpCheckResult> {
-    if (!policyHook) return { allowed: true };
-    try {
-        const d = await policyHook(input);
-        return d.allowed ? { allowed: true } : { allowed: false, code: EXTENSION_REMOTE_MCP_CODES.POLICY_BLOCKED, reason: d.reason };
-    } catch (e) {
-        logger.warn(`MCP 서버 정책 훅 실패 → 거절: ${e instanceof Error ? e.message : String(e)}`);
-        return { allowed: false, code: EXTENSION_REMOTE_MCP_CODES.POLICY_UNAVAILABLE, reason: 'MCP 서버 정책을 확인하지 못했습니다' };
-    }
+/**
+ * §8-3 확장 MCP 서버 정책(`EXTENSION_MCP_SERVER_POLICY_ENFORCED`)으로 승인 시점 판정 — 설치 시점은 `collectMcpDrafts` 가
+ * 같은 게이트를 이미 부른다(중복 감사 방지로 여기서는 승인만). 강제 OFF 면 게이트가 null 이라 허용(종전 동작).
+ * 정책 조회 실패(적용 이력 없음)는 게이트가 `POLICY_UNAVAILABLE` 거절로 돌려준다(fail-closed).
+ */
+export async function checkMcpServerPolicyAtApproval(input: ExtensionRemoteMcpInput, deps?: RemoteMcpPolicyDeps): Promise<RemoteMcpCheckResult> {
+    const gate = await loadExtensionMcpServerGate(input.userId, deps);
+    if (!gate) return { allowed: true };
+    const verdict = gate.evaluate({ name: input.serverKey, transport: input.transportType, command: input.command, args: input.args, url: input.url });
+    if (verdict.allowed) return { allowed: true };
+    const detail = await recordMcpServerBlocked(input.userId, 'extension-approve', verdict, deps);
+    return { allowed: false, code: EXTENSION_MCP_SERVER_BLOCKED_CODE, reason: describeMcpServerBlock(detail) };
 }
 
 const SSRF_BLOCKED_PREFIX = 'SSRF blocked';
@@ -101,12 +91,14 @@ export async function checkRemoteMcpUrl(rawUrl: string | null | undefined, phase
     }
 }
 
-/** URL 검사 → 정책 훅 순서로 판정(원격 서버용) */
-export async function checkExtensionRemoteMcp(input: ExtensionMcpServerPolicyInput, resolver?: DnsResolver): Promise<RemoteMcpCheckResult> {
+/** URL 검사 → (승인 시점이면) §8-3 정책 순서로 판정(원격 서버용) */
+export async function checkExtensionRemoteMcp(input: ExtensionRemoteMcpInput, resolver?: DnsResolver, deps?: RemoteMcpPolicyDeps): Promise<RemoteMcpCheckResult> {
     const url = await checkRemoteMcpUrl(input.url, input.phase, resolver);
     if (!url.allowed) return url;
-    const policy = await checkExtensionMcpServerPolicy(input);
-    if (!policy.allowed) return policy;
+    if (input.phase === 'approve') {
+        const policy = await checkMcpServerPolicyAtApproval(input, deps);
+        if (!policy.allowed) return policy;
+    }
     return url;
 }
 

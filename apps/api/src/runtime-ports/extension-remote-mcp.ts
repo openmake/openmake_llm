@@ -9,9 +9,8 @@
 export { extensionRemoteMcpEnabled, EXTENSION_REMOTE_MCP_CODES } from '../config/extension-remote-mcp';
 export {
     checkExtensionRemoteMcp,
-    checkExtensionMcpServerPolicy,
     readRemoteRegistration,
     verifyRemoteRegistrationUrl,
     type RemoteMcpCheckResult,
-    type ExtensionMcpServerPolicyInput,
+    type ExtensionRemoteMcpInput,
 } from '../services/extensions/remote-mcp-registration';

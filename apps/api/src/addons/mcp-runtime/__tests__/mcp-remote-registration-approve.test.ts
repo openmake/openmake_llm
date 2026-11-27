@@ -2,7 +2,7 @@
  * 확장 번들 원격 MCP 관리 등록(P8, opt-in EXTENSION_REMOTE_MCP_ENABLED) — 승인 단계(mcp-server-ingest.routes).
  *
  *  - 플래그 OFF: 종전 그대로(검사 없음, 승인 즉시 연결 시도, 응답에 oauthRequired 없음)
- *  - 플래그 ON: 저장 URL 이 선언값과 다르면 409, SSRF·호스트 확인 실패면 400, 정책 거절은 403 — 모두 승인 안 함.
+ *  - 플래그 ON: 저장 URL 이 선언값과 다르면 409, SSRF·호스트 확인 실패면 400, §8-3 MCP 서버 정책(실제 게이트) 거절은 403 — 모두 승인 안 함.
  *    통과하면 활성화하되 연결은 하지 않고 `oauthRequired: true`(OAuth 콜백이 연결한다)
  */
 const getById = jest.fn();
@@ -20,7 +20,14 @@ jest.mock('../data/mcp-server-draft-repository', () => ({
     })),
 }));
 jest.mock('../lifecycle-supervisor', () => ({ getLifecycleSupervisor: () => ({ spawnUserServer }) }));
-jest.mock('../../../services/AuditService', () => ({ getAuditService: () => ({ logAudit: jest.fn(async () => undefined) }) }));
+const logAudit = jest.fn(async (_e: unknown) => undefined);
+jest.mock('../../../services/AuditService', () => ({ getAuditService: () => ({ logAudit: (e: unknown) => logAudit(e) }) }));
+// §8-3 정책의 조직 층 — 기본 없음, 실패 주입 가능
+const resolveEffectivePolicyStrict = jest.fn(async () => ({ extensionMcpServer: undefined as unknown }));
+jest.mock('../../../services/org/effective-policy', () => ({
+    ...jest.requireActual('../../../services/org/effective-policy'),
+    resolveEffectivePolicyStrict: () => resolveEffectivePolicyStrict(),
+}));
 jest.mock('../../../security/security-audit', () => ({
     auditSecurityEvent: jest.fn().mockResolvedValue(undefined),
     isSsrfBlockedError: jest.requireActual('../../../security/security-audit').isSsrfBlockedError,
@@ -41,7 +48,8 @@ import request from 'supertest';
 import type { Pool } from 'pg';
 import { mcpServerIngestRouter } from '../routes/mcp-server-ingest.routes';
 import { resetConfig } from '../../../config/env';
-import { buildRemoteRegistrationMeta, setExtensionMcpServerPolicyHook } from '../../../services/extensions/remote-mcp-registration';
+import { buildRemoteRegistrationMeta } from '../../../services/extensions/remote-mcp-registration';
+import { resetExtensionMcpServerPolicyState } from '../../../services/extensions/mcp-server-policy';
 
 const app = express();
 app.use(express.json());
@@ -56,7 +64,13 @@ function remoteDraft(over: Record<string, unknown> = {}) {
         ...over,
     };
 }
-const ORIGINAL = process.env.EXTENSION_REMOTE_MCP_ENABLED;
+const ENV_KEYS = ['EXTENSION_REMOTE_MCP_ENABLED', 'EXTENSION_MCP_SERVER_POLICY_ENFORCED', 'EXTENSION_MCP_SERVER_POLICY'] as const;
+const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map(k => [k, process.env[k]]));
+function setServerPolicy(policy: object | undefined): void {
+    if (policy === undefined) { delete process.env.EXTENSION_MCP_SERVER_POLICY_ENFORCED; delete process.env.EXTENSION_MCP_SERVER_POLICY; }
+    else { process.env.EXTENSION_MCP_SERVER_POLICY_ENFORCED = 'true'; process.env.EXTENSION_MCP_SERVER_POLICY = JSON.stringify(policy); }
+    resetConfig();
+}
 function setFlag(on: boolean | undefined): void {
     if (on === undefined) delete process.env.EXTENSION_REMOTE_MCP_ENABLED;
     else process.env.EXTENSION_REMOTE_MCP_ENABLED = on ? 'true' : 'false';
@@ -69,10 +83,13 @@ beforeEach(() => {
     approve.mockResolvedValue({ id: 'd-1', name: 'ext-cloud', user_id: 'owner-1', enabled: true, auto_spawn: true });
     spawnUserServer.mockResolvedValue({});
 });
-afterEach(() => setExtensionMcpServerPolicyHook(null));
+afterEach(() => {
+    setServerPolicy(undefined);
+    resetExtensionMcpServerPolicyState();
+    resolveEffectivePolicyStrict.mockImplementation(async () => ({ extensionMcpServer: undefined }));
+});
 afterAll(() => {
-    if (ORIGINAL === undefined) delete process.env.EXTENSION_REMOTE_MCP_ENABLED;
-    else process.env.EXTENSION_REMOTE_MCP_ENABLED = ORIGINAL;
+    for (const k of ENV_KEYS) { if (ORIGINAL_ENV[k] === undefined) delete process.env[k]; else process.env[k] = ORIGINAL_ENV[k]; }
     resetConfig();
 });
 
@@ -122,13 +139,44 @@ describe('POST /:id/approve — 플래그 ON', () => {
         expect(spawnUserServer).not.toHaveBeenCalled();
     });
 
-    it('정책 훅 거절 → 403 MCP_SERVER_POLICY_BLOCKED', async () => {
-        setExtensionMcpServerPolicyHook(() => ({ allowed: false, reason: '허용 목록 밖' }));
+    it('§8-3 정책 거절 → 403 EXTENSION_MCP_SERVER_BLOCKED, 승인·연결 없음, 감사 origin=extension-approve', async () => {
+        setServerPolicy({ deny: [{ type: 'url', url: 'https://mcp.example.com' }] });
         getById.mockResolvedValue(remoteDraft());
         const res = await post();
         expect(res.status).toBe(403);
-        expect(res.body.error).toBe('MCP_SERVER_POLICY_BLOCKED');
+        expect(res.body.error).toBe('EXTENSION_MCP_SERVER_BLOCKED');
         expect(approve).not.toHaveBeenCalled();
+        expect(spawnUserServer).not.toHaveBeenCalled();
+        expect(logAudit).toHaveBeenCalledWith(expect.objectContaining({
+            action: 'extension.mcp_server_blocked', details: expect.objectContaining({ origin: 'extension-approve', reason: 'DENIED' }),
+        }));
+    });
+
+    it('§8-3 정책 허용 목록 안이면 승인(OAuth 뒤 연결)', async () => {
+        setServerPolicy({ allow: [{ type: 'url', url: 'https://mcp.example.com' }] });
+        getById.mockResolvedValue(remoteDraft());
+        const res = await post();
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({ spawned: false, oauthRequired: true });
+    });
+
+    it('§8-3 정책 조회 실패(적용 이력 없음) → fail-closed 403', async () => {
+        setServerPolicy({ deny: [] });
+        resolveEffectivePolicyStrict.mockImplementation(async () => { throw new Error('db down'); });
+        getById.mockResolvedValue(remoteDraft());
+        const res = await post();
+        expect(res.status).toBe(403);
+        expect(res.body.error).toBe('EXTENSION_MCP_SERVER_BLOCKED');
+        expect(approve).not.toHaveBeenCalled();
+    });
+
+    it('§8-3 정책 강제 OFF 면 정책 값이 있어도 승인(종전 동작)', async () => {
+        process.env.EXTENSION_MCP_SERVER_POLICY = JSON.stringify({ deny: [{ type: 'url', url: 'https://mcp.example.com' }] });
+        resetConfig();
+        getById.mockResolvedValue(remoteDraft());
+        const res = await post();
+        expect(res.status).toBe(200);
+        expect(logAudit).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'extension.mcp_server_blocked' }));
     });
 
     it('플래그 전 설치분(관리 기록 없음)도 SSRF 를 다시 보고 OAuth 뒤로 연결을 미룬다', async () => {

@@ -1,28 +1,45 @@
 /**
- * 확장 번들 원격 MCP 관리 등록(P8) 판정 — URL(https·SSRF)·정책 훅(§8-3 자리)·선언 URL 고정. 네트워크 없음(DNS 는 주입).
+ * 확장 번들 원격 MCP 관리 등록(P8) 판정 — URL(https·SSRF)·§8-3 MCP 서버 정책(실제 게이트, 조직 층·감사는 주입)·선언 URL 고정.
+ * 네트워크 없음(DNS 는 주입).
  */
 import {
     checkRemoteMcpUrl,
     checkRemoteMcpUrlStatic,
     checkExtensionRemoteMcp,
-    checkExtensionMcpServerPolicy,
-    setExtensionMcpServerPolicyHook,
+    checkMcpServerPolicyAtApproval,
     buildRemoteRegistrationMeta,
     readRemoteRegistration,
     verifyRemoteRegistrationUrl,
-    type ExtensionMcpServerPolicyInput,
+    type ExtensionRemoteMcpInput,
+    type RemoteMcpPolicyDeps,
 } from '../remote-mcp-registration';
 import type { DnsResolver } from '../../../security/ssrf-guard';
+import { resetConfig } from '../../../config/env';
+import { resetExtensionMcpServerPolicyState } from '../mcp-server-policy';
 
 const publicDns: DnsResolver = async () => ({ address: '93.184.216.34' });
 const dnsTo = (address: string): DnsResolver => async () => ({ address });
 const dnsFail: DnsResolver = async () => { throw new Error('getaddrinfo ENOTFOUND mcp.example.com'); };
-const input = (over: Partial<ExtensionMcpServerPolicyInput> = {}): ExtensionMcpServerPolicyInput => ({
-    phase: 'install', userId: 'u1', extensionName: 'pack', serverKey: 'cloud',
+const input = (over: Partial<ExtensionRemoteMcpInput> = {}): ExtensionRemoteMcpInput => ({
+    phase: 'install', userId: 'u1', serverKey: 'cloud',
     transportType: 'streamable-http', url: 'https://mcp.example.com/mcp', ...over,
 });
 
-afterEach(() => setExtensionMcpServerPolicyHook(null));
+const POLICY_KEYS = ['EXTENSION_MCP_SERVER_POLICY_ENFORCED', 'EXTENSION_MCP_SERVER_POLICY'] as const;
+const ORIGINAL_POLICY = Object.fromEntries(POLICY_KEYS.map(k => [k, process.env[k]]));
+function setServerPolicy(enforced: boolean, policy?: object): void {
+    if (enforced) process.env.EXTENSION_MCP_SERVER_POLICY_ENFORCED = 'true'; else delete process.env.EXTENSION_MCP_SERVER_POLICY_ENFORCED;
+    if (policy) process.env.EXTENSION_MCP_SERVER_POLICY = JSON.stringify(policy); else delete process.env.EXTENSION_MCP_SERVER_POLICY;
+    resetConfig();
+}
+const audit = jest.fn(async () => undefined);
+const deps = (loadOrgLayer: RemoteMcpPolicyDeps['loadOrgLayer'] = async () => undefined): RemoteMcpPolicyDeps => ({ loadOrgLayer, audit });
+afterEach(() => {
+    for (const k of POLICY_KEYS) { if (ORIGINAL_POLICY[k] === undefined) delete process.env[k]; else process.env[k] = ORIGINAL_POLICY[k]; }
+    resetConfig();
+    resetExtensionMcpServerPolicyState();
+    audit.mockClear();
+});
 
 describe('checkRemoteMcpUrl — https + SSRF', () => {
     it('공개 https 주소는 통과', async () => {
@@ -56,30 +73,44 @@ describe('checkRemoteMcpUrl — https + SSRF', () => {
     });
 });
 
-describe('MCP 서버 정책 훅 — §8-3 자리', () => {
-    it('등록이 없으면 언제나 허용', async () => {
-        expect(await checkExtensionMcpServerPolicy(input({ transportType: 'stdio', url: null, command: 'npx' }))).toEqual({ allowed: true });
+describe('§8-3 MCP 서버 정책 — 승인 시점 판정(실제 게이트)', () => {
+    it('정책 강제 OFF 면 허용 — 정책 값이 있어도 판정·감사 없음(종전 동작)', async () => {
+        setServerPolicy(false, { deny: [{ type: 'url', url: 'https://mcp.example.com' }] });
+        expect(await checkMcpServerPolicyAtApproval(input({ phase: 'approve' }), deps())).toEqual({ allowed: true });
+        expect(audit).not.toHaveBeenCalled();
     });
 
-    it('훅이 거절하면 POLICY_BLOCKED, 입력(원격·stdio 구분 포함)을 그대로 받는다', async () => {
-        const hook = jest.fn(async () => ({ allowed: false as const, reason: '허용 목록 밖' }));
-        setExtensionMcpServerPolicyHook(hook);
-        expect(await checkExtensionMcpServerPolicy(input())).toMatchObject({ allowed: false, code: 'MCP_SERVER_POLICY_BLOCKED', reason: '허용 목록 밖' });
-        expect(hook).toHaveBeenCalledWith(expect.objectContaining({ phase: 'install', transportType: 'streamable-http', url: 'https://mcp.example.com/mcp' }));
+    it('전역 deny 에 걸리면 EXTENSION_MCP_SERVER_BLOCKED, 감사 origin=extension-approve', async () => {
+        setServerPolicy(true, { deny: [{ type: 'url', url: 'https://mcp.example.com' }] });
+        const r = await checkMcpServerPolicyAtApproval(input({ phase: 'approve' }), deps());
+        expect(r).toMatchObject({ allowed: false, code: 'EXTENSION_MCP_SERVER_BLOCKED' });
+        expect(audit).toHaveBeenCalledWith('u1', 'extension-approve', expect.objectContaining({ reason: 'DENIED', name: 'cloud' }));
     });
 
-    it('훅이 실패하면 거절(fail-closed)', async () => {
-        setExtensionMcpServerPolicyHook(() => { throw new Error('policy store down'); });
-        expect(await checkExtensionMcpServerPolicy(input())).toMatchObject({ allowed: false, code: 'MCP_SERVER_POLICY_UNAVAILABLE' });
+    it('조직 층 allow 밖이면 거절, 안이면 허용', async () => {
+        setServerPolicy(true);
+        const org = deps(async () => ({ allow: [{ type: 'url' as const, url: 'https://ok.example.com' }], deny: [], scope: 'organization' as const }));
+        expect(await checkMcpServerPolicyAtApproval(input({ phase: 'approve' }), org)).toMatchObject({ allowed: false, code: 'EXTENSION_MCP_SERVER_BLOCKED' });
+        expect(await checkMcpServerPolicyAtApproval(input({ phase: 'approve', url: 'https://ok.example.com/mcp' }), org)).toEqual({ allowed: true });
     });
 
-    it('checkExtensionRemoteMcp — URL 검사가 먼저, 통과해야 정책을 본다', async () => {
-        const hook = jest.fn(() => ({ allowed: true as const }));
-        setExtensionMcpServerPolicyHook(hook);
-        expect(await checkExtensionRemoteMcp(input({ url: 'https://mcp.example.com/mcp' }), dnsTo('10.1.2.3'))).toMatchObject({ code: 'MCP_REMOTE_URL_BLOCKED' });
-        expect(hook).not.toHaveBeenCalled();
-        expect(await checkExtensionRemoteMcp(input(), dnsFail)).toEqual({ allowed: true, unresolved: true });
-        expect(hook).toHaveBeenCalledTimes(1);
+    it('정책 조회 실패(적용 이력 없음)는 거절(fail-closed)', async () => {
+        setServerPolicy(true);
+        const failing = deps(async () => { throw new Error('policy store down'); });
+        expect(await checkMcpServerPolicyAtApproval(input({ phase: 'approve' }), failing)).toMatchObject({ allowed: false, code: 'EXTENSION_MCP_SERVER_BLOCKED' });
+    });
+
+    it('checkExtensionRemoteMcp — URL 검사가 먼저, 정책은 승인 시점에만(설치는 collectMcpDrafts 게이트가 본다)', async () => {
+        setServerPolicy(true, { deny: [{ type: 'url', url: 'https://mcp.example.com' }] });
+        // URL 이 먼저 막히면 정책 판정(감사)은 없다
+        expect(await checkExtensionRemoteMcp(input({ phase: 'approve' }), dnsTo('10.1.2.3'), deps())).toMatchObject({ code: 'MCP_REMOTE_URL_BLOCKED' });
+        expect(audit).not.toHaveBeenCalled();
+        // 설치 시점은 URL 만 — 정책 deny 여도 여기서는 통과(중복 감사 없음)
+        expect(await checkExtensionRemoteMcp(input({ phase: 'install' }), dnsFail, deps())).toEqual({ allowed: true, unresolved: true });
+        expect(audit).not.toHaveBeenCalled();
+        // 승인 시점은 정책까지
+        expect(await checkExtensionRemoteMcp(input({ phase: 'approve' }), publicDns, deps())).toMatchObject({ allowed: false, code: 'EXTENSION_MCP_SERVER_BLOCKED' });
+        expect(audit).toHaveBeenCalledTimes(1);
     });
 });
 

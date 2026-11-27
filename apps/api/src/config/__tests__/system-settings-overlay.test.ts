@@ -80,6 +80,8 @@ describe('system-settings-registry', () => {
             // 확장 원본 정책(M2) — 불리언·모드
             else if (def.key === 'EXTENSION_SOURCE_POLICY_ENFORCED') sample[def.key] = 'true';
             else if (def.key === 'EXTENSION_ARBITRARY_URL_INSTALL') sample[def.key] = 'catalog-only';
+            // 확장 MCP 서버 정책(§8-3) — 불리언
+            else if (def.key === 'EXTENSION_MCP_SERVER_POLICY_ENFORCED') sample[def.key] = 'true';
             // 확장 카탈로그 주기 동기화(M4) — 불리언·정수
             else if (def.key === 'EXTENSION_CATALOG_AUTO_SYNC_ENABLED') sample[def.key] = 'true';
             else if (def.key === 'EXTENSION_CATALOG_SYNC_INTERVAL_MS') sample[def.key] = '784';

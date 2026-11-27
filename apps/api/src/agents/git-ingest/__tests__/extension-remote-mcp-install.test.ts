@@ -3,7 +3,8 @@
  *
  *  - 플래그 OFF: 종전 그대로(원격 서버도 URL 검사 없이 draft, 관리 기록 없음, DNS 조회 없음)
  *  - 플래그 ON: https·SSRF 가드 통과분만 draft 로 저장하고 선언 URL 을 manifest_meta.remoteRegistration 에 고정한다
- *  - MCP 서버 정책 훅(§8-3 자리)은 플래그와 무관하게 불리고, 등록이 없으면 아무 것도 바꾸지 않는다
+ *  - MCP 서버 정책(§8-3, EXTENSION_MCP_SERVER_POLICY_ENFORCED)은 루프 머리의 게이트가 판정한다 — 정책에 막힌 원격 서버는
+ *    URL 검사(DNS)도 저장도 없이 빠지고, 통과한 서버만 관리 등록된다(실제 정책 함수로 검증)
  */
 const insertDraft = jest.fn();
 jest.mock('../../../addons/mcp-runtime/data/mcp-server-draft-repository', () => ({
@@ -27,10 +28,18 @@ jest.mock('../../../security/ssrf-guard', () => ({
     validateOutboundUrl: (raw: string) => mockValidate(raw),
 }));
 
+const resolveEffectivePolicyStrict = jest.fn(async () => ({ extensionMcpServer: undefined }));
+jest.mock('../../../services/org/effective-policy', () => ({
+    ...jest.requireActual('../../../services/org/effective-policy'),
+    resolveEffectivePolicyStrict: () => resolveEffectivePolicyStrict(),
+}));
+const logAudit = jest.fn(async (_e: unknown) => undefined);
+jest.mock('../../../services/AuditService', () => ({ getAuditService: () => ({ logAudit: (e: unknown) => logAudit(e) }) }));
+
 import { collectMcpDrafts, type ComponentContext } from '../extension-components';
 import type { LLMClient } from '../../../llm/client';
 import { resetConfig } from '../../../config/env';
-import { setExtensionMcpServerPolicyHook } from '../../../services/extensions/remote-mcp-registration';
+import { resetExtensionMcpServerPolicyState } from '../../../services/extensions/mcp-server-policy';
 
 const stdio = { name: 'local', transportType: 'stdio' as const, command: 'npx', args: ['-y', 'some-mcp@1.0.0'] };
 const remote = { name: 'cloud', transportType: 'streamable-http' as const, url: 'https://mcp.example.com/mcp' };
@@ -49,10 +58,16 @@ function ctx(addonPermissions?: readonly string[]): ComponentContext {
     };
 }
 const llm = (() => ({})) as unknown as (model: string) => LLMClient;
-const ORIGINAL = process.env.EXTENSION_REMOTE_MCP_ENABLED;
+const ENV_KEYS = ['EXTENSION_REMOTE_MCP_ENABLED', 'EXTENSION_MCP_SERVER_POLICY_ENFORCED', 'EXTENSION_MCP_SERVER_POLICY'] as const;
+const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map(k => [k, process.env[k]]));
 function setFlag(on: boolean | undefined): void {
     if (on === undefined) delete process.env.EXTENSION_REMOTE_MCP_ENABLED;
     else process.env.EXTENSION_REMOTE_MCP_ENABLED = on ? 'true' : 'false';
+    resetConfig();
+}
+function setServerPolicy(policy: object | undefined): void {
+    if (policy === undefined) { delete process.env.EXTENSION_MCP_SERVER_POLICY_ENFORCED; delete process.env.EXTENSION_MCP_SERVER_POLICY; }
+    else { process.env.EXTENSION_MCP_SERVER_POLICY_ENFORCED = 'true'; process.env.EXTENSION_MCP_SERVER_POLICY = JSON.stringify(policy); }
     resetConfig();
 }
 
@@ -61,10 +76,9 @@ beforeEach(() => {
     insertDraft.mockImplementation(async (input: { name: string }) => ({ id: `id-${input.name}` }));
     mockValidate.mockClear();
 });
-afterEach(() => setExtensionMcpServerPolicyHook(null));
+afterEach(() => { setServerPolicy(undefined); resetExtensionMcpServerPolicyState(); logAudit.mockClear(); });
 afterAll(() => {
-    if (ORIGINAL === undefined) delete process.env.EXTENSION_REMOTE_MCP_ENABLED;
-    else process.env.EXTENSION_REMOTE_MCP_ENABLED = ORIGINAL;
+    for (const k of ENV_KEYS) { if (ORIGINAL_ENV[k] === undefined) delete process.env[k]; else process.env[k] = ORIGINAL_ENV[k]; }
     resetConfig();
 });
 
@@ -109,16 +123,31 @@ describe('collectMcpDrafts — 원격 MCP 관리 등록', () => {
         expect(mockValidate).not.toHaveBeenCalled();
     });
 
-    it('정책 훅(§8-3 자리) — 플래그와 무관하게 원격·stdio 를 받고, 거절하면 제외', async () => {
-        setFlag(undefined);
-        const hook = jest.fn((i: { serverKey?: string }) => (i.serverKey === 'local'
-            ? { allowed: false as const, reason: '명령 허용 목록 밖' } : { allowed: true as const }));
-        setExtensionMcpServerPolicyHook(hook);
-        const c = ctx(undefined);
-        const res = await collectMcpDrafts(c, [stdio, remote], llm);
-        expect(hook).toHaveBeenCalledTimes(2);
-        expect(hook.mock.calls[0][0]).toMatchObject({ phase: 'install', transportType: 'stdio', command: 'npx', extensionName: 'ext', sourceUrl: 'https://github.com/o/r' });
-        expect(res.find(r => r.name === 'local')?.error).toMatch(/^MCP_SERVER_POLICY_BLOCKED/);
+    it('§8-3 정책 연결 — 정책이 막은 원격 서버는 URL 검사·저장 없이 빠지고, 허용 서버만 관리 등록된다', async () => {
+        setFlag(true);
+        setServerPolicy({ deny: [{ type: 'url', url: 'https://blocked.example.com' }] });
+        const banned = { name: 'banned', transportType: 'streamable-http' as const, url: 'https://blocked.example.com/mcp' };
+        const c = ctx(['network:internet']);
+        const res = await collectMcpDrafts(c, [banned, remote], llm);
+
+        expect(res.find(r => r.name === 'banned')?.error).toMatch(/^EXTENSION_MCP_SERVER_BLOCKED/);
+        expect(c.warnings.join('\n')).toContain("MCP_SERVER_POLICY_BLOCKED: MCP 서버 'banned' 제외");
+        expect(mockValidate.mock.calls.map(call => call[0])).toEqual(['https://mcp.example.com/mcp']);
         expect(insertDraft).toHaveBeenCalledTimes(1);
+        expect(insertDraft.mock.calls[0][0].manifestMeta.remoteRegistration).toMatchObject({ declaredUrl: 'https://mcp.example.com/mcp' });
+        // 거절은 감사에 한 번만 남는다(설치 게이트 한 곳)
+        expect(logAudit).toHaveBeenCalledTimes(1);
+        expect(logAudit.mock.calls[0][0]).toMatchObject({ action: 'extension.mcp_server_blocked', details: { origin: 'extension-install' } });
+    });
+
+    it('§8-3 정책 강제 OFF 면 정책 값이 있어도 판정하지 않는다(종전 동작)', async () => {
+        setFlag(true);
+        process.env.EXTENSION_MCP_SERVER_POLICY = JSON.stringify({ deny: [{ type: 'url', url: 'https://mcp.example.com' }] });
+        resetConfig();
+        const c = ctx(['network:internet']);
+        const res = await collectMcpDrafts(c, [remote], llm);
+        expect(res[0].error).toBeUndefined();
+        expect(insertDraft).toHaveBeenCalledTimes(1);
+        expect(logAudit).not.toHaveBeenCalled();
     });
 });

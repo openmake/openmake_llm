@@ -11,8 +11,9 @@
  *  - 승인: 저장된 URL 이 선언값과 같은지, SSRF·정책을 다시 확인한 뒤 활성화하고, 연결은 OAuth 로그인 뒤로 미룬다(`oauthRequired`).
  *  - 연결: 승인 전(draft·archived) 서버는 수동 연결·OAuth 시작이 모두 거절된다 — 승인 전 연결 0.
  *
- * MCP 서버 매처 정책(§8-3)은 `services/extensions/remote-mcp-registration` 의 일반 훅(`setExtensionMcpServerPolicyHook`)에
- * 꽂는다 — 설치·승인 두 지점이 이미 그 훅을 부른다.
+ * MCP 서버 매처 정책(§8-3, `EXTENSION_MCP_SERVER_POLICY_ENFORCED`)은 설치 때 `collectMcpDrafts` 가, 승인 때
+ * `services/extensions/remote-mcp-registration` 의 `checkMcpServerPolicyAtApproval` 이 같은 게이트로 판정한다
+ * (거절 코드 `EXTENSION_MCP_SERVER_BLOCKED` — 403).
  *
  * @module config/extension-remote-mcp
  */
@@ -37,10 +38,6 @@ export const EXTENSION_REMOTE_MCP_CODES = {
     URL_UNRESOLVED: 'MCP_REMOTE_URL_UNRESOLVED',
     /** 저장된 URL 이 번들 선언값과 다르다 */
     URL_MISMATCH: 'MCP_REMOTE_URL_MISMATCH',
-    /** MCP 서버 정책 훅(§8-3)이 거절했다 */
-    POLICY_BLOCKED: 'MCP_SERVER_POLICY_BLOCKED',
-    /** 정책 훅이 실패했다(켜진 정책을 확인하지 못하면 거절 — fail-closed) */
-    POLICY_UNAVAILABLE: 'MCP_SERVER_POLICY_UNAVAILABLE',
     /** 승인 전 서버의 연결·OAuth 시작 */
     NOT_APPROVED: 'MCP_SERVER_NOT_APPROVED',
 } as const;

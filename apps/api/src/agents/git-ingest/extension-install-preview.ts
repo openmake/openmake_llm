@@ -174,7 +174,7 @@ export async function previewExtensionInstall(
     const mcpServers: PreviewMcpServer[] = (await planMcpEntries(ctx, manifest.mcpServers)).map(entry => {
         const findings = checkMcpServerStatic({ command: entry.command, args: entry.args });
         // 원격 관리 등록(opt-in EXTENSION_REMOTE_MCP_ENABLED) — 네트워크 없는 정적 검사만(형식·https·URL 자격증명).
-        // 호스트(SSRF) 확인과 MCP 서버 정책 훅은 설치·승인에서 한다(미리보기는 쓰기·네트워크 없음).
+        // 호스트(SSRF) 확인은 설치·승인에서 한다(미리보기는 쓰기·네트워크 없음).
         const remoteManaged = networkAllowed && entry.transportType !== 'stdio' && extensionRemoteMcpEnabled();
         const remoteStatic = remoteManaged ? checkRemoteMcpUrlStatic(entry.url) : null;
         const excluded = !networkAllowed && entry.transportType !== 'stdio'

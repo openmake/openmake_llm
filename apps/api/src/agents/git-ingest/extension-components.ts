@@ -35,7 +35,9 @@ import { PLUGIN_COMPONENT_LIMITS, UNSUPPORTED_AGENT_FIELDS } from '../../config/
 import type { SkillInstallResult, AgentInstallResult, McpServerInstallResult } from './extension-ingest-types';
 import { planCommandPaths, planAgentPaths, planMcpEntries, mcpNetworkDecision } from './extension-component-plan';
 import { extensionRemoteMcpEnabled, EXTENSION_REMOTE_MCP_CODES } from '../../config/extension-remote-mcp';
-import { buildRemoteRegistrationMeta, checkExtensionMcpServerPolicy, checkExtensionRemoteMcp } from '../../services/extensions/remote-mcp-registration';
+import { buildRemoteRegistrationMeta, checkRemoteMcpUrl } from '../../services/extensions/remote-mcp-registration';
+import { loadExtensionMcpServerGate, recordMcpServerBlocked } from '../../services/extensions/mcp-server-policy';
+import { describeMcpServerBlock, EXTENSION_MCP_SERVER_BLOCKED_CODE } from '../../errors/extension-mcp-server-blocked.error';
 // 설치 미리보기(M1b)가 같은 함수를 쓰도록 재노출
 export { planCommandPaths, planAgentPaths, planMcpEntries, mcpNetworkDecision };
 
@@ -392,7 +394,17 @@ export async function collectMcpDrafts(
     // MCP 서버 테이블은 MCP add-on 소유 — 데이터 모듈의 저장 연산으로(같은 풀, SQL 동일)
     const mcpServers = getComponentStore('mcpServers', ctx.pool);
     const { networkAllowed, networkNeedsReview } = mcpNetworkDecision(ctx);
+    // 확장 MCP 서버 정책(§8-3, opt-in) — 강제 OFF 면 null(종전 동작). 서버마다 LLM 검사·저장 **전에** 판정해
+    // 위반 서버만 빼고 나머지 구성요소는 그대로 설치한다(권한·관례 검사의 서버 단위 제외와 같은 단위).
+    const serverPolicy = await loadExtensionMcpServerGate(ctx.userId);
     for (const entry of mcpEntries) {
+        const verdict = serverPolicy?.evaluate({ name: entry.name, transport: entry.transportType, command: entry.command, args: entry.args, url: entry.url });
+        if (verdict && !verdict.allowed) {
+            const detail = await recordMcpServerBlocked(ctx.userId, 'extension-install', verdict);
+            ctx.warnings.push(`MCP_SERVER_POLICY_BLOCKED: MCP 서버 '${entry.name}' 제외 — ${describeMcpServerBlock(detail)}`);
+            results.push({ name: entry.name, error: `${EXTENSION_MCP_SERVER_BLOCKED_CODE}: ${describeMcpServerBlock(detail)}` });
+            continue;
+        }
         if (!networkAllowed && entry.transportType !== 'stdio') {
             if (networkNeedsReview) {
                 ctx.warnings.push(`MCP_PERMISSION_REVIEW_REQUIRED: 원격 MCP 서버 '${entry.name}' 제외 — '${ADDON_PERMISSIONS.NETWORK_INTERNET}' 권한이 이전 승인 범위 밖입니다(설정 → 확장에서 재승인)`);
@@ -403,21 +415,16 @@ export async function collectMcpDrafts(
             }
             continue;
         }
-        // MCP 서버 정책 훅(§8-3 자리 — 등록이 없으면 언제나 허용) + 원격 관리 등록(opt-in EXTENSION_REMOTE_MCP_ENABLED)
-        const isRemote = entry.transportType !== 'stdio';
-        const policyInput = {
-            phase: 'install' as const, userId: ctx.userId, extensionName: ctx.extensionName, sourceUrl: ctx.gitUrl,
-            serverKey: entry.name, transportType: entry.transportType,
-            url: entry.url ?? null, command: entry.command ?? null, args: entry.args ?? null,
-        };
-        const remoteManaged = isRemote && extensionRemoteMcpEnabled();
-        const gate = remoteManaged ? await checkExtensionRemoteMcp(policyInput) : await checkExtensionMcpServerPolicy(policyInput);
+        // 원격 관리 등록(opt-in EXTENSION_REMOTE_MCP_ENABLED) — 선언 URL 을 https·SSRF 가드로 검사. MCP 서버 정책(§8-3)은
+        // 루프 머리의 게이트가 이미 판정했다(같은 게이트를 두 번 부르지 않는다 — 감사 중복 방지)
+        const remoteManaged = entry.transportType !== 'stdio' && extensionRemoteMcpEnabled();
+        const gate = remoteManaged ? await checkRemoteMcpUrl(entry.url, 'install') : { allowed: true as const };
         if (!gate.allowed) {
             ctx.warnings.push(`${gate.code}: MCP 서버 '${entry.name}' 제외 — ${gate.reason}`);
             results.push({ name: entry.name, error: `${gate.code}: ${gate.reason}` });
             continue;
         }
-        if (remoteManaged && gate.unresolved) {
+        if (remoteManaged && 'unresolved' in gate && gate.unresolved) {
             ctx.warnings.push(`${EXTENSION_REMOTE_MCP_CODES.URL_UNRESOLVED}: 원격 MCP 서버 '${entry.name}' 의 호스트를 지금 확인하지 못했습니다 — 승인할 때 다시 확인합니다`);
         }
         try {
