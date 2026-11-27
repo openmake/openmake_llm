@@ -18,7 +18,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { ADDON_MANIFEST_FILENAME, addonManifestSchema, type AddonManifest } from './manifest';
+import { ADDON_MANIFEST_FILENAME, addonManifestSchema, type AddonDefaultState, type AddonManifest } from './manifest';
 
 /** `order` 를 적지 않은 add-on 의 순서 — 명시한 것 뒤, 서로는 id 순 */
 const DEFAULT_ADDON_ORDER = 100000;
@@ -100,6 +100,14 @@ function disabledIds(): Set<string> {
 
 export function isBuiltinAddonEnabled(id: string): boolean {
     return !disabledIds().has(id);
+}
+
+/**
+ * 매니페스트 `defaultState` — 설치 표에 행이 없을 때(첫 발견 전·미적재·미등록)의 의도. 선언이 없거나 내장 add-on 이
+ * 아니면(설치형 `ext:*` 포함) `enabled` — 종전 동작 그대로다.
+ */
+export function builtinAddonDefaultState(id: string): AddonDefaultState {
+    return discover().addons.find(a => a.id === id)?.manifest.defaultState ?? 'enabled';
 }
 
 /** 설정에 적혔지만 발견되지 않은 id — 오타로 add-on 이 조용히 켜진 채 남는 것을 부팅 로그로 알린다. */

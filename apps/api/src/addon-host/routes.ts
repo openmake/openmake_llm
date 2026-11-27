@@ -36,9 +36,35 @@ export function listBuiltinAddons(): AddonListEntry[] {
 function createAddonListRouter(): Router {
     const router = Router();
     router.get('/', (_req, res) => {
-        res.json(success({ addons: listBuiltinAddons() }));
+        // 기본 꺼짐 add-on 이 없으면 종전과 같은 동기 응답(env 판정) — 기존 add-on 의 목록 계약 그대로
+        if (defaultOffAddonIds().size === 0) {
+            res.json(success({ addons: listBuiltinAddons() }));
+            return;
+        }
+        void listAddonsForClient().then(addons => res.json(success({ addons })));
     });
     return router;
+}
+
+/** 매니페스트 `defaultState: disabled` 를 선언한 내장 add-on id */
+function defaultOffAddonIds(): Set<string> {
+    return new Set(listBuiltinAddonDefs().filter(a => a.manifest.defaultState === 'disabled').map(a => a.id));
+}
+
+/**
+ * 클라이언트용 목록 — 종전 add-on 은 env 판정(`listBuiltinAddons`) 그대로다. `defaultState: disabled` add-on 만 DB 상태까지
+ * 겹친다: 관리자가 켜기 전에는 진입점을 숨겨야 해서다(관리자 토글은 요청마다 반영된다). 상태를 확인하지 못하면 꺼짐으로 답한다.
+ */
+export async function listAddonsForClient(): Promise<AddonListEntry[]> {
+    const base = listBuiltinAddons();
+    const defaultOff = defaultOffAddonIds();
+    if (defaultOff.size === 0) return base;
+    const { readAddonEnabledStrict } = await import('../services/addon/addon-state');
+    return Promise.all(base.map(async (a) => {
+        if (!defaultOff.has(a.id) || !a.enabled) return a;
+        const verdict = await readAddonEnabledStrict(a.id).catch(() => ({ known: false as const }));
+        return { ...a, enabled: verdict.known && verdict.enabled };
+    }));
 }
 
 /** 확인 불가 응답 — 503 + Retry-After. 꺼짐(404)·조직 밖(403)과 구분해 클라이언트가 재시도할 수 있게 한다(설계 문서 8.3). */

@@ -53,6 +53,9 @@ export const ADDON_SPECIFIC_NAME_PATTERNS: readonly RegExp[] = [
     /image-runtime|music-runtime|video-runtime/i,
     // knowledge-runtime add-on — 일반 단어 'knowledge' 는 막지 않는다(Base 에 knowledge-cutoff 가 있다). 도메인 고유 이름만.
     /knowledge[-_]?runtime|knowledge_space|knowledgeSpace|knowledge_conversation/i,
+    // extension-marketplace add-on(마켓플레이스 계획 v3.4 A) — 일반 단어 'marketplace' 는 막지 않는다(Base 에 큐레이션 마켓·
+    // marketplace.json 처리가 있다). add-on 이름과 그 내부 설정 키 접두(EXT_MARKET_*)만. Base 쪽 플래그는 중립 이름(EXTENSION_MANAGED_*)을 쓴다.
+    /extension[-_]?marketplace|extensionMarketplace|EXT_MARKET_/i,
 ];
 
 /** add-on 고유 이름이 나와도 되는 위치(`apps/api/src` 기준 접두) — add-on 모듈과 그것을 모으는 호스트뿐 */

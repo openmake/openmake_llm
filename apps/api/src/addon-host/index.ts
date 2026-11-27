@@ -188,6 +188,13 @@ export async function bootAddons(candidates: readonly BuiltinAddon[], deps: Addo
             logger.info(`add-on '${addon.id}' 관리자 의도 ${row.desiredState} — 부팅 대상에서 제외`);
             continue;
         }
+        // 행이 없거나 의도를 읽지 못했으면 매니페스트 `defaultState` 를 따른다 — 기본 꺼짐 add-on 은 DB 장애로 켜지지 않는다.
+        // 선언이 없는 add-on 은 종전대로 env 판정만으로 부팅한다.
+        if (!row && addon.manifest.defaultState === 'disabled') {
+            results.set(addon.id, { id: addon.id, stage: 'excluded', reason: '기본 상태 disabled — 관리자가 켜기 전' });
+            logger.info(`add-on '${addon.id}' 기본 상태 disabled(설치 표 ${desired ? '행 없음' : '조회 실패'}) — 부팅 대상에서 제외`);
+            continue;
+        }
         // ② 버전 불일치는 경고 후 계속 실행하지 않고 그 add-on 을 제외한다(계획서 7.4) — capability 계약 버전도 같다
         if (!satisfiesOpenmakeRange(deps.appVersion, addon.manifest.requires.openmake)) {
             const reason = `requires ${addon.manifest.requires.openmake}, 현재 ${deps.appVersion}`;
@@ -275,7 +282,7 @@ export async function bootAddons(candidates: readonly BuiltinAddon[], deps: Addo
  * 발견된 내장 add-on 을 설치 표(`addon_installations`)에 반영한다 — 내장과 설치형이 같은 상태 모델을 쓴다.
  * **state·desired_state 는 건드리지 않는다**: 관리자가 끈 add-on 이 재부팅으로 되살아나면 안 된다.
  */
-async function syncAddonInstallations(): Promise<void> {
+export async function syncAddonInstallations(): Promise<void> {
     try {
         const { getUnifiedDatabase } = await import('../data/models/unified-database');
         const { AddonStateRepository } = await import('../data/repositories/addon-state-repository');
@@ -289,6 +296,8 @@ async function syncAddonInstallations(): Promise<void> {
                 kind: addon.manifest.kind ?? 'content',
                 source: 'builtin',
                 entitlementSku: addon.manifest.entitlement?.sku ?? null,
+                // 첫 insert 에만 쓰인다 — 이미 있는 행의 state 는 그대로(관리자 결정 보존). 선언이 없으면 종전대로 enabled
+                ...(addon.manifest.defaultState ? { initialState: addon.manifest.defaultState } : {}),
             });
         }
         clearAddonStateCache();
