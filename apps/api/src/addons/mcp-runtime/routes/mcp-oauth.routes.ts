@@ -27,6 +27,7 @@ import { McpOAuthRepository } from '../data/mcp-oauth-repository';
 import { McpOAuthProvider, consumeMcpOAuthState } from '../oauth-provider';
 import { getLifecycleSupervisor } from '../lifecycle-supervisor';
 import { createPinnedFetch } from '../../../security/ssrf-guard';
+import { extensionRemoteMcpEnabled, EXTENSION_REMOTE_MCP_CODES } from '../../../runtime-ports/extension-remote-mcp';
 import { canStartStopServer } from './mcp-visibility';
 import { MCP_OAUTH_RETURN_PATH } from '../../../config/mcp-oauth';
 import { buildCimdDocument, MCP_OAUTH_CIMD_CACHE_MAX_AGE_SEC, MCP_OAUTH_CIMD_ROUTE } from '../oauth-cimd';
@@ -54,7 +55,7 @@ mcpOAuthRouter.get(MCP_OAUTH_CIMD_ROUTE, (_req: Request, res: Response) => {
 });
 
 /** 원격 transport 인 사용자 소유 서버만 OAuth 대상이다 */
-async function loadOAuthTarget(req: Request, res: Response) {
+async function loadOAuthTarget(req: Request, res: Response, opts: { forLogin?: boolean } = {}) {
     const userId = String(req.user?.id ?? '');
     const actor = { id: userId, role: req.user?.role ?? 'user' };
     const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
@@ -65,12 +66,17 @@ async function loadOAuthTarget(req: Request, res: Response) {
         res.status(400).json(badRequest('원격(sse/streamable-http) 서버만 OAuth 로그인을 지원합니다'));
         return null;
     }
+    // 원격 관리 등록 opt-in — 승인 전 서버는 OAuth 로그인(=토큰 발급·연결)도 시작하지 않는다
+    if (opts.forLogin && extensionRemoteMcpEnabled() && (await repo.getServerStatus(server.id)) !== 'active') {
+        res.status(409).json({ success: false, error: EXTENSION_REMOTE_MCP_CODES.NOT_APPROVED, message: '승인한 뒤 로그인할 수 있습니다' });
+        return null;
+    }
     return { server, userId, ownerId: String(server.user_id ?? userId) };
 }
 
 /** 인가 URL 발급 — provider 가 redirectToAuthorization 으로 붙잡은 URL 을 돌려준다 */
 mcpOAuthRouter.post('/servers/:id/oauth/start', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-    const target = await loadOAuthTarget(req, res);
+    const target = await loadOAuthTarget(req, res, { forLogin: true });
     if (!target) return;
     const provider = new McpOAuthProvider({ serverId: target.server.id, userId: target.ownerId });
     // 기존 토큰이 있으면 SDK 가 갱신을 시도해 AUTHORIZED 를 돌려줄 수 있다 — 그 경우 로그인 불필요.

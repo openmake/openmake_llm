@@ -2724,7 +2724,9 @@
       "actionFailed": "操作失败：{error}",
       "envRequired": "必填环境变量 — 输入实际值后方可批准",
       "envPlaceholder": "输入值",
-      "envMissing": "需要填写: {keys}"
+      "envMissing": "需要填写: {keys}",
+      "remoteOauthNote": "固定为扩展声明的远程地址。批准后将继续进行 OAuth 登录。",
+      "oauthStartFailed": "已批准，但无法开始 OAuth 登录。请在 设置 → 连接器 中登录。{error}"
     },
     "agents": {
       "title": "自定义智能体",

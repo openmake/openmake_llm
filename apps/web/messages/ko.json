@@ -2724,7 +2724,9 @@
       "actionFailed": "처리 실패: {error}",
       "envRequired": "필수 환경변수 — 실제 값을 입력해야 승인됩니다",
       "envPlaceholder": "값 입력",
-      "envMissing": "값이 필요합니다: {keys}"
+      "envMissing": "값이 필요합니다: {keys}",
+      "remoteOauthNote": "확장이 선언한 원격 주소로 고정됩니다. 승인하면 OAuth 로그인으로 이어집니다.",
+      "oauthStartFailed": "승인했지만 OAuth 로그인을 시작하지 못했습니다. 설정 → 커넥터에서 로그인하세요. {error}"
     },
     "agents": {
       "title": "커스텀 에이전트",

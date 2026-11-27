@@ -57,7 +57,7 @@ export type { Invocation, McpServerDescriptor, McpServerSpec, PackageId } from '
 const logger = createLogger('ExtensionMcpServerPolicy');
 
 /** 검사 지점 — 감사 기록에 남긴다 */
-export type McpServerPolicyOrigin = 'extension-install' | 'git-ingest' | 'catalog';
+export type McpServerPolicyOrigin = 'extension-install' | 'extension-approve' | 'git-ingest' | 'catalog';
 
 export type McpServerVerdict = { allowed: true } | ({ allowed: false } & ExtensionMcpServerBlockDetail);
 

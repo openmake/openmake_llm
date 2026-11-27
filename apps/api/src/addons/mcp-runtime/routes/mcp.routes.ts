@@ -48,6 +48,7 @@ import { connectGlobalServer } from './mcp-global-connect';
 import { renameMcpServer } from './mcp-server-rename';
 import { getAuditService } from '../../../services/AuditService';
 import { validateOutboundUrl } from '../../../security/ssrf-guard';
+import { extensionRemoteMcpEnabled, EXTENSION_REMOTE_MCP_CODES } from '../../../runtime-ports/extension-remote-mcp';
 import { auditMcpServerCreated, auditMcpServerDeleted, auditMcpDeleteDenied, auditMcpRegisterDenied, auditMcpUrlBlocked } from './mcp-server-audit';
 import { McpCatalogInputError } from '../data/mcp-catalog-input';
 import { transportNoticeFields } from '../transport-notices';
@@ -479,6 +480,11 @@ export const mcpRouter = Router();
       }
       if (!canStartStopServer(actor, target)) {
           res.status(403).json(forbidden('해당 서버를 연결할 권한이 없습니다'));
+          return;
+      }
+      // 원격 관리 등록 opt-in — 승인 전(draft)·회수된(archived) 서버는 연결하지 않는다(supervisor 도 같은 검사를 한다)
+      if (target.visibility !== 'global' && extensionRemoteMcpEnabled() && (await repo.getServerStatus(id)) !== 'active') {
+          res.status(409).json({ success: false, error: EXTENSION_REMOTE_MCP_CODES.NOT_APPROVED, message: '승인한 뒤 연결할 수 있습니다' });
           return;
       }
 
