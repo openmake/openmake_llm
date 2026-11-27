@@ -25,6 +25,7 @@ import request from 'supertest';
 import { adminExtensionsRouter } from '../admin-extensions.routes';
 import { errorHandler } from '../../utils/error-handler';
 import { encodeInventoryCursor } from '../../data/repositories/extension-inventory-repository';
+import { resetConfig } from '../../config/env';
 
 const app = express();
 app.use(express.json());
@@ -33,14 +34,19 @@ app.use(errorHandler);
 
 const KEY = 'EXTENSION_ADMIN_INVENTORY_ENABLED';
 const ORIGINAL = process.env[KEY];
+/** 플래그는 getConfig 캐시를 거친다 — env 를 바꾼 뒤 캐시를 비운다 */
+function setFlag(v: string | undefined): void {
+    if (v === undefined) delete process.env[KEY]; else process.env[KEY] = v;
+    resetConfig();
+}
 afterEach(() => {
-    if (ORIGINAL === undefined) delete process.env[KEY]; else process.env[KEY] = ORIGINAL;
+    setFlag(ORIGINAL);
     jest.clearAllMocks();
 });
 
 describe('GET /api/admin/extensions/*', () => {
     it('관리자가 아니면 403 — 타인 설치 정보를 보지 못한다', async () => {
-        process.env[KEY] = 'true';
+        setFlag('true');
         for (const p of ['status', 'inventory', 'policy-preview']) {
             const res = await request(app).get(`/api/admin/extensions/${p}`).set('x-test-role', 'user');
             expect(res.status).toBe(403);
@@ -50,7 +56,7 @@ describe('GET /api/admin/extensions/*', () => {
     });
 
     it('플래그 OFF(기본) — status 는 enabled:false, 현황·미리보기는 404', async () => {
-        delete process.env[KEY];
+        setFlag(undefined);
         const st = await request(app).get('/api/admin/extensions/status').set('x-test-role', 'admin');
         expect(st.status).toBe(200);
         expect(st.body.data).toEqual({ enabled: false });
@@ -61,7 +67,7 @@ describe('GET /api/admin/extensions/*', () => {
     });
 
     it('플래그 ON — 필터·커서·limit 을 서비스에 넘긴다', async () => {
-        process.env[KEY] = 'true';
+        setFlag('true');
         listExtensionInventory.mockResolvedValue({ items: [], nextCursor: null, sources: [] });
         const cursor = encodeInventoryCursor({ createdAt: '2026-11-27T00:00:00.000Z', id: 'user-ext-1' });
         const res = await request(app)
@@ -77,14 +83,14 @@ describe('GET /api/admin/extensions/*', () => {
     });
 
     it('깨진 커서 400, 범위 밖 limit 400', async () => {
-        process.env[KEY] = 'true';
+        setFlag('true');
         expect((await request(app).get('/api/admin/extensions/inventory?cursor=%%%').set('x-test-role', 'admin')).status).toBe(400);
         expect((await request(app).get('/api/admin/extensions/inventory?limit=1000').set('x-test-role', 'admin')).status).toBe(400);
         expect(listExtensionInventory).not.toHaveBeenCalled();
     });
 
     it('플래그 ON — 미리보기 결과를 그대로 돌려준다', async () => {
-        process.env[KEY] = 'true';
+        setFlag('true');
         previewExtensionSourcePolicy.mockResolvedValue({ enforced: false, arbitraryUrlInstall: 'allow', checked: 1, blocked: [], truncated: false });
         const res = await request(app).get('/api/admin/extensions/policy-preview').set('x-test-role', 'admin');
         expect(res.status).toBe(200);
