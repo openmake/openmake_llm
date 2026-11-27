@@ -210,7 +210,7 @@ describe('정적 색인 우선 동기화 (M6, opt-in)', () => {
 
     function indexDeps(impl: (...a: unknown[]) => Promise<unknown>) {
         const d = deps();
-        (d.service as Record<string, unknown>).fetchCatalogSnapshotFromIndex = jest.fn(impl);
+        (d.service as unknown as Record<string, unknown>).fetchCatalogSnapshotFromIndex = jest.fn(impl);
         return d as typeof d & { service: { fetchCatalogSnapshotFromIndex: jest.Mock } };
     }
 

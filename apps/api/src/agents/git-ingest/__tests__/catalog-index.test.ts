@@ -120,7 +120,7 @@ describe('indexToSnapshot', () => {
 
 describe('fetchCatalogSnapshotFromIndex — 요청 1회', () => {
     it('색인 하나만 받는다 (요청 1회, GET · JSON)', async () => {
-        const fetchImpl = jest.fn(async () => okResponse(FIXTURE_TEXT));
+        const fetchImpl = jest.fn(async (_url: string, _init: RequestInit) => okResponse(FIXTURE_TEXT));
         const snap = await fetchCatalogSnapshotFromIndex(INDEX_URL, CATALOG_URL, undefined, fetchImpl);
         expect(snap.plugins).toHaveLength(13);
         expect(fetchImpl).toHaveBeenCalledTimes(1);
