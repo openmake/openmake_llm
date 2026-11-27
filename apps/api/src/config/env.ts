@@ -86,6 +86,12 @@ export interface EnvConfig {
     externalModelPolicy: string;
     /** 로컬 브라우저 사이트 허용 목록 원문(JSON {allow,deny}) — @openmake/config parseBrowserSitePolicy 가 파싱 */
     browserSitePolicy: string;
+    /** 확장 원본 정책(M2) 강제 — 기본 false(검사 없음). config/extension-source-policy 가 읽는다 */
+    extensionSourcePolicyEnforced: boolean;
+    /** 'allow'(기본) · 'catalog-only' — 강제 ON 일 때만 의미 */
+    extensionArbitraryUrlInstall: 'allow' | 'catalog-only';
+    /** 전역 확장 원본 규칙 원문(JSON {allow?,deny?}) — 빈 값 = 전역 층 없음 */
+    extensionSourcePolicy: string;
     /** vLLM `--reasoning-parser` 미설정 환경 등에서 extra_body.reasoning_effort 거절 방지 토글. */
     llmEnableReasoningEffort: boolean;
     /** 사용자별 역할→모델 매핑(model_assignments scope=userId) 사용 토글 (기본 false=전역 env/default 만). */
@@ -263,6 +269,9 @@ export function loadConfig(): EnvConfig {
         LLM_WEEKLY_TOKEN_LIMIT: env('LLM_WEEKLY_TOKEN_LIMIT'),
         EXTERNAL_MODEL_POLICY: env('EXTERNAL_MODEL_POLICY'),
         BROWSER_SITE_POLICY: env('BROWSER_SITE_POLICY'),
+        EXTENSION_SOURCE_POLICY_ENFORCED: env('EXTENSION_SOURCE_POLICY_ENFORCED'),
+        EXTENSION_ARBITRARY_URL_INSTALL: env('EXTENSION_ARBITRARY_URL_INSTALL'),
+        EXTENSION_SOURCE_POLICY: env('EXTENSION_SOURCE_POLICY'),
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
         USER_MODEL_ROLES_ENABLED: env('USER_MODEL_ROLES_ENABLED'),
         THINKING_SUMMARY_ENABLED: env('THINKING_SUMMARY_ENABLED'),
@@ -389,6 +398,10 @@ export function loadConfig(): EnvConfig {
         llmWeeklyTokenLimit: parsed.LLM_WEEKLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmWeeklyTokenLimit,
         externalModelPolicy: parsed.EXTERNAL_MODEL_POLICY ?? DEFAULT_CONFIG.externalModelPolicy,
         browserSitePolicy: parsed.BROWSER_SITE_POLICY ?? DEFAULT_CONFIG.browserSitePolicy,
+        // 확장 원본 정책(M2) — 알 수 없는 값은 기본값(종전 동작). 부팅을 막지 않게 스키마는 문자열로 받는다
+        extensionSourcePolicyEnforced: parsed.EXTENSION_SOURCE_POLICY_ENFORCED === undefined ? DEFAULT_CONFIG.extensionSourcePolicyEnforced : parsed.EXTENSION_SOURCE_POLICY_ENFORCED === 'true',
+        extensionArbitraryUrlInstall: parsed.EXTENSION_ARBITRARY_URL_INSTALL === 'catalog-only' ? 'catalog-only' : DEFAULT_CONFIG.extensionArbitraryUrlInstall,
+        extensionSourcePolicy: parsed.EXTENSION_SOURCE_POLICY ?? DEFAULT_CONFIG.extensionSourcePolicy,
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',
         userModelRolesEnabled: (parsed.USER_MODEL_ROLES_ENABLED ?? 'false').toLowerCase() === 'true',
         thinkingSummaryEnabled: (parsed.THINKING_SUMMARY_ENABLED ?? 'true').toLowerCase() === 'true',

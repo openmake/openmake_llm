@@ -77,6 +77,9 @@ describe('system-settings-registry', () => {
             else if (def.key === 'AGENT_TASK_HITL_PARK_ON_TIMEOUT') sample[def.key] = 'true';
             else if (def.key === 'LLM_PREFIX_CACHE_SALT_MODE') sample[def.key] = 'user';
             else if (def.key === 'LLM_PRIORITY_ENABLED') sample[def.key] = 'true';
+            // 확장 원본 정책(M2) — 불리언·모드
+            else if (def.key === 'EXTENSION_SOURCE_POLICY_ENFORCED') sample[def.key] = 'true';
+            else if (def.key === 'EXTENSION_ARBITRARY_URL_INSTALL') sample[def.key] = 'catalog-only';
             // SLO 목표(F24.8) — 백분율·정수
             else if (def.key === 'SLO_CHAT_AVAILABILITY_TARGET') sample[def.key] = '97.51';
             else if (def.key === 'SLO_AGENT_TASK_SUCCESS_TARGET') sample[def.key] = '97.52';

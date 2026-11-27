@@ -19,6 +19,8 @@ interface CatalogPluginEntry {
     category?: string;
     /** 설명 한국어 번역 (동기화 후단 배치 — catalog-translator.ts, 없으면 원문 노출) */
     description_ko?: string;
+    /** 교차 저장소 항목의 실제 원본 URL(marketplace.json 항목 url) — 원본 정책 catalog-only 판정. 이 필드 이전 스냅샷은 재동기화로 채워진다 */
+    source?: string;
 }
 
 interface ExtensionCatalogRow {
