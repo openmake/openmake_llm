@@ -129,7 +129,7 @@ export default function AdminExtensionsPage() {
                         <tbody>
                           {items.map((it) => (
                             <tr key={it.id}>
-                              <Td><div className="text-sm">{it.owner.username ?? it.owner.id}</div><div className="text-[11px] text-muted">{it.owner.email ?? ""}</div></Td>
+                              <Td><div className="text-sm">{it.owner.username ?? it.owner.id}</div><div className="text-[11px] text-muted">{it.owner.org ? t("orgOwner") : (it.owner.email ?? "")}</div></Td>
                               <Td><div className="text-sm">{it.name}</div><div className="text-[11px] text-muted">v{it.version} · {it.permissionState}</div></Td>
                               <Td className="min-w-[16rem] max-w-[28rem]">
                                 <div className="break-all font-mono text-xs">{it.source.url}</div>

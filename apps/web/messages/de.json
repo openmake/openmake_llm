@@ -3140,6 +3140,7 @@
     }
   },
   "adminExtensions": {
+    "orgOwner": "Organisationseigen",
     "title": "Erweiterungen",
     "description": "Installierte Erweiterungen pro Benutzer mit Quelle, Commit, Komponenten, Freigabestatus und der Aushandlung jedes MCP-Servers. Vor dem Erzwingen einer Quellrichtlinie lässt sich prüfen, was sie blockieren würde.",
     "loadError": "Laden fehlgeschlagen.",

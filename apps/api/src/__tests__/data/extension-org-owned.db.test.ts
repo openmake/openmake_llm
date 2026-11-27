@@ -25,6 +25,7 @@ import { OrgOwnedExtensionRepository } from '../../data/repositories/org-owned-e
 import { UserExtensionRepository } from '../../data/repositories/user-extension-repository';
 import { getAddonDataModules } from '../../addon-host/addon-data';
 import { listInstalledExtensionsBySources } from '../../data/extension-catalog-lookup';
+import { ExtensionInventoryRepository } from '../../data/repositories/extension-inventory-repository';
 import { removeOrgOwnedExtension, updateOrgOwnedExtension, type OrgOwnedDeps } from '../../services/extensions/org-owned-install';
 import type { ResolvedExtensionSource } from '../../agents/git-ingest/extension-source-resolver';
 
@@ -85,6 +86,9 @@ describeOrSkip('조직 소유 확장 (212, 실제 Postgres)', () => {
         expect(await repo.getInstallableById(orgRowId, ids.outsider, [])).toBeNull();
         // 카탈로그 설치본 근거는 사람 소유 설치본만 — 구성요소 없는 조직 소유 행은 근거가 아니다
         expect((await listInstalledExtensionsBySources([SRC.sourceUrl])).map((r) => r.name)).not.toContain('org-pack');
+        // 관리자 현황은 소유 조직 id·이름을 함께 읽는다(소유자 칸 — 서비스가 플래그 ON 일 때만 싣는다)
+        const inv = (await new ExtensionInventoryRepository(mockPool).listPage({}, 500, null)).find((r) => r.id === orgRowId);
+        expect(inv).toMatchObject({ user_id: null, username: null, owner_org_id: ORG, owner_org_name: ORG });
     });
 
     it('⑤ 개인 경로는 조직 소유 행에 닿지 않는다(개인 조회·제거)', async () => {

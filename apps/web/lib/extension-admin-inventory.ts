@@ -22,7 +22,8 @@ export interface InventoryItem {
   name: string;
   version: string;
   status: string;
-  owner: { id: string; username: string | null; email: string | null };
+  /** org: 조직 소유 설치(212) — EXTENSION_ORG_OWNED_INSTALL_ENABLED 가 켜져 있을 때만 온다(username = 조직 이름) */
+  owner: { id: string; username: string | null; email: string | null; org?: { id: string; name: string | null } };
   source: { url: string; ref: string; trackingRef: string | null; path: string; commit: string };
   visibility: string;
   orgId: string | null;
@@ -41,14 +42,14 @@ export interface InventoryPage { items: InventoryItem[]; nextCursor: string | nu
 export interface PolicyPreviewBlocked {
   extensionId: string;
   name: string;
-  owner: { id: string; username: string | null };
+  owner: { id: string; username: string | null; org?: { id: string; name: string | null } };
   source: { url: string; trackingRef: string | null };
   verdict: { reason: string; scope?: "global" | "organization"; rule?: unknown; source: string };
 }
 export interface PolicyPreviewMcpBlocked {
   extensionId: string;
   name: string;
-  owner: { id: string; username: string | null };
+  owner: { id: string; username: string | null; org?: { id: string; name: string | null } };
   server: { id: string; name: string; transport: string };
   verdict: { reason: string; scope?: "global" | "organization"; rule?: unknown; server: string };
 }
