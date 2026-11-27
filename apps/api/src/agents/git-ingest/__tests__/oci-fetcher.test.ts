@@ -12,6 +12,7 @@ import { isNonGitSourceUrl } from '../internal-bundle-fetcher';
 import { makeNonGitFetcher } from '../extension-ingest-helpers';
 import { resolveExtensionSource, isSelectionRequired } from '../extension-source-resolver';
 import { safeFetch } from '../../../security/ssrf-guard';
+import { ExtensionIngestService } from '../extension-ingest-service';
 import type { GitFetcher } from '../git-fetcher';
 
 // ── tar·매니페스트 빌더 ──────────────────────────────────────────────────────────
@@ -82,10 +83,10 @@ function fetchFor(reg: Registry, host = 'reg.example.com', repo = 'org/plugin'):
         if (!m) return new Response('nope', { status: 404 });
         if (m[1] === 'manifests') {
             const body = reg.manifests.get(m[2]);
-            return body ? new Response(body, { status: 200, headers: { 'content-type': 'application/vnd.oci.image.manifest.v1+json' } }) : new Response('x', { status: 404 });
+            return body ? new Response(new Uint8Array(body), { status: 200, headers: { 'content-type': 'application/vnd.oci.image.manifest.v1+json' } }) : new Response('x', { status: 404 });
         }
         const blob = reg.blobs.get(m[2]);
-        return blob ? new Response(blob, { status: 200 }) : new Response('x', { status: 404 });
+        return blob ? new Response(new Uint8Array(blob), { status: 200 }) : new Response('x', { status: 404 });
     };
 }
 
@@ -298,8 +299,6 @@ describe('ExtensionIngestService.checkForUpdate — OCI 태그의 새 digest', (
     it('설치 digest 와 같으면 업데이트 없음, 태그가 새 digest 를 가리키면 updateAvailable + 새 버전', async () => {
         setFlag('true');
         try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { ExtensionIngestService } = require('../extension-ingest-service') as typeof import('../extension-ingest-service');
             const reg = makeRegistry([{ data: pluginLayer(), mediaType: TGZ }]);
             let current: Registry & { digest: string } = reg;
             const svc = new ExtensionIngestService({
