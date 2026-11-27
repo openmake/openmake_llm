@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { browserSitePolicyProblems } from '@openmake/config';
 import { contributedSettings, type AddonSettingValidator } from '../addon-host/contributions';
 import { ARBITRARY_URL_INSTALL_MODES, EXTENSION_SOURCE_POLICY_KEYS, extensionSourcePolicyProblems } from './extension-source-policy';
+import { EXTENSION_CATALOG_SYNC_KEYS } from './extension-catalog-sync';
 
 /** Base 그룹 또는 add-on 이 기여한 그룹 이름 */
 export type SettingGroup = 'oauth' | 'search' | 'alerts' | 'push' | 'llm' | 'agent' | 'slo' | (string & {});
@@ -43,6 +44,10 @@ const nonNegativeIntString = z
     .string()
     .trim()
     .regex(/^\d+$/, '0 이상의 정수여야 합니다');
+const positiveIntString = z
+    .string()
+    .trim()
+    .regex(/^[1-9]\d*$/, '1 이상의 정수여야 합니다');
 /** JSON 객체 문자열 — 외부 모델 정책({"allow":[…],"deny":[…]}) 같은 구조 설정. */
 const jsonObject = nonEmpty.refine((v) => {
     try { const o = JSON.parse(v); return !!o && typeof o === 'object' && !Array.isArray(o); } catch { return false; }
@@ -132,6 +137,9 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     { key: EXTENSION_SOURCE_POLICY_KEYS.ENFORCED, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     { key: EXTENSION_SOURCE_POLICY_KEYS.ARBITRARY_URL_INSTALL, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(ARBITRARY_URL_INSTALL_MODES) },
     { key: EXTENSION_SOURCE_POLICY_KEYS.POLICY, group: 'agent', secret: false, requiresRestart: false, validate: extensionSourcePolicy },
+    // 확장 카탈로그 주기 동기화(M4, opt-in) — 5분 점검 tick 이 호출 시점에 읽는다(실시간). 간격은 양의 정수 ms
+    { key: EXTENSION_CATALOG_SYNC_KEYS.AUTO_SYNC_ENABLED, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
+    { key: EXTENSION_CATALOG_SYNC_KEYS.SYNC_INTERVAL_MS, group: 'agent', secret: false, requiresRestart: false, validate: positiveIntString },
 
     // ── SLO 목표(F24.8, 145) — 5분 평가 tick 이 호출 시점에 읽는다(실시간) ──
     { key: 'SLO_CHAT_AVAILABILITY_TARGET', group: 'slo', secret: false, requiresRestart: false, validate: percentTarget },

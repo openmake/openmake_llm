@@ -7,6 +7,7 @@
 
 import { startSessionCleanupScheduler, stopSessionCleanupScheduler } from '../data/conversation-db';
 import { startQuotaReconcileJob, stopQuotaReconcileJob } from '../services/cost/quota-reconcile-job';
+import { startCatalogAutoSync, stopCatalogAutoSync } from '../services/extensions/catalog-sync';
 import { startDbRetention } from '../data/db-retention';
 import { startPeriodicCleanup, stopPeriodicCleanup } from '../utils/token-cleanup';
 import { createLogger } from '../utils/logger';
@@ -45,6 +46,13 @@ export async function startAllSchedulers(): Promise<void> {
         logger.debug('DbRetentionScheduler 시작 완료');
     } catch (err) {
         logger.error('DbRetentionScheduler 시작 실패:', err);
+    }
+
+    // 2-1. 확장 카탈로그 주기 동기화(M4, opt-in) — 타이머는 걸되 tick 마다 EXTENSION_CATALOG_AUTO_SYNC_ENABLED 를 읽는다(꺼짐 = 아무것도 안 함)
+    try {
+        startCatalogAutoSync();
+    } catch (err) {
+        logger.error('CatalogAutoSync 시작 실패:', err);
     }
 
     // 3. 토큰 블랙리스트/레이트리밋 만료 데이터 주기 정리
@@ -460,6 +468,13 @@ export function stopAllSchedulers(): void {
         stopQuotaReconcileJob();
     } catch (err) {
         logger.error('QuotaReconcileJob 중지 실패:', err);
+    }
+
+    // 2-1. 확장 카탈로그 주기 동기화 중지 — 자체 모듈 타이머
+    try {
+        stopCatalogAutoSync();
+    } catch (err) {
+        logger.error('CatalogAutoSync 중지 실패:', err);
     }
 
     // 3. 토큰 정리 주기 중지 — 역시 자체 모듈 타이머

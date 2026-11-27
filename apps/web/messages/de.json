@@ -2600,7 +2600,25 @@
       "sourceAria": "Quellfilter",
       "sourceAll": "Alle Quellen ({count})",
       "searchAria": "Stichwortsuche",
-      "searchPlaceholder": "Name/Beschreibung durchsuchen"
+      "searchPlaceholder": "Name/Beschreibung durchsuchen",
+      "admin": {
+        "statusOk": "Letzte Synchronisierung erfolgreich",
+        "statusError": "Letzte Synchronisierung fehlgeschlagen",
+        "statusRateLimited": "Letzte Synchronisierung: Ratenlimit (automatische Wiederholungen warten länger)",
+        "statusNever": "Noch nie synchronisiert",
+        "lastAttempt": "Letzter Versuch: {time}",
+        "credentialSaved": "Quell-Token gespeichert",
+        "credentialNone": "Kein Quell-Token (ohne Authentifizierung)",
+        "tokenPlaceholder": "Quell-Zugriffstoken (wird nach dem Speichern nicht mehr angezeigt)",
+        "saveToken": "Token speichern",
+        "clearToken": "Token entfernen",
+        "clearTokenConfirm": "Gespeichertes Quell-Token entfernen?",
+        "subpathPlaceholder": "Unterpfad (z. B. plugins/market; leer = Repository-Wurzel)",
+        "saveSubpath": "Pfad speichern",
+        "saveFailed": "Speichern fehlgeschlagen",
+        "saved": "Gespeichert",
+        "syncHint": "Änderungen an Unterpfad und Token gelten ab der nächsten Synchronisierung."
+      }
     }
   },
   "mcpInstances": {

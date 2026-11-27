@@ -2600,7 +2600,25 @@
       "sourceAria": "Source filter",
       "sourceAll": "All sources ({count})",
       "searchAria": "Keyword search",
-      "searchPlaceholder": "Search name/description"
+      "searchPlaceholder": "Search name/description",
+      "admin": {
+        "statusOk": "Last sync succeeded",
+        "statusError": "Last sync failed",
+        "statusRateLimited": "Last sync: rate limited (automatic retries back off)",
+        "statusNever": "Never synced",
+        "lastAttempt": "Last attempt: {time}",
+        "credentialSaved": "Source token saved",
+        "credentialNone": "No source token (unauthenticated)",
+        "tokenPlaceholder": "Source access token (not shown again after saving)",
+        "saveToken": "Save token",
+        "clearToken": "Remove token",
+        "clearTokenConfirm": "Remove the saved source token?",
+        "subpathPlaceholder": "Subpath (e.g. plugins/market; empty = repository root)",
+        "saveSubpath": "Save path",
+        "saveFailed": "Save failed",
+        "saved": "Saved",
+        "syncHint": "Subpath and token changes apply from the next sync."
+      }
     }
   },
   "mcpInstances": {
