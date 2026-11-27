@@ -13,6 +13,7 @@
 import type { TreeEntry, TreeResult } from './git-fetcher';
 import { isArchiveUrl, archivePseudoRepo } from './archive-fetcher';
 import { isLocalSourceUrl, localPseudoRepo } from './local-directory-fetcher';
+import { isEnabledOciSourceUrl, ociPseudoRepo } from './oci-reference';
 
 export const INTERNAL_BUNDLE_PREFIX = 'internal://bundle/';
 
@@ -28,14 +29,15 @@ function internalBundlePseudoRepo(url: string): { owner: string; repo: string } 
     return { owner: 'internal', repo: internalBundleId(url) };
 }
 
-/** git 이 아닌 소스(zip 아카이브 · 내부 번들 · 로컬 디렉터리) — ingest 분기 공통 판정 */
+/** git 이 아닌 소스(zip 아카이브 · 내부 번들 · 로컬 디렉터리 · OCI(opt-in)) — ingest 분기 공통 판정 */
 export function isNonGitSourceUrl(url: string): boolean {
-    return isArchiveUrl(url) || isInternalBundleUrl(url) || isLocalSourceUrl(url);
+    return isArchiveUrl(url) || isInternalBundleUrl(url) || isLocalSourceUrl(url) || isEnabledOciSourceUrl(url);
 }
 
 export function nonGitPseudoRepo(url: string): { owner: string; repo: string } {
     if (isInternalBundleUrl(url)) return internalBundlePseudoRepo(url);
     if (isLocalSourceUrl(url)) return localPseudoRepo(url);
+    if (isEnabledOciSourceUrl(url)) return ociPseudoRepo(url);
     return archivePseudoRepo(url);
 }
 

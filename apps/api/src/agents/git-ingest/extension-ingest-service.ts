@@ -25,6 +25,8 @@ import type { LLMClient } from '../../llm/client';
 import { createLogger } from '../../utils/logger';
 import { recordExtensionInstallation } from '../../services/addon/addon-state';
 import { isLocalSourceUrl } from './local-directory-fetcher';
+import { isEnabledOciSourceUrl } from './oci-reference';
+import type { OciFetchImpl } from './oci-fetcher';
 import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import { GitFetcher } from './git-fetcher';
 import { isNonGitSourceUrl, nonGitPseudoRepo, type LoadedBundle } from './internal-bundle-fetcher';
@@ -77,6 +79,8 @@ interface ExtensionIngestOptions {
     archiveFetcherFactory?: (url: string) => GitFetcher;
     /** 내부 번들(internal://bundle/<id>) 로더 — 갤러리 게시분 설치용. 미주입 시 내부 소스는 실패한다 */
     internalBundleLoader?: (id: string) => Promise<LoadedBundle | null>;
+    /** OCI 레지스트리 요청 함수 (테스트 주입용 — 기본은 SSRF 가드 safeFetch) */
+    ociFetch?: OciFetchImpl;
     /** 정적 색인(M6) 요청 함수 (테스트 주입용 — 기본은 SSRF 가드 safeFetch) */
     catalogIndexFetch?: CatalogIndexFetch;
 }
@@ -85,13 +89,13 @@ export class ExtensionIngestService {
     constructor(private opts: ExtensionIngestOptions) {}
 
     /** git 이 아닌 소스(.zip 아카이브 · 내부 번들 · 로컬 디렉터리) fetcher 생성 — GitFetcher 동형 (duck-typed). */
-    private makeArchiveFetcher(url: string): GitFetcher {
-        return makeNonGitFetcher(url, this.opts);
+    private makeArchiveFetcher(url: string, source?: { accessToken?: string }): GitFetcher {
+        return makeNonGitFetcher(url, this.opts, source);
     }
 
     /** 원본 해석기 의존성 — 설치·미리보기 공용 */
     private resolverDeps(): SourceResolverDeps {
-        return { fetcherFactory: this.opts.fetcherFactory, makeArchiveFetcher: (u) => this.makeArchiveFetcher(u) };
+        return { fetcherFactory: this.opts.fetcherFactory, makeArchiveFetcher: (u, s) => this.makeArchiveFetcher(u, s) };
     }
 
     async import(input: ImportInput): Promise<ImportResult | CandidateListResult> {
@@ -312,9 +316,10 @@ export class ExtensionIngestService {
         // 내장 add-on 과 같은 설치 표에 남긴다 — 관리 화면이 내장/설치형을 한 목록으로 본다(S3).
         await recordExtensionInstallation({
             extensionId: row.id, name: manifest.name, version: manifest.version,
-            // 소스 구분: internal://bundle(마켓 게시분) · zip/tar 아카이브 · 그 외 Git
+            // 소스 구분: internal://bundle(마켓 게시분) · 로컬 · OCI 레지스트리(opt-in) · zip/tar 아카이브 · 그 외 Git
             source: input.gitUrl.startsWith('internal://') ? 'marketplace'
                 : isLocalSourceUrl(input.gitUrl) ? 'local'
+                : isEnabledOciSourceUrl(input.gitUrl) ? 'oci'
                 : (isArchive ? 'zip' : 'git'),
         });
 
@@ -364,7 +369,7 @@ export class ExtensionIngestService {
         const parsed = isArchive ? nonGitPseudoRepo(input.sourceUrl) : parseGitUrl(input.sourceUrl);
         if (!parsed) throw new Error(`INVALID_GIT_URL: ${input.sourceUrl}`);
         const fetcher = isArchive
-            ? this.makeArchiveFetcher(input.sourceUrl)
+            ? this.makeArchiveFetcher(input.sourceUrl, { accessToken: input.accessToken })
             : this.opts.fetcherFactory({ accessToken: input.accessToken });
         const latestRef = await fetcher.resolveRef(parsed.owner, parsed.repo, input.trackingRef ?? 'HEAD');
         if (latestRef === input.currentRef) {
