@@ -29,6 +29,10 @@
     "apps/api/src/__tests__/circuit-breaker.test.ts": "운영 호출 0 인 노드 서킷 브레이커 cluster/circuit-breaker.ts(+tryWithFallback·CircuitOpenError·AllNodesFailedError)를 지우며 함께 삭제 — 남은 서킷(도구 서킷)은 apps/api/src/tool-contract/__tests__/tool-health-circuit.test.ts 가 검증한다"
   },
   "deletedSources": {
+    "apps/api/src/routes/marketplace-publish.routes.ts": [
+      "apps/api/src/addons/extension-curation/__tests__/publish-routes.test.ts",
+      "apps/api/src/__tests__/extension-sharing-addon-off.test.ts"
+    ],
     "apps/api/src/addons/knowledge-runtime/embedding/index-manager.ts": [
       "apps/api/src/addons/knowledge-runtime/__tests__/index-catalog.test.ts",
       "apps/api/src/addons/knowledge-runtime/__tests__/space-reindex.test.ts",

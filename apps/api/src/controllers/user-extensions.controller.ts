@@ -7,12 +7,9 @@
  *
  * Endpoints (모두 requireAuth):
  *   GET    /api/users/me/extensions                     — 본인 active 설치 목록
- *   GET    /api/users/me/extensions/gallery             — 워크스페이스 갤러리 (shared 확장 + admin 큐레이션 카탈로그)
- *   POST   /api/users/me/extensions/gallery/:id/install — 갤러리 확장을 본인 계정으로 설치 (ingest 재실행)
  *   POST   /api/users/me/extensions/catalog/:id/preview — 설치 미리보기(M1b, EXTENSION_INSTALL_PREVIEW_ENABLED — 쓰기·LLM 없음)
  *   POST   /api/users/me/extensions/catalog/:id/install — 카탈로그 소스의 플러그인을 본인 계정으로 설치
  *   GET    /api/users/me/extensions/:id                 — 상세 (구성요소 현재 상태 포함, 본인 소유)
- *   PATCH  /api/users/me/extensions/:id/visibility      — 공유 토글 (소유자 한정, Phase 3)
  *   POST   /api/users/me/extensions/:id/update-check    — 원격 ref 비교 업데이트 확인 (Phase 2)
  *   DELETE /api/users/me/extensions/:id                 — 제거 (구성요소 archive + soft remove, 소유자 한정)
  *
@@ -28,22 +25,25 @@
  *   GET|POST /api/users/me/extensions/org-owned · POST …/org-owned/:id/update · DELETE …/org-owned/:id
  *                                                      — 조직 소유 설치(P8, EXTENSION_ORG_OWNED_INSTALL_ENABLED — OFF 면 종전 라우트로)
  *
- * ⚠️ 라우트 등록 순서: '/gallery*'·'/catalog*' 가 '/:id' 보다 먼저여야 한다 (Express 순차 매칭).
+ * 공유·갤러리(`GET /gallery`·`POST /gallery/:id/install`·`PATCH /:id/visibility`)와 게시(`/api/marketplace`)는
+ * 큐레이션 add-on 의 라우트다(§8-2) — 앱이 add-on 라우트를 이 라우터보다 먼저 마운트하므로 `/gallery` 가 `/:id` 에 잡히지 않는다.
+ * 저장소·원본 정책·카탈로그 관리·이름 설치는 Base 에 남는다(add-on 을 꺼도 정책이 강제돼야 한다).
+ *
+ * ⚠️ 라우트 등록 순서: '/catalog*' 가 '/:id' 보다 먼저여야 한다 (Express 순차 매칭).
  *
  * @see data/repositories/user-extension-repository
  * @see data/repositories/extension-catalog-repository
  */
-import { Router, Request } from 'express';
+import { Router } from 'express';
 import { isAdminRole } from '../data/user-manager';
 import { z } from 'zod';
 import { requireAuth, requireAdmin } from '../auth/middleware';
 import { validate } from '../middlewares/validation';
 import { getPool } from '../data/models/unified-database';
 import { releaseLinkedMcpServers } from '../services/extensions/release-linked-mcp';
-import { UserExtensionRepository, type UserExtensionRow } from '../data/repositories/user-extension-repository';
+import { UserExtensionRepository } from '../data/repositories/user-extension-repository';
 import { ExtensionCatalogRepository, toPublicCatalogSource } from '../data/repositories/extension-catalog-repository';
 import { buildExtensionIngestService } from '../services/extensions/ingest-service-factory';
-import { installSharedExtension } from '../services/extensions/shared-install';
 import { syncCatalogSource } from '../services/extensions/catalog-sync';
 import { EXTENSION_CATALOG_SYNC_LIMITS, normalizeCatalogSubpath } from '../config/extension-catalog-sync';
 import { CATALOG_INDEX_LIMITS, normalizeCatalogIndexUrl } from '../config/extension-catalog-index';
@@ -54,9 +54,9 @@ import { registerOrgOwnedRoutes } from './user-extensions-org-owned.routes';
 import { applyDefaultCatalogAlias } from '../services/extensions/catalog-alias';
 import { createLogger } from '../utils/logger';
 import { removeExtensionInstallation } from '../services/addon/addon-state';
-import { activeOrgFor, membershipsFor } from '../services/org/membership-cache';
+import { requestUserId, toPublicExtension } from '../services/extensions/public-view';
 import { success, internalError, unauthorized, notFound, badRequest, conflict, error as apiError } from '../utils/api-response';
-import { decideExtensionRemoval, galleryDeploymentModes, installedDeploymentInfo, recordExtensionRemoval } from '../services/extensions/org-deployment';
+import { decideExtensionRemoval, installedDeploymentInfo, recordExtensionRemoval } from '../services/extensions/org-deployment';
 import { ExtensionSourceBlockedError } from '../errors/extension-source-blocked.error';
 import { extensionInstallPreviewEnabled } from '../config/extension-install-preview';
 
@@ -65,12 +65,8 @@ const updateCheckSchema = z.object({
     accessToken: z.string().max(200).optional(),
 });
 
-const visibilitySchema = z.object({
-    visibility: z.enum(['private', 'shared', 'organization']),
-});
-
-const galleryInstallSchema = z.object({
-    // 공유 확장이 private repo 인 경우 설치자 본인의 token (요청 한정 — DB 미저장)
+const catalogSyncSchema = z.object({
+    // 비공개 원본 재동기화용 token (요청 한정 — DB 미저장)
     accessToken: z.string().max(200).optional(),
 });
 
@@ -108,33 +104,8 @@ function rethrowPolicyError(err: unknown): void {
     if (err instanceof ExtensionSourceBlockedError) throw err;
 }
 
-function getUserId(req: Request): string | null {
-    if (!req.user) return null;
-    if ('userId' in req.user && typeof (req.user as { userId?: unknown }).userId === 'string') {
-        return (req.user as { userId: string }).userId;
-    }
-    if ('id' in req.user) return String(req.user.id);
-    return null;
-}
-
-/**
- * 응답에서 내부 필드(source_hash, user_id, 승인자 id) 제외. 조직 소유(212) 열은 싣지 않고 — 사람 소유 행의 응답 모양은
- * 마이그레이션 전과 같다 — 조직 소유 행만 `orgOwned: true` 를 붙인다(설치자 id 는 싣지 않는다).
- */
-function toPublic(row: UserExtensionRow) {
-    const { source_hash: _hash, user_id: _uid, permissions_reviewed_by: _reviewer, ...rest } = row as UserExtensionRow & { owner_org_id?: string | null; installed_by_user_id?: string | null };
-    const { owner_org_id: ownerOrg, installed_by_user_id: _installer, ...base } = rest;
-    return ownerOrg ? { ...base, orgOwned: true } : base;
-}
-
-/** 요청자가 멤버인 조직 id — 조직에 공개된 확장의 갤러리 노출·설치 판정에 쓴다 (조회 실패는 빈 목록 = 조직 공개분만 안 보인다) */
-async function memberOrgIds(userId: string): Promise<string[]> {
-    try {
-        return (await membershipsFor(userId)).map((m) => m.orgId);
-    } catch {
-        return [];
-    }
-}
+const getUserId = requestUserId;
+const toPublic = toPublicExtension;
 
 /** ExtensionIngestService 조립 — services/extensions/ingest-service-factory (카탈로그 주기 동기화와 공용) */
 const buildIngestService = buildExtensionIngestService;
@@ -173,77 +144,6 @@ export function createUserExtensionsController(): Router {
         } catch (err) {
             log.error('list 실패:', err);
             res.status(500).json(internalError('확장 목록 조회 실패'));
-        }
-    });
-
-    // ⚠️ '/:id' 보다 먼저 등록 — Express 순차 매칭이라 아래에 두면 id='gallery' 로 잡힘
-    router.get('/gallery', requireAuth, async (req, res) => {
-        const userId = getUserId(req);
-        if (!userId) { res.status(401).json(unauthorized()); return; }
-        try {
-            const repo = new UserExtensionRepository(getPool());
-            const rows = await repo.listShared(undefined, await memberOrgIds(userId));
-            // 타인 user_id 는 노출하지 않고 owned 플래그만 제공 (user_agents 관용구 동형)
-            const modes = await galleryDeploymentModes(userId);
-            const extensions = rows.map((r) => {
-                const item = { ...toPublic(r), owned: r.user_id === userId };
-                // 조직 배포 모드(§8-1, opt-in) — 활성 조직 공개 항목에만 이 멤버의 적용 모드. 꺼져 있으면 필드 없음(종전)
-                const mode = modes?.get(r.id);
-                return mode ? { ...item, deployment_mode: mode } : item;
-            });
-            // admin 큐레이션 카탈로그 (enabled 소스만) — 실패해도 갤러리 자체는 응답 (fail-open)
-            let catalog: Array<Record<string, unknown>> = [];
-            try {
-                const catRepo = new ExtensionCatalogRepository(getPool());
-                catalog = (await catRepo.listEnabled()).map((c) => ({
-                    id: c.id, url: c.url, name: c.name, description: c.description,
-                    plugins: c.plugins, last_synced_at: c.last_synced_at,
-                }));
-            } catch (err) {
-                log.warn('catalog 조회 실패 (갤러리는 계속):', err);
-            }
-            // 설치 미리보기(M1b) — 켜져 있을 때만 필드를 싣는다(꺼져 있으면 응답 모양이 종전과 같다)
-            res.json(success({ extensions, catalog, ...(extensionInstallPreviewEnabled() ? { installPreview: true } : {}) }));
-        } catch (err) {
-            log.error('gallery 실패:', err);
-            res.status(500).json(internalError('갤러리 조회 실패'));
-        }
-    });
-
-    router.post('/gallery/:id/install', requireAuth, validate(galleryInstallSchema), async (req, res) => {
-        const userId = getUserId(req);
-        if (!userId) { res.status(401).json(unauthorized()); return; }
-        try {
-            const repo = new UserExtensionRepository(getPool());
-            const shared = await repo.getInstallableById(req.params.id, userId, await memberOrgIds(userId));
-            if (!shared) { res.status(404).json(notFound('공유 확장 없음')); return; }
-
-            const body = req.body as z.infer<typeof galleryInstallSchema>;
-            // 설치자 본인 계정으로 동일 소스 ingest 재실행 — 구성요소는 본인 소유 draft 로 생성 (조직 배포 조정과 같은 입력)
-            const result = await installSharedExtension(shared, userId, { isAdmin: isAdminRole(req.user?.role), accessToken: body.accessToken });
-            if ('selectionRequired' in result && result.selectionRequired) {
-                // 명시 gitPath 라 도달 불가 — 방어
-                res.status(400).json(badRequest('plugin.json 후보가 모호합니다'));
-                return;
-            }
-            log.info(`gallery install: ${req.params.id} → ${result.extensionId} (user=${userId}, updated=${!!result.updated}, upToDate=${!!result.upToDate})`);
-            res.json(success({
-                extensionId: result.extensionId,
-                name: result.name,
-                version: result.version,
-                updated: result.updated ?? false,
-                // deduped = 동일 ref 최근 설치 재사용 — 설치자 관점에선 "이미 최신"과 동일
-                upToDate: (result.upToDate ?? false) || result.deduped,
-                skills: result.skills,
-                mcpServers: result.mcpServers,
-                agents: result.agents,
-                validationWarnings: result.validationWarnings,
-            }));
-        } catch (err) {
-            rethrowPolicyError(err);
-            const msg = err instanceof Error ? err.message : String(err);
-            log.warn(`gallery install 실패: ${msg}`);
-            res.status(400).json(badRequest(`갤러리 설치 실패: ${msg}`));
         }
     });
 
@@ -299,14 +199,14 @@ export function createUserExtensionsController(): Router {
         }
     });
 
-    router.post('/catalog/:id/sync', requireAuth, requireAdmin, validate(galleryInstallSchema), async (req, res) => {
+    router.post('/catalog/:id/sync', requireAuth, requireAdmin, validate(catalogSyncSchema), async (req, res) => {
         try {
             const repo = new ExtensionCatalogRepository(getPool());
             const row = await repo.getById(req.params.id);
             if (!row) { res.status(404).json(notFound('카탈로그 소스 없음')); return; }
             const service = await buildIngestService();
             // accessToken(요청 한정) > 저장된 원본 토큰(M4) — GitHub API 무인증 rate limit(60/hr) 회피 (2026-08-16 실측)
-            const body = req.body as z.infer<typeof galleryInstallSchema>;
+            const body = req.body as z.infer<typeof catalogSyncSchema>;
             // 결과(sync_status·last_sync_error·last_sync_attempt_at)는 syncCatalogSource 가 기록한다 — 실패도 기록 후 다시 던진다
             const { row: updated, snapshot } = await syncCatalogSource({ repo, service }, row, {
                 accessToken: body.accessToken, userId: getUserId(req) ?? undefined,
@@ -474,28 +374,6 @@ export function createUserExtensionsController(): Router {
         } catch (err) {
             log.error('get 실패:', err);
             res.status(500).json(internalError('확장 조회 실패'));
-        }
-    });
-
-    router.patch('/:id/visibility', requireAuth, validate(visibilitySchema), async (req, res) => {
-        const userId = getUserId(req);
-        if (!userId) { res.status(401).json(unauthorized()); return; }
-        try {
-            const body = req.body as z.infer<typeof visibilitySchema>;
-            const repo = new UserExtensionRepository(getPool());
-            // organization 공개는 요청자의 활성 조직(멤버십 검증 완료)에만 — 임의 org_id 를 받지 않는다 (user_agents 와 같은 규칙)
-            const activeOrg = body.visibility === 'organization' ? await activeOrgFor(userId) : null;
-            if (body.visibility === 'organization' && !activeOrg) {
-                res.status(400).json(badRequest('활성 조직이 없습니다. 먼저 조직을 선택하세요.'));
-                return;
-            }
-            const row = await repo.setVisibility(req.params.id, userId, body.visibility, activeOrg?.orgId ?? null);
-            if (!row) { res.status(404).json(notFound('확장 없음')); return; }
-            log.info(`확장 visibility 변경: ${row.id} → ${body.visibility} (user=${userId})`);
-            res.json(success({ extension: toPublic(row) }));
-        } catch (err) {
-            log.error('visibility 실패:', err);
-            res.status(500).json(internalError('공유 설정 실패'));
         }
     });
 
