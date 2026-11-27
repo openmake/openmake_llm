@@ -19,7 +19,7 @@
  * @module services/addon/addon-state
  */
 import { createLogger } from '../../utils/logger';
-import { isBuiltinAddonEnabled } from '../../addon-host/builtin-registry';
+import { builtinAddonDefaultState, isBuiltinAddonEnabled } from '../../addon-host/builtin-registry';
 import { getAddonProcessReadiness } from '../../addon-host/activation';
 import { ADDON_STATE_CACHE_TTL_MS } from '../../config/runtime-limits';
 import type { AddonDesiredState, AddonFailureCode, AddonState } from '../../data/repositories/addon-state-repository';
@@ -67,7 +67,7 @@ export async function ensureAddonStates(): Promise<void> {
 }
 
 /**
- * `state` — 켜짐/꺼짐의 이유. env 차단은 `env_disabled`, 행 없음(미등록)은 기본 의도 `enabled`.
+ * `state` — 켜짐/꺼짐의 이유. env 차단은 `env_disabled`, 행 없음(미등록)은 매니페스트 `defaultState`(선언 없으면 `enabled`).
  * `failed`(부팅 실패)는 관리자 조치가 필요해 라우트가 꺼짐(404)과 구분해 503 `ADDON_FAILED` 로 알린다(설계 문서 8.3).
  */
 export type AddonEnabledVerdict =
@@ -86,7 +86,7 @@ export async function readAddonEnabledStrict(addonId: string): Promise<AddonEnab
         const err = await refreshStates();
         if (err) return { known: false, reason: err.message };
     }
-    const state = withProcessReadiness(addonId, cachedAddonState(addonId) ?? 'enabled');
+    const state = withProcessReadiness(addonId, cachedAddonState(addonId) ?? builtinAddonDefaultState(addonId));
     return { known: true, enabled: state === 'enabled', state };
 }
 
@@ -111,7 +111,10 @@ export async function readAddonStateStrict(addonId: string): Promise<StrictAddon
         const { getUnifiedDatabase } = await import('../../data/models/unified-database');
         const { AddonStateRepository } = await import('../../data/repositories/addon-state-repository');
         const row = await new AddonStateRepository(getUnifiedDatabase().getPool()).get(addonId);
-        if (!row) return { known: true, registered: false, state: 'enabled', desiredState: 'enabled', stateRevision: 0, lastFailureCode: null };
+        if (!row) {
+            const initial = builtinAddonDefaultState(addonId);
+            return { known: true, registered: false, state: initial, desiredState: initial, stateRevision: 0, lastFailureCode: null };
+        }
         return { known: true, registered: true, state: row.state, desiredState: row.desired_state, stateRevision: row.state_revision, lastFailureCode: row.last_failure_code };
     } catch (err) {
         return { known: false, reason: err instanceof Error ? err.message : String(err) };
@@ -141,11 +144,12 @@ export function cachedAddonState(addonId: string): AddonState | undefined {
 
 /**
  * 동기 판정 — 캐시에 있는 값만 본다(만료돼도 마지막 값). 채팅은 턴 시작(`runMessagePipeline`)에서, 라우트는 게이트에서
- * `ensureAddonStates()` 를 먼저 await 해 이 턴의 캐시를 TTL 안으로 맞춘다. 첫 적재 전에는 env 판정만 쓴다(부팅 직후 fail-open).
+ * `ensureAddonStates()` 를 먼저 await 해 이 턴의 캐시를 TTL 안으로 맞춘다. 첫 적재 전에는 env 판정만 쓴다(부팅 직후 fail-open) —
+ * 단 매니페스트 `defaultState: disabled` add-on 은 행을 읽기 전까지 꺼진 것으로 본다(fail-closed).
  */
 export function isAddonEnabledSync(addonId: string): boolean {
     if (!isBuiltinAddonEnabled(addonId)) return false;
-    return withProcessReadiness(addonId, cachedAddonState(addonId) ?? 'enabled') === 'enabled';
+    return withProcessReadiness(addonId, cachedAddonState(addonId) ?? builtinAddonDefaultState(addonId)) === 'enabled';
 }
 
 /** 비동기 판정 — 캐시를 보장한 뒤 답한다. */

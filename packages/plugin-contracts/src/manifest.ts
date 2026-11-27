@@ -73,6 +73,8 @@ export interface AddonManifestDTO {
         capabilities: string[];
     };
     permissions?: AddonPermissionName[];
+    /** 설치 표에 처음 들어갈 때의 상태 — 생략하면 enabled(종전 동작). disabled 면 관리자가 켜기 전까지 꺼짐 */
+    defaultState?: 'enabled' | 'disabled';
     entitlement?: {
         sku: string;
     };

@@ -46,4 +46,12 @@ describeOrSkip('AddonStateRepository (TEMP addon_installations)', () => {
         // failed 에서 다른 상태로 바꾸면 실패 사유가 지워진다
         expect(await repo.setState('x-runtime', 'enabled', 'back')).toMatchObject({ state: 'enabled', failure_reason: null });
     });
+
+    it('initialState disabled(매니페스트 defaultState) — 첫 insert 만 꺼진 채, 관리자가 켠 뒤 다시 발견해도 켜짐 유지', async () => {
+        await repo.upsertDiscovered({ addonId: 'x-default-off', name: 'off', version: '1.0.0', kind: 'content', source: 'builtin', initialState: 'disabled' });
+        expect(await repo.get('x-default-off')).toMatchObject({ state: 'disabled', desired_state: 'disabled' });
+        await repo.setState('x-default-off', 'enabled');
+        await repo.upsertDiscovered({ addonId: 'x-default-off', name: 'off', version: '1.1.0', kind: 'content', source: 'builtin', initialState: 'disabled' });
+        expect(await repo.get('x-default-off')).toMatchObject({ state: 'enabled', desired_state: 'enabled', version: '1.1.0' });
+    });
 });
