@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.151.1](https://github.com/openmake/openmake_llm/compare/v1.151.0...v1.151.1) (2026-11-27)
+
+
+### 🐛 버그 수정
+
+* **web:** 확장 현황 표의 짧은 열이 세로로 접히지 않게 한다 ([c449076](https://github.com/openmake/openmake_llm/commit/c44907692e20780879ff9b2ff59b0c8567937e77))
+* **web:** 확장 현황 표의 짧은 열이 세로로 접히지 않게 한다 ([75df9f9](https://github.com/openmake/openmake_llm/commit/75df9f9bcbbfc672ae679fa6c08485e5024b2f4a))
+
 ## [1.151.0](https://github.com/openmake/openmake_llm/compare/v1.150.0...v1.151.0) (2026-11-27)
 
 
