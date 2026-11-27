@@ -18,6 +18,10 @@ jest.mock('../../services/extensions/catalog-sync', () => ({
     startCatalogAutoSync: jest.fn(),
     stopCatalogAutoSync: jest.fn(),
 }));
+jest.mock('../../services/extensions/org-deployment', () => ({
+    startOrgDeploymentReconcile: jest.fn(),
+    stopOrgDeploymentReconcile: jest.fn(),
+}));
 jest.mock('../../data/db-retention', () => ({ startDbRetention: jest.fn() }));
 jest.mock('../../utils/token-cleanup', () => ({ startPeriodicCleanup: jest.fn(), stopPeriodicCleanup: jest.fn() }));
 
@@ -25,6 +29,7 @@ import { stopAllSchedulers } from '../index';
 import { stopQuotaReconcileJob } from '../../services/cost/quota-reconcile-job';
 import { stopSessionCleanupScheduler } from '../../data/conversation-db';
 import { stopCatalogAutoSync } from '../../services/extensions/catalog-sync';
+import { stopOrgDeploymentReconcile } from '../../services/extensions/org-deployment';
 
 describe('stopAllSchedulers', () => {
     beforeEach(() => jest.clearAllMocks());
@@ -42,6 +47,11 @@ describe('stopAllSchedulers', () => {
     test('확장 카탈로그 주기 동기화(자체 타이머)를 중지한다', () => {
         stopAllSchedulers();
         expect(stopCatalogAutoSync).toHaveBeenCalledTimes(1);
+    });
+
+    test('조직 확장 배포 모드 조정(자체 타이머)을 중지한다', () => {
+        stopAllSchedulers();
+        expect(stopOrgDeploymentReconcile).toHaveBeenCalledTimes(1);
     });
 
     test('한 잡의 중지 실패가 나머지 중지를 막지 않는다', () => {

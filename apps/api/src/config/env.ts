@@ -90,6 +90,8 @@ export interface EnvConfig {
     extensionSourcePolicyEnforced: boolean;
     /** 확장 설치 미리보기(M1b) — config/extension-install-preview */
     extensionInstallPreviewEnabled: boolean;
+    /** 조직 확장 배포 모드(§8-1) — 항목별 default_off/default_on/required + 그룹 덮어쓰기 + 자동 설치 조정(기본 OFF) */
+    extensionOrgDeploymentModesEnabled: boolean;
     /** 관리자 확장 현황(M3) — 현황·정책 미리보기 라우트와 /admin/extensions 화면(기본 OFF) */
     extensionAdminInventoryEnabled: boolean;
     /** `GET /api/addons` 가 모든 add-on 의 켜짐을 라우트 게이트와 같은 판정(env × DB 상태 × 프로세스 준비)으로 답한다(opt-in, config/addon-list-state) */
@@ -283,6 +285,7 @@ export function loadConfig(): EnvConfig {
         BROWSER_SITE_POLICY: env('BROWSER_SITE_POLICY'),
         EXTENSION_SOURCE_POLICY_ENFORCED: env('EXTENSION_SOURCE_POLICY_ENFORCED'),
         EXTENSION_INSTALL_PREVIEW_ENABLED: env('EXTENSION_INSTALL_PREVIEW_ENABLED'),
+        EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED: env('EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED'),
         EXTENSION_ADMIN_INVENTORY_ENABLED: env('EXTENSION_ADMIN_INVENTORY_ENABLED'),
         ADDON_LIST_REFLECT_DB_STATE: env('ADDON_LIST_REFLECT_DB_STATE'),
         EXTENSION_ARBITRARY_URL_INSTALL: env('EXTENSION_ARBITRARY_URL_INSTALL'),
@@ -419,6 +422,7 @@ export function loadConfig(): EnvConfig {
         // 확장 원본 정책(M2) — 알 수 없는 값은 기본값(종전 동작). 부팅을 막지 않게 스키마는 문자열로 받는다
         extensionSourcePolicyEnforced: parsed.EXTENSION_SOURCE_POLICY_ENFORCED === undefined ? DEFAULT_CONFIG.extensionSourcePolicyEnforced : parsed.EXTENSION_SOURCE_POLICY_ENFORCED === 'true',
         extensionInstallPreviewEnabled: parsed.EXTENSION_INSTALL_PREVIEW_ENABLED === undefined ? DEFAULT_CONFIG.extensionInstallPreviewEnabled : parsed.EXTENSION_INSTALL_PREVIEW_ENABLED === 'true',
+        extensionOrgDeploymentModesEnabled: parsed.EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED === 'true',
         extensionAdminInventoryEnabled: parsed.EXTENSION_ADMIN_INVENTORY_ENABLED === undefined ? DEFAULT_CONFIG.extensionAdminInventoryEnabled : parsed.EXTENSION_ADMIN_INVENTORY_ENABLED === 'true',
         addonListReflectDbState: parsed.ADDON_LIST_REFLECT_DB_STATE === undefined ? DEFAULT_CONFIG.addonListReflectDbState : parsed.ADDON_LIST_REFLECT_DB_STATE === 'true',
         extensionArbitraryUrlInstall: parsed.EXTENSION_ARBITRARY_URL_INSTALL === 'catalog-only' ? 'catalog-only' : DEFAULT_CONFIG.extensionArbitraryUrlInstall,
