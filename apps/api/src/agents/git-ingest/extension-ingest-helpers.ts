@@ -7,6 +7,8 @@
 import { LocalDirectoryFetcher, isLocalSourceUrl } from './local-directory-fetcher';
 import type { GitFetcher, TreeEntry } from './git-fetcher';
 import { ArchiveFetcher } from './archive-fetcher';
+import { OciFetcher, type OciFetchImpl } from './oci-fetcher';
+import { isEnabledOciSourceUrl } from './oci-reference';
 import { InternalBundleFetcher, isInternalBundleUrl, type LoadedBundle } from './internal-bundle-fetcher';
 import { detectUnsupportedComponents } from './repo-scanner';
 import type { ExtensionManifest } from './extension-manifest-validator';
@@ -21,14 +23,21 @@ import type {
     ImportResult,
 } from './extension-ingest-types';
 
-/** git 이 아닌 소스(.zip 아카이브 · 내부 번들 · 로컬 디렉터리) fetcher 생성 — GitFetcher 동형 (duck-typed). */
+/** git 이 아닌 소스(.zip 아카이브 · 내부 번들 · 로컬 디렉터리 · OCI) fetcher 생성 — GitFetcher 동형 (duck-typed). */
 export function makeNonGitFetcher(
     url: string,
     opts: {
         archiveFetcherFactory?: (url: string) => GitFetcher;
         internalBundleLoader?: (id: string) => Promise<LoadedBundle | null>;
+        /** OCI 레지스트리 요청 함수(테스트 주입용 — 기본은 SSRF 가드 safeFetch) */
+        ociFetch?: OciFetchImpl;
     },
+    source: { accessToken?: string } = {},
 ): GitFetcher {
+    if (isEnabledOciSourceUrl(url)) {
+        // OCI 레지스트리(P8, opt-in) — 사설 레지스트리는 사용자 accessToken. 판정·해제 방어는 oci-fetcher
+        return new OciFetcher(url, { accessToken: source.accessToken, fetchImpl: opts.ociFetch }) as unknown as GitFetcher;
+    }
     if (isLocalSourceUrl(url)) {
         // 서버 파일시스템을 읽는 소스 — 루트 고정(realpath)·관리자 전용(import 에서 게이트).
         return new LocalDirectoryFetcher(url, {

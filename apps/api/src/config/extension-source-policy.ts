@@ -10,10 +10,11 @@
  * - `EXTENSION_ARBITRARY_URL_INSTALL`   `allow`(기본, 종전) · `catalog-only`(등록된 카탈로그 원본만). ENFORCED 일 때만 의미.
  * - `EXTENSION_SOURCE_POLICY`           전역 원본 규칙 `{ allow?: Rule[], deny?: Rule[] }`(JSON). 조직 정책 같은 키와 층으로 겹친다.
  *
- * 규칙 형태·매칭은 services/extensions/source-policy.ts 머리말.
+ * 규칙 형태·매칭은 services/extensions/source-policy.ts 머리말. `oci` 규칙은 EXTENSION_OCI_INSTALL_ENABLED 가 켜졌을 때만 원본에 닿는다.
  */
 import { z } from 'zod';
 import { getConfig } from './env';
+import { isValidOciRepository, normalizeOciRegistry } from '../agents/git-ingest/oci-reference';
 
 export const EXTENSION_SOURCE_POLICY_KEYS = {
     ENFORCED: 'EXTENSION_SOURCE_POLICY_ENFORCED',
@@ -36,6 +37,10 @@ export const EXTENSION_SOURCE_POLICY_LIMITS = {
 const field = z.string().trim().min(1).max(EXTENSION_SOURCE_POLICY_LIMITS.MAX_FIELD_CHARS);
 /** owner/repo 또는 owner/* */
 const repoField = field.regex(/^[A-Za-z0-9_.-]+\/(\*|[A-Za-z0-9_.-]+)$/, 'owner/repo 또는 owner/* 형식이어야 합니다');
+/** OCI 레지스트리 host[:port] — 원본과 같은 정규화 함수로 검증(services/extensions/source-policy 가 같은 함수로 비교) */
+const ociRegistryField = field.refine((v) => normalizeOciRegistry(v) !== null, 'OCI 레지스트리는 host[:port] 형식이어야 합니다');
+/** OCI 저장소 접두 — 사양 문법(소문자 구성요소). 끝 `/` 허용 */
+const ociRepositoryField = field.refine((v) => isValidOciRepository(v.replace(/\/+$/, '')), 'OCI 저장소는 소문자 경로(org/repo) 형식이어야 합니다');
 /** 정규식 — 컴파일되지 않으면 스키마 실패(= 정책 전체를 깨진 값으로 취급) */
 const regexField = field.refine((v) => { try { new RegExp(v); return true; } catch { return false; } }, '정규식이 올바르지 않습니다');
 
@@ -47,6 +52,8 @@ export const EXTENSION_SOURCE_RULE_SCHEMA = z.discriminatedUnion('type', [
     z.object({ type: z.literal('catalog'), id: field }).strict(),
     z.object({ type: z.literal('internal') }).strict(),
     z.object({ type: z.literal('local') }).strict(),
+    // OCI 레지스트리 원본(P8) — registry 는 host[:port], repository 는 경로 구성요소 단위 접두(생략 = 레지스트리 전체)
+    z.object({ type: z.literal('oci'), registry: ociRegistryField, repository: ociRepositoryField.optional() }).strict(),
 ]);
 export type ExtensionSourceRule = z.infer<typeof EXTENSION_SOURCE_RULE_SCHEMA>;
 
