@@ -3674,7 +3674,8 @@
     "approvePromote": "Freigeben & übernehmen",
     "approvePromoted": "Freigegeben und als deaktivierter Entwurf in den MCP-Katalog übernommen: {id}",
     "search": "Suchen",
-    "searchResult": "{total} Treffer (Name/Titel zuerst)"
+    "searchResult": "{total} Treffer (Name/Titel zuerst)",
+    "searchPlaceholderLive": "Name, Titel oder Beschreibung suchen (Ergebnisse beim Tippen)"
   },
   "orgExtensionDeployments": {
     "title": "Bereitstellungsmodi für Erweiterungen",

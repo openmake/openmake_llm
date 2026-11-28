@@ -3674,7 +3674,8 @@
     "approvePromote": "承認してカタログへ",
     "approvePromoted": "承認し、MCP カタログに無効の下書きとして追加しました: {id}",
     "search": "検索",
-    "searchResult": "{total} 件（名前・タイトル一致を優先）"
+    "searchResult": "{total} 件（名前・タイトル一致を優先）",
+    "searchPlaceholderLive": "名前・タイトル・説明を検索（入力するとすぐ検索）"
   },
   "orgExtensionDeployments": {
     "title": "拡張の配布モード",

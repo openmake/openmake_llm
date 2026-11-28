@@ -101,7 +101,7 @@ function EntryRow({ entry, onChanged, quick }: { entry: RegistryAdminEntry; onCh
         </div>
       </Td>
       <Td className="text-xs text-fg-2">{installSummary(entry) ?? t("noInstall")}</Td>
-      <Td>
+      <Td className="whitespace-nowrap">
         <div className="flex flex-col items-start gap-1">
           <Badge tone={CURATION_TONE[entry.curation]}>{t(`curation.${entry.curation}`)}</Badge>
           {entry.status !== "active" && <Badge tone="warn">{t(`registryStatus.${entry.status}`)}</Badge>}
@@ -109,8 +109,8 @@ function EntryRow({ entry, onChanged, quick }: { entry: RegistryAdminEntry; onCh
           {entry.promotedCatalogId && <span className="font-mono text-xs text-muted">{entry.promotedCatalogId}</span>}
         </div>
       </Td>
-      <Td>
-        <div className="flex flex-wrap gap-1">
+      <Td className="whitespace-nowrap">
+        <div className={quick ? "flex flex-col items-stretch gap-1" : "flex flex-wrap gap-1"}>
           {quick && entry.curation !== "approved" && !tomb && !entry.promotedCatalogId && (
             <Button size="sm" disabled={busy} onClick={approvePromote}>{t("approvePromote")}</Button>
           )}
@@ -209,8 +209,8 @@ export function AdminMcpRegistryPage() {
             <input
               className={inputCls}
               value={draft}
-              placeholder={t("searchPlaceholder")}
-              aria-label={t("searchPlaceholder")}
+              placeholder={t(quick ? "searchPlaceholderLive" : "searchPlaceholder")}
+              aria-label={t(quick ? "searchPlaceholderLive" : "searchPlaceholder")}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") runSearch(); }}
             />
