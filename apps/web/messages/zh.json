@@ -3674,7 +3674,8 @@
     "approvePromote": "批准并上架",
     "approvePromoted": "已批准并作为停用草稿加入 MCP 目录：{id}",
     "search": "搜索",
-    "searchResult": "{total} 条结果（名称/标题匹配优先）"
+    "searchResult": "{total} 条结果（名称/标题匹配优先）",
+    "searchPlaceholderLive": "搜索名称、标题或描述（输入即搜索）"
   },
   "orgExtensionDeployments": {
     "title": "扩展部署模式",
