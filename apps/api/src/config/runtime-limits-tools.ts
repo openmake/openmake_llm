@@ -354,6 +354,15 @@ export const CHAT_USER_MCP_BREADTH_SLOTS = parseInt(
 export const CHAT_TOOL_INTENT_GATE_ENABLED = process.env.CHAT_TOOL_INTENT_GATE_ENABLED !== 'false';
 
 /**
+ * 응답 스타일 가드의 캐시 순서 (opt-in, 2026-11-28) — 종전엔 concise/verbose 가드를 정적 prefix **맨 앞**에 붙여,
+ * 스타일을 바꾼 요청은 첫 바이트부터 default 요청과 prefix 를 공유하지 못했다(운영 30일 6.1% — 정적 영역
+ * ≈9.4K자를 매번 다시 prefill). true 면 가드를 공통 정적 블록(가드·답변 형식·아티팩트·보고서) **뒤**, DYNAMIC
+ * BOUNDARY 앞에 둔다 — 공통 블록은 스타일과 무관하게 같은 prefix 가 된다. 문구·포함 여부는 같고 위치만 바뀐다.
+ * 기본 false = 종전 순서.
+ */
+export const CHAT_STYLE_GUARD_AFTER_STATIC = process.env.CHAT_STYLE_GUARD_AFTER_STATIC === 'true';
+
+/**
  * 에이전트 1턴에 주입하는 스킬 manifest(prompt_md) 합계 문자 상한 (프롬프트 다이어트, 2026-09-05).
  * priority 순으로 담고 넘치면 나머지를 건너뛴다(첫 스킬은 항상 주입). 실측: backend-developer
  * 30.7K 자·software-engineer 18.2K 자가 매 턴 실렸고 대부분 에이전트는 2.5K 자.
