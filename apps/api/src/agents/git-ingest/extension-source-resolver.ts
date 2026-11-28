@@ -101,7 +101,11 @@ export async function resolveExtensionSource(
         if (mkCandidates.length > 0) {
             const mkRaw = await fetcher.fetchFile(owner, repo, sha, mkCandidates[0].path, EXTENSION_INGEST.marketplaceMaxBytes);
             const mk = parseMarketplaceFile(mkRaw);
-            if (mk.ok && !input.plugin) {
+            // 플러그인이 하나뿐인 마켓플레이스는 고를 것이 없다 — 그 하나로 해석한다(이름 추측·치환이 아니다).
+            // 카탈로그 갤러리는 단일 플러그인 원본에 plugin 을 싣지 않아, 종전엔 "플러그인 이름을 지정하세요 — 가능: X" 로 막혔다
+            const plugin = input.plugin
+                ?? (mk.ok && mk.marketplace.plugins.length === 1 ? mk.marketplace.plugins[0].name : undefined);
+            if (mk.ok && !plugin) {
                 // 목록만 반환 — plugin 인자로 재호출 유도
                 return {
                     gitUrl: input.gitUrl,
@@ -115,10 +119,10 @@ export async function resolveExtensionSource(
                     },
                 };
             }
-            if (mk.ok && input.plugin) {
-                const entry = mk.marketplace.plugins.find(p => p.name === input.plugin);
+            if (mk.ok && plugin) {
+                const entry = mk.marketplace.plugins.find(p => p.name === plugin);
                 if (!entry) {
-                    throw new Error(`PLUGIN_NOT_IN_MARKETPLACE: "${input.plugin}" — 가능한 플러그인: ${mk.marketplace.plugins.map(p => p.name).join(', ')}`);
+                    throw new Error(`PLUGIN_NOT_IN_MARKETPLACE: "${plugin}" — 가능한 플러그인: ${mk.marketplace.plugins.map(p => p.name).join(', ')}`);
                 }
                 // 다른 저장소를 가리키는 엔트리 (git-subdir url)
                 if (entry.url) {
@@ -150,7 +154,7 @@ export async function resolveExtensionSource(
                     synthesized = { name: entry.name, description: entry.description };
                     candidate = { path: synthesizedManifestPath(prefix), sha: '', size: 0 };
                 }
-                logger.info(`marketplace plugin resolved: ${input.plugin} → ${owner}/${repo}@${sha.slice(0, 7)}:${candidate.path}${synthesized ? ' (합성)' : ''}`);
+                logger.info(`marketplace plugin resolved: ${plugin} → ${owner}/${repo}@${sha.slice(0, 7)}:${candidate.path}${synthesized ? ' (합성)' : ''}`);
             }
             // mk 파싱 실패 → 일반 plugin.json 스캔으로 폴백
         }
