@@ -10,6 +10,9 @@ import { PageHeader, PageBody, Card, CardHeader, CardTitle, CardContent, Badge, 
 import { AdminTabs } from "@/components/hub-tabs";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { QuotaOverridesCard } from "@/components/admin/quota-overrides-card";
+
+interface QuotaFeatures { userOverrides: boolean; orgGrants: boolean; orgBucket: boolean; storageDailySnapshot: boolean }
 
 interface Req { id: string; user_id: string; window: string; bucket: string; requested_amount: string | number; reason: string | null; status: string; auto_created: boolean; granted_amount: string | number | null; created_at: string; expires_at: string }
 const inputCls = "h-9 w-full rounded-md border border-border bg-surface-2 px-2 text-sm text-fg focus:border-accent focus:outline-none";
@@ -22,6 +25,16 @@ export default function AdminQuotaRequestsPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [gUser, setGUser] = useState(""); const [gWindow, setGWindow] = useState("weekly"); const [gAmount, setGAmount] = useState("");
+  // F25 잔여(opt-in) — 켜진 기능만 그린다. 조회 실패는 전부 꺼짐으로(종전 화면)
+  const [features, setFeatures] = useState<QuotaFeatures | null>(null);
+  const [gSubject, setGSubject] = useState<"user" | "org">("user");
+  const [gDimension, setGDimension] = useState<"tokens" | "cost_micros">("tokens");
+  useEffect(() => {
+    ApiClient.get<ApiSuccess<QuotaFeatures>>("/api/admin/quota-features")
+      .then((r) => setFeatures(r?.data ?? null))
+      .catch(() => setFeatures(null));
+  }, []);
+  const extendedGrant = features?.orgGrants === true && (gSubject !== "user" || gDimension !== "tokens");
 
   const load = useCallback(async () => {
     try {
@@ -40,7 +53,10 @@ export default function AdminQuotaRequestsPage() {
   async function grant() {
     setError(null);
     try {
-      await ApiClient.post("/api/admin/quota-grants", { userId: gUser.trim(), window: gWindow, amount: Number(gAmount) });
+      const id = gUser.trim();
+      await ApiClient.post("/api/admin/quota-grants", extendedGrant
+        ? { ...(gSubject === "org" ? { orgId: id } : { userId: id }), subjectType: gSubject, dimension: gDimension, window: "monthly", amount: Number(gAmount) }
+        : { userId: id, window: gWindow, amount: Number(gAmount) });
       setGUser(""); setGAmount("");
       alert(t("grantDone"));
     } catch (e) { setError(e instanceof Error ? e.message : t("actionFailed")); }
@@ -93,9 +109,22 @@ export default function AdminQuotaRequestsPage() {
             <CardHeader><CardTitle>{t("manualTitle")}</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               <p className="text-xs text-muted">{t("manualHelp")}</p>
-              <div className="grid gap-2 sm:grid-cols-4">
-                <input className={inputCls} value={gUser} onChange={(e) => setGUser(e.target.value)} placeholder={t("userIdPlaceholder")} aria-label={t("user")} />
-                <select className={selectCls} value={gWindow} onChange={(e) => setGWindow(e.target.value)} aria-label={t("window")}>
+              {features?.orgGrants && <p className="text-xs text-muted">{t("extendedGrantHelp")}</p>}
+              <div className={`grid gap-2 ${features?.orgGrants ? "sm:grid-cols-6" : "sm:grid-cols-4"}`}>
+                {features?.orgGrants && (
+                  <>
+                    <select className={selectCls} value={gSubject} onChange={(e) => setGSubject(e.target.value as "user" | "org")} aria-label={t("subject")}>
+                      <option value="user">{t("subjects.user")}</option>
+                      <option value="org">{t("subjects.org")}</option>
+                    </select>
+                    <select className={selectCls} value={gDimension} onChange={(e) => setGDimension(e.target.value as "tokens" | "cost_micros")} aria-label={t("dimension")}>
+                      <option value="tokens">{t("dimensions.tokens")}</option>
+                      <option value="cost_micros">{t("dimensions.cost_micros")}</option>
+                    </select>
+                  </>
+                )}
+                <input className={inputCls} value={gUser} onChange={(e) => setGUser(e.target.value)} placeholder={gSubject === "org" && features?.orgGrants ? t("orgIdPlaceholder") : t("userIdPlaceholder")} aria-label={t("user")} />
+                <select className={selectCls} value={extendedGrant ? "monthly" : gWindow} disabled={extendedGrant} onChange={(e) => setGWindow(e.target.value)} aria-label={t("window")}>
                   {["hourly", "weekly", "monthly"].map((w) => <option key={w} value={w}>{w}</option>)}
                 </select>
                 <input className={inputCls} type="number" min={1} value={gAmount} onChange={(e) => setGAmount(e.target.value)} placeholder={t("amount")} aria-label={t("amount")} />
@@ -103,6 +132,7 @@ export default function AdminQuotaRequestsPage() {
               </div>
             </CardContent>
           </Card>
+          {features?.userOverrides && <QuotaOverridesCard onError={setError} />}
         </div>
       </PageBody>
     </>

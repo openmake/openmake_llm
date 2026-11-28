@@ -3009,7 +3009,38 @@
     "manualHelp": "現在のバケットに即時加算されます（時間/週/月）。ユーザー id は管理者 → ユーザー一覧で確認。",
     "userIdPlaceholder": "ユーザー id",
     "grant": "付与",
-    "grantDone": "付与しました。"
+    "grantDone": "付与しました。",
+    "extendedGrantHelp": "組織・コストの grant は月バケットにのみ加算されます(組織の月予算・ユーザーの月コスト予算)。コストの単位は USD micros(1 USD = 1,000,000)。",
+    "subject": "対象",
+    "subjects": {
+      "user": "ユーザー",
+      "org": "組織"
+    },
+    "dimension": "単位",
+    "dimensions": {
+      "tokens": "トークン",
+      "cost_micros": "コスト(micros)"
+    },
+    "orgIdPlaceholder": "組織 id",
+    "overrides": {
+      "title": "ユーザー別の上限",
+      "help": "このユーザーだけ別の上限を設定します。空欄はグローバル値、0 は無制限です。月コストは USD micros(1 USD = 1,000,000)。",
+      "userId": "ユーザー id",
+      "user": "ユーザー",
+      "hourly": "時間トークン",
+      "weekly": "週トークン",
+      "cost": "月コスト(micros)",
+      "reason": "理由",
+      "save": "保存",
+      "edit": "編集",
+      "remove": "削除",
+      "empty": "設定されたユーザーはありません。",
+      "useGlobal": "グローバル",
+      "unlimited": "無制限",
+      "invalid": "上限は空欄か 0 以上の整数で入力してください。",
+      "loadError": "読み込みに失敗しました。",
+      "saveFailed": "保存に失敗しました。"
+    }
   },
   "adminSlo": {
     "title": "SLO",

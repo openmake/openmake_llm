@@ -103,6 +103,8 @@ describe('system-settings-registry', () => {
             else if (def.key === 'EXTENSION_ADMIN_INVENTORY_ENABLED') sample[def.key] = 'true';
             // add-on 목록 DB 상태 반영(§8-4) — 불리언
             else if (def.key === 'ADDON_LIST_REFLECT_DB_STATE') sample[def.key] = 'true';
+            // F25 잔여(사용자별 한도·조직 grant·조직 버킷·보관량 일별 계상) — 불리언
+            else if (['QUOTA_USER_OVERRIDES_ENABLED', 'QUOTA_ORG_GRANTS_ENABLED', 'QUOTA_ORG_BUCKET_ENABLED', 'STORAGE_GENERATED_DAILY_SNAPSHOT_ENABLED'].includes(def.key)) sample[def.key] = 'true';
             // SLO 목표(F24.8) — 백분율·정수
             else if (def.key === 'SLO_CHAT_AVAILABILITY_TARGET') sample[def.key] = '97.51';
             else if (def.key === 'SLO_AGENT_TASK_SUCCESS_TARGET') sample[def.key] = '97.52';

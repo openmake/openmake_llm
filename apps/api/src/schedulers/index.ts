@@ -84,8 +84,14 @@ export async function startAllSchedulers(): Promise<void> {
     // 6-b. /generated 생성 미디어 보존 스윕 (부팅 1회 + 주기) — reports/ 제외
     try {
         const { reapStaleGeneratedMedia } = await import('../services/generated-media-retention');
-        reapStaleGeneratedMedia();
-        track(setInterval(() => { try { reapStaleGeneratedMedia(); } catch { /* noop */ } }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS));
+        // 보관량 일별 계상(opt-in, 호출마다 STORAGE_GENERATED_DAILY_SNAPSHOT_ENABLED 를 읽음 — 꺼짐 = 질의 0) — TTL 삭제 뒤에 센다
+        const { snapshotGeneratedStorage } = await import('../services/cost/storage-snapshot');
+        const sweepGenerated = () => {
+            try { reapStaleGeneratedMedia(); } catch { /* noop */ }
+            void snapshotGeneratedStorage().catch((e: unknown) => logger.warn('생성 미디어 보관량 계상 실패 (다음 주기 재시도):', e));
+        };
+        sweepGenerated();
+        track(setInterval(sweepGenerated, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS));
     } catch (err) {
         logger.warn('생성 미디어 스윕 등록 실패 (계속):', err);
     }

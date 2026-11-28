@@ -7,6 +7,8 @@ jest.mock('../../../data/repositories/cost-rate-repository', () => ({ CostRateRe
 jest.mock('../../../data/repositories/cost-ledger-repository', () => ({ CostLedgerRepository: jest.fn().mockImplementation(() => ({ insert })) }));
 jest.mock('../../../data/models/unified-database', () => ({ getPool: () => ({}) }));
 jest.mock('../../org/membership-cache', () => ({ activeOrgFor: async () => ({ orgId: 'o1', orgRole: 'member' }) }));
+// F25 잔여 플래그는 OFF 로 고정 — 로컬 .env(jest.setup 이 읽는다)에 켜져 있어도 종전 귀속(활성 조직)을 검증한다
+jest.mock('../../../config/quota-extensions', () => ({ quotaOrgBucketEnabled: () => false, quotaOrgGrantsEnabled: () => false, quotaUserOverridesEnabled: () => false, storageGeneratedDailySnapshotEnabled: () => false }));
 
 import { resolveRateFromTable, fallbackRate, recordCostAsync, clearCostRateCache } from '../cost-ledger-service';
 import { runWithCostSession } from '../../../utils/cost-attribution-context';
@@ -79,5 +81,16 @@ describe('recordCostAsync', () => {
         await recordCostAsync({ userId: 'u-bucket', kind: 'llm.external', rateKey: 'openrouter:x', unit: 'token_out', quantity: 10, costOwner: 'byok', directCostUsdMicros: 500 }, now);
         await new Promise((r) => setTimeout(r, 20));
         expect(await store.get(k)).toBe(500);
+    });
+
+    test('멱등 키 충돌로 원장에 안 들어간 중복은 월 비용 버킷에도 더하지 않는다', async () => {
+        const now = Date.now();
+        const store = getKeyValueStore();
+        const k = costMonthKey('u-dup', now);
+        insert.mockResolvedValueOnce(true as never).mockResolvedValueOnce(false as never);
+        const entry = { userId: 'u-dup', kind: 'llm.external' as const, rateKey: 'openrouter:x', unit: 'token_out' as const, quantity: 10, costOwner: 'byok' as const, directCostUsdMicros: 300, idempotencyKey: 'dup-1' };
+        await recordCostAsync(entry, now);
+        await recordCostAsync(entry, now);
+        expect(await store.get(k)).toBe(300);
     });
 });

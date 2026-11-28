@@ -21,7 +21,8 @@ import { getRequestId } from '../../utils/request-context';
 import { getCostSessionId } from '../../utils/cost-attribution-context';
 import { activeOrgFor } from '../org/membership-cache';
 import { getKeyValueStore } from '../../storage';
-import { costMonthKey, COST_MONTH_TTL_MS } from '../../llm/user-quota';
+import { costMonthKey, COST_MONTH_TTL_MS, chargeOrgFor, orgCostMonthKey } from '../../llm/user-quota';
+import { quotaOrgBucketEnabled } from '../../config/quota-extensions';
 
 const logger = createLogger('CostLedger');
 
@@ -114,7 +115,11 @@ export async function recordCostAsync(entry: CostEntry, now: number = Date.now()
         ? entry.directCostUsdMicros / entry.quantity
         : await resolveRate(entry.kind, entry.rateKey, entry.unit, now);
     const cost = entry.directCostUsdMicros !== undefined ? Math.round(entry.directCostUsdMicros) : Math.round(rate * entry.quantity);
-    const orgId = userId ? (await activeOrgFor(userId, now))?.orgId ?? null : null;
+    // 조직 귀속: 기본은 활성 조직(종전). QUOTA_ORG_BUCKET_ENABLED 면 쿼터와 같은 청구 대상 조직(활성 조직, 없으면 가입이 가장 이른 예산 조직)
+    const orgBucket = quotaOrgBucketEnabled();
+    const orgId = userId
+        ? (orgBucket ? (await chargeOrgFor(userId, now))?.orgId ?? null : (await activeOrgFor(userId, now))?.orgId ?? null)
+        : null;
     const row: CostLedgerInsert = {
         userId, orgId, kind: entry.kind, rateKey: entry.rateKey, unit: entry.unit, quantity: entry.quantity,
         usdMicrosPerUnit: rate, costUsdMicros: cost, costOwner: entry.costOwner,
@@ -122,13 +127,15 @@ export async function recordCostAsync(entry: CostEntry, now: number = Date.now()
         requestId: entry.ctx?.requestId ?? getRequestId() ?? null, feature: entry.ctx?.feature ?? null,
         meta: entry.meta, idempotencyKey: entry.idempotencyKey ?? null,
     };
-    await new CostLedgerRepository(getPool()).insert(row);
+    const inserted = await new CostLedgerRepository(getPool()).insert(row);
     // 월 비용 버킷(136) — 사용자·조직 비용 예산 검사 재료. cost_owner 가 byok(사용자 본인 과금)여도 예산 관점에선 지출이다.
-    if (userId && cost > 0) {
+    // 멱등 키 충돌로 원장에 안 들어간 중복은 버킷에도 더하지 않는다(키 없는 행은 항상 들어가므로 종전과 같다).
+    if (inserted !== false && userId && cost > 0) {
         try {
             const store = getKeyValueStore();
             const k = costMonthKey(userId, now);
             await store.incrBy(k, cost); await store.expire(k, COST_MONTH_TTL_MS);
+            if (orgBucket && orgId) { const ok = orgCostMonthKey(orgId, now); await store.incrBy(ok, cost); await store.expire(ok, COST_MONTH_TTL_MS); }
         } catch (e) { logger.warn('월 비용 버킷 누적 실패 (무시):', e); }
     }
 }

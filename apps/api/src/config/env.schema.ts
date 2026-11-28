@@ -166,6 +166,10 @@ export const envSchema = z
         EXTENSION_REMOTE_MCP_ENABLED: z.string().optional(),
         /** `GET /api/addons` DB 상태 반영(opt-in) — config/addon-list-state */
         ADDON_LIST_REFLECT_DB_STATE: z.string().optional(),
+        QUOTA_USER_OVERRIDES_ENABLED: z.string().optional(),
+        QUOTA_ORG_GRANTS_ENABLED: z.string().optional(),
+        QUOTA_ORG_BUCKET_ENABLED: z.string().optional(),
+        STORAGE_GENERATED_DAILY_SNAPSHOT_ENABLED: z.string().optional(),
         EXTENSION_ARBITRARY_URL_INSTALL: z.string().optional(),
         EXTENSION_SOURCE_POLICY: z.string().optional(),
         /** 확장 MCP 서버 정책(§8-3, opt-in) — 해석·검증은 config/extension-mcp-server-policy · system-settings-registry */

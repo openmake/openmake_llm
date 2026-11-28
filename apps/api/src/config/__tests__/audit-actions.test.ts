@@ -40,6 +40,7 @@ describe('audit action registry', () => {
             'config.imported': 'critical',
             'quota.overage_decided': 'warning',
             'quota.grant_manual': 'warning',
+            'quota.override_changed': 'warning',
             'password.changed': 'warning',
             'consent.withdrawn': 'warning',
             'minor_pending_registered': 'warning',
