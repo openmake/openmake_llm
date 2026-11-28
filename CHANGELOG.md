@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.154.0](https://github.com/openmake/openmake_llm/compare/v1.153.0...v1.154.0) (2026-11-28)
+
+
+### ✨ 기능
+
+* **chat:** 스타일 가드를 공통 정적 블록 뒤로 — 프롬프트 캐시 공유 (opt-in CHAT_STYLE_GUARD_AFTER_STATIC) ([bbc9f03](https://github.com/openmake/openmake_llm/commit/bbc9f038605a2df73a59116fda21a9c18a3238ed))
+* **quota:** 사용자별 한도·조직/비용 grant·조직 월 버킷·생성 파일 일별 보관량 (F25 잔여, opt-in) ([d056670](https://github.com/openmake/openmake_llm/commit/d0566709ef494abfc812f88e3b77bbc2eb2d098b))
+
+
+### 🐛 버그 수정
+
+* **extensions:** OCI 레이어 미디어 타입 화이트리스트가 상속 키를 통과시키던 결함 ([a0b99bd](https://github.com/openmake/openmake_llm/commit/a0b99bd373d5487ac1149cf15d47ea375a64af67))
+* **extensions:** OCI 레이어 미디어 타입 화이트리스트가 상속 키를 통과시키던 결함 ([1bced0b](https://github.com/openmake/openmake_llm/commit/1bced0b0aecd6d1754730eab5386ac397cb9aa43))
+* **quota:** 예약 중간 실패(KV) 시 이미 올린 버킷을 되돌린다 ([d8901ec](https://github.com/openmake/openmake_llm/commit/d8901ecb23337dd5974608460161c2ff74173911))
+
 ## [1.153.0](https://github.com/openmake/openmake_llm/compare/v1.152.0...v1.153.0) (2026-11-27)
 
 
