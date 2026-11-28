@@ -23,7 +23,7 @@ import { EXTENSION_MCP_SERVER_POLICY_KEYS, extensionMcpServerPolicyProblems } fr
 import { EXTENSION_CATALOG_SYNC_KEYS } from './extension-catalog-sync';
 import { EXTENSION_AGENT_PROVENANCE_FLAG } from './extension-agent-provenance';
 import { EXTENSION_INSTALL_PREVIEW_FLAG } from './extension-install-preview';
-import { EXTENSION_MCP_SERVER_KEY_NAMES_FLAG, EXTENSION_GALLERY_GROUP_SOURCES_FLAG } from './extension-naming';
+import { EXTENSION_MCP_SERVER_KEY_NAMES_FLAG, EXTENSION_GALLERY_GROUP_SOURCES_FLAG, EXTENSION_MCP_DEPENDENCY_HINTS_FLAG } from './extension-naming';
 import { EXTENSION_OCI_INSTALL_FLAG } from './extension-oci';
 import { EXTENSION_ORG_OWNED_INSTALL_FLAG } from './extension-org-owned';
 import { EXTENSION_REMOTE_MCP_FLAG } from './extension-remote-mcp';
@@ -177,6 +177,8 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     { key: EXTENSION_MCP_SERVER_KEY_NAMES_FLAG, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     // 갤러리의 다중 플러그인 원본 묶음(opt-in, 2026-11-28) — 갤러리 응답이 요청 시점에 읽는다(실시간)
     { key: EXTENSION_GALLERY_GROUP_SOURCES_FLAG, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
+    // 스킬이 부르는 MCP 서버 부재 안내(opt-in, 2026-11-28) — 설치 시점에 읽는다(실시간)
+    { key: EXTENSION_MCP_DEPENDENCY_HINTS_FLAG, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     // OCI 레지스트리 확장 설치(P8, opt-in) — 원본 판정·설치가 호출 시점에 읽는다(실시간). config/extension-oci
     { key: EXTENSION_OCI_INSTALL_FLAG, group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     // 조직 소유 확장 설치(P8, opt-in, 212) — 라우트가 요청마다 읽는다(실시간). config/extension-org-owned

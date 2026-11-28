@@ -28,6 +28,9 @@ import { isLocalSourceUrl } from './local-directory-fetcher';
 import { isEnabledOciSourceUrl } from './oci-reference';
 import type { OciFetchImpl } from './oci-fetcher';
 import { parseGitUrl } from '../../schemas/git-ingest.schema';
+import { getComponentStore } from '../../addon-host/addon-data';
+import { extensionMcpDependencyHintsEnabled } from '../../config/extension-naming';
+import { buildMcpDependencyHints } from './mcp-dependency-hint';
 import { GitFetcher } from './git-fetcher';
 import { isNonGitSourceUrl, nonGitPseudoRepo, type LoadedBundle } from './internal-bundle-fetcher';
 import { fetchCatalogSnapshot as fetchCatalogSnapshotImpl, type CatalogSnapshot } from './catalog-snapshot';
@@ -202,6 +205,23 @@ export class ExtensionIngestService {
 
         // (6-c) agents/<name>.md → Custom Agent (Phase 2)
         const agentResults = await collectPluginAgents(componentCtx);
+
+        // (6-d) 스킬이 부르는 MCP 서버 부재 안내(opt-in) — 서버를 다른 플러그인이 정의한 마켓플레이스(ruflo 등). 실패는 건너뛴다
+        if (extensionMcpDependencyHintsEnabled()) {
+            try {
+                const store = getComponentStore('mcpServers', this.opts.pool);
+                if (store.listActiveNamesForUser) {
+                    const existing = await store.listActiveNamesForUser(input.userId);
+                    const installedNow = mcpResults.filter((r) => r.serverId).map((r) => r.name);
+                    warnings.push(...await buildMcpDependencyHints(componentCtx, {
+                        skillPaths: skillResults.filter((r) => r.skillId).map((r) => r.path),
+                        serverNames: [...existing, ...installedNow],
+                    }));
+                }
+            } catch (err) {
+                logger.warn(`MCP 의존 안내 실패 (설치는 계속): ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
 
         // 스킬 적응 요약 — 확장 단위 리포트에 합류 (구성요소별 상세는 skills[].compatNotes)
         const adaptedSkills = skillResults.filter(r => r.compatNotes && r.compatNotes.length > 0);

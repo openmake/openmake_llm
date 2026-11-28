@@ -170,6 +170,8 @@ export interface McpServerComponentStore extends ExtensionLinkedStore {
     insertDraft(input: McpServerDraftInput): Promise<{ id: string }>;
     /** (user_id, name) 이 이미 쓰였으면 그 id */
     findIdByUserAndName(userId: string, name: string): Promise<string | null>;
+    /** 사용자의 보관되지 않은 MCP 서버 이름(승인 대기 포함) — 설치 안내(스킬이 부르는 서버 유무)용 읽기. 없으면 안내를 건너뛴다 */
+    listActiveNamesForUser?(userId: string): Promise<string[]>;
     /** 네트워크 권한이 닫혔다 — stdio 는 --network none, 원격은 끈다 */
     restrictNetworkForExtension(extensionId: string): Promise<{ sandboxed: number; disabled: number }>;
     /** 네트워크 권한이 열렸다 — 권한 때문에 막았던 stdio 만 되돌린다 */

@@ -20,6 +20,13 @@ import { readSettingValue } from './env';
 export const EXTENSION_MCP_SERVER_KEY_NAMES_FLAG = 'EXTENSION_MCP_SERVER_KEY_NAMES';
 export const EXTENSION_GALLERY_GROUP_SOURCES_FLAG = 'EXTENSION_GALLERY_GROUP_SOURCES';
 
+export const EXTENSION_MCP_DEPENDENCY_HINTS_FLAG = 'EXTENSION_MCP_DEPENDENCY_HINTS';
+
+/** 스킬이 부르는 MCP 서버가 사용자에게 없으면 설치 리포트에 제공 플러그인을 안내(agents/git-ingest/mcp-dependency-hint) */
+export function extensionMcpDependencyHintsEnabled(): boolean {
+    return readSettingValue(EXTENSION_MCP_DEPENDENCY_HINTS_FLAG) === 'true';
+}
+
 export function extensionMcpServerKeyNamesEnabled(): boolean {
     return readSettingValue(EXTENSION_MCP_SERVER_KEY_NAMES_FLAG) === 'true';
 }
