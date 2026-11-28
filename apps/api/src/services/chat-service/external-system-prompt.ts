@@ -18,6 +18,7 @@ import { hasOrchestrationIntent, isArtifactIntentTurn, type OrchestrationIntents
 import { SPAWN_PROMPT_GUIDE } from '../agent-spawn/spawn-agents';
 import { LANGUAGE_DISPLAY_NAMES, resolvePromptLocale, type SupportedLanguageCode } from '../../chat/language-policy';
 import type { StreamFromExternalContext } from './external-provider-types';
+import { CHAT_STYLE_GUARD_AFTER_STATIC } from '../../config/runtime-limits-tools';
 
 type ExternalSystemPromptParams = {
     req: ChatMessageRequest;
@@ -55,12 +56,13 @@ export function buildExternalSystemPromptParts(params: ExternalSystemPromptParam
     // 가변 데이터를 이 앞에 두면 prefix 가 매 요청 달라져 vLLM/OpenRouter 캐시가 무효화되므로,
     // 정적 콘텐츠(가드·아티팩트 가이드)를 반드시 시스템 프롬프트 맨 앞에 배치한다. (Cache-aware 원칙)
     // ════════════════════════════════════════════════════════════════════
-    // 응답 스타일 가드 (concise/verbose) — 정적 prefix 맨 앞에 prepend. default 면 빈 문자열(overhead 0).
+    // 응답 스타일 가드 (concise/verbose) — 종전: 정적 prefix 맨 앞. default 면 빈 문자열(overhead 0).
+    // CHAT_STYLE_GUARD_AFTER_STATIC 이면 공통 정적 블록 뒤(DYNAMIC BOUNDARY 앞)로 — 스타일이 달라도 공통 prefix 공유.
     const styleGuard = getStyleGuard(
         normalizeStyle(ctx.style),
         ctx.resolvedLanguage || req.userLanguagePreference || 'en',
     );
-    if (styleGuard) {
+    if (styleGuard && !CHAT_STYLE_GUARD_AFTER_STATIC) {
         systemPromptParts.push(styleGuard.trim());
     }
     const guards = getExternalProviderSystemGuards(ctx.resolvedLanguage || req.userLanguagePreference || 'en');
@@ -79,6 +81,10 @@ export function buildExternalSystemPromptParts(params: ExternalSystemPromptParam
     // 이번 턴의 산출물 형식(reportdata JSON)이 일반 가이드보다 우선 적용되게 한다.
     if (ctx.reportGuideBlock) {
         systemPromptParts.push(ctx.reportGuideBlock.trim());
+    }
+
+    if (styleGuard && CHAT_STYLE_GUARD_AFTER_STATIC) {
+        systemPromptParts.push(styleGuard.trim());
     }
 
     // ──────────────────── DYNAMIC BOUNDARY ────────────────────
