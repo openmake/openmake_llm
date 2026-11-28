@@ -25,13 +25,16 @@ const tree = {
     ].map((path) => ({ path, sha: 'b', size: 10, type: 'blob' as const })),
 };
 
-function makeService() {
+const ROOT_MK2 = JSON.stringify({ name: 'root-market', plugins: [{ name: 'root-plugin', source: './root-plugin' }, { name: 'root-2', source: './root-2' }] });
+const SUB_MK2 = JSON.stringify({ name: 'sub-market', plugins: [{ name: 'sub-plugin', source: './sub-plugin' }, { name: 'sub-2', source: './sub-2' }] });
+
+function makeService(mk: { root: string; sub: string } = { root: ROOT_MK, sub: SUB_MK }) {
     const fetcher = {
         resolveRef: jest.fn(async () => 'abc'),
         listTree: jest.fn(async () => tree),
         fetchFile: jest.fn(async (_o: string, _r: string, _s: string, path: string) => {
-            if (path === '.claude-plugin/marketplace.json') return ROOT_MK;
-            if (path === 'catalogs/team/.claude-plugin/marketplace.json') return SUB_MK;
+            if (path === '.claude-plugin/marketplace.json') return mk.root;
+            if (path === 'catalogs/team/.claude-plugin/marketplace.json') return mk.sub;
             throw new Error(`UPSTREAM_FETCH_FAIL: 404 ${path}`);
         }),
     };
@@ -68,11 +71,12 @@ describe('fetchCatalogSnapshot 하위 경로', () => {
 
 describe('import 의 catalogSubpath', () => {
     it('없으면 루트 marketplace 목록, 있으면 하위 경로 marketplace 목록', async () => {
-        const a = makeService();
+        const a = makeService({ root: ROOT_MK2, sub: SUB_MK2 });
         const rootList = await a.svc.import({ userId: 'u', isAdmin: false, gitUrl: 'https://github.com/acme/repo' });
+        // 플러그인이 하나뿐인 마켓은 목록 없이 그 하나로 해석하므로(2026-11-28) 목록 확인은 2개짜리 마켓으로
         expect('marketplace' in rootList && rootList.marketplace?.name).toBe('root-market');
 
-        const b = makeService();
+        const b = makeService({ root: ROOT_MK2, sub: SUB_MK2 });
         const subList = await b.svc.import({ userId: 'u', isAdmin: false, gitUrl: 'https://github.com/acme/repo', catalogSubpath: 'catalogs/team' });
         expect('marketplace' in subList && subList.marketplace?.name).toBe('sub-market');
     });
