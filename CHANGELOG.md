@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.155.0](https://github.com/openmake/openmake_llm/compare/v1.154.0...v1.155.0) (2026-11-28)
+
+
+### ✨ 기능
+
+* **extensions:** 스킬이 부르는 MCP 서버 부재 안내 · 플러그인 도구 표기 별칭 해석 (opt-in) ([d5807bf](https://github.com/openmake/openmake_llm/commit/d5807bf0c2824013bcc5da57514664843b5cecd6))
+* **extensions:** 확장 MCP 서버 이름을 서버 키로 · 갤러리 다중 플러그인 원본 묶음 (opt-in) ([3c933b1](https://github.com/openmake/openmake_llm/commit/3c933b147100526a18b45290a57884b365805660))
+
 ## [1.154.0](https://github.com/openmake/openmake_llm/compare/v1.153.0...v1.154.0) (2026-11-28)
 
 
