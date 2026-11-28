@@ -34,6 +34,16 @@ export interface RegistryStatus {
     lastError: string | null;
   };
   counts: Record<Curation | "tombstoned", number>;
+  /** 빠른 작업(opt-in EXT_MARKET_REGISTRY_QUICK_ACTIONS) — 켜져 있을 때만 온다: 승인+올리기 한 번에, 입력 중 검색 */
+  quickActions?: boolean;
+}
+
+/** 입력 중 검색 대기 시간(ms) — 72,000여 항목 ILIKE 라 글자마다 요청하지 않게 */
+export const REGISTRY_SEARCH_DEBOUNCE_MS = 350;
+
+/** 상태 응답 → 빠른 작업 화면 여부(꺼져 있거나 상태를 못 받았으면 종전 화면) */
+export function quickActionsEnabled(status: { quickActions?: unknown } | null | undefined): boolean {
+  return status?.quickActions === true;
 }
 
 export const CURATION_TONE: Record<Curation, "neutral" | "success" | "warn"> = {

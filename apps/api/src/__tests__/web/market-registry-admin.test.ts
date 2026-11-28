@@ -41,3 +41,25 @@ describe('MCP Registry 관리자 화면 배선', () => {
         }
     });
 });
+
+describe('빠른 작업(opt-in EXT_MARKET_REGISTRY_QUICK_ACTIONS) — 상태 응답의 quickActions 로만 켠다', () => {
+    const { quickActionsEnabled } = require('../../../../web/addons/extension-marketplace/pages/registry-view') as {
+        quickActionsEnabled: (s: unknown) => boolean;
+    };
+    it.each([[null, false], [{}, false], [{ quickActions: 'true' }, false], [{ quickActions: true }, true]])('%j → %s', (s, want) => {
+        expect(quickActionsEnabled(s)).toBe(want);
+    });
+    it('승인+올리기 버튼·검색 버튼·입력 중 검색은 quick 아래에만 있다(꺼져 있으면 종전 화면)', () => {
+        const src = read('addons/extension-marketplace/pages/admin-mcp-registry-page.tsx');
+        expect(src).toContain('{quick && entry.curation !== "approved" && !tomb && !entry.promotedCatalogId && (');
+        expect(src).toContain('/entries/approve-promote');
+        expect(src).toContain('if (!quick || draft === search) return;');
+        expect(src).toContain('{quick && (');
+    });
+    it('번역 키 4개가 5개 언어에 있다', () => {
+        for (const lang of ['ko', 'en', 'ja', 'zh', 'de']) {
+            const m = JSON.parse(read(`messages/${lang}.json`)).marketRegistry;
+            for (const k of ['approvePromote', 'approvePromoted', 'search', 'searchResult']) expect(m[k]).toEqual(expect.any(String));
+        }
+    });
+});

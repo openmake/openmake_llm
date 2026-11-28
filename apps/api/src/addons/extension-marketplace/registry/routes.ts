@@ -6,6 +6,7 @@
  *   GET  /admin/entries                — 전체 사본(큐레이션 필터·검색·페이지, 관리자)
  *   PUT  /admin/entries/curation       — {serverName, curation} 승인·숨김·보류(관리자, 감사)
  *   POST /admin/entries/promote        — {serverName} MCP 카탈로그 꺼진 초안으로 올리기(관리자, 감사)
+ *   POST /admin/entries/approve-promote — {serverName} 승인 + 올리기 한 번에(opt-in EXT_MARKET_REGISTRY_QUICK_ACTIONS, 꺼지면 404)
  *   POST /admin/sync                   — 지금 동기화(플래그 ON 일 때만, 관리자)
  *
  * 읽기는 DB 사본만 본다 — 레지스트리가 죽어도 목록·갤러리는 그대로다. 서버 이름에 '/' 가 있어 경로 대신 본문·쿼리로 받는다.
@@ -26,7 +27,7 @@ import { REGISTRY_CURATED_AUDIT_ACTION, REGISTRY_PROMOTED_AUDIT_ACTION } from '.
 import { REGISTRY_SOURCE_ID } from './constants';
 import { planCatalogDraft } from './promote';
 import { RegistryRepository, type StoredRegistryEntry } from './registry-repository';
-import { registrySyncEnabled, triggerRegistrySync } from './runtime';
+import { registryQuickActionsEnabled, registrySyncEnabled, triggerRegistrySync } from './runtime';
 
 const logger = createLogger('ExtensionMarketplaceRegistry');
 
@@ -76,6 +77,23 @@ function publicView(e: StoredRegistryEntry) {
     };
 }
 
+/** 카탈로그 꺼진 초안으로 올리기 — 단독 올리기·승인+올리기가 같은 규칙·같은 감사를 쓴다 */
+async function promoteEntry(repo: RegistryRepository, serverName: string, by: string): Promise<{ serverName: string; catalogId: string; status: string }> {
+    const entry = await repo.get(serverName);
+    if (!entry) throw new AppError('항목이 없습니다', 404, true, 'REGISTRY_ENTRY_NOT_FOUND');
+    const plan = planCatalogDraft(entry);
+    if (!plan.ok) throw new AppError('카탈로그로 올릴 수 없는 항목입니다', 409, true, `REGISTRY_PROMOTE_${plan.reason}`);
+    const result = await createMcpCatalogDraft(plan.input);
+    if (result.status === 'unavailable') throw new AppError('MCP 런타임이 꺼져 있어 카탈로그에 올릴 수 없습니다', 409, true, 'MCP_CATALOG_UNAVAILABLE');
+    if (result.status === 'invalid') throw new AppError(`카탈로그 입력이 올바르지 않습니다: ${result.message}`, 422, true, 'MCP_CATALOG_INVALID');
+    await repo.setPromoted(entry.serverName, result.id);
+    await recordAddonAudit({
+        action: REGISTRY_PROMOTED_AUDIT_ACTION, userId: by, resourceType: 'mcp_registry_entry', resourceId: entry.serverName,
+        details: { catalogId: result.id, status: result.status, version: entry.version, transport: plan.input.transportType },
+    });
+    return { serverName: entry.serverName, catalogId: result.id, status: result.status };
+}
+
 export function createRegistryRouter(deps: RegistryRouteDeps = defaultDeps): Router {
     const router = Router();
 
@@ -103,7 +121,11 @@ export function createRegistryRouter(deps: RegistryRouteDeps = defaultDeps): Rou
         const repo = deps.repo();
         const [state, counts] = await Promise.all([repo.getState(), repo.counts()]);
         const backingOff = state.backoffUntil !== null && Date.parse(state.backoffUntil) > Date.now();
-        res.json(success({ sourceKind: REGISTRY_SOURCE_KIND, sourceId: REGISTRY_SOURCE_ID, syncEnabled: registrySyncEnabled(), backingOff, state, counts }));
+        res.json(success({
+            sourceKind: REGISTRY_SOURCE_KIND, sourceId: REGISTRY_SOURCE_ID, syncEnabled: registrySyncEnabled(), backingOff, state, counts,
+            // 빠른 작업(opt-in) — 켜져 있을 때만 필드를 싣는다(꺼져 있으면 응답 모양이 종전과 같다)
+            ...(registryQuickActionsEnabled() ? { quickActions: true } : {}),
+        }));
     }));
 
     router.get('/admin/entries', asyncHandler(async (req, res) => {
@@ -113,6 +135,7 @@ export function createRegistryRouter(deps: RegistryRouteDeps = defaultDeps): Rou
         const { entries, total } = await deps.repo().list({
             curation: q.data.curation ?? 'all', search: q.data.search, includeTombstoned: q.data.includeTombstoned === 'true',
             limit: q.data.limit ?? 50, offset: q.data.offset ?? 0,
+            ...(registryQuickActionsEnabled() ? { rank: true } : {}),
         });
         res.json(success({ total, entries: entries.map(e => ({ ...publicView(e), curation: e.curation, curatedAt: e.curatedAt, tombstonedAt: e.tombstonedAt, lastSeenAt: e.lastSeenAt })) }));
     }));
@@ -134,20 +157,30 @@ export function createRegistryRouter(deps: RegistryRouteDeps = defaultDeps): Rou
         const by = assertAdmin(req);
         const b = promoteBody.safeParse(req.body);
         if (!b.success) throw new ValidationError('serverName 이 필요합니다');
+        res.json(success(await promoteEntry(deps.repo(), b.data.serverName, by)));
+    }));
+
+    // 승인 + 올리기 한 번에(opt-in). 올릴 수 없는 항목(설치 정보 없음 등)은 승인도 하지 않는다 — 판정을 먼저 한다.
+    router.post('/admin/entries/approve-promote', asyncHandler(async (req, res) => {
+        const by = assertAdmin(req);
+        if (!registryQuickActionsEnabled()) throw new AppError('빠른 작업이 꺼져 있습니다', 404, true, 'REGISTRY_QUICK_ACTIONS_DISABLED');
+        const b = promoteBody.safeParse(req.body);
+        if (!b.success) throw new ValidationError('serverName 이 필요합니다');
         const repo = deps.repo();
         const entry = await repo.get(b.data.serverName);
-        if (!entry) throw new AppError('항목이 없습니다', 404, true, 'REGISTRY_ENTRY_NOT_FOUND');
-        const plan = planCatalogDraft(entry);
+        if (!entry || entry.tombstonedAt) throw new AppError('항목이 없거나 레지스트리에서 지워져 승인할 수 없습니다', 404, true, 'REGISTRY_ENTRY_NOT_FOUND');
+        // 승인 뒤의 모습으로 미리 판정한다 — 승인 여부를 뺀 나머지 사유(설치 정보 없음 등)면 승인하지 않고 거절
+        const plan = planCatalogDraft({ ...entry, curation: 'approved' });
         if (!plan.ok) throw new AppError('카탈로그로 올릴 수 없는 항목입니다', 409, true, `REGISTRY_PROMOTE_${plan.reason}`);
-        const result = await createMcpCatalogDraft(plan.input);
-        if (result.status === 'unavailable') throw new AppError('MCP 런타임이 꺼져 있어 카탈로그에 올릴 수 없습니다', 409, true, 'MCP_CATALOG_UNAVAILABLE');
-        if (result.status === 'invalid') throw new AppError(`카탈로그 입력이 올바르지 않습니다: ${result.message}`, 422, true, 'MCP_CATALOG_INVALID');
-        await repo.setPromoted(entry.serverName, result.id);
-        await recordAddonAudit({
-            action: REGISTRY_PROMOTED_AUDIT_ACTION, userId: by, resourceType: 'mcp_registry_entry', resourceId: entry.serverName,
-            details: { catalogId: result.id, status: result.status, version: entry.version, transport: plan.input.transportType },
-        });
-        res.json(success({ serverName: entry.serverName, catalogId: result.id, status: result.status }));
+        if (entry.curation !== 'approved') {
+            const ok = await repo.setCuration(entry.serverName, 'approved', by);
+            if (!ok) throw new AppError('항목이 없거나 레지스트리에서 지워져 승인할 수 없습니다', 404, true, 'REGISTRY_ENTRY_NOT_FOUND');
+            await recordAddonAudit({
+                action: REGISTRY_CURATED_AUDIT_ACTION, userId: by, resourceType: 'mcp_registry_entry', resourceId: entry.serverName,
+                details: { curation: 'approved', via: 'approve-promote' },
+            });
+        }
+        res.json(success({ ...(await promoteEntry(repo, entry.serverName, by)), curation: 'approved' }));
     }));
 
     router.post('/admin/sync', asyncHandler(async (req, res) => {

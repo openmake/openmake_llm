@@ -3670,7 +3670,11 @@
     "empty": "No entries",
     "pageInfo": "{from}–{to} of {total}",
     "prev": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "approvePromote": "Approve & promote",
+    "approvePromoted": "Approved and added to the MCP catalog as a disabled draft: {id}",
+    "search": "Search",
+    "searchResult": "{total} results (name/title matches first)"
   },
   "orgExtensionDeployments": {
     "title": "Extension deployment modes",
