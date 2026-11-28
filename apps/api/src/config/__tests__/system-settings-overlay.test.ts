@@ -89,6 +89,8 @@ describe('system-settings-registry', () => {
             else if (def.key === 'EXTENSION_CATALOG_INDEX_ENABLED') sample[def.key] = 'true';
             // 확장 설치 미리보기(M1b) — 불리언
             else if (def.key === 'EXTENSION_INSTALL_PREVIEW_ENABLED') sample[def.key] = 'true';
+            // 확장 MCP 서버 이름·갤러리 원본 묶음(2026-11-28) — 불리언
+            else if (def.key === 'EXTENSION_MCP_SERVER_KEY_NAMES' || def.key === 'EXTENSION_GALLERY_GROUP_SOURCES' || def.key === 'EXTENSION_MCP_DEPENDENCY_HINTS') sample[def.key] = 'true';
             // OCI 확장 설치(P8) — 불리언
             else if (def.key === 'EXTENSION_OCI_INSTALL_ENABLED') sample[def.key] = 'true';
             // 조직 소유 확장 설치(P8) — 불리언

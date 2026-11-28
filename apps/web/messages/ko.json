@@ -2636,7 +2636,10 @@
         "installed": "설치했습니다: {name} (구성요소는 승인 후 활성화)",
         "failed": "이름 설치 실패",
         "candidates": "후보:"
-      }
+      },
+      "groupSummary": "플러그인 {count}개",
+      "groupMcp": "MCP 포함 {count}개",
+      "groupOpen": "보기"
     },
     "preview": {
       "title": "설치 미리보기 — {name}",

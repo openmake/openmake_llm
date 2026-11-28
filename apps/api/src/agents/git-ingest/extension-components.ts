@@ -13,6 +13,7 @@
  *
  * @module agents/git-ingest/extension-components
  */
+import { mcpServerNameCandidates, extensionMcpServerKeyNamesEnabled } from '../../config/extension-naming';
 import { getComponentStore } from '../../addon-host/addon-data';
 import type { McpServerComponentStore } from '../../runtime-ports/component-stores';
 import { posix } from 'path';
@@ -434,7 +435,10 @@ export async function collectMcpDrafts(
                 { command: entry.command, args: entry.args },
             );
             const blockedByConvention = isBlockedByConvention(conv.findings);
-            const finalName = await resolveUniqueServerName(mcpServers, ctx.userId, `${ctx.extensionName}-${entry.name}`);
+            const finalName = await resolveUniqueServerName(
+                mcpServers, ctx.userId,
+                mcpServerNameCandidates(ctx.extensionName, entry.name, extensionMcpServerKeyNamesEnabled()),
+            );
             const inserted = await mcpServers.insertDraft({
                 name: finalName,
                 transportType: entry.transportType,
@@ -508,12 +512,18 @@ async function appendAssetIndex(pool: Pool, skillId: string, relPaths: string[])
     }
 }
 
-/** mcp_servers (user_id, name) unique 충돌 회피 — McpServerIngestService 관용구 동형. */
-async function resolveUniqueServerName(store: McpServerComponentStore, userId: string, name: string): Promise<string> {
-    const base = name.slice(0, 100);
-    if (!(await store.findIdByUserAndName(userId, base))) return base;
+/**
+ * mcp_servers (user_id, name) unique 충돌 회피 — McpServerIngestService 관용구 동형.
+ * 후보를 앞에서부터 확인해 빈 이름을 쓰고, 전부 차 있으면 **마지막 후보**(종전 이름)에 난수 접미사.
+ * 후보 하나면 종전 동작과 같다.
+ */
+async function resolveUniqueServerName(store: McpServerComponentStore, userId: string, candidates: readonly string[]): Promise<string> {
+    const bases = candidates.map((c) => c.slice(0, 100));
+    for (const base of bases) {
+        if (!(await store.findIdByUserAndName(userId, base))) return base;
+    }
     const suffix = crypto.randomBytes(3).toString('hex');
-    return `${base.slice(0, 93)}-${suffix}`;
+    return `${bases[bases.length - 1].slice(0, 93)}-${suffix}`;
 }
 
 /** Custom Agent 이름 충돌 회피 — UNIQUE(user_id, name) 위반 방지 (MCP 서버명 규칙 동형). */

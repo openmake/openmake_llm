@@ -155,6 +155,12 @@ export function mcpServerComponentStore(db: StoreDb): McpServerComponentStore {
             );
         },
 
+        async listActiveNamesForUser(userId) {
+            const r = await db.query<{ name: string }>(
+                `SELECT name FROM mcp_servers WHERE user_id = $1 AND status IS DISTINCT FROM 'archived'`, [userId]);
+            return r.rows.map((x) => x.name);
+        },
+
         async listExportCandidates(userId) {
             const r = await db.query<ExportMcpServer>(
                 `SELECT ${EXPORT_COLUMNS}

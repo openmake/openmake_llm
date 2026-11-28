@@ -14,10 +14,18 @@
  *  - 서버 부분은 정규화(소문자 + 영숫자 외 `_`) 후 키와 같거나 `_<키>` 로 끝나야 한다 — 충돌 접미 `-xxxxxx` 는 떼고 본다.
  *  - 후보가 정확히 하나일 때만 잇는다. 여럿이면 서버 부분이 키와 똑같은 것 하나를 고르고, 그래도 여럿이면 잇지 않는다
  *    (모호한 이름을 아무 서버로나 보내지 않는다 — not-found + 이름 제안으로 떨어진다).
+ *  - Claude Code 플러그인 표기 `mcp__plugin_<플러그인>_<서버 키>__<도구>`(ruvnet/ruflo 등 — 2026-11-28 실측)는
+ *    opt-in `MCP_TOOL_ALIAS_PLUGIN_FORM=true` 일 때만 본다: `<플러그인>_<키>` 가 서버 이름과 같으면(종전 이름 `ruflo-core-ruflo`)
+ *    정확 일치, `_<서버 이름>` 으로 끝나면(서버 키 이름 `ruflo`) 후보. 끄면 종전처럼 이 표기는 어느 서버와도 맞지 않는다.
  *  - 후보는 **이 사용자가 지금 쓸 수 있는 이름** 안에서만 고른다. 해석된 이름은 Base 디스패처의 거버넌스(반출·서킷·역할·훅)를
  *    그 이름으로 다시 지난다.
  */
 // 이 모듈은 Base 내부를 import 하지 않는다(add-on 경계 래칫) — 네임스페이스 구분자는 호출자(tool-router)가 넘긴다.
+
+/** 플러그인 표기(`mcp__plugin_<플러그인>_<키>__…`) 해석 켜짐 여부 — 호출 시점에 읽는다(기본 OFF) */
+export function toolAliasPluginFormEnabled(): boolean {
+    return process.env.MCP_TOOL_ALIAS_PLUGIN_FORM === 'true';
+}
 
 /** 별칭 해석 켜짐 여부 — 호출 시점에 읽는다(기본 OFF) */
 export function toolAliasResolveEnabled(): boolean {
@@ -58,6 +66,7 @@ export function resolveToolNameAlias(name: string, known: readonly string[], sep
     const key = norm(alias.key);
     if (!key) return {};
     const scored: Array<{ name: string; exact: boolean }> = [];
+    const pluginRest = key.startsWith('plugin_') && toolAliasPluginFormEnabled() ? key.slice('plugin_'.length) : null;
     for (const k of new Set(known)) {
         const i = k.indexOf(sep);
         if (i <= 0 || k.slice(i + sep.length) !== alias.tool) continue;
@@ -65,6 +74,8 @@ export function resolveToolNameAlias(name: string, known: readonly string[], sep
         const forms = [norm(server), norm(server.replace(COLLISION_SUFFIX, ''))];
         if (forms.some(f => f === key)) scored.push({ name: k, exact: true });
         else if (forms.some(f => f.endsWith(`_${key}`))) scored.push({ name: k, exact: false });
+        else if (pluginRest && forms.some(f => f === pluginRest)) scored.push({ name: k, exact: true });
+        else if (pluginRest && forms.some(f => f && pluginRest.endsWith(`_${f}`))) scored.push({ name: k, exact: false });
     }
     if (scored.length === 1) return { resolved: scored[0].name };
     const exact = scored.filter(s => s.exact);

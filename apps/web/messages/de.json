@@ -2636,7 +2636,10 @@
         "installed": "Installiert: {name} (Komponenten werden nach Freigabe aktiv)",
         "failed": "Installation nach Name fehlgeschlagen",
         "candidates": "Meinten Sie:"
-      }
+      },
+      "groupSummary": "{count} Plugins",
+      "groupMcp": "{count} mit MCP",
+      "groupOpen": "Anzeigen"
     },
     "preview": {
       "title": "Installationsvorschau — {name}",
