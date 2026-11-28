@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.156.0](https://github.com/openmake/openmake_llm/compare/v1.155.0...v1.156.0) (2026-11-28)
+
+
+### ✨ 기능
+
+* **extension-marketplace:** MCP 레지스트리 '승인하고 올리기' 한 번에 · 입력 중 검색 · 관련도 순 (opt-in) ([65c1496](https://github.com/openmake/openmake_llm/commit/65c14964bde60ced751dbad46b19193b24c0cf99))
+* **extension-marketplace:** MCP 레지스트리 '승인하고 올리기' 한 번에 · 입력 중 검색 · 관련도 순 (opt-in) ([2c5c1dd](https://github.com/openmake/openmake_llm/commit/2c5c1dd12da0654529de98969b40455adc29aa8f))
+
 ## [1.155.0](https://github.com/openmake/openmake_llm/compare/v1.154.0...v1.155.0) (2026-11-28)
 
 
