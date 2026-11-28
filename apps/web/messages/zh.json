@@ -2636,7 +2636,10 @@
         "installed": "已安装:{name}(组件需审批后启用)",
         "failed": "按名称安装失败",
         "candidates": "候选:"
-      }
+      },
+      "groupSummary": "{count} 个插件",
+      "groupMcp": "{count} 个含 MCP",
+      "groupOpen": "查看"
     },
     "preview": {
       "title": "安装预览 — {name}",

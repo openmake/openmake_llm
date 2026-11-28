@@ -2636,7 +2636,10 @@
         "installed": "Installed: {name} (components activate after approval)",
         "failed": "Install by name failed",
         "candidates": "Did you mean:"
-      }
+      },
+      "groupSummary": "{count} plugins",
+      "groupMcp": "{count} with MCP",
+      "groupOpen": "Browse"
     },
     "preview": {
       "title": "Install preview — {name}",

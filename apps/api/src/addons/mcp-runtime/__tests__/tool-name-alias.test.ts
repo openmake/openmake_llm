@@ -60,3 +60,20 @@ describe('resolveToolNameAlias', () => {
         expect(resolveToolNameAlias('nothing_here', known, SEP)).toEqual({});
     });
 });
+
+describe('플러그인 표기 mcp__plugin_<플러그인>_<키>__ (opt-in MCP_TOOL_ALIAS_PLUGIN_FORM, ruflo 실측)', () => {
+    const ORIGINAL = process.env.MCP_TOOL_ALIAS_PLUGIN_FORM;
+    afterEach(() => { if (ORIGINAL === undefined) delete process.env.MCP_TOOL_ALIAS_PLUGIN_FORM; else process.env.MCP_TOOL_ALIAS_PLUGIN_FORM = ORIGINAL; });
+    const call = 'mcp__plugin_ruflo-core_ruflo__swarm_init';
+
+    it('OFF(기본) — 종전처럼 어느 서버와도 맞지 않는다', () => {
+        delete process.env.MCP_TOOL_ALIAS_PLUGIN_FORM;
+        expect(resolveToolNameAlias(call, ['ruflo-core-ruflo::swarm_init'], SEP)).toEqual({});
+    });
+    it('ON — 종전 이름(ruflo-core-ruflo)·서버 키 이름(ruflo) 모두 잇는다', () => {
+        process.env.MCP_TOOL_ALIAS_PLUGIN_FORM = 'true';
+        expect(resolveToolNameAlias(call, ['ruflo-core-ruflo::swarm_init'], SEP)).toEqual({ resolved: 'ruflo-core-ruflo::swarm_init' });
+        expect(resolveToolNameAlias(call, ['ruflo::swarm_init', 'other::swarm_init'], SEP)).toEqual({ resolved: 'ruflo::swarm_init' });
+        expect(resolveToolNameAlias(call, ['ruflo::swarm_status'], SEP)).toEqual({});
+    });
+});

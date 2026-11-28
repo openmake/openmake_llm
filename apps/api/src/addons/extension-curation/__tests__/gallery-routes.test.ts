@@ -50,7 +50,7 @@ import { createGalleryRouter, createVisibilityRouter } from '../gallery-routes';
 import { errorHandler } from '../../../utils/error-handler';
 import { ExtensionSourceBlockedError } from '../../../errors/extension-source-blocked.error';
 
-const KEYS = ['EXTENSION_INSTALL_PREVIEW_ENABLED', 'EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED'] as const;
+const KEYS = ['EXTENSION_INSTALL_PREVIEW_ENABLED', 'EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED', 'EXTENSION_GALLERY_GROUP_SOURCES'] as const;
 const ORIGINAL = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 function setEnv(k: (typeof KEYS)[number], v: string | undefined) {
     if (v === undefined) delete process.env[k]; else process.env[k] = v;
@@ -95,6 +95,15 @@ describe('GET /gallery', () => {
         expect(res.status).toBe(200);
         expect(res.body.data.catalog).toEqual([]);
         expect(res.body.data.extensions).toHaveLength(2);
+    });
+
+    it('원본 묶음이 켜지면 groupSources:true (꺼져 있으면 필드 없음 — 종전 응답 모양 테스트가 고정)', async () => {
+        setEnv('EXTENSION_GALLERY_GROUP_SOURCES', 'true');
+        const res = await request(app()).get('/api/users/me/extensions/gallery');
+        expect(res.body.data.groupSources).toBe(true);
+        setEnv('EXTENSION_GALLERY_GROUP_SOURCES', 'false');
+        const off = await request(app()).get('/api/users/me/extensions/gallery');
+        expect(off.body.data).not.toHaveProperty('groupSources');
     });
 
     it('설치 미리보기가 켜지면 installPreview:true', async () => {

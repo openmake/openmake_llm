@@ -15,6 +15,7 @@ import { NamedInstallForm } from "./named-install-form";
 import { useAppStore } from "@/lib/store";
 import { ExtensionInstallPreviewDialog } from "./extension-install-preview-dialog";
 import { catalogInstallMode, type InstallPreviewTarget } from "../install-preview";
+import { catalogGroupingEnabled, catalogGroups, isGroupedCatalogView } from "../catalog-groups";
 
 interface UserExtension {
   id: string;
@@ -63,6 +64,8 @@ interface CatalogPlugin {
   category?: string;
   /** 설명 한국어 번역 (동기화 후단 배치) — ko 로케일에서 우선 노출, 없으면 원문 */
   description_ko?: string;
+  /** 플러그인 루트에 MCP 정의가 있는가(동기화 시 트리로 판정) — 없으면 미상 */
+  hasMcp?: boolean;
 }
 
 /** 카탈로그 페이지 크기 — 대형 마켓플레이스(수백 개) 스크롤 방지 */
@@ -113,6 +116,8 @@ export function ExtensionsSection() {
   const [catalogInstalls, setCatalogInstalls] = useState<Record<string, GalleryInstallState>>({});
   // 설치 미리보기(M1b) — 갤러리 응답에 installPreview 가 있을 때만. 없으면 종전처럼 바로 설치
   const [catalogMode, setCatalogMode] = useState<"preview" | "direct">("direct");
+  // 다중 플러그인 원본 묶음(opt-in) — 갤러리 응답에 groupSources 가 있을 때만. 없으면 종전처럼 평면 목록
+  const [catalogGrouping, setCatalogGrouping] = useState(false);
   const [previewTarget, setPreviewTarget] = useState<InstallPreviewTarget | null>(null);
   const [catalogUrl, setCatalogUrl] = useState("");
   const [catalogBusy, setCatalogBusy] = useState<string | null>(null);
@@ -145,12 +150,17 @@ export function ExtensionsSection() {
     ? sourceScoped.filter((e) => (e.plugin.category ?? UNCATEGORIZED) === catalogCategory)
     : sourceScoped;
   const searchQuery = catalogSearch.trim().toLowerCase();
-  const catalogFiltered = searchQuery
+  // 묶음 화면 — 플러그인 여럿인 원본은 카드 한 줄로, 평면 목록에서는 뺀다(카드를 누르면 원본 선택으로 들어간다)
+  const groupedView = isGroupedCatalogView(catalogGrouping, catalogSource || catalogCategory, searchQuery);
+  const groupCards = groupedView ? catalogGroups(catalog) : [];
+  const groupedIds = new Set(groupCards.map((g) => g.id));
+  const catalogFilteredAll = searchQuery
     ? categoryScoped.filter((e) =>
         [e.plugin.name, e.plugin.description, e.plugin.description_ko, e.plugin.category]
           .some((v) => v?.toLowerCase().includes(searchQuery)),
       )
     : categoryScoped;
+  const catalogFiltered = groupedIds.size > 0 ? catalogFilteredAll.filter((e) => !groupedIds.has(e.srcId)) : catalogFilteredAll;
   const catalogTotalPages = Math.max(1, Math.ceil(catalogFiltered.length / CATALOG_PAGE_SIZE));
   const catalogPageClamped = Math.min(catalogPage, catalogTotalPages - 1);
   const catalogPageEntries = catalogFiltered.slice(
@@ -172,12 +182,13 @@ export function ExtensionsSection() {
 
   const loadGallery = useCallback(async () => {
     try {
-      const res = await ApiClient.get<ApiSuccess<{ extensions: GalleryExtension[]; catalog?: CatalogSource[]; installPreview?: boolean }>>(
+      const res = await ApiClient.get<ApiSuccess<{ extensions: GalleryExtension[]; catalog?: CatalogSource[]; installPreview?: boolean; groupSources?: boolean }>>(
         "/api/users/me/extensions/gallery",
       );
       setGallery(res?.data?.extensions ?? []);
       setCatalog(res?.data?.catalog ?? []);
       setCatalogMode(catalogInstallMode(res?.data));
+      setCatalogGrouping(catalogGroupingEnabled(res?.data));
     } catch {
       /* 실패 — 빈 갤러리 유지 */
     }
@@ -748,7 +759,34 @@ export function ExtensionsSection() {
               {isAdmin && selectedSource && (
                 <CatalogSourceAdmin sourceId={selectedSource.id} refreshKey={catalogAdminTick} />
               )}
-              {catalogFiltered.length === 0 ? (
+              {groupCards.length > 0 && (
+                <ul className="divide-y divide-border border-b border-border">
+                  {groupCards.map((g) => (
+                    <li key={`group:${g.id}`} className="flex items-center gap-3 px-3.5 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm text-fg">{g.name}</p>
+                        <p className="mt-0.5 text-xs text-muted">
+                          {t("catalog.groupSummary", { count: g.installable })}
+                          {g.mcp > 0 && <span className="ml-1.5">{t("catalog.groupMcp", { count: g.mcp })}</span>}
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setCatalogSource(g.id);
+                          setCatalogCategory("");
+                          setCatalogPage(0);
+                        }}
+                      >
+                        {t("catalog.groupOpen")}
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {catalogFiltered.length === 0 && groupCards.length > 0 ? null : catalogFiltered.length === 0 ? (
                 <p className="px-3.5 py-2.5 text-xs text-muted">{t("catalog.noneInstallable")}</p>
               ) : (
                 <ul className="divide-y divide-border">
@@ -763,6 +801,9 @@ export function ExtensionsSection() {
                             {p.name}
                             {p.version && <span className="ml-1.5 font-mono text-xs text-muted">v{p.version}</span>}
                             <GalleryItemBadges catalogId={e.srcId} pluginName={p.name} />
+                            {catalogGrouping && p.hasMcp && (
+                              <span className="ml-1.5 rounded border border-border px-1.5 py-0.5 font-mono text-xs text-muted">MCP</span>
+                            )}
                             {!catalogSource && (
                               <span className="ml-1.5 rounded bg-surface px-1.5 py-0.5 text-xs text-muted">
                                 {e.srcName}
