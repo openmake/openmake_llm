@@ -3670,7 +3670,11 @@
     "empty": "Keine Einträge",
     "pageInfo": "{from}–{to} von {total}",
     "prev": "Zurück",
-    "next": "Weiter"
+    "next": "Weiter",
+    "approvePromote": "Freigeben & übernehmen",
+    "approvePromoted": "Freigegeben und als deaktivierter Entwurf in den MCP-Katalog übernommen: {id}",
+    "search": "Suchen",
+    "searchResult": "{total} Treffer (Name/Titel zuerst)"
   },
   "orgExtensionDeployments": {
     "title": "Bereitstellungsmodi für Erweiterungen",

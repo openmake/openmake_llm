@@ -28,9 +28,11 @@ const createMcpCatalogDraft = jest.fn();
 jest.mock('../../../runtime-ports/mcp-catalog-templates', () => ({ createMcpCatalogDraft: (...a: unknown[]) => createMcpCatalogDraft(...a) }));
 
 const syncEnabled = jest.fn();
+const quickActions = jest.fn();
 const triggerRegistrySync = jest.fn();
 jest.mock('../registry/runtime', () => ({
     registrySyncEnabled: () => syncEnabled(),
+    registryQuickActionsEnabled: () => quickActions(),
     triggerRegistrySync: (...a: unknown[]) => triggerRegistrySync(...a),
 }));
 
@@ -60,6 +62,7 @@ beforeEach(() => {
     role = 'user';
     checkAddonEntitlement.mockResolvedValue('ok');
     syncEnabled.mockReturnValue(false);
+    quickActions.mockReturnValue(false);
     repo.list.mockResolvedValue({ entries: [entry], total: 1 });
     repo.get.mockResolvedValue(entry);
     repo.setCuration.mockResolvedValue(true);
@@ -139,6 +142,55 @@ describe('registry 관리자', () => {
         expect(repo.setPromoted).not.toHaveBeenCalled();
         repo.get.mockResolvedValueOnce(null);
         expect((await request(app()).post(`${BASE}/registry/admin/entries/promote`).send({ serverName: entry.serverName })).status).toBe(404);
+    });
+
+    it('빠른 작업 OFF(기본) — 승인+올리기 404, 목록은 이름순(rank 없음), 상태에 quickActions 없음', async () => {
+        role = 'admin';
+        const r = await request(app()).post(`${BASE}/registry/admin/entries/approve-promote`).send({ serverName: entry.serverName });
+        expect(r.status).toBe(404);
+        expect(r.body.error.code).toBe('REGISTRY_QUICK_ACTIONS_DISABLED');
+        expect(repo.setCuration).not.toHaveBeenCalled();
+        repo.list.mockResolvedValue({ entries: [], total: 0 });
+        await request(app()).get(`${BASE}/registry/admin/entries?search=notion`);
+        expect(repo.list).toHaveBeenCalledWith(expect.not.objectContaining({ rank: true }));
+        repo.getState.mockResolvedValue({ cursor: null });
+        repo.counts.mockResolvedValue({ pending: 0, approved: 0, hidden: 0, tombstoned: 0 });
+        expect((await request(app()).get(`${BASE}/registry/admin/status`)).body.data).not.toHaveProperty('quickActions');
+    });
+
+    it('빠른 작업 ON — 대기 항목을 승인하고 올린다(감사 2건), 상태 quickActions, 목록 rank', async () => {
+        role = 'admin';
+        quickActions.mockReturnValue(true);
+        repo.get.mockResolvedValueOnce({ ...entry, curation: 'pending' }).mockResolvedValue(entry);
+        repo.setCuration.mockResolvedValue(true);
+        createMcpCatalogDraft.mockResolvedValue({ status: 'created', id: 'mcp-reg-io-github-acme-weather' });
+        const r = await request(app()).post(`${BASE}/registry/admin/entries/approve-promote`).send({ serverName: entry.serverName });
+        expect(r.status).toBe(200);
+        expect(r.body.data).toMatchObject({ catalogId: 'mcp-reg-io-github-acme-weather', status: 'created', curation: 'approved' });
+        expect(repo.setCuration).toHaveBeenCalledWith(entry.serverName, 'approved', '3');
+        expect(repo.setPromoted).toHaveBeenCalledWith(entry.serverName, 'mcp-reg-io-github-acme-weather');
+        expect(recordAddonAudit.mock.calls.map((c) => c[0].action)).toEqual(['extension_marketplace.registry_curated', 'extension_marketplace.registry_promoted']);
+        repo.list.mockResolvedValue({ entries: [], total: 0 });
+        await request(app()).get(`${BASE}/registry/admin/entries?search=notion`);
+        expect(repo.list).toHaveBeenCalledWith(expect.objectContaining({ search: 'notion', rank: true }));
+        repo.getState.mockResolvedValue({ cursor: null });
+        repo.counts.mockResolvedValue({ pending: 0, approved: 0, hidden: 0, tombstoned: 0 });
+        expect((await request(app()).get(`${BASE}/registry/admin/status`)).body.data.quickActions).toBe(true);
+    });
+
+    it('빠른 작업 ON — 올릴 수 없는 항목은 승인하지 않는다(409), 지워진 항목 404, 관리자 아니면 403', async () => {
+        role = 'admin';
+        quickActions.mockReturnValue(true);
+        repo.get.mockResolvedValueOnce({ ...entry, curation: 'pending', remotes: [], packages: [] });
+        const r = await request(app()).post(`${BASE}/registry/admin/entries/approve-promote`).send({ serverName: entry.serverName });
+        expect(r.status).toBe(409);
+        expect(r.body.error.code).toBe('REGISTRY_PROMOTE_NO_SUPPORTED_INSTALL');
+        expect(repo.setCuration).not.toHaveBeenCalled();
+        repo.get.mockResolvedValueOnce({ ...entry, tombstonedAt: '2026-11-28T00:00:00.000Z' });
+        expect((await request(app()).post(`${BASE}/registry/admin/entries/approve-promote`).send({ serverName: entry.serverName })).status).toBe(404);
+        role = 'user';
+        expect((await request(app()).post(`${BASE}/registry/admin/entries/approve-promote`).send({ serverName: entry.serverName })).status).toBe(403);
+        expect(createMcpCatalogDraft).not.toHaveBeenCalled();
     });
 
     it('지금 동기화 — 플래그 OFF 면 409(외부 호출 없음), ON 이면 force', async () => {

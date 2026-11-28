@@ -22,6 +22,8 @@ export const extensionMarketplaceContributions: AddonContribution = {
     settings: [
         // M7 MCP Registry 동기화(기본 OFF) — 켜면 공식 레지스트리를 주기적으로 증분 수신한다. 꺼져 있으면 외부 요청 0.
         { key: 'EXT_MARKET_MCP_REGISTRY_SYNC', group: 'agent', secret: false, requiresRestart: false, validate: 'boolean' },
+        // 관리자 빠른 작업(기본 OFF) — 승인 + 카탈로그로 올리기 한 번에, 검색 결과 관련도 순. 요청 시점에 읽는다(실시간)
+        { key: 'EXT_MARKET_REGISTRY_QUICK_ACTIONS', group: 'agent', secret: false, requiresRestart: false, validate: 'boolean' },
     ],
     auditActions: { [REGISTRY_CURATED_AUDIT_ACTION]: null, [REGISTRY_PROMOTED_AUDIT_ACTION]: null },
 };

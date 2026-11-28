@@ -3670,7 +3670,11 @@
     "empty": "没有条目",
     "pageInfo": "{from}–{to} / {total}",
     "prev": "上一页",
-    "next": "下一页"
+    "next": "下一页",
+    "approvePromote": "批准并上架",
+    "approvePromoted": "已批准并作为停用草稿加入 MCP 目录：{id}",
+    "search": "搜索",
+    "searchResult": "{total} 条结果（名称/标题匹配优先）"
   },
   "orgExtensionDeployments": {
     "title": "扩展部署模式",
