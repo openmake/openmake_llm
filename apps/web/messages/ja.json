@@ -3670,7 +3670,11 @@
     "empty": "項目がありません",
     "pageInfo": "{from}–{to} / {total}",
     "prev": "前へ",
-    "next": "次へ"
+    "next": "次へ",
+    "approvePromote": "承認してカタログへ",
+    "approvePromoted": "承認し、MCP カタログに無効の下書きとして追加しました: {id}",
+    "search": "検索",
+    "searchResult": "{total} 件（名前・タイトル一致を優先）"
   },
   "orgExtensionDeployments": {
     "title": "拡張の配布モード",

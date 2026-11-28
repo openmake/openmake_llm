@@ -18,6 +18,15 @@ import { runRegistrySync, type SyncOutcome } from './sync';
 
 const logger = createLogger('ExtensionMarketplaceRegistry');
 
+/**
+ * 관리자 빠른 작업(opt-in `EXT_MARKET_REGISTRY_QUICK_ACTIONS`, 2026-11-28, 기본 OFF) — 승인 + 카탈로그로 올리기를 한 번에,
+ * 검색 결과를 관련도 순(이름·제목 일치 먼저)으로. 꺼져 있으면 라우트·정렬·상태 응답이 종전과 같다.
+ */
+export const REGISTRY_QUICK_ACTIONS_FLAG = 'EXT_MARKET_REGISTRY_QUICK_ACTIONS';
+export function registryQuickActionsEnabled(): boolean {
+    return readSettingValue(REGISTRY_QUICK_ACTIONS_FLAG) === 'true';
+}
+
 export function registrySyncEnabled(): boolean {
     return readSettingValue(REGISTRY_SYNC_FLAG) === 'true';
 }

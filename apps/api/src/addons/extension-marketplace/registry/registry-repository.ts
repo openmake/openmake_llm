@@ -53,6 +53,8 @@ export interface ListOptions {
     curation?: Curation | 'all';
     includeTombstoned?: boolean;
     search?: string;
+    /** 검색어가 있을 때 관련도 순(정확 일치 → 앞부분 일치 → 이름·제목 포함 → 설명만 포함), 같은 순위는 이름순. 없으면 이름순(종전) */
+    rank?: boolean;
     limit: number;
     offset: number;
 }
@@ -141,16 +143,31 @@ export class RegistryRepository {
             params.push(opts.curation);
             where.push(`curation = $${params.length}`);
         }
+        let order = 'server_name';
         if (opts.search) {
-            params.push(`%${opts.search.replace(/[\\%_]/g, c => `\\${c}`)}%`);
-            where.push(`(server_name ILIKE $${params.length} OR title ILIKE $${params.length} OR description ILIKE $${params.length})`);
+            const esc = opts.search.replace(/[\\%_]/g, c => `\\${c}`);
+            params.push(`%${esc}%`);
+            const like = params.length;
+            where.push(`(server_name ILIKE $${like} OR title ILIKE $${like} OR description ILIKE $${like})`);
+            if (opts.rank) {
+                // 이름의 끝 부분(`io.github.acme/weather` → `weather`)과 제목을 먼저 본다 — 네임스페이스(`io.github.*`)는 거의 모든 항목에 걸린다
+                params.push(esc, `${esc}%`);
+                const exact = params.length - 1, prefix = params.length;
+                const tail = `split_part(server_name, '/', 2)`;
+                order = `CASE WHEN ${tail} ILIKE $${exact} OR title ILIKE $${exact} THEN 0
+                              WHEN ${tail} ILIKE $${prefix} OR title ILIKE $${prefix} THEN 1
+                              WHEN ${tail} ILIKE $${like} OR title ILIKE $${like} THEN 2
+                              WHEN server_name ILIKE $${like} THEN 3 ELSE 4 END, server_name`;
+            }
         }
         const cond = where.join(' AND ');
-        const count = await this.db.query<{ n: string }>(`SELECT COUNT(*)::text AS n FROM market_registry_entries WHERE ${cond}`, params);
+        // 순위용 파라미터는 COUNT 에 쓰지 않는다 — 조건에 쓰인 것까지만 넘긴다(미사용 파라미터는 pg 가 타입을 못 정한다)
+        const condParams = opts.search && opts.rank ? params.slice(0, -2) : params;
+        const count = await this.db.query<{ n: string }>(`SELECT COUNT(*)::text AS n FROM market_registry_entries WHERE ${cond}`, condParams);
         params.push(opts.limit, opts.offset);
         const r = await this.db.query<EntryRow>(
             `SELECT ${ENTRY_COLUMNS} FROM market_registry_entries WHERE ${cond}
-              ORDER BY server_name LIMIT $${params.length - 1} OFFSET $${params.length}`,
+              ORDER BY ${order} LIMIT $${params.length - 1} OFFSET $${params.length}`,
             params,
         );
         return { entries: r.rows.map(toEntry), total: Number(count.rows[0]?.n ?? 0) };

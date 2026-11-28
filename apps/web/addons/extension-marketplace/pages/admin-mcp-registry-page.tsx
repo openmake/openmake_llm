@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { BadgeCheck, Loader2, RefreshCw } from "lucide-react";
+import { BadgeCheck, Loader2, RefreshCw, Search } from "lucide-react";
 import { PageHeader, PageBody, Card, CardContent, Badge, Button, Table, Th, Td } from "@/components/ui/primitives";
 import { AdminTabs } from "@/components/hub-tabs";
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
@@ -18,6 +18,8 @@ import {
   type RegistryAdminEntry,
   type RegistryStatus,
   installSummary,
+  quickActionsEnabled,
+  REGISTRY_SEARCH_DEBOUNCE_MS,
 } from "./registry-view";
 
 const BASE = "/api/extension-marketplace/registry/admin";
@@ -56,7 +58,7 @@ function StatusCard({ status, onSync, syncing }: { status: RegistryStatus | null
   );
 }
 
-function EntryRow({ entry, onChanged }: { entry: RegistryAdminEntry; onChanged: (msg: string) => void }) {
+function EntryRow({ entry, onChanged, quick }: { entry: RegistryAdminEntry; onChanged: (msg: string) => void; quick: boolean }) {
   const t = useTranslations("marketRegistry");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -79,6 +81,11 @@ function EntryRow({ entry, onChanged }: { entry: RegistryAdminEntry; onChanged: 
   const promote = () => act(async () => {
     const r = await ApiClient.post<ApiEnvelope<{ catalogId: string; status: string }>>(`${BASE}/entries/promote`, { serverName: entry.serverName });
     return t(r.data.status === "exists" ? "promoteExists" : "promoted", { id: r.data.catalogId });
+  });
+  // 승인 + 올리기 한 번에(빠른 작업) — 올릴 수 없는 항목은 서버가 승인하지 않고 거절한다
+  const approvePromote = () => act(async () => {
+    const r = await ApiClient.post<ApiEnvelope<{ catalogId: string; status: string }>>(`${BASE}/entries/approve-promote`, { serverName: entry.serverName });
+    return t(r.data.status === "exists" ? "promoteExists" : "approvePromoted", { id: r.data.catalogId });
   });
   const tomb = Boolean(entry.tombstonedAt);
 
@@ -104,6 +111,9 @@ function EntryRow({ entry, onChanged }: { entry: RegistryAdminEntry; onChanged: 
       </Td>
       <Td>
         <div className="flex flex-wrap gap-1">
+          {quick && entry.curation !== "approved" && !tomb && !entry.promotedCatalogId && (
+            <Button size="sm" disabled={busy} onClick={approvePromote}>{t("approvePromote")}</Button>
+          )}
           {entry.curation !== "approved" && !tomb && (
             <Button size="sm" variant="outline" disabled={busy} onClick={() => curate("approved")}>{t("approve")}</Button>
           )}
@@ -160,6 +170,15 @@ export function AdminMcpRegistryPage() {
     void load();
   }, [load]);
 
+  const quick = quickActionsEnabled(status);
+  // 빠른 작업이 켜져 있으면 입력을 멈춘 뒤 자동 검색(Enter·검색 버튼은 언제나 즉시)
+  useEffect(() => {
+    if (!quick || draft === search) return;
+    const id = setTimeout(() => { setSearch(draft); setOffset(0); }, REGISTRY_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(id);
+  }, [quick, draft, search]);
+  const runSearch = () => { setSearch(draft); setOffset(0); };
+
   async function syncNow() {
     setSyncing(true);
     try {
@@ -193,8 +212,17 @@ export function AdminMcpRegistryPage() {
               placeholder={t("searchPlaceholder")}
               aria-label={t("searchPlaceholder")}
               onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { setSearch(draft); setOffset(0); } }}
+              onKeyDown={(e) => { if (e.key === "Enter") runSearch(); }}
             />
+            {quick && (
+              <Button size="sm" variant="outline" onClick={runSearch}>
+                <Search className="h-3.5 w-3.5" aria-hidden />
+                {t("search")}
+              </Button>
+            )}
+            {quick && search.trim() && !loading && (
+              <span className="text-xs text-muted">{t("searchResult", { total })}</span>
+            )}
             <label className="flex items-center gap-1 text-xs text-fg-2">
               <input type="checkbox" checked={showTomb} onChange={(e) => { setShowTomb(e.target.checked); setOffset(0); }} />
               {t("showTombstoned")}
@@ -217,7 +245,7 @@ export function AdminMcpRegistryPage() {
                   ) : entries.length === 0 ? (
                     <tr><Td colSpan={4}><div className="py-12 text-center text-muted">{t("empty")}</div></Td></tr>
                   ) : (
-                    entries.map((e) => <EntryRow key={e.serverName} entry={e} onChanged={(msg) => { setNotice(msg); void load(); }} />)
+                    entries.map((e) => <EntryRow key={e.serverName} entry={e} quick={quick} onChanged={(msg) => { setNotice(msg); void load(); }} />)
                   )}
                 </tbody>
               </Table>

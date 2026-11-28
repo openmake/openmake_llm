@@ -3670,7 +3670,11 @@
     "empty": "항목이 없습니다",
     "pageInfo": "{from}–{to} / {total}",
     "prev": "이전",
-    "next": "다음"
+    "next": "다음",
+    "approvePromote": "승인하고 올리기",
+    "approvePromoted": "승인하고 MCP 카탈로그에 꺼진 초안으로 올렸습니다: {id}",
+    "search": "검색",
+    "searchResult": "{total}건 (이름·제목 일치 먼저)"
   },
   "orgExtensionDeployments": {
     "title": "확장 배포 모드",

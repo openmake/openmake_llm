@@ -75,6 +75,18 @@ describeOrSkip('market_registry_entries (실 DB)', () => {
         expect((await repo().list({ curation: 'all', search: '%', limit: 50, offset: 0 })).entries.map(e => e.serverName)).toEqual(['com.example/percent']);
     });
 
+    it('rank — 이름 끝·제목 정확 일치 → 앞부분 → 포함 → 네임스페이스·설명만 순, total 은 같다', async () => {
+        await repo().applyEntry(entry({ name: 'io.github.zz/notion', title: 'Notion' }));
+        await repo().applyEntry(entry({ name: 'io.github.aa/notion-tasks', title: 'Tasks' }));
+        await repo().applyEntry(entry({ name: 'io.github.notion/other', title: 'Other' }));
+        await repo().applyEntry(entry({ name: 'com.example/avatars', title: 'Avatars', description: 'works with notion' }));
+        const plain = await repo().list({ curation: 'all', search: 'notion', limit: 50, offset: 0 });
+        const ranked = await repo().list({ curation: 'all', search: 'notion', rank: true, limit: 50, offset: 0 });
+        expect(ranked.total).toBe(plain.total);
+        expect(ranked.entries.map(e => e.serverName)).toEqual(['io.github.zz/notion', 'io.github.aa/notion-tasks', 'io.github.notion/other', 'com.example/avatars']);
+        expect(plain.entries.map(e => e.serverName)[0]).toBe('com.example/avatars');
+    });
+
     it('동기화 상태 — 없으면 기본값, 패치·커서 비우기', async () => {
         expect(await repo().getState()).toMatchObject({ cursor: null, failureCount: 0, lastStats: {} });
         await repo().patchState({ cursor: 'c1', runStartedAt: '2026-11-28T00:00:00.000Z', lastStats: { received: 3 } });
