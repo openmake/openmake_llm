@@ -175,6 +175,23 @@ describe('조직 자체 월 버킷 (QUOTA_ORG_BUCKET_ENABLED)', () => {
         expect(await getKeyValueStore().get(orgMonthKey('ob4', now))).toBe(120);
     });
 
+    it('조직 버킷 증가가 KV 오류로 실패하면(fail-open) 이미 올린 사용자 버킷도 되돌린다', async () => {
+        flags.orgBucket = true;
+        const now = nextHour();
+        listBudgetedOrgsForUser.mockResolvedValue([{ orgId: 'ob6', budget: 100_000, costBudgetMicros: 0, memberIds: ['b-g'] }]);
+        listMembershipsForUser.mockResolvedValue([{ orgId: 'ob6', role: 'member' }]);
+        const store = getKeyValueStore();
+        const real = store.incrBy.bind(store);
+        const spy = jest.spyOn(store, 'incrBy').mockImplementation(async (k: string, n: number) => {
+            if (k.startsWith('llmqo:') && n > 0) throw new Error('kv down');
+            return real(k, n);
+        });
+        try {
+            await expect(reserveUserQuota('b-g', 300, now)).resolves.toMatchObject({ estimate: 0, keys: [] });
+            expect((await store.get(`llmq:b-g:h:${Math.floor(now / 3_600_000)}`)) ?? 0).toBe(0);
+        } finally { spy.mockRestore(); }
+    });
+
     it('활성 조직이 없으면 가입이 가장 이른 예산 조직 하나', async () => {
         flags.orgBucket = true;
         listBudgetedOrgsForUser.mockResolvedValue([

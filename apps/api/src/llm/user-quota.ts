@@ -335,6 +335,9 @@ export async function reserveUserQuota(userId: string | undefined, estimate: num
         return { userId, estimate: est, keys: applied };
     } catch (e) {
         if (e instanceof QuotaExceededError) throw e;
+        // 중간 실패(KV·청구 조직 조회) — 이미 올린 버킷은 되돌린다. 아래 두 분기 모두 예약 핸들을 돌려주지 않아
+        // 정산이 이 증가분을 볼 수 없으므로, 남겨 두면 버킷이 영구히 부풀어 있다(환불 자체는 best-effort).
+        await refund(store, applied, est);
         if (cfg.quotaFailMode === 'closed') {
             logger.error('per-user quota 저장소 장애 (fail-closed):', e);
             throw new QuotaUnavailableError(e);
