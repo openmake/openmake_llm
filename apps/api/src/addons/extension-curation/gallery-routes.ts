@@ -18,6 +18,7 @@ import {
     memberOrgIds, requestUserId, toPublicExtension, userExtensionStore,
 } from '../../runtime-ports/extension-sharing';
 import { extensionInstallPreviewEnabled } from '../../config/extension-install-preview';
+import { extensionGalleryGroupSourcesEnabled } from '../../config/extension-naming';
 import { createLogger } from '../../utils/logger';
 import { success, internalError, unauthorized, notFound, badRequest } from '../../utils/api-response';
 
@@ -64,7 +65,12 @@ export function createGalleryRouter(): Router {
                 log.warn('catalog 조회 실패 (갤러리는 계속):', err);
             }
             // 설치 미리보기(M1b) — 켜져 있을 때만 필드를 싣는다(꺼져 있으면 응답 모양이 종전과 같다)
-            res.json(success({ extensions, catalog, ...(extensionInstallPreviewEnabled() ? { installPreview: true } : {}) }));
+            // 다중 플러그인 원본 묶음(opt-in, 2026-11-28) — 켜져 있을 때만 필드를 싣는다(웹이 원본별 카드로 묶는다)
+            res.json(success({
+                extensions, catalog,
+                ...(extensionInstallPreviewEnabled() ? { installPreview: true } : {}),
+                ...(extensionGalleryGroupSourcesEnabled() ? { groupSources: true } : {}),
+            }));
         } catch (err) {
             log.error('gallery 실패:', err);
             res.status(500).json(internalError('갤러리 조회 실패'));

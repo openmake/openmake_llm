@@ -2636,7 +2636,10 @@
         "installed": "インストールしました: {name}(構成要素は承認後に有効化)",
         "failed": "名前でのインストールに失敗しました",
         "candidates": "候補:"
-      }
+      },
+      "groupSummary": "プラグイン {count} 件",
+      "groupMcp": "MCP 付き {count} 件",
+      "groupOpen": "表示"
     },
     "preview": {
       "title": "インストールのプレビュー — {name}",

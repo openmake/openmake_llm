@@ -33,7 +33,11 @@ export { buildSkillDiscoveryPattern } from './extension-discovery';
 export interface CatalogSnapshot {
     name: string;
     description: string | null;
-    plugins: Array<{ name: string; description?: string; version?: string; installable?: boolean; category?: string; description_ko?: string; source?: string }>;
+    /**
+     * hasMcp — 플러그인 루트에 `.mcp.json`/`mcp.json` 이 있는가(이미 받은 트리로만 판정, 추가 요청 없음).
+     * 트리를 못 받았거나(거대 repo) 교차 저장소 항목이면 필드 없음 = 미상. plugin.json 안의 인라인 `mcpServers` 는 보지 않는다.
+     */
+    plugins: Array<{ name: string; description?: string; version?: string; installable?: boolean; category?: string; description_ko?: string; source?: string; hasMcp?: boolean }>;
 }
 
 interface CatalogSnapshotDeps {
@@ -116,7 +120,8 @@ export async function fetchCatalogSnapshot(
                 }
                 const prefix = `${sp}${p.path ? `${p.path}/` : ''}`;
                 const installable = await probeInstallableAt(fetcher, parsed.owner, parsed.repo, sha, prefix, treeEntries);
-                return { name: p.name, description: p.description, installable, category: p.category };
+                const hasMcp = treeEntries ? hasMcpConfigAt(treeEntries, prefix) : undefined;
+                return { name: p.name, description: p.description, installable, category: p.category, ...(hasMcp === undefined ? {} : { hasMcp }) };
             }));
             enriched.push(...results);
         }
@@ -231,6 +236,12 @@ async function probeExternalEntry(
 }
 
 /** 카탈로그 루트 prefix — null/빈 값 = 저장소 루트('') */
+/** PURE: 플러그인 루트(prefix, `/` 로 끝나거나 빈 문자열)에 MCP 정의 파일이 있는가 */
+export function hasMcpConfigAt(entries: TreeEntry[], prefix: string): boolean {
+    const targets = new Set([`${prefix}.mcp.json`, `${prefix}mcp.json`]);
+    return entries.some((e) => targets.has(e.path));
+}
+
 export function catalogRootPrefix(subpath: string | null | undefined): string {
     return subpath ? `${subpath.replace(/\/+$/, '')}/` : '';
 }
