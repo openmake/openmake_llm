@@ -3674,7 +3674,8 @@
     "approvePromote": "승인하고 올리기",
     "approvePromoted": "승인하고 MCP 카탈로그에 꺼진 초안으로 올렸습니다: {id}",
     "search": "검색",
-    "searchResult": "{total}건 (이름·제목 일치 먼저)"
+    "searchResult": "{total}건 (이름·제목 일치 먼저)",
+    "searchPlaceholderLive": "이름·제목·설명 검색 (입력하면 바로 찾습니다)"
   },
   "orgExtensionDeployments": {
     "title": "확장 배포 모드",

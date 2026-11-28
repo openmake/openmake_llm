@@ -55,11 +55,13 @@ describe('빠른 작업(opt-in EXT_MARKET_REGISTRY_QUICK_ACTIONS) — 상태 응
         expect(src).toContain('/entries/approve-promote');
         expect(src).toContain('if (!quick || draft === search) return;');
         expect(src).toContain('{quick && (');
+        expect(src).toContain('placeholder={t(quick ? "searchPlaceholderLive" : "searchPlaceholder")}');
+        expect(src).toContain('<Td className="whitespace-nowrap">');
     });
-    it('번역 키 4개가 5개 언어에 있다', () => {
+    it('번역 키 5개가 5개 언어에 있다', () => {
         for (const lang of ['ko', 'en', 'ja', 'zh', 'de']) {
             const m = JSON.parse(read(`messages/${lang}.json`)).marketRegistry;
-            for (const k of ['approvePromote', 'approvePromoted', 'search', 'searchResult']) expect(m[k]).toEqual(expect.any(String));
+            for (const k of ['approvePromote', 'approvePromoted', 'search', 'searchResult', 'searchPlaceholderLive']) expect(m[k]).toEqual(expect.any(String));
         }
     });
 });

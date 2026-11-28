@@ -3674,7 +3674,8 @@
     "approvePromote": "Approve & promote",
     "approvePromoted": "Approved and added to the MCP catalog as a disabled draft: {id}",
     "search": "Search",
-    "searchResult": "{total} results (name/title matches first)"
+    "searchResult": "{total} results (name/title matches first)",
+    "searchPlaceholderLive": "Search name, title or description (results update as you type)"
   },
   "orgExtensionDeployments": {
     "title": "Extension deployment modes",
