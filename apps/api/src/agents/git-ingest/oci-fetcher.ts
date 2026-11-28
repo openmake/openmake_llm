@@ -128,7 +128,8 @@ export function parseOciManifest(raw: Uint8Array, contentType: string | null, li
     let total = 0;
     return d.layers.map((l: unknown) => {
         const layer = l as { mediaType?: unknown; digest?: unknown; size?: unknown };
-        if (typeof layer.mediaType !== 'string' || !(layer.mediaType in OCI_LAYER_MEDIA_TYPES)) {
+        if (typeof layer.mediaType !== 'string' || !Object.hasOwn(OCI_LAYER_MEDIA_TYPES, layer.mediaType)) {
+            // `in` 은 상속 키(toString·constructor·__proto__)도 통과시킨다 — 화이트리스트는 자기 키만
             throw new Error(`OCI_LAYER_MEDIA_TYPE_REJECTED: ${String(layer.mediaType)} — tar · tar+gzip 레이어만 설치할 수 있습니다`);
         }
         if (typeof layer.digest !== 'string' || !OCI_DIGEST_RE.test(layer.digest)) throw new Error('OCI_MANIFEST_INVALID: 레이어 digest 형식 오류(sha256 만)');

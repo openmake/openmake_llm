@@ -195,6 +195,13 @@ describe('OciFetcher — 레지스트리 mock', () => {
         await expect(new OciFetcher(URL_TAG, { fetchImpl: fetchFor(idx) }).resolveRef('', '')).rejects.toThrow(/OCI_INDEX_UNSUPPORTED/);
     });
 
+    it('레이어 미디어 타입 화이트리스트는 상속 키(toString·constructor·__proto__)를 허용하지 않는다', async () => {
+        for (const mediaType of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
+            const reg = makeRegistry([{ data: pluginLayer(), mediaType }]);
+            await expect(new OciFetcher(URL_TAG, { fetchImpl: fetchFor(reg) }).resolveRef('', '')).rejects.toThrow(/OCI_LAYER_MEDIA_TYPE_REJECTED/);
+        }
+    });
+
     it('상한: 레이어 수 · blob 합계 · 압축 폭탄 · 파일 수 · 매니페스트 크기', async () => {
         const two = makeRegistry([{ data: pluginLayer(), mediaType: TGZ }, { data: pluginLayer(), mediaType: TGZ }]);
         await expect(new OciFetcher(URL_TAG, { fetchImpl: fetchFor(two), limits: { maxLayers: 1 } }).resolveRef('', '')).rejects.toThrow(/OCI_TOO_MANY_LAYERS/);
