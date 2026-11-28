@@ -491,6 +491,18 @@ describe('ExtensionIngestService', () => {
             expect(r.marketplace?.plugins.map(p => p.name)).toEqual(['core', 'extra']);
         });
 
+        // 2026-11-28: 카탈로그 갤러리는 플러그인 1개 원본에 plugin 을 싣지 않는다 — "플러그인 이름을 지정하세요 — 가능: astryx" 로 막히던 결함
+        it('plugin 미지정 + 플러그인이 하나뿐인 마켓 → 목록을 돌려주지 않고 그 플러그인으로 해석', async () => {
+            const MK = JSON.stringify({ name: 'solo', plugins: [{ name: 'astryx', source: './' }] });
+            mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
+            mockFetcher.listTree.mockResolvedValueOnce(treeOf('.claude-plugin/marketplace.json', '.claude-plugin/plugin.json'));
+            mockFetcher.fetchFile.mockResolvedValueOnce(MK);                 // marketplace.json
+            mockFetcher.fetchFile.mockResolvedValueOnce('{ not json');       // plugin.json — 해석이 엔트리까지 갔음을 매니페스트 검증 실패로 확인
+            await expect(makeService().import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' }))
+                .rejects.toThrow(/INVALID_EXTENSION_MANIFEST/);
+            expect(mockFetcher.fetchFile).toHaveBeenLastCalledWith('foo', 'bar', 'abc123', '.claude-plugin/plugin.json', expect.any(Number));
+        });
+
         it('plugin 지정 → 고정 ref 로 해당 플러그인 설치 (tracking_ref=엔트리 ref)', async () => {
             mockFetcher.resolveRef.mockResolvedValueOnce('abc123');   // HEAD
             mockFetcher.listTree.mockResolvedValueOnce(treeOf('.claude-plugin/marketplace.json'));
