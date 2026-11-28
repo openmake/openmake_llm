@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.156.1](https://github.com/openmake/openmake_llm/compare/v1.156.0...v1.156.1) (2026-11-28)
+
+
+### 🐛 버그 수정
+
+* **extension-marketplace:** MCP 레지스트리 검색 안내 문구·작업 버튼 줄바꿈 다듬기 ([1883421](https://github.com/openmake/openmake_llm/commit/188342189efbf85fba626e4d19bed1490da51b65))
+* **extension-marketplace:** MCP 레지스트리 검색 안내 문구·작업 버튼 줄바꿈 다듬기 ([ccab258](https://github.com/openmake/openmake_llm/commit/ccab258ddd15f6e12a8dae8b4fd5d3a8de4b6a6b))
+
 ## [1.156.0](https://github.com/openmake/openmake_llm/compare/v1.155.0...v1.156.0) (2026-11-28)
 
 
