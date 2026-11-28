@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.156.2](https://github.com/openmake/openmake_llm/compare/v1.156.1...v1.156.2) (2026-11-28)
+
+
+### 🐛 버그 수정
+
+* **extensions:** 플러그인이 하나뿐인 마켓플레이스 원본은 이름 없이도 그 플러그인으로 설치 ([258bc36](https://github.com/openmake/openmake_llm/commit/258bc366bfbc00b5660e849029e3909fb69c5f44))
+
 ## [1.156.1](https://github.com/openmake/openmake_llm/compare/v1.156.0...v1.156.1) (2026-11-28)
 
 
