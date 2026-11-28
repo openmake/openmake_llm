@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.153.0](https://github.com/openmake/openmake_llm/compare/v1.152.0...v1.153.0) (2026-11-27)
+
+
+### ✨ 기능
+
+* **extensions:** 확장 공유·게시 라우트를 큐레이션 add-on 으로 이전 (§8-2, 1/2 API) ([e01d91a](https://github.com/openmake/openmake_llm/commit/e01d91aaab1ca118ca0b2751643a8c3a2658fc9f))
+* **extensions:** 확장 공유·게시 라우트를 큐레이션 add-on(extension-curation)으로 이전 (§8-2, 1/2 API) ([458918d](https://github.com/openmake/openmake_llm/commit/458918d04f3d9df5689e59d291d0f631aed53ef9))
+* **web:** 설정 확장 탭을 큐레이션 add-on 으로 이전 (§8-2, 2/2 웹) ([1dd45e8](https://github.com/openmake/openmake_llm/commit/1dd45e8d4a3e6429817484e36fa77c230213d79b))
+* **web:** 설정 확장 탭을 큐레이션 add-on(extension-curation)으로 이전 (§8-2, 2/2 웹) ([e17c51e](https://github.com/openmake/openmake_llm/commit/e17c51e78e0ad9873053851c754d0b4f5fc222fb))
+
 ## [1.152.0](https://github.com/openmake/openmake_llm/compare/v1.151.1...v1.152.0) (2026-11-27)
 
 
