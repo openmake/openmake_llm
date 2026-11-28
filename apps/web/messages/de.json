@@ -3009,7 +3009,38 @@
     "manualHelp": "Wird sofort dem aktuellen Bucket hinzugefügt (stündlich/wöchentlich/monatlich). Benutzer-IDs unter Admin → Benutzer.",
     "userIdPlaceholder": "Benutzer-ID",
     "grant": "Gewähren",
-    "grantDone": "Gewährt."
+    "grantDone": "Gewährt.",
+    "extendedGrantHelp": "Organisations- und Kosten-Grants zählen nur zum Monats-Bucket (Monatsbudget der Organisation, monatliches Kostenbudget des Nutzers). Kosten in USD-Micros (1 USD = 1.000.000).",
+    "subject": "Gegenstand",
+    "subjects": {
+      "user": "Nutzer",
+      "org": "Organisation"
+    },
+    "dimension": "Einheit",
+    "dimensions": {
+      "tokens": "Tokens",
+      "cost_micros": "Kosten (Micros)"
+    },
+    "orgIdPlaceholder": "Organisations-ID",
+    "overrides": {
+      "title": "Limits pro Nutzer",
+      "help": "Eigene Limits für diesen Nutzer. Leeres Feld = globaler Wert, 0 = unbegrenzt. Monatskosten in USD-Micros (1 USD = 1.000.000).",
+      "userId": "Nutzer-ID",
+      "user": "Nutzer",
+      "hourly": "Tokens pro Stunde",
+      "weekly": "Tokens pro Woche",
+      "cost": "Monatskosten (Micros)",
+      "reason": "Grund",
+      "save": "Speichern",
+      "edit": "Bearbeiten",
+      "remove": "Entfernen",
+      "empty": "Keine Nutzer eingerichtet.",
+      "useGlobal": "global",
+      "unlimited": "unbegrenzt",
+      "invalid": "Limits leer lassen oder als ganze Zahl ≥ 0 angeben.",
+      "loadError": "Laden fehlgeschlagen.",
+      "saveFailed": "Speichern fehlgeschlagen."
+    }
   },
   "adminSlo": {
     "title": "SLO",

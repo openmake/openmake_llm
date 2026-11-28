@@ -3009,7 +3009,38 @@
     "manualHelp": "현재 버킷에 즉시 더해집니다(시간/주/월). 사용자 id 는 관리자 → 사용자 목록에서 확인.",
     "userIdPlaceholder": "사용자 id",
     "grant": "부여",
-    "grantDone": "부여했습니다."
+    "grantDone": "부여했습니다.",
+    "extendedGrantHelp": "조직·비용 grant 는 월 버킷에만 더해집니다(조직 월 예산·사용자 월 비용 예산). 비용 단위는 USD micros(1 USD = 1,000,000).",
+    "subject": "대상",
+    "subjects": {
+      "user": "사용자",
+      "org": "조직"
+    },
+    "dimension": "단위",
+    "dimensions": {
+      "tokens": "토큰",
+      "cost_micros": "비용(micros)"
+    },
+    "orgIdPlaceholder": "조직 id",
+    "overrides": {
+      "title": "사용자별 한도",
+      "help": "이 사용자에게만 다른 한도를 둡니다. 칸을 비우면 전역 값, 0 은 무제한입니다. 월 비용은 USD micros(1 USD = 1,000,000).",
+      "userId": "사용자 id",
+      "user": "사용자",
+      "hourly": "시간 토큰",
+      "weekly": "주 토큰",
+      "cost": "월 비용(micros)",
+      "reason": "사유",
+      "save": "저장",
+      "edit": "수정",
+      "remove": "삭제",
+      "empty": "설정된 사용자가 없습니다.",
+      "useGlobal": "전역",
+      "unlimited": "무제한",
+      "invalid": "한도는 비우거나 0 이상의 정수로 적어 주세요.",
+      "loadError": "불러오기에 실패했습니다.",
+      "saveFailed": "저장에 실패했습니다."
+    }
   },
   "adminSlo": {
     "title": "SLO",

@@ -17,6 +17,7 @@ import { browserSitePolicyProblems } from '@openmake/config';
 import { contributedSettings, type AddonSettingValidator } from '../addon-host/contributions';
 import { EXTENSION_ADMIN_INVENTORY_KEY } from './extension-admin-inventory';
 import { ADDON_LIST_REFLECT_DB_STATE_KEY } from './addon-list-state';
+import { QUOTA_EXTENSION_FLAGS } from './quota-extensions';
 import { ARBITRARY_URL_INSTALL_MODES, EXTENSION_SOURCE_POLICY_KEYS, extensionSourcePolicyProblems } from './extension-source-policy';
 import { EXTENSION_MCP_SERVER_POLICY_KEYS, extensionMcpServerPolicyProblems } from './extension-mcp-server-policy';
 import { EXTENSION_CATALOG_SYNC_KEYS } from './extension-catalog-sync';
@@ -138,6 +139,11 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     { key: 'QUOTA_FAIL_MODE', group: 'llm', secret: false, requiresRestart: false, validate: z.enum(['open', 'closed']) },
     { key: 'QUOTA_EXCEEDED_ACTION', group: 'llm', secret: false, requiresRestart: false, validate: z.enum(['reject', 'degrade']) },
     { key: 'QUOTA_DEGRADE_MODEL_MAP', group: 'llm', secret: false, requiresRestart: false, validate: jsonObject },
+    // F25 잔여(opt-in, 실시간) — config/quota-extensions.ts
+    { key: QUOTA_EXTENSION_FLAGS.USER_OVERRIDES, group: 'llm', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
+    { key: QUOTA_EXTENSION_FLAGS.ORG_GRANTS, group: 'llm', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
+    { key: QUOTA_EXTENSION_FLAGS.ORG_BUCKET, group: 'llm', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
+    { key: QUOTA_EXTENSION_FLAGS.STORAGE_DAILY_SNAPSHOT, group: 'llm', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     { key: 'USER_MONTHLY_COST_BUDGET_MICROS', group: 'llm', secret: false, requiresRestart: false, validate: nonNegativeIntString },
     // ── 로컬 vLLM 스케줄링 필드(PR-13) — LLMClient.chat 이 호출 시점에 읽는다(실시간). priority 는 DGX 정책이 켜져야 효과 ──
     { key: 'LLM_PREFIX_CACHE_SALT_MODE', group: 'llm', secret: false, requiresRestart: false, validate: z.enum(['off', 'user']) },

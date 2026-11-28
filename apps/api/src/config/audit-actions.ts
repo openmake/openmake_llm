@@ -75,6 +75,7 @@ const BASE_AUDIT_ACTION_SEVERITY = {
     // 쿼터 초과 승인·수동 부여 (F25 PR-3b)
     'quota.overage_decided': 'warning',
     'quota.grant_manual': 'warning',
+    'quota.override_changed': 'warning',
     'cost_rate.changed': null,
     'addon.state_changed': null,
     // 설치형 확장 권한 재승인·철회(190) — 감사 기록만(알림 없음)

@@ -5,8 +5,10 @@ import { BaseRepository } from './base-repository';
 
 export type QuotaWindow = 'hourly' | 'weekly' | 'monthly';
 export type GrantKind = 'rollover' | 'approval' | 'manual';
+export type GrantSubject = 'user' | 'org';
+export type GrantDimension = 'tokens' | 'cost_micros';
 
-export interface QuotaGrantRow { id: number; subject_type: string; subject_id: string; window: QuotaWindow; bucket: string; amount: string | number; kind: GrantKind; source_id: string; created_at: string }
+export interface QuotaGrantRow { id: number; subject_type: string; subject_id: string; dimension?: string; window: QuotaWindow; bucket: string; amount: string | number; kind: GrantKind; source_id: string; created_at: string }
 export interface OverageRequestRow {
     id: string; user_id: string; window: QuotaWindow; bucket: string; requested_amount: string | number; reason: string | null;
     status: 'pending' | 'approved' | 'rejected' | 'expired'; auto_created: boolean; decided_by: string | null; decided_at: string | null;
@@ -22,6 +24,33 @@ export class QuotaGrantRepository extends BaseRepository {
             [userId, window, bucket],
         );
         return Number(r.rows[0]?.total ?? 0);
+    }
+
+    /** 임의 주체·차원의 grants 합 — 조직 grant·비용(micros) grant(QUOTA_ORG_GRANTS_ENABLED). */
+    async sumGrants(subjectType: GrantSubject, subjectId: string, dimension: GrantDimension, window: QuotaWindow, bucket: string): Promise<number> {
+        const r = await this.query<{ total: string | null }>(
+            `SELECT SUM(amount)::text AS total FROM quota_grants
+             WHERE subject_type = $1 AND subject_id = $2 AND dimension = $3 AND "window" = $4 AND bucket = $5`,
+            [subjectType, subjectId, dimension, window, bucket],
+        );
+        return Number(r.rows[0]?.total ?? 0);
+    }
+
+    /** 임의 주체·차원의 멱등 삽입 — 관리자 수동 부여(조직·비용). */
+    async insertGrantIfAbsent(p: { subjectType: GrantSubject; subjectId: string; dimension: GrantDimension; window: QuotaWindow; bucket: string; amount: number; kind: GrantKind; sourceId?: string; createdBy?: string | null }): Promise<boolean> {
+        const r = await this.query(
+            `INSERT INTO quota_grants (subject_type, subject_id, dimension, "window", bucket, amount, kind, source_id, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT DO NOTHING`,
+            [p.subjectType, p.subjectId, p.dimension, p.window, p.bucket, Math.round(p.amount), p.kind, p.sourceId ?? '', p.createdBy ?? null],
+        );
+        return (r.rowCount ?? 0) > 0;
+    }
+
+    async listOrgGrants(orgId: string, limit = 50): Promise<QuotaGrantRow[]> {
+        const r = await this.query<QuotaGrantRow>(
+            `SELECT * FROM quota_grants WHERE subject_type = 'org' AND subject_id = $1 ORDER BY created_at DESC LIMIT $2`, [orgId, limit]);
+        return r.rows;
     }
 
     /** 멱등 삽입 — 같은 (subject, window, bucket, kind, source) 가 있으면 false. */
