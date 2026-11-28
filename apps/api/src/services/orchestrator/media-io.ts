@@ -7,6 +7,7 @@ import { resolveGeneratedPath } from '../../tools/generated-media';
 import { downloadProviderUrl } from './http-call';
 import { inferImageMime } from '../../utils/image-mime';
 import { recordCost } from '../cost/cost-ledger-service';
+import { storageGeneratedDailySnapshotEnabled } from '../../config/quota-extensions';
 import { COST_RATE_WILDCARD } from '../../config/cost-kinds';
 import type { OrchestratorAttachment, TaskMedia } from './types';
 
@@ -17,6 +18,8 @@ import type { OrchestratorAttachment, TaskMedia } from './types';
  */
 function recordGeneratedStorageCost(userId: string | undefined, bytes: number): void {
     if (!userId) return;
+    // 일별 보관량 계상(opt-in)이 켜져 있으면 그 잡(services/cost/storage-snapshot)이 실제 보관 일수만큼 센다 — 여기서 또 쌓으면 이중 계상
+    if (storageGeneratedDailySnapshotEnabled()) return;
     recordCost({ userId, kind: 'storage.generated', unit: 'gb_day', rateKey: COST_RATE_WILDCARD, quantity: bytes / 1_000_000_000, costOwner: 'server', ctx: { feature: 'generated-media' } });
 }
 

@@ -16,11 +16,13 @@
  */
 import { getKeyValueStore } from '../storage';
 import { getConfig } from '../config';
-import { budgetedOrgsFor, clearOrgMembershipCache } from '../services/org/membership-cache';
+import { budgetedOrgsFor, clearOrgMembershipCache, activeOrgFor, membershipsFor, type BudgetedOrg } from '../services/org/membership-cache';
 import { createLogger } from '../utils/logger';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
 import { QuotaUnavailableError } from '../errors/quota-unavailable.error';
-import { grantsFor, maybeCreateRollover, ensureOverageRequest } from '../services/cost/quota-grants';
+import { grantsFor, maybeCreateRollover, ensureOverageRequest, subjectGrantsFor } from '../services/cost/quota-grants';
+import { effectiveUserLimits } from '../services/cost/quota-overrides';
+import { quotaOrgBucketEnabled, quotaOrgGrantsEnabled } from '../config/quota-extensions';
 import { QUOTA_GRANTS } from '../config/runtime-limits';
 import { isPersistableUserId } from '../utils/user-id-validation';
 
@@ -79,31 +81,93 @@ export function costMonthKey(userId: string, now: number): string { return `cost
 export const COST_MONTH_TTL_MS = MONTH_TTL_MS;
 
 /**
- * 조직 월 예산 검사(127·136) — 토큰 예산은 멤버 월 토큰 버킷 합, 비용 예산은 멤버 월 비용 버킷 합. 예산 이상이면 throw.
- * 조직이 없으면 no-op. KV 장애는 fail-open.
+ * 조직 자체 월 버킷(QUOTA_ORG_BUCKET_ENABLED) — 접두가 사용자 버킷(`llmq:`·`costq:`)과 달라 사용자 id 와 충돌하지 않는다.
+ * 탈퇴해도 조직 버킷의 이번 달 사용분은 남는다(멤버 합산 방식의 한계 해소).
+ */
+export function orgMonthKey(orgId: string, now: number): string { return `llmqo:${orgId}:m:${monthBucket(now)}`; }
+export function orgCostMonthKey(orgId: string, now: number): string { return `costqo:${orgId}:m:${monthBucket(now)}`; }
+
+/** 청구 대상 조직 — 예산이 0 이면 판정은 건너뛰고 버킷만 쌓는다. */
+export interface ChargeOrg { orgId: string; budget: number; costBudgetMicros: number }
+
+/**
+ * 요청 사용량을 쌓을 조직 **하나**(QUOTA_ORG_BUCKET_ENABLED). 활성 조직(멤버십 검증)이 있으면 그 조직, 없으면 가입이 가장 이른
+ * 예산 조직, 둘 다 없으면 null. 하나만 고르므로 여러 조직 소속이어도 같은 사용량이 중복 집계되지 않는다.
+ * 원장 org_id(cost-ledger-service)와 정산 잡이 같은 함수를 써 집계 기준이 하나다. 조회 실패는 fail-open(null 쪽).
+ */
+export async function chargeOrgFor(userId: string, now: number): Promise<ChargeOrg | null> {
+    const budgeted = await budgetedOrgsFor(userId, now);
+    const pick = (o: BudgetedOrg): ChargeOrg => ({ orgId: o.orgId, budget: o.budget, costBudgetMicros: o.costBudgetMicros });
+    const active = await activeOrgFor(userId, now);
+    if (active) {
+        const b = budgeted.find((o) => o.orgId === active.orgId);
+        return b ? pick(b) : { orgId: active.orgId, budget: 0, costBudgetMicros: 0 };
+    }
+    if (budgeted.length === 0) return null;
+    for (const m of await membershipsFor(userId, now)) {
+        const b = budgeted.find((o) => o.orgId === m.orgId);
+        if (b) return pick(b);
+    }
+    return pick(budgeted[0]);
+}
+
+/** 조직 예산 + 조직 grants(QUOTA_ORG_GRANTS_ENABLED, 월 버킷). */
+async function orgEffectiveBudget(orgId: string, base: number, dimension: 'tokens' | 'cost_micros', now: number): Promise<number> {
+    if (!(base > 0) || !quotaOrgGrantsEnabled()) return base;
+    return base + await subjectGrantsFor('org', orgId, dimension, 'monthly', monthBucket(now), now);
+}
+
+/**
+ * 조직 월 예산 검사(127·136). 예산 이상이면 throw. 조직이 없으면 no-op. KV 장애는 fail-open.
+ * - 기본(종전): 토큰 예산은 멤버 월 토큰 버킷 합, 비용 예산은 멤버 월 비용 버킷 합 — 소속 예산 조직 전부.
+ * - QUOTA_ORG_BUCKET_ENABLED: 청구 대상 조직 하나의 자체 버킷으로 판정(reserve 가 이미 이 요청분을 올려 둔 값).
+ * - QUOTA_ORG_GRANTS_ENABLED: 판정 한도 = 조직 예산 + 조직 grants.
  */
 export async function checkOrgBudget(userId: string, now: number): Promise<void> {
+    const store = getKeyValueStore();
+    if (quotaOrgBucketEnabled()) {
+        const org = await chargeOrgFor(userId, now);
+        if (!org) return;
+        if (org.budget > 0) {
+            const used = (await store.get<number>(orgMonthKey(org.orgId, now))) ?? 0;
+            const limit = await orgEffectiveBudget(org.orgId, org.budget, 'tokens', now);
+            if (typeof used === 'number' && used >= limit) throw new QuotaExceededError('org_monthly', used, limit);
+        }
+        if (org.costBudgetMicros > 0) {
+            const used = (await store.get<number>(orgCostMonthKey(org.orgId, now))) ?? 0;
+            const limit = await orgEffectiveBudget(org.orgId, org.costBudgetMicros, 'cost_micros', now);
+            if (typeof used === 'number' && used >= limit) throw new QuotaExceededError('org_cost_monthly', used, limit);
+        }
+        return;
+    }
     const orgs = await budgetedOrgsFor(userId, now);
     if (orgs.length === 0) return;
-    const store = getKeyValueStore();
     const sumOf = async (keys: string[]): Promise<number> =>
         (await Promise.all(keys.map((k) => store.get<number>(k)))).reduce<number>((sum, v) => sum + (typeof v === 'number' ? v : 0), 0);
     for (const org of orgs) {
         if (org.budget > 0) {
             const used = await sumOf(org.memberIds.map((m) => monthKey(m, now)));
-            if (used >= org.budget) throw new QuotaExceededError('org_monthly', used, org.budget);
+            const limit = await orgEffectiveBudget(org.orgId, org.budget, 'tokens', now);
+            if (used >= limit) throw new QuotaExceededError('org_monthly', used, limit);
         }
         if (org.costBudgetMicros > 0) {
             const used = await sumOf(org.memberIds.map((m) => costMonthKey(m, now)));
-            if (used >= org.costBudgetMicros) throw new QuotaExceededError('org_cost_monthly', used, org.costBudgetMicros);
+            const limit = await orgEffectiveBudget(org.orgId, org.costBudgetMicros, 'cost_micros', now);
+            if (used >= limit) throw new QuotaExceededError('org_cost_monthly', used, limit);
         }
     }
 }
 
-/** 사용자 월 비용 예산(USER_MONTHLY_COST_BUDGET_MICROS, 0=무제한) — 원장 누적이 예산 이상이면 throw. */
+/**
+ * 사용자 월 비용 예산(USER_MONTHLY_COST_BUDGET_MICROS, 0=무제한) — 원장 누적이 예산 이상이면 throw.
+ * 예산은 사용자별 덮어쓰기(QUOTA_USER_OVERRIDES_ENABLED)를 따르고, QUOTA_ORG_GRANTS_ENABLED 면 사용자 비용 grants 를 더한다.
+ */
 export async function checkUserCostBudget(userId: string, now: number): Promise<void> {
-    const budget = getConfig().userMonthlyCostBudgetMicros;
-    if (!(budget > 0)) return;
+    const base = (await effectiveUserLimits(userId, now)).monthlyCostBudgetMicros;
+    if (!(base > 0)) return;
+    const budget = quotaOrgGrantsEnabled()
+        ? base + await subjectGrantsFor('user', userId, 'cost_micros', 'monthly', monthBucket(now), now)
+        : base;
     const used = (await getKeyValueStore().get<number>(costMonthKey(userId, now))) ?? 0;
     if (typeof used === 'number' && used >= budget) throw new QuotaExceededError('cost_monthly', used, budget);
 }
@@ -138,9 +202,9 @@ function toWindow(used: number, limit: number, resetAt: number): UserQuotaWindow
  */
 export async function getUserQuotaStatus(userId: string | undefined, now: number): Promise<UserQuotaStatus | null> {
     if (!isPersistableUserId(userId)) return null;
-    const cfg = getConfig();
 
     try {
+        const limits = await effectiveUserLimits(userId, now);
         const store = getKeyValueStore();
         const [hUsed, wUsed] = await Promise.all([
             store.get<number>(hourKey(userId, now)),
@@ -149,12 +213,12 @@ export async function getUserQuotaStatus(userId: string | undefined, now: number
         return {
             hourly: toWindow(
                 typeof hUsed === 'number' ? hUsed : 0,
-                cfg.llmHourlyTokenLimit,
+                limits.hourlyTokenLimit,
                 (Math.floor(now / HOUR_MS) + 1) * HOUR_MS,
             ),
             weekly: toWindow(
                 typeof wUsed === 'number' ? wUsed : 0,
-                cfg.llmWeeklyTokenLimit,
+                limits.weeklyTokenLimit,
                 (Math.floor(now / WEEK_MS) + 1) * WEEK_MS,
             ),
         };
@@ -171,10 +235,9 @@ export async function getUserQuotaStatus(userId: string | undefined, now: number
 export async function checkUserQuota(userId: string | undefined, now: number): Promise<void> {
     if (!isPersistableUserId(userId)) return; // 비인증 요청은 enforcement skip
     const cfg = getConfig();
-    const hourlyLimit = cfg.llmHourlyTokenLimit;
-    const weeklyLimit = cfg.llmWeeklyTokenLimit;
 
     try {
+        const { hourlyTokenLimit: hourlyLimit, weeklyTokenLimit: weeklyLimit } = await effectiveUserLimits(userId, now);
         const store = getKeyValueStore();
         const [hUsed, wUsed] = await Promise.all([
             store.get<number>(hourKey(userId, now)),
@@ -212,7 +275,8 @@ export interface QuotaReservation {
  * 원자적 예약(F25 PR-2): 추정 토큰을 hour→week→month 버킷에 incrBy 로 **선반영**하고, 증가 후 값이 한도를
  * 넘으면 지금까지 올린 만큼 환불하고 throw. 동시 N요청 중 한도를 넘는 요청은 자기 증가분의 결과값으로
  * 즉시 판정되므로 초과 통과가 불가능하다(종전 check-then-record 의 경쟁 창 제거).
- * 조직 월 예산은 종전처럼 멤버 합산 읽기로 검사한다(이 사용자의 예약분은 월 버킷에 이미 반영돼 있다).
+ * 조직 월 예산은 종전처럼 멤버 합산 읽기로 검사한다(이 사용자의 예약분은 월 버킷에 이미 반영돼 있다) — QUOTA_ORG_BUCKET_ENABLED 면
+ * 청구 대상 조직 버킷에도 예약분을 올리고 그 버킷으로 판정한다. 한도는 사용자별 덮어쓰기(QUOTA_USER_OVERRIDES_ENABLED)를 따른다.
  * KV 장애: QUOTA_FAIL_MODE=open 이면 예약 없이 통과(estimate 0 핸들), closed 면 QuotaUnavailableError.
  */
 export async function reserveUserQuota(userId: string | undefined, estimate: number, now: number): Promise<QuotaReservation | null> {
@@ -220,9 +284,10 @@ export async function reserveUserQuota(userId: string | undefined, estimate: num
     const cfg = getConfig();
     const est = Number.isFinite(estimate) && estimate > 0 ? Math.ceil(estimate) : 0;
     const weekBucket = String(Math.floor(now / WEEK_MS));
+    const limits = await effectiveUserLimits(userId, now);
     const plan: Array<{ key: string; ttlMs: number; limit: number; type: 'hourly' | 'weekly' | null; bucket: string }> = [
-        { key: hourKey(userId, now), ttlMs: HOUR_TTL_MS, limit: cfg.llmHourlyTokenLimit, type: 'hourly', bucket: String(Math.floor(now / HOUR_MS)) },
-        { key: weekKey(userId, now), ttlMs: WEEK_TTL_MS, limit: cfg.llmWeeklyTokenLimit, type: 'weekly', bucket: weekBucket },
+        { key: hourKey(userId, now), ttlMs: HOUR_TTL_MS, limit: limits.hourlyTokenLimit, type: 'hourly', bucket: String(Math.floor(now / HOUR_MS)) },
+        { key: weekKey(userId, now), ttlMs: WEEK_TTL_MS, limit: limits.weeklyTokenLimit, type: 'weekly', bucket: weekBucket },
         { key: monthKey(userId, now), ttlMs: MONTH_TTL_MS, limit: 0, type: null, bucket: monthBucket(now) },
     ];
     const applied: { key: string; ttlMs: number }[] = [];
@@ -248,6 +313,16 @@ export async function reserveUserQuota(userId: string | undefined, estimate: num
                         Math.ceil(step.limit * QUOTA_GRANTS.OVERAGE_AUTO_REQUEST_RATIO), 'auto', true);
                 }
                 throw err;
+            }
+        }
+        // 조직 자체 월 버킷(opt-in) — 청구 대상 조직에 이 요청분을 올린다. applied 에 넣어 환불·정산이 같은 경로를 탄다.
+        if (quotaOrgBucketEnabled() && est > 0) {
+            const org = await chargeOrgFor(userId, now);
+            if (org) {
+                const ok = orgMonthKey(org.orgId, now);
+                await store.incrBy(ok, est);
+                applied.push({ key: ok, ttlMs: MONTH_TTL_MS });
+                void store.expire(ok, MONTH_TTL_MS).catch(() => undefined);
             }
         }
         try {
@@ -311,6 +386,10 @@ export async function recordUserUsage(userId: string | undefined, tokens: number
             store.incrBy(wk, tokens).then(() => store.expire(wk, WEEK_TTL_MS)),
             store.incrBy(mk, tokens).then(() => store.expire(mk, MONTH_TTL_MS)),
         ]);
+        if (quotaOrgBucketEnabled()) {
+            const org = await chargeOrgFor(userId, now);
+            if (org) { const ok = orgMonthKey(org.orgId, now); await store.incrBy(ok, tokens); await store.expire(ok, MONTH_TTL_MS); }
+        }
     } catch (e) {
         logger.warn('per-user quota record 실패 (무시):', e);
     }

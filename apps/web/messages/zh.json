@@ -3009,7 +3009,38 @@
     "manualHelp": "立即加到当前桶（小时/周/月）。用户 id 可在管理员 → 用户列表查看。",
     "userIdPlaceholder": "用户 id",
     "grant": "授予",
-    "grantDone": "已授予。"
+    "grantDone": "已授予。",
+    "extendedGrantHelp": "组织和费用 grant 只加到月度桶(组织月预算、用户月费用预算)。费用单位为 USD micros(1 USD = 1,000,000)。",
+    "subject": "对象",
+    "subjects": {
+      "user": "用户",
+      "org": "组织"
+    },
+    "dimension": "单位",
+    "dimensions": {
+      "tokens": "令牌",
+      "cost_micros": "费用(micros)"
+    },
+    "orgIdPlaceholder": "组织 id",
+    "overrides": {
+      "title": "按用户限额",
+      "help": "为该用户单独设置限额。留空使用全局值,0 表示不限。月费用单位为 USD micros(1 USD = 1,000,000)。",
+      "userId": "用户 id",
+      "user": "用户",
+      "hourly": "每小时令牌",
+      "weekly": "每周令牌",
+      "cost": "月费用(micros)",
+      "reason": "原因",
+      "save": "保存",
+      "edit": "编辑",
+      "remove": "删除",
+      "empty": "尚未设置任何用户。",
+      "useGlobal": "全局",
+      "unlimited": "不限",
+      "invalid": "限额请留空或填写不小于 0 的整数。",
+      "loadError": "加载失败。",
+      "saveFailed": "保存失败。"
+    }
   },
   "adminSlo": {
     "title": "SLO",

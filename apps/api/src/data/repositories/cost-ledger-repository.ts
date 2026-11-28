@@ -25,9 +25,9 @@ export interface CostLedgerInsert {
 export interface CostSummaryRow { kind: string; rate_key: string; quantity: string; cost_usd_micros: string }
 
 export class CostLedgerRepository extends BaseRepository {
-    /** 1행 적재. idempotency_key 충돌은 무시(중복 기록 방지). */
-    async insert(e: CostLedgerInsert): Promise<void> {
-        await this.query(
+    /** 1행 적재. idempotency_key 충돌은 무시(중복 기록 방지) — 실제로 들어갔으면 true. */
+    async insert(e: CostLedgerInsert): Promise<boolean> {
+        const r = await this.query(
             `INSERT INTO cost_ledger
                 (occurred_at, user_id, org_id, kind, rate_key, unit, quantity, usd_micros_per_unit, cost_usd_micros,
                  cost_owner, agent_id, session_id, request_id, feature, meta, idempotency_key)
@@ -39,6 +39,7 @@ export class CostLedgerRepository extends BaseRepository {
                 JSON.stringify(e.meta ?? {}), e.idempotencyKey ?? null,
             ],
         );
+        return (r.rowCount ?? 0) > 0;
     }
 
     /** 사용자 기간 합계 (kind·rate_key 별). */

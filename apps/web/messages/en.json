@@ -3009,7 +3009,38 @@
     "manualHelp": "Added immediately to the current bucket (hourly/weekly/monthly). Find user ids in Admin → users.",
     "userIdPlaceholder": "user id",
     "grant": "Grant",
-    "grantDone": "Granted."
+    "grantDone": "Granted.",
+    "extendedGrantHelp": "Org and cost grants add to the monthly bucket only (org monthly budget, user monthly cost budget). Cost is in USD micros (1 USD = 1,000,000).",
+    "subject": "Subject",
+    "subjects": {
+      "user": "User",
+      "org": "Organization"
+    },
+    "dimension": "Unit",
+    "dimensions": {
+      "tokens": "Tokens",
+      "cost_micros": "Cost (micros)"
+    },
+    "orgIdPlaceholder": "org id",
+    "overrides": {
+      "title": "Per-user limits",
+      "help": "Give this user different limits. Leave a field empty to use the global value; 0 means unlimited. Monthly cost is in USD micros (1 USD = 1,000,000).",
+      "userId": "user id",
+      "user": "User",
+      "hourly": "Hourly tokens",
+      "weekly": "Weekly tokens",
+      "cost": "Monthly cost (micros)",
+      "reason": "Reason",
+      "save": "Save",
+      "edit": "Edit",
+      "remove": "Remove",
+      "empty": "No users configured.",
+      "useGlobal": "global",
+      "unlimited": "unlimited",
+      "invalid": "Enter limits as empty or a whole number ≥ 0.",
+      "loadError": "Failed to load.",
+      "saveFailed": "Failed to save."
+    }
   },
   "adminSlo": {
     "title": "SLO",

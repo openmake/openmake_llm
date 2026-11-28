@@ -15,7 +15,7 @@ import { createLogger } from '../../utils/logger';
 import { getPool } from '../../data/models/unified-database';
 import { QUOTA_GRANTS } from '../../config/runtime-limits';
 import { ORG_CONTEXT } from '../../config/runtime-limits';
-import type { QuotaWindow } from '../../data/repositories/quota-grant-repository';
+import type { QuotaWindow, GrantSubject, GrantDimension } from '../../data/repositories/quota-grant-repository';
 
 const logger = createLogger('QuotaGrants');
 
@@ -45,6 +45,30 @@ export async function grantsFor(userId: string, window: QuotaWindow, bucket: str
         logger.warn('grants 조회 실패 (0 으로 처리):', e);
         return 0;
     }
+}
+
+/**
+ * 임의 주체·차원의 grants 합 — 조직 grant·비용(micros) grant (QUOTA_ORG_GRANTS_ENABLED 일 때만 호출).
+ * 캐시 키는 `<subject>:<id>|…` 라 사용자 토큰 캐시(`<userId>|…`)와 겹치지 않는다. fail-open 0.
+ */
+export async function subjectGrantsFor(subjectType: GrantSubject, subjectId: string, dimension: GrantDimension, window: QuotaWindow, bucket: string, now: number = Date.now()): Promise<number> {
+    const key = `${subjectType}:${subjectId}|${dimension}|${window}|${bucket}`;
+    const hit = grantCache.get(key);
+    if (hit && now - hit.at < ORG_CONTEXT.CACHE_TTL_MS) return hit.value;
+    try {
+        const value = await (await repo()).sumGrants(subjectType, subjectId, dimension, window, bucket);
+        grantCache.set(key, { at: now, value });
+        return value;
+    } catch (e) {
+        logger.warn('grants 조회 실패 (0 으로 처리):', e);
+        return 0;
+    }
+}
+
+/** 조직·비용 grant 캐시 무효화 — 수동 부여 직후. */
+export function clearSubjectGrantCache(subjectType: GrantSubject, subjectId: string): void {
+    const prefix = `${subjectType}:${subjectId}|`;
+    for (const k of grantCache.keys()) if (k.startsWith(prefix)) grantCache.delete(k);
 }
 
 /** PURE: 이월량 = min(cap, max(0, 직전 한도 - 직전 사용) × ratio). ratio 0 이면 0. */

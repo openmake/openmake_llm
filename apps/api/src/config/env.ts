@@ -104,6 +104,10 @@ export interface EnvConfig {
     extensionAdminInventoryEnabled: boolean;
     /** `GET /api/addons` 가 모든 add-on 의 켜짐을 라우트 게이트와 같은 판정(env × DB 상태 × 프로세스 준비)으로 답한다(opt-in, config/addon-list-state) */
     addonListReflectDbState: boolean;
+    quotaUserOverridesEnabled: boolean;
+    quotaOrgGrantsEnabled: boolean;
+    quotaOrgBucketEnabled: boolean;
+    storageGeneratedDailySnapshotEnabled: boolean;
     /** 'allow'(기본) · 'catalog-only' — 강제 ON 일 때만 의미 */
     extensionArbitraryUrlInstall: 'allow' | 'catalog-only';
     /** 전역 확장 원본 규칙 원문(JSON {allow?,deny?}) — 빈 값 = 전역 층 없음 */
@@ -304,6 +308,10 @@ export function loadConfig(): EnvConfig {
         EXTENSION_ADMIN_INVENTORY_ENABLED: env('EXTENSION_ADMIN_INVENTORY_ENABLED'),
         EXTENSION_REMOTE_MCP_ENABLED: env('EXTENSION_REMOTE_MCP_ENABLED'),
         ADDON_LIST_REFLECT_DB_STATE: env('ADDON_LIST_REFLECT_DB_STATE'),
+        QUOTA_USER_OVERRIDES_ENABLED: env('QUOTA_USER_OVERRIDES_ENABLED'),
+        QUOTA_ORG_GRANTS_ENABLED: env('QUOTA_ORG_GRANTS_ENABLED'),
+        QUOTA_ORG_BUCKET_ENABLED: env('QUOTA_ORG_BUCKET_ENABLED'),
+        STORAGE_GENERATED_DAILY_SNAPSHOT_ENABLED: env('STORAGE_GENERATED_DAILY_SNAPSHOT_ENABLED'),
         EXTENSION_ARBITRARY_URL_INSTALL: env('EXTENSION_ARBITRARY_URL_INSTALL'),
         EXTENSION_SOURCE_POLICY: env('EXTENSION_SOURCE_POLICY'),
         EXTENSION_MCP_SERVER_POLICY_ENFORCED: env('EXTENSION_MCP_SERVER_POLICY_ENFORCED'),
@@ -447,6 +455,10 @@ export function loadConfig(): EnvConfig {
         extensionOrgDeploymentModesEnabled: parsed.EXTENSION_ORG_DEPLOYMENT_MODES_ENABLED === 'true',
         extensionAdminInventoryEnabled: parsed.EXTENSION_ADMIN_INVENTORY_ENABLED === undefined ? DEFAULT_CONFIG.extensionAdminInventoryEnabled : parsed.EXTENSION_ADMIN_INVENTORY_ENABLED === 'true',
         addonListReflectDbState: parsed.ADDON_LIST_REFLECT_DB_STATE === undefined ? DEFAULT_CONFIG.addonListReflectDbState : parsed.ADDON_LIST_REFLECT_DB_STATE === 'true',
+        quotaUserOverridesEnabled: parsed.QUOTA_USER_OVERRIDES_ENABLED === undefined ? DEFAULT_CONFIG.quotaUserOverridesEnabled : parsed.QUOTA_USER_OVERRIDES_ENABLED === 'true',
+        quotaOrgGrantsEnabled: parsed.QUOTA_ORG_GRANTS_ENABLED === undefined ? DEFAULT_CONFIG.quotaOrgGrantsEnabled : parsed.QUOTA_ORG_GRANTS_ENABLED === 'true',
+        quotaOrgBucketEnabled: parsed.QUOTA_ORG_BUCKET_ENABLED === undefined ? DEFAULT_CONFIG.quotaOrgBucketEnabled : parsed.QUOTA_ORG_BUCKET_ENABLED === 'true',
+        storageGeneratedDailySnapshotEnabled: parsed.STORAGE_GENERATED_DAILY_SNAPSHOT_ENABLED === undefined ? DEFAULT_CONFIG.storageGeneratedDailySnapshotEnabled : parsed.STORAGE_GENERATED_DAILY_SNAPSHOT_ENABLED === 'true',
         extensionArbitraryUrlInstall: parsed.EXTENSION_ARBITRARY_URL_INSTALL === 'catalog-only' ? 'catalog-only' : DEFAULT_CONFIG.extensionArbitraryUrlInstall,
         extensionSourcePolicy: parsed.EXTENSION_SOURCE_POLICY ?? DEFAULT_CONFIG.extensionSourcePolicy,
         // 확장 MCP 서버 정책(§8-3) — 'true' 만 켠다(그 외 기본값 = 검사 없음)

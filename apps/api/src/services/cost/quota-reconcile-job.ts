@@ -8,7 +8,8 @@ import { createLogger } from '../../utils/logger';
 import { getPool } from '../../data/models/unified-database';
 import { getKeyValueStore } from '../../storage';
 import { QUOTA_RESERVE } from '../../config/runtime-limits';
-import { weekBucketKey, monthBucketKey, WEEK_TTL_MS, MONTH_TTL_MS, weekWindow, monthWindow } from '../../llm/user-quota';
+import { weekBucketKey, monthBucketKey, WEEK_TTL_MS, MONTH_TTL_MS, weekWindow, monthWindow, orgMonthKey } from '../../llm/user-quota';
+import { quotaOrgBucketEnabled } from '../../config/quota-extensions';
 import { materializeMonth, currentMonth } from './statement-service';
 
 const logger = createLogger('QuotaReconcile');
@@ -27,7 +28,19 @@ async function sumLocalTokens(from: Date, to: Date): Promise<Row[]> {
     return r.rows;
 }
 
-/** 1회 정산 — 반환은 갱신한 버킷 수. */
+/** 조직 자체 월 버킷 재료 — 원장 org_id(청구 대상 조직) 기준 합계. */
+async function sumLocalTokensByOrg(from: Date, to: Date): Promise<Array<{ org_id: string; tokens: string }>> {
+    const r = await getPool().query<{ org_id: string; tokens: string }>(
+        `SELECT org_id, SUM(quantity)::text AS tokens FROM cost_ledger
+         WHERE kind = 'llm.local' AND unit IN ('token_in', 'token_out') AND org_id IS NOT NULL
+           AND occurred_at >= $1 AND occurred_at < $2
+         GROUP BY org_id`,
+        [from.toISOString(), to.toISOString()],
+    );
+    return r.rows;
+}
+
+/** 1회 정산 — 반환은 갱신한 버킷 수. QUOTA_ORG_BUCKET_ENABLED 면 조직 자체 월 버킷도 원장으로 교정한다. */
 export async function reconcileQuotaBuckets(now: number = Date.now()): Promise<number> {
     const store = getKeyValueStore();
     let updated = 0;
@@ -40,6 +53,14 @@ export async function reconcileQuotaBuckets(now: number = Date.now()): Promise<n
             const tokens = Math.round(Number(row.tokens));
             if (!(tokens > 0)) continue;
             await store.set(w.key(row.user_id), tokens, w.ttl);
+            updated++;
+        }
+    }
+    if (quotaOrgBucketEnabled()) {
+        for (const row of await sumLocalTokensByOrg(monthWindow(now).from, monthWindow(now).to)) {
+            const tokens = Math.round(Number(row.tokens));
+            if (!(tokens > 0)) continue;
+            await store.set(orgMonthKey(row.org_id, now), tokens, MONTH_TTL_MS);
             updated++;
         }
     }
